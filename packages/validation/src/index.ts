@@ -35,12 +35,36 @@ export const ed25519PrivateJwkSchema = ed25519PublicJwkSchema.extend({
   d: z.string().min(1),
 });
 
-export const tenantSigningRegistryEntrySchema = z.object({
+export const p256PublicJwkSchema = z.object({
+  kty: z.literal('EC'),
+  crv: z.literal('P-256'),
+  x: z.string().min(1),
+  y: z.string().min(1),
+  kid: z.string().min(1).optional(),
+});
+
+export const p256PrivateJwkSchema = p256PublicJwkSchema.extend({
+  d: z.string().min(1),
+});
+
+const tenantSigningRegistryEntryEd25519Schema = z.object({
   tenantId: z.string().min(1),
   keyId: z.string().min(1),
   publicJwk: ed25519PublicJwkSchema,
   privateJwk: ed25519PrivateJwkSchema.optional(),
 });
+
+const tenantSigningRegistryEntryP256Schema = z.object({
+  tenantId: z.string().min(1),
+  keyId: z.string().min(1),
+  publicJwk: p256PublicJwkSchema,
+  privateJwk: p256PrivateJwkSchema.optional(),
+});
+
+export const tenantSigningRegistryEntrySchema = z.union([
+  tenantSigningRegistryEntryEd25519Schema,
+  tenantSigningRegistryEntryP256Schema,
+]);
 
 export const tenantSigningRegistrySchema = z.record(z.string().min(1), tenantSigningRegistryEntrySchema);
 
@@ -146,11 +170,22 @@ export const adminUpsertTenantRequestSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export const adminUpsertTenantSigningRegistrationRequestSchema = z.object({
+const adminUpsertTenantSigningRegistrationEd25519RequestSchema = z.object({
   keyId: z.string().trim().min(1).max(128),
   publicJwk: ed25519PublicJwkSchema,
   privateJwk: ed25519PrivateJwkSchema.optional(),
 });
+
+const adminUpsertTenantSigningRegistrationP256RequestSchema = z.object({
+  keyId: z.string().trim().min(1).max(128),
+  publicJwk: p256PublicJwkSchema,
+  privateJwk: p256PrivateJwkSchema.optional(),
+});
+
+export const adminUpsertTenantSigningRegistrationRequestSchema = z.union([
+  adminUpsertTenantSigningRegistrationEd25519RequestSchema,
+  adminUpsertTenantSigningRegistrationP256RequestSchema,
+]);
 
 export const adminUpsertBadgeTemplateByIdRequestSchema = createBadgeTemplateRequestSchema;
 

@@ -70,9 +70,12 @@ vi.mock('@credtrail/db/postgres', () => {
 
 import {
   type JsonObject,
+  type P256PrivateJwk,
+  type P256PublicJwk,
   encodeJwkPublicKeyMultibase,
   generateTenantDidSigningMaterial,
   getImmutableCredentialObject,
+  signCredentialWithDataIntegrityProof,
   signCredentialWithEd25519Signature2020,
 } from '@credtrail/core-domain';
 import {
@@ -596,6 +599,39 @@ const sampleTenant = (overrides?: Partial<TenantRecord>): TenantRecord => {
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
     ...overrides,
+  };
+};
+
+const requireJwkString = (value: string | undefined, field: string): string => {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Missing ${field} in exported JWK`);
+  }
+
+  return value;
+};
+
+const generateP256SigningMaterial = async (
+  kid = 'key-p256',
+): Promise<{ publicJwk: P256PublicJwk; privateJwk: P256PrivateJwk }> => {
+  const generated = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const exportedPublicJwk = await crypto.subtle.exportKey('jwk', generated.publicKey);
+  const exportedPrivateJwk = await crypto.subtle.exportKey('jwk', generated.privateKey);
+
+  const publicJwk: P256PublicJwk = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: requireJwkString(exportedPublicJwk.x, 'x'),
+    y: requireJwkString(exportedPublicJwk.y, 'y'),
+    kid,
+  };
+  const privateJwk: P256PrivateJwk = {
+    ...publicJwk,
+    d: requireJwkString(exportedPrivateJwk.d, 'd'),
+  };
+
+  return {
+    publicJwk,
+    privateJwk,
   };
 };
 
@@ -2567,6 +2603,53 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(body.verification.proof.verificationMethod).toBe(
       'did:web:credtrail.test:tenant_123#key-1',
     );
+  });
+
+  it('verifies DataIntegrityProof ecdsa-sd-2023 proofs when issuer signing keys are resolvable', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateP256SigningMaterial('key-p256');
+    const did = 'did:web:credtrail.test:tenant_123';
+    const credential = await signCredentialWithDataIntegrityProof({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        issuer: did,
+        credentialSubject: {
+          id: 'mailto:learner@example.edu',
+          achievement: {
+            id: 'urn:credtrail:badge:001',
+            type: ['Achievement'],
+            name: 'Sakai Contributor',
+          },
+        },
+      },
+      privateJwk: signingMaterial.privateJwk,
+      verificationMethod: `${did}#${signingMaterial.publicJwk.kid ?? 'key-p256'}`,
+      cryptosuite: 'ecdsa-sd-2023',
+      createdAt: '2026-02-11T00:00:00.000Z',
+    });
+
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did,
+        keyId: signingMaterial.publicJwk.kid ?? 'key-p256',
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/credentials/v1/tenant_123%3Aassertion_456', undefined, env);
+    const body = await response.json<VerificationResponse>();
+
+    expect(response.status).toBe(200);
+    expect(body.verification.proof.status).toBe('valid');
+    expect(body.verification.proof.format).toBe('DataIntegrityProof');
+    expect(body.verification.proof.cryptosuite).toBe('ecdsa-sd-2023');
+    expect(body.verification.proof.verificationMethod).toBe('did:web:credtrail.test:tenant_123#key-p256');
   });
 
   it('returns 400 for non-tenant-scoped credential identifiers', async () => {

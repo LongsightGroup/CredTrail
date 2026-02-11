@@ -6,6 +6,7 @@ import {
   splitTenantScopedId,
   type Ed25519PrivateJwk,
   type Ed25519PublicJwk,
+  type P256PublicJwk,
   type JsonObject,
   generateTenantDidSigningMaterial,
   getImmutableCredentialObject,
@@ -325,12 +326,29 @@ const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | 
   return session;
 };
 
-const toEd25519PublicJwk = (jwk: {
-  kty: 'OKP';
-  crv: 'Ed25519';
-  x: string;
-  kid?: string | undefined;
-}): Ed25519PublicJwk => {
+type Ed25519SigningPublicJwk = Extract<TenantSigningRegistryEntry['publicJwk'], { kty: 'OKP'; crv: 'Ed25519' }>;
+type P256SigningPublicJwk = Extract<TenantSigningRegistryEntry['publicJwk'], { kty: 'EC'; crv: 'P-256' }>;
+type Ed25519SigningPrivateJwk = NonNullable<
+  Extract<TenantSigningRegistryEntry['privateJwk'], { kty: 'OKP'; crv: 'Ed25519' }>
+>;
+
+const isEd25519SigningPublicJwk = (
+  jwk: TenantSigningRegistryEntry['publicJwk'],
+): jwk is Ed25519SigningPublicJwk => {
+  return jwk.kty === 'OKP';
+};
+
+const isP256SigningPublicJwk = (jwk: TenantSigningRegistryEntry['publicJwk']): jwk is P256SigningPublicJwk => {
+  return jwk.kty === 'EC';
+};
+
+const isEd25519SigningPrivateJwk = (
+  jwk: TenantSigningRegistryEntry['privateJwk'],
+): jwk is Ed25519SigningPrivateJwk => {
+  return jwk?.kty === 'OKP';
+};
+
+const toEd25519PublicJwk = (jwk: Ed25519SigningPublicJwk): Ed25519PublicJwk => {
   if (jwk.kid === undefined) {
     return {
       kty: jwk.kty,
@@ -347,13 +365,26 @@ const toEd25519PublicJwk = (jwk: {
   };
 };
 
-const toEd25519PrivateJwk = (jwk: {
-  kty: 'OKP';
-  crv: 'Ed25519';
-  x: string;
-  d: string;
-  kid?: string | undefined;
-}): Ed25519PrivateJwk => {
+const toP256PublicJwk = (jwk: P256SigningPublicJwk): P256PublicJwk => {
+  if (jwk.kid === undefined) {
+    return {
+      kty: jwk.kty,
+      crv: jwk.crv,
+      x: jwk.x,
+      y: jwk.y,
+    };
+  }
+
+  return {
+    kty: jwk.kty,
+    crv: jwk.crv,
+    x: jwk.x,
+    y: jwk.y,
+    kid: jwk.kid,
+  };
+};
+
+const toEd25519PrivateJwk = (jwk: Ed25519SigningPrivateJwk): Ed25519PrivateJwk => {
   if (jwk.kid === undefined) {
     return {
       kty: jwk.kty,
@@ -2140,6 +2171,16 @@ const verifyCredentialProofSummary = async (
   }
 
   if (proofType === 'Ed25519Signature2020') {
+    if (!isEd25519SigningPublicJwk(signingEntry.publicJwk)) {
+      return {
+        status: 'invalid',
+        format: proofType,
+        cryptosuite: null,
+        verificationMethod,
+        reason: 'Ed25519Signature2020 requires an Ed25519 public key',
+      };
+    }
+
     const isValid = await verifyCredentialProofWithEd25519Signature2020({
       credential: {
         ...credential,
@@ -2176,6 +2217,38 @@ const verifyCredentialProofSummary = async (
       };
     }
 
+    let verificationPublicJwk: Ed25519PublicJwk | P256PublicJwk;
+
+    if (cryptosuite === 'eddsa-rdfc-2022') {
+      const signingPublicJwk = signingEntry.publicJwk;
+
+      if (!isEd25519SigningPublicJwk(signingPublicJwk)) {
+        return {
+          status: 'invalid',
+          format: proofType,
+          cryptosuite,
+          verificationMethod,
+          reason: 'eddsa-rdfc-2022 requires an Ed25519 public key',
+        };
+      }
+
+      verificationPublicJwk = toEd25519PublicJwk(signingPublicJwk);
+    } else {
+      const signingPublicJwk = signingEntry.publicJwk;
+
+      if (!isP256SigningPublicJwk(signingPublicJwk)) {
+        return {
+          status: 'invalid',
+          format: proofType,
+          cryptosuite,
+          verificationMethod,
+          reason: 'ecdsa-sd-2023 requires a P-256 public key',
+        };
+      }
+
+      verificationPublicJwk = toP256PublicJwk(signingPublicJwk);
+    }
+
     const isValid = await verifyCredentialProofWithDataIntegrity({
       credential: {
         ...credential,
@@ -2188,7 +2261,7 @@ const verifyCredentialProofSummary = async (
           proofValue,
         },
       },
-      publicJwk: toEd25519PublicJwk(signingEntry.publicJwk),
+      publicJwk: verificationPublicJwk,
     });
 
     return {
@@ -4542,6 +4615,16 @@ app.get('/.well-known/did.json', async (c) => {
     );
   }
 
+  if (!isEd25519SigningPublicJwk(signingEntry.publicJwk)) {
+    return c.json(
+      {
+        error: 'DID document generation requires an Ed25519 public key',
+        did,
+      },
+      422,
+    );
+  }
+
   return c.json(
     createDidDocument({
       did,
@@ -4563,6 +4646,16 @@ app.get('/:tenantSlug/did.json', async (c) => {
         did,
       },
       404,
+    );
+  }
+
+  if (!isEd25519SigningPublicJwk(signingEntry.publicJwk)) {
+    return c.json(
+      {
+        error: 'DID document generation requires an Ed25519 public key',
+        did,
+      },
+      422,
     );
   }
 
@@ -4642,6 +4735,16 @@ app.get('/credentials/v1/status-lists/:tenantId/revocation', async (c) => {
         did: issuerDid,
       },
       500,
+    );
+  }
+
+  if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
+    return c.json(
+      {
+        error: 'Revocation status list signing requires an Ed25519 private key',
+        did: issuerDid,
+      },
+      422,
     );
   }
 
@@ -5489,6 +5592,13 @@ const issueBadgeForTenant = async (
     });
   }
 
+  if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
+    throw new HttpErrorResponse(500, {
+      error: 'Tenant issuance requires an Ed25519 private key',
+      did: issuerDid,
+    });
+  }
+
   const requestBaseUrl = new URL(c.req.url);
   const learnerProfile = await resolveLearnerProfileForIdentity(resolveDatabase(c.env), {
     tenantId,
@@ -5791,6 +5901,16 @@ app.post('/v1/signing/credentials', async (c) => {
         did: request.did,
       },
       500,
+    );
+  }
+
+  if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
+    return c.json(
+      {
+        error: 'Credential signing endpoint requires an Ed25519 private key',
+        did: request.did,
+      },
+      422,
     );
   }
 

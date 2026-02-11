@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseAdminUpsertTenantSigningRegistrationRequest,
   parseAdminUpsertTenantMembershipRoleRequest,
   parseBadgeTemplateListQuery,
   parseBadgeTemplatePathParams,
@@ -254,6 +255,53 @@ describe('parseTenantSigningRegistry', () => {
 
     expect(Object.keys(registry)).toHaveLength(1);
   });
+
+  it('accepts P-256 tenant registry entries', () => {
+    const registry = parseTenantSigningRegistry({
+      'did:web:issuers.credtrail.org:tenant-b': {
+        tenantId: 'tenant_b',
+        keyId: 'key-p256',
+        publicJwk: {
+          kty: 'EC',
+          crv: 'P-256',
+          x: 'X'.repeat(43),
+          y: 'Y'.repeat(43),
+        },
+        privateJwk: {
+          kty: 'EC',
+          crv: 'P-256',
+          x: 'X'.repeat(43),
+          y: 'Y'.repeat(43),
+          d: 'D'.repeat(43),
+        },
+      },
+    });
+
+    expect(Object.keys(registry)).toHaveLength(1);
+  });
+
+  it('rejects tenant registry entries with mismatched key types', () => {
+    expect(() => {
+      parseTenantSigningRegistry({
+        'did:web:issuers.credtrail.org:tenant-c': {
+          tenantId: 'tenant_c',
+          keyId: 'key-mismatch',
+          publicJwk: {
+            kty: 'OKP',
+            crv: 'Ed25519',
+            x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
+          },
+          privateJwk: {
+            kty: 'EC',
+            crv: 'P-256',
+            x: 'X'.repeat(43),
+            y: 'Y'.repeat(43),
+            d: 'D'.repeat(43),
+          },
+        },
+      });
+    }).toThrowError();
+  });
 });
 
 describe('badge template parsers', () => {
@@ -327,7 +375,48 @@ describe('badge template parsers', () => {
   });
 });
 
-describe('admin membership role parser', () => {
+describe('admin request parsers', () => {
+  it('accepts P-256 tenant signing registration payloads', () => {
+    const payload = parseAdminUpsertTenantSigningRegistrationRequest({
+      keyId: 'key-p256',
+      publicJwk: {
+        kty: 'EC',
+        crv: 'P-256',
+        x: 'X'.repeat(43),
+        y: 'Y'.repeat(43),
+      },
+      privateJwk: {
+        kty: 'EC',
+        crv: 'P-256',
+        x: 'X'.repeat(43),
+        y: 'Y'.repeat(43),
+        d: 'D'.repeat(43),
+      },
+    });
+
+    expect(payload.keyId).toBe('key-p256');
+  });
+
+  it('rejects signing registration payloads with mismatched key types', () => {
+    expect(() => {
+      parseAdminUpsertTenantSigningRegistrationRequest({
+        keyId: 'key-mismatch',
+        publicJwk: {
+          kty: 'OKP',
+          crv: 'Ed25519',
+          x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
+        },
+        privateJwk: {
+          kty: 'EC',
+          crv: 'P-256',
+          x: 'X'.repeat(43),
+          y: 'Y'.repeat(43),
+          d: 'D'.repeat(43),
+        },
+      });
+    }).toThrowError();
+  });
+
   it('accepts valid membership role updates', () => {
     const payload = parseAdminUpsertTenantMembershipRoleRequest({
       role: 'admin',
