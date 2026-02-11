@@ -1,0 +1,24 @@
+{
+  "name": "credtrail",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "check:public-docs": "node scripts/check-public-docs.mjs",
+    "lint": "eslint --max-warnings=0 \"apps/**/*.ts\" \"workers/**/*.ts\" \"packages/**/*.ts\" \"vitest.config.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm check:public-docs && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260206.0",
+    "@eslint/js": "^9.21.0",
+    "eslint": "^9.21.0",
+    "globals": "^15.15.0",
+    "prettier": "^3.5.2",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.25.0",
+    "vitest": "^3.0.7",
+    "wrangler": "^4.2.1"
+  }
+}

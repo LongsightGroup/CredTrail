@@ -1,0 +1,13 @@
+{
+  "name": "@credtrail/api-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@credtrail/core-domain": "workspace:*",
+    "@credtrail/db": "workspace:*",
+    "@credtrail/ui-components": "workspace:*",
+    "@credtrail/validation": "workspace:*",
+    "hono": "^4.7.2"
+  }
+}
