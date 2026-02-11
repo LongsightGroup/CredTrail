@@ -58,6 +58,7 @@ export const tenantIdSchema = z.string().min(1);
 export const resourceIdSchema = z.string().min(1);
 export const userIdSchema = z.string().min(1);
 export const isoTimestampSchema = z.string().datetime();
+export const tenantPlanTierSchema = z.enum(['free', 'team', 'institution', 'enterprise']);
 export const recipientIdentityTypeSchema = z.enum(['email', 'email_sha256', 'did', 'url']);
 export const badgeTemplateSlugSchema = z
   .string()
@@ -126,6 +127,27 @@ export const updateBadgeTemplateRequestSchema = z
       message: 'At least one badge template field must be provided',
     },
   );
+
+export const adminUpsertTenantRequestSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(96)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  displayName: z.string().trim().min(1).max(200),
+  planTier: tenantPlanTierSchema.optional(),
+  issuerDomain: z.string().trim().min(1).max(255).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const adminUpsertTenantSigningRegistrationRequestSchema = z.object({
+  keyId: z.string().trim().min(1).max(128),
+  publicJwk: ed25519PublicJwkSchema,
+  privateJwk: ed25519PrivateJwkSchema.optional(),
+});
+
+export const adminUpsertBadgeTemplateByIdRequestSchema = createBadgeTemplateRequestSchema;
 
 export const magicLinkRequestSchema = z.object({
   tenantId: tenantIdSchema,
@@ -248,6 +270,7 @@ export type QueueJob = z.infer<typeof queueJobSchema>;
 export type KeyGenerationRequest = z.infer<typeof keyGenerationRequestSchema>;
 export type SignCredentialRequest = z.infer<typeof signCredentialRequestSchema>;
 export type TenantSigningRegistry = z.infer<typeof tenantSigningRegistrySchema>;
+export type TenantSigningRegistryEntry = z.infer<typeof tenantSigningRegistryEntrySchema>;
 export type MagicLinkRequest = z.infer<typeof magicLinkRequestSchema>;
 export type MagicLinkVerifyRequest = z.infer<typeof magicLinkVerifyRequestSchema>;
 export type LearnerIdentityLinkRequest = z.infer<typeof learnerIdentityLinkRequestSchema>;
@@ -265,6 +288,11 @@ export type CredentialPathParams = z.infer<typeof credentialPathParamsSchema>;
 export type BadgeTemplateListQuery = z.infer<typeof badgeTemplateListQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
+export type AdminUpsertTenantRequest = z.infer<typeof adminUpsertTenantRequestSchema>;
+export type AdminUpsertTenantSigningRegistrationRequest = z.infer<
+  typeof adminUpsertTenantSigningRegistrationRequestSchema
+>;
+export type AdminUpsertBadgeTemplateByIdRequest = z.infer<typeof adminUpsertBadgeTemplateByIdRequestSchema>;
 
 export const parseQueueJob = (input: unknown): QueueJob => {
   return queueJobSchema.parse(input);
@@ -280,6 +308,10 @@ export const parseSignCredentialRequest = (input: unknown): SignCredentialReques
 
 export const parseTenantSigningRegistry = (input: unknown): TenantSigningRegistry => {
   return tenantSigningRegistrySchema.parse(input);
+};
+
+export const parseTenantSigningRegistryEntry = (input: unknown): TenantSigningRegistryEntry => {
+  return tenantSigningRegistryEntrySchema.parse(input);
 };
 
 export const parseMagicLinkRequest = (input: unknown): MagicLinkRequest => {
@@ -342,4 +374,20 @@ export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemp
 
 export const parseUpdateBadgeTemplateRequest = (input: unknown): UpdateBadgeTemplateRequest => {
   return updateBadgeTemplateRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantRequest = (input: unknown): AdminUpsertTenantRequest => {
+  return adminUpsertTenantRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantSigningRegistrationRequest = (
+  input: unknown,
+): AdminUpsertTenantSigningRegistrationRequest => {
+  return adminUpsertTenantSigningRegistrationRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertBadgeTemplateByIdRequest = (
+  input: unknown,
+): AdminUpsertBadgeTemplateByIdRequest => {
+  return adminUpsertBadgeTemplateByIdRequestSchema.parse(input);
 };

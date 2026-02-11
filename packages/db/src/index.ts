@@ -40,6 +40,70 @@ export interface SqlDatabase {
   prepare(sql: string): SqlPreparedStatement;
 }
 
+export type TenantPlanTier = 'free' | 'team' | 'institution' | 'enterprise';
+
+export interface TenantRecord {
+  id: string;
+  slug: string;
+  displayName: string;
+  planTier: TenantPlanTier;
+  issuerDomain: string;
+  didWeb: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTenantInput {
+  id: string;
+  slug: string;
+  displayName: string;
+  planTier: TenantPlanTier;
+  issuerDomain: string;
+  didWeb: string;
+  isActive?: boolean | undefined;
+}
+
+export interface UpsertBadgeTemplateByIdInput {
+  id: string;
+  tenantId: string;
+  slug: string;
+  title: string;
+  description?: string | undefined;
+  criteriaUri?: string | undefined;
+  imageUri?: string | undefined;
+  createdByUserId?: string | undefined;
+}
+
+export interface Ed25519PublicJwkRecord {
+  kty: 'OKP';
+  crv: 'Ed25519';
+  x: string;
+  kid?: string | undefined;
+}
+
+export interface Ed25519PrivateJwkRecord extends Ed25519PublicJwkRecord {
+  d: string;
+}
+
+export interface TenantSigningRegistrationRecord {
+  tenantId: string;
+  did: string;
+  keyId: string;
+  publicJwkJson: string;
+  privateJwkJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTenantSigningRegistrationInput {
+  tenantId: string;
+  did: string;
+  keyId: string;
+  publicJwkJson: string;
+  privateJwkJson?: string | undefined;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -375,6 +439,28 @@ interface BadgeTemplateRow {
   imageUri: string | null;
   createdByUserId: string | null;
   isArchived: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TenantRow {
+  id: string;
+  slug: string;
+  displayName: string;
+  planTier: TenantPlanTier;
+  issuerDomain: string;
+  didWeb: string;
+  isActive: number | boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TenantSigningRegistrationRow {
+  tenantId: string;
+  did: string;
+  keyId: string;
+  publicJwkJson: string;
+  privateJwkJson: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1265,6 +1351,34 @@ export const revokeSessionByHash = async (
     .run();
 };
 
+const mapTenantRow = (row: TenantRow): TenantRecord => {
+  return {
+    id: row.id,
+    slug: row.slug,
+    displayName: row.displayName,
+    planTier: row.planTier,
+    issuerDomain: row.issuerDomain,
+    didWeb: row.didWeb,
+    isActive: row.isActive === 1 || row.isActive === true,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapTenantSigningRegistrationRow = (
+  row: TenantSigningRegistrationRow,
+): TenantSigningRegistrationRecord => {
+  return {
+    tenantId: row.tenantId,
+    did: row.did,
+    keyId: row.keyId,
+    publicJwkJson: row.publicJwkJson,
+    privateJwkJson: row.privateJwkJson,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
 const mapBadgeTemplateRow = (row: BadgeTemplateRow): BadgeTemplateRecord => {
   return {
     id: row.id,
@@ -1353,6 +1467,234 @@ const mapPublicBadgeWallEntryRow = (row: PublicBadgeWallEntryRow): PublicBadgeWa
     issuedAt: row.issuedAt,
     revokedAt: row.revokedAt,
   };
+};
+
+export const upsertTenant = async (
+  db: SqlDatabase,
+  input: UpsertTenantInput,
+): Promise<TenantRecord> => {
+  const nowIso = new Date().toISOString();
+  const isActive = input.isActive ?? true;
+
+  await db
+    .prepare(
+      `
+      INSERT INTO tenants (
+        id,
+        slug,
+        display_name,
+        plan_tier,
+        issuer_domain,
+        did_web,
+        is_active,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (id)
+      DO UPDATE SET
+        slug = excluded.slug,
+        display_name = excluded.display_name,
+        plan_tier = excluded.plan_tier,
+        issuer_domain = excluded.issuer_domain,
+        did_web = excluded.did_web,
+        is_active = excluded.is_active,
+        updated_at = excluded.updated_at
+    `,
+    )
+    .bind(
+      input.id,
+      input.slug,
+      input.displayName,
+      input.planTier,
+      input.issuerDomain,
+      input.didWeb,
+      isActive ? 1 : 0,
+      nowIso,
+      nowIso,
+    )
+    .run();
+
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        slug,
+        display_name AS displayName,
+        plan_tier AS planTier,
+        issuer_domain AS issuerDomain,
+        did_web AS didWeb,
+        is_active AS isActive,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM tenants
+      WHERE id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(input.id)
+    .first<TenantRow>();
+
+  if (row === null) {
+    throw new Error(`Unable to upsert tenant "${input.id}"`);
+  }
+
+  return mapTenantRow(row);
+};
+
+export const upsertTenantSigningRegistration = async (
+  db: SqlDatabase,
+  input: UpsertTenantSigningRegistrationInput,
+): Promise<TenantSigningRegistrationRecord> => {
+  const nowIso = new Date().toISOString();
+
+  await db
+    .prepare(
+      `
+      INSERT INTO tenant_signing_registrations (
+        tenant_id,
+        did,
+        key_id,
+        public_jwk_json,
+        private_jwk_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (tenant_id)
+      DO UPDATE SET
+        did = excluded.did,
+        key_id = excluded.key_id,
+        public_jwk_json = excluded.public_jwk_json,
+        private_jwk_json = excluded.private_jwk_json,
+        updated_at = excluded.updated_at
+    `,
+    )
+    .bind(
+      input.tenantId,
+      input.did,
+      input.keyId,
+      input.publicJwkJson,
+      input.privateJwkJson ?? null,
+      nowIso,
+      nowIso,
+    )
+    .run();
+
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        tenant_id AS tenantId,
+        did,
+        key_id AS keyId,
+        public_jwk_json AS publicJwkJson,
+        private_jwk_json AS privateJwkJson,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM tenant_signing_registrations
+      WHERE tenant_id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(input.tenantId)
+    .first<TenantSigningRegistrationRow>();
+
+  if (row === null) {
+    throw new Error(`Unable to upsert signing registration for tenant "${input.tenantId}"`);
+  }
+
+  return mapTenantSigningRegistrationRow(row);
+};
+
+export const findTenantSigningRegistrationByDid = async (
+  db: SqlDatabase,
+  did: string,
+): Promise<TenantSigningRegistrationRecord | null> => {
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        tenant_id AS tenantId,
+        did,
+        key_id AS keyId,
+        public_jwk_json AS publicJwkJson,
+        private_jwk_json AS privateJwkJson,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM tenant_signing_registrations
+      WHERE did = ?
+      LIMIT 1
+    `,
+    )
+    .bind(did)
+    .first<TenantSigningRegistrationRow>();
+
+  if (row === null) {
+    return null;
+  }
+
+  return mapTenantSigningRegistrationRow(row);
+};
+
+export const upsertBadgeTemplateById = async (
+  db: SqlDatabase,
+  input: UpsertBadgeTemplateByIdInput,
+): Promise<BadgeTemplateRecord> => {
+  const nowIso = new Date().toISOString();
+
+  await db
+    .prepare(
+      `
+      INSERT INTO badge_templates (
+        id,
+        tenant_id,
+        slug,
+        title,
+        description,
+        criteria_uri,
+        image_uri,
+        created_by_user_id,
+        is_archived,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ON CONFLICT (id)
+      DO UPDATE SET
+        tenant_id = excluded.tenant_id,
+        slug = excluded.slug,
+        title = excluded.title,
+        description = excluded.description,
+        criteria_uri = excluded.criteria_uri,
+        image_uri = excluded.image_uri,
+        created_by_user_id = excluded.created_by_user_id,
+        is_archived = 0,
+        updated_at = excluded.updated_at
+    `,
+    )
+    .bind(
+      input.id,
+      input.tenantId,
+      input.slug,
+      input.title,
+      input.description ?? null,
+      input.criteriaUri ?? null,
+      input.imageUri ?? null,
+      input.createdByUserId ?? null,
+      nowIso,
+      nowIso,
+    )
+    .run();
+
+  const template = await findBadgeTemplateById(db, input.tenantId, input.id);
+
+  if (template === null) {
+    throw new Error(`Unable to upsert badge template "${input.id}"`);
+  }
+
+  return template;
 };
 
 export const createBadgeTemplate = async (

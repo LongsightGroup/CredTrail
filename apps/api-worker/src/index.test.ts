@@ -15,6 +15,7 @@ vi.mock('@credtrail/db', async () => {
     findAssertionByPublicId: vi.fn(),
     findAssertionByIdempotencyKey: vi.fn(),
     findBadgeTemplateById: vi.fn(),
+    findTenantSigningRegistrationByDid: vi.fn(),
     findActiveSessionByHash: vi.fn(),
     findLearnerProfileById: vi.fn(),
     findLearnerIdentityLinkProofByHash: vi.fn(),
@@ -29,6 +30,9 @@ vi.mock('@credtrail/db', async () => {
     nextAssertionStatusListIndex: vi.fn(),
     recordAssertionRevocation: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
+    upsertBadgeTemplateById: vi.fn(),
+    upsertTenant: vi.fn(),
+    upsertTenantSigningRegistration: vi.fn(),
   };
 });
 
@@ -61,6 +65,8 @@ import {
   type LearnerProfileRecord,
   type PublicBadgeWallEntryRecord,
   type SessionRecord,
+  type TenantRecord,
+  type TenantSigningRegistrationRecord,
   type SqlDatabase,
   addLearnerIdentityAlias,
   completeJobQueueMessage,
@@ -73,6 +79,7 @@ import {
   findAssertionByPublicId,
   findAssertionByIdempotencyKey,
   findBadgeTemplateById,
+  findTenantSigningRegistrationByDid,
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileById,
   findLearnerProfileByIdentity,
@@ -87,6 +94,9 @@ import {
   resolveLearnerProfileForIdentity,
   touchSession,
   type JobQueueMessageRecord,
+  upsertBadgeTemplateById,
+  upsertTenant,
+  upsertTenantSigningRegistration,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
 
@@ -143,6 +153,7 @@ const mockedFindAssertionById = vi.mocked(findAssertionById);
 const mockedFindAssertionByPublicId = vi.mocked(findAssertionByPublicId);
 const mockedFindAssertionByIdempotencyKey = vi.mocked(findAssertionByIdempotencyKey);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
+const mockedFindTenantSigningRegistrationByDid = vi.mocked(findTenantSigningRegistrationByDid);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindUserById = vi.mocked(findUserById);
@@ -164,6 +175,9 @@ const mockedLeaseJobQueueMessages = vi.mocked(leaseJobQueueMessages);
 const mockedCompleteJobQueueMessage = vi.mocked(completeJobQueueMessage);
 const mockedFailJobQueueMessage = vi.mocked(failJobQueueMessage);
 const mockedRecordAssertionRevocation = vi.mocked(recordAssertionRevocation);
+const mockedUpsertTenant = vi.mocked(upsertTenant);
+const mockedUpsertTenantSigningRegistration = vi.mocked(upsertTenantSigningRegistration);
+const mockedUpsertBadgeTemplateById = vi.mocked(upsertBadgeTemplateById);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -176,6 +190,7 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
   MARKETING_SITE_ORIGIN?: string;
   JOB_PROCESSOR_TOKEN?: string;
+  BOOTSTRAP_ADMIN_TOKEN?: string;
 } => {
   return {
     APP_ENV: 'test',
@@ -188,6 +203,7 @@ const createEnv = (): {
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
 });
 
 const sampleAssertion = (overrides?: {
@@ -322,6 +338,45 @@ const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTem
     imageUri: null,
     createdByUserId: 'usr_issuer',
     isArchived: false,
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleTenant = (overrides?: Partial<TenantRecord>): TenantRecord => {
+  return {
+    id: 'sakai',
+    slug: 'sakai',
+    displayName: 'Sakai Project',
+    planTier: 'team',
+    issuerDomain: 'sakai.credtrail.test',
+    didWeb: 'did:web:credtrail.test:sakai',
+    isActive: true,
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleTenantSigningRegistration = (
+  overrides?: Partial<TenantSigningRegistrationRecord>,
+): TenantSigningRegistrationRecord => {
+  return {
+    tenantId: 'sakai',
+    did: 'did:web:credtrail.test:sakai',
+    keyId: 'key-1',
+    publicJwkJson: JSON.stringify({
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: 'A'.repeat(32),
+    }),
+    privateJwkJson: JSON.stringify({
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: 'A'.repeat(32),
+      d: 'B'.repeat(32),
+    }),
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
     ...overrides,
@@ -475,6 +530,246 @@ describe('canonical host redirects', () => {
 
     expect(response.status).toBe(308);
     expect(response.headers.get('location')).toBe('https://credtrail.test/healthz');
+  });
+});
+
+describe('PUT /v1/admin/tenants/:tenantId', () => {
+  beforeEach(() => {
+    mockedUpsertTenant.mockReset();
+  });
+
+  it('returns 503 when bootstrap admin token is not configured', async () => {
+    const response = await app.request(
+      '/v1/admin/tenants/sakai',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer any-token',
+        },
+        body: JSON.stringify({
+          slug: 'sakai',
+          displayName: 'Sakai Project',
+        }),
+      },
+      createEnv(),
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe('Bootstrap admin API is not configured');
+    expect(mockedUpsertTenant).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when bootstrap bearer token does not match', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+    const response = await app.request(
+      '/v1/admin/tenants/sakai',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer wrong-secret',
+        },
+        body: JSON.stringify({
+          slug: 'sakai',
+          displayName: 'Sakai Project',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe('Unauthorized');
+    expect(mockedUpsertTenant).not.toHaveBeenCalled();
+  });
+
+  it('upserts tenant metadata through the admin API', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+    mockedUpsertTenant.mockResolvedValue(sampleTenant());
+
+    const response = await app.request(
+      '/v1/admin/tenants/sakai',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer bootstrap-secret',
+        },
+        body: JSON.stringify({
+          slug: 'sakai',
+          displayName: 'Sakai Project',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{ tenant: TenantRecord }>();
+
+    expect(response.status).toBe(201);
+    expect(body.tenant.id).toBe('sakai');
+    expect(body.tenant.didWeb).toBe('did:web:credtrail.test:sakai');
+    expect(mockedUpsertTenant).toHaveBeenCalledWith(fakeDb, {
+      id: 'sakai',
+      slug: 'sakai',
+      displayName: 'Sakai Project',
+      planTier: 'team',
+      issuerDomain: 'sakai.credtrail.test',
+      didWeb: 'did:web:credtrail.test:sakai',
+      isActive: undefined,
+    });
+  });
+
+  it('returns 409 when tenant slug/domain uniqueness is violated', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+    mockedUpsertTenant.mockRejectedValue(
+      new Error('duplicate key value violates unique constraint "tenants_slug_key"'),
+    );
+
+    const response = await app.request(
+      '/v1/admin/tenants/sakai',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer bootstrap-secret',
+        },
+        body: JSON.stringify({
+          slug: 'sakai',
+          displayName: 'Sakai Project',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('Tenant slug or issuer domain is already in use');
+  });
+});
+
+describe('PUT /v1/admin/tenants/:tenantId/signing-registration', () => {
+  beforeEach(() => {
+    mockedUpsertTenantSigningRegistration.mockReset();
+  });
+
+  it('stores tenant signing registration via admin API', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:sakai',
+      keyId: 'key-1',
+    });
+    mockedUpsertTenantSigningRegistration.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request(
+      '/v1/admin/tenants/sakai/signing-registration',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer bootstrap-secret',
+        },
+        body: JSON.stringify({
+          keyId: signingMaterial.keyId,
+          publicJwk: signingMaterial.publicJwk,
+          privateJwk: signingMaterial.privateJwk,
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{
+      tenantId: string;
+      did: string;
+      keyId: string;
+      hasPrivateKey: boolean;
+    }>();
+
+    expect(response.status).toBe(201);
+    expect(body.tenantId).toBe('sakai');
+    expect(body.did).toBe('did:web:credtrail.test:sakai');
+    expect(body.keyId).toBe('key-1');
+    expect(body.hasPrivateKey).toBe(true);
+    const firstCall = mockedUpsertTenantSigningRegistration.mock.calls[0];
+    const input = firstCall?.[1];
+
+    expect(firstCall?.[0]).toBe(fakeDb);
+    expect(input?.tenantId).toBe('sakai');
+    expect(input?.did).toBe('did:web:credtrail.test:sakai');
+    expect(input?.keyId).toBe(signingMaterial.keyId);
+    expect(JSON.parse(input?.publicJwkJson ?? '{}')).toEqual(signingMaterial.publicJwk);
+    expect(JSON.parse(input?.privateJwkJson ?? '{}')).toEqual(signingMaterial.privateJwk);
+  });
+});
+
+describe('PUT /v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', () => {
+  beforeEach(() => {
+    mockedUpsertBadgeTemplateById.mockReset();
+  });
+
+  it('upserts a template through the admin API', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+    mockedUpsertBadgeTemplateById.mockResolvedValue(
+      sampleBadgeTemplate({
+        id: 'badge_template_sakai_1000',
+        tenantId: 'sakai',
+        slug: 'sakai-1000-commits-contributor',
+      }),
+    );
+
+    const response = await app.request(
+      '/v1/admin/tenants/sakai/badge-templates/badge_template_sakai_1000',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer bootstrap-secret',
+        },
+        body: JSON.stringify({
+          slug: 'sakai-1000-commits-contributor',
+          title: 'Sakai 1000+ Commits Contributor',
+          description: 'Awarded for contributing 1000+ commits to Sakai.',
+          criteriaUri: 'https://github.com/sakaiproject/sakai',
+          imageUri: 'https://avatars.githubusercontent.com/u/429529?s=200&v=4',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{ tenantId: string; template: BadgeTemplateRecord }>();
+
+    expect(response.status).toBe(201);
+    expect(body.tenantId).toBe('sakai');
+    expect(body.template.id).toBe('badge_template_sakai_1000');
+    expect(mockedUpsertBadgeTemplateById).toHaveBeenCalledWith(fakeDb, {
+      id: 'badge_template_sakai_1000',
+      tenantId: 'sakai',
+      slug: 'sakai-1000-commits-contributor',
+      title: 'Sakai 1000+ Commits Contributor',
+      description: 'Awarded for contributing 1000+ commits to Sakai.',
+      criteriaUri: 'https://github.com/sakaiproject/sakai',
+      imageUri: 'https://avatars.githubusercontent.com/u/429529?s=200&v=4',
+    });
   });
 });
 
@@ -851,8 +1146,41 @@ describe('GET /credentials/v1/:credentialId', () => {
   });
 });
 
+describe('DID signing resolution from Postgres registration', () => {
+  beforeEach(() => {
+    mockedFindTenantSigningRegistrationByDid.mockReset();
+  });
+
+  it('serves did.json from DB-backed signing registration', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:localhost',
+      keyId: 'key-root',
+    });
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'platform',
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/.well-known/did.json', undefined, env);
+    const body = await response.json<JsonObject>();
+
+    expect(response.status).toBe(200);
+    expect(asString(body.id)).toBe('did:web:localhost');
+    expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(fakeDb, 'did:web:localhost');
+  });
+});
+
 describe('GET /credentials/v1/status-lists/:tenantId/revocation', () => {
   beforeEach(() => {
+    mockedFindTenantSigningRegistrationByDid.mockReset();
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
     mockedListAssertionStatusListEntries.mockReset();
   });
 
@@ -933,6 +1261,92 @@ describe('GET /credentials/v1/status-lists/:tenantId/revocation', () => {
     expect(response.status).toBe(404);
     expect(body.error).toBe('No signing configuration for tenant DID');
     expect(mockedListAssertionStatusListEntries).not.toHaveBeenCalled();
+  });
+
+  it('builds status list credential from DB-backed signing registration', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+      keyId: 'key-db',
+    });
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+    mockedListAssertionStatusListEntries.mockResolvedValue([]);
+
+    const response = await app.request(
+      '/credentials/v1/status-lists/tenant_123/revocation',
+      undefined,
+      env,
+    );
+    const body = await response.json<JsonObject>();
+
+    expect(response.status).toBe(200);
+    expect(asString(body.issuer)).toBe('did:web:credtrail.test:tenant_123');
+    expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(
+      fakeDb,
+      'did:web:credtrail.test:tenant_123',
+    );
+  });
+});
+
+describe('POST /v1/signing/credentials', () => {
+  beforeEach(() => {
+    mockedFindTenantSigningRegistrationByDid.mockReset();
+  });
+
+  it('signs credentials using DB-backed signing registrations', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:sakai',
+      keyId: 'key-db-sign',
+    });
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'sakai',
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request(
+      '/v1/signing/credentials',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          did: signingMaterial.did,
+          credential: {
+            '@context': ['https://www.w3.org/ns/credentials/v2'],
+            type: ['VerifiableCredential'],
+            issuer: signingMaterial.did,
+            credentialSubject: {
+              id: 'urn:credtrail:subject:test',
+            },
+          },
+        }),
+      },
+      env,
+    );
+    const body = await response.json<JsonObject>();
+    const signedCredential = asJsonObject(body.credential);
+
+    expect(response.status).toBe(201);
+    expect(asString(body.did)).toBe(signingMaterial.did);
+    expect(asJsonObject(signedCredential?.proof)).not.toBeNull();
+    expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(fakeDb, signingMaterial.did);
   });
 });
 

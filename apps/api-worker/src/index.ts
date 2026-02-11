@@ -35,6 +35,7 @@ import {
   findAssertionByPublicId,
   findAssertionByIdempotencyKey,
   findBadgeTemplateById,
+  findTenantSigningRegistrationByDid,
   findActiveSessionByHash,
   isLearnerIdentityLinkProofValid,
   listAssertionStatusListEntries,
@@ -52,6 +53,9 @@ import {
   revokeSessionByHash,
   setBadgeTemplateArchivedState,
   touchSession,
+  upsertBadgeTemplateById,
+  upsertTenant,
+  upsertTenantSigningRegistration,
   updateBadgeTemplate,
   type AssertionRecord,
   type LearnerBadgeSummaryRecord,
@@ -69,6 +73,9 @@ import {
   parseQueueJob,
   parseCredentialPathParams,
   parseCreateBadgeTemplateRequest,
+  parseAdminUpsertBadgeTemplateByIdRequest,
+  parseAdminUpsertTenantRequest,
+  parseAdminUpsertTenantSigningRegistrationRequest,
   type IssueBadgeQueueJob,
   type IssueBadgeRequest,
   type ProcessQueueRequest,
@@ -88,7 +95,9 @@ import {
   parseRevokeBadgeRequest,
   parseSignCredentialRequest,
   parseTenantSigningRegistry,
+  parseTenantSigningRegistryEntry,
   parseUpdateBadgeTemplateRequest,
+  type TenantSigningRegistryEntry,
   type TenantSigningRegistry,
 } from '@credtrail/validation';
 import { Hono, type Context } from 'hono';
@@ -109,6 +118,7 @@ interface AppBindings {
   MAILTRAP_FROM_NAME?: string;
   GITHUB_TOKEN?: string;
   JOB_PROCESSOR_TOKEN?: string;
+  BOOTSTRAP_ADMIN_TOKEN?: string;
 }
 
 interface AppEnv {
@@ -295,6 +305,91 @@ const parseSigningRegistryFromEnv = (rawRegistry: string | undefined): TenantSig
   }
 
   return parseTenantSigningRegistry(parsedRegistry);
+};
+
+const parseSigningEntryFromStoredJson = (
+  tenantId: string,
+  keyId: string,
+  publicJwkJson: string,
+  privateJwkJson: string | null,
+): TenantSigningRegistryEntry => {
+  let parsedPublicJwk: unknown;
+  let parsedPrivateJwk: unknown = undefined;
+
+  try {
+    parsedPublicJwk = JSON.parse(publicJwkJson) as unknown;
+  } catch {
+    throw new Error(`Invalid stored public JWK JSON for tenant "${tenantId}"`);
+  }
+
+  if (privateJwkJson !== null) {
+    try {
+      parsedPrivateJwk = JSON.parse(privateJwkJson) as unknown;
+    } catch {
+      throw new Error(`Invalid stored private JWK JSON for tenant "${tenantId}"`);
+    }
+  }
+
+  return parseTenantSigningRegistryEntry({
+    tenantId,
+    keyId,
+    publicJwk: parsedPublicJwk,
+    ...(parsedPrivateJwk === undefined ? {} : { privateJwk: parsedPrivateJwk }),
+  });
+};
+
+const resolveSigningEntryForDid = async (
+  c: AppContext,
+  did: string,
+): Promise<TenantSigningRegistryEntry | null> => {
+  const dbSigningRegistration = await findTenantSigningRegistrationByDid(resolveDatabase(c.env), did);
+
+  if (dbSigningRegistration !== null) {
+    return parseSigningEntryFromStoredJson(
+      dbSigningRegistration.tenantId,
+      dbSigningRegistration.keyId,
+      dbSigningRegistration.publicJwkJson,
+      dbSigningRegistration.privateJwkJson,
+    );
+  }
+
+  const envRegistry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
+  return envRegistry[did] ?? null;
+};
+
+const requireBootstrapAdmin = (c: AppContext): Response | null => {
+  const configuredToken = c.env.BOOTSTRAP_ADMIN_TOKEN?.trim();
+
+  if (configuredToken === undefined || configuredToken.length === 0) {
+    return c.json(
+      {
+        error: 'Bootstrap admin API is not configured',
+      },
+      503,
+    );
+  }
+
+  const authorizationHeader = c.req.header('authorization');
+  const expectedAuthorization = `Bearer ${configuredToken}`;
+
+  if (authorizationHeader !== expectedAuthorization) {
+    return c.json(
+      {
+        error: 'Unauthorized',
+      },
+      401,
+    );
+  }
+
+  return null;
+};
+
+const isUniqueConstraintError = (error: unknown): boolean => {
+  return (
+    error instanceof Error &&
+    (error.message.includes('UNIQUE constraint failed') ||
+      error.message.includes('duplicate key value violates unique constraint'))
+  );
 };
 
 const didForWellKnownRequest = (requestUrl: string): string => {
@@ -2194,12 +2289,152 @@ app.get('/healthz', (c) => {
   });
 });
 
-app.get('/.well-known/did.json', (c) => {
-  const registry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
-  const did = didForWellKnownRequest(c.req.url);
-  const signingEntry = registry[did];
+app.put('/v1/admin/tenants/:tenantId', async (c) => {
+  const unauthorizedResponse = requireBootstrapAdmin(c);
 
-  if (signingEntry === undefined) {
+  if (unauthorizedResponse !== null) {
+    return unauthorizedResponse;
+  }
+
+  const pathParams = parseTenantPathParams(c.req.param());
+  const payload = await c.req.json<unknown>();
+  const request = parseAdminUpsertTenantRequest(payload);
+  const issuerDomain = request.issuerDomain ?? `${request.slug}.${c.env.PLATFORM_DOMAIN}`;
+  const didWeb = createDidWeb({
+    host: c.env.PLATFORM_DOMAIN,
+    pathSegments: [pathParams.tenantId],
+  });
+
+  try {
+    const tenant = await upsertTenant(resolveDatabase(c.env), {
+      id: pathParams.tenantId,
+      slug: request.slug,
+      displayName: request.displayName,
+      planTier: request.planTier ?? 'team',
+      issuerDomain,
+      didWeb,
+      isActive: request.isActive,
+    });
+
+    return c.json(
+      {
+        tenant,
+      },
+      201,
+    );
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error)) {
+      return c.json(
+        {
+          error: 'Tenant slug or issuer domain is already in use',
+        },
+        409,
+      );
+    }
+
+    throw error;
+  }
+});
+
+app.put('/v1/admin/tenants/:tenantId/signing-registration', async (c) => {
+  const unauthorizedResponse = requireBootstrapAdmin(c);
+
+  if (unauthorizedResponse !== null) {
+    return unauthorizedResponse;
+  }
+
+  const pathParams = parseTenantPathParams(c.req.param());
+  const payload = await c.req.json<unknown>();
+  const request = parseAdminUpsertTenantSigningRegistrationRequest(payload);
+  const did = createDidWeb({
+    host: c.env.PLATFORM_DOMAIN,
+    pathSegments: [pathParams.tenantId],
+  });
+
+  try {
+    const registration = await upsertTenantSigningRegistration(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      did,
+      keyId: request.keyId,
+      publicJwkJson: JSON.stringify(request.publicJwk),
+      ...(request.privateJwk === undefined
+        ? {}
+        : {
+            privateJwkJson: JSON.stringify(request.privateJwk),
+          }),
+    });
+
+    return c.json(
+      {
+        tenantId: registration.tenantId,
+        did: registration.did,
+        keyId: registration.keyId,
+        hasPrivateKey: registration.privateJwkJson !== null,
+      },
+      201,
+    );
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error)) {
+      return c.json(
+        {
+          error: 'Signing registration conflicts with another tenant DID',
+        },
+        409,
+      );
+    }
+
+    throw error;
+  }
+});
+
+app.put('/v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
+  const unauthorizedResponse = requireBootstrapAdmin(c);
+
+  if (unauthorizedResponse !== null) {
+    return unauthorizedResponse;
+  }
+
+  const pathParams = parseBadgeTemplatePathParams(c.req.param());
+  const payload = await c.req.json<unknown>();
+  const request = parseAdminUpsertBadgeTemplateByIdRequest(payload);
+
+  try {
+    const template = await upsertBadgeTemplateById(resolveDatabase(c.env), {
+      id: pathParams.badgeTemplateId,
+      tenantId: pathParams.tenantId,
+      slug: request.slug,
+      title: request.title,
+      description: request.description,
+      criteriaUri: request.criteriaUri,
+      imageUri: request.imageUri,
+    });
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        template,
+      },
+      201,
+    );
+  } catch (error: unknown) {
+    if (isUniqueConstraintError(error)) {
+      return c.json(
+        {
+          error: 'Badge template slug already exists for tenant',
+        },
+        409,
+      );
+    }
+
+    throw error;
+  }
+});
+
+app.get('/.well-known/did.json', async (c) => {
+  const did = didForWellKnownRequest(c.req.url);
+  const signingEntry = await resolveSigningEntryForDid(c, did);
+
+  if (signingEntry === null) {
     return c.json(
       {
         error: 'No DID document configured for request host',
@@ -2218,13 +2453,12 @@ app.get('/.well-known/did.json', (c) => {
   );
 });
 
-app.get('/:tenantSlug/did.json', (c) => {
-  const registry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
+app.get('/:tenantSlug/did.json', async (c) => {
   const tenantSlug = c.req.param('tenantSlug');
   const did = didForTenantPathRequest(c.req.url, tenantSlug);
-  const signingEntry = registry[did];
+  const signingEntry = await resolveSigningEntryForDid(c, did);
 
-  if (signingEntry === undefined) {
+  if (signingEntry === null) {
     return c.json(
       {
         error: 'No DID document configured for tenant path',
@@ -2285,14 +2519,13 @@ app.get('/credentials/v1/:credentialId', async (c) => {
 
 app.get('/credentials/v1/status-lists/:tenantId/revocation', async (c) => {
   const pathParams = parseTenantPathParams(c.req.param());
-  const registry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
   const issuerDid = createDidWeb({
     host: c.env.PLATFORM_DOMAIN,
     pathSegments: [pathParams.tenantId],
   });
-  const signingEntry = registry[issuerDid];
+  const signingEntry = await resolveSigningEntryForDid(c, issuerDid);
 
-  if (signingEntry === undefined) {
+  if (signingEntry === null) {
     return c.json(
       {
         error: 'No signing configuration for tenant DID',
@@ -3124,10 +3357,9 @@ const issueBadgeForTenant = async (
     host: c.env.PLATFORM_DOMAIN,
     pathSegments: [tenantId],
   });
-  const registry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
-  const signingEntry = registry[issuerDid];
+  const signingEntry = await resolveSigningEntryForDid(c, issuerDid);
 
-  if (signingEntry === undefined) {
+  if (signingEntry === null) {
     throw new HttpErrorResponse(404, {
       error: 'No signing configuration for tenant DID',
       did: issuerDid,
@@ -3433,10 +3665,9 @@ app.post('/v1/signing/keys/generate', async (c) => {
 app.post('/v1/signing/credentials', async (c) => {
   const payload = await c.req.json<unknown>();
   const request = parseSignCredentialRequest(payload);
-  const registry = parseSigningRegistryFromEnv(c.env.TENANT_SIGNING_REGISTRY_JSON);
-  const signingEntry = registry[request.did];
+  const signingEntry = await resolveSigningEntryForDid(c, request.did);
 
-  if (signingEntry === undefined) {
+  if (signingEntry === null) {
     return c.json(
       {
         error: 'No signing configuration for requested DID',
