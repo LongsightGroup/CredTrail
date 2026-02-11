@@ -296,9 +296,9 @@ const samplePublicBadgeWallEntry = (
   overrides?: Partial<PublicBadgeWallEntryRecord>,
 ): PublicBadgeWallEntryRecord => {
   return {
-    assertionId: 'tenant_sakai:assertion_001',
+    assertionId: 'sakai:assertion_001',
     assertionPublicId: 'a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf',
-    tenantId: 'tenant_sakai',
+    tenantId: 'sakai',
     badgeTemplateId: 'badge_template_sakai_1000',
     badgeTitle: 'Sakai 1000+ Commits Contributor',
     badgeDescription: 'Awarded for 1000+ commits.',
@@ -494,12 +494,12 @@ describe('GET /showcase/:tenantId', () => {
       }),
     ]);
 
-    const response = await app.request('/showcase/tenant_sakai', undefined, env);
+    const response = await app.request('/showcase/sakai', undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body).toContain('Badge Wall · tenant_sakai');
+    expect(body).toContain('Badge Wall · sakai');
     expect(body).toContain('2 issued badges');
     expect(body).toContain('/badges/a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf');
     expect(body).toContain('/badges/620b51c5-c6f8-4506-8a5c-2daaa2eb6f04');
@@ -509,7 +509,8 @@ describe('GET /showcase/:tenantId', () => {
     expect(body).toContain('Sakai Distinguished Contributor');
     expect(body).toContain('github.com/ottenhoff.png');
     expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_sakai',
+      tenantId: 'sakai',
+      badgeTemplateId: 'badge_template_sakai_1000',
     });
   });
 
@@ -518,7 +519,7 @@ describe('GET /showcase/:tenantId', () => {
     mockedListPublicBadgeWallEntries.mockResolvedValue([]);
 
     const response = await app.request(
-      '/showcase/tenant_sakai?badgeTemplateId=badge_template_sakai_1000',
+      '/showcase/sakai?badgeTemplateId=badge_template_sakai_1000',
       undefined,
       env,
     );
@@ -527,7 +528,7 @@ describe('GET /showcase/:tenantId', () => {
     expect(response.status).toBe(200);
     expect(body).toContain('badge template &quot;badge_template_sakai_1000&quot;');
     expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_sakai',
+      tenantId: 'sakai',
       badgeTemplateId: 'badge_template_sakai_1000',
     });
   });
@@ -536,24 +537,12 @@ describe('GET /showcase/:tenantId', () => {
     const env = createEnv();
     mockedListPublicBadgeWallEntries.mockResolvedValue([]);
 
-    const response = await app.request('/showcase/tenant_sakai', undefined, env);
+    const response = await app.request('/showcase/sakai', undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(200);
     expect(body).toContain('0 issued badges');
     expect(body).toContain('No public badges found for this showcase.');
-  });
-});
-
-describe('GET /showcase/sakai', () => {
-  it('redirects to the generic tenant showcase with Sakai template filter', async () => {
-    const env = createEnv();
-    const response = await app.request('/showcase/sakai', undefined, env);
-
-    expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe(
-      'http://localhost/showcase/tenant_sakai?badgeTemplateId=badge_template_sakai_1000',
-    );
   });
 });
 

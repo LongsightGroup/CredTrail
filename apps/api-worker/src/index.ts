@@ -130,7 +130,7 @@ const SAKAI_REPO_NAME = 'sakai';
 const SAKAI_MIN_COMMIT_COUNT = 1000;
 const SAKAI_ISSUER_NAME = 'Sakai Project';
 const SAKAI_ISSUER_URL = 'https://www.sakaiproject.org/';
-const SAKAI_SHOWCASE_TENANT_ID = 'tenant_sakai';
+const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
 const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
 const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
@@ -2410,16 +2410,12 @@ app.get('/badges/:badgeIdentifier', async (c) => {
   return c.html(publicBadgePage(c.req.url, result.value));
 });
 
-app.get('/showcase/sakai', (c) => {
-  const showcaseUrl = new URL(c.req.url);
-  showcaseUrl.pathname = `/showcase/${encodeURIComponent(SAKAI_SHOWCASE_TENANT_ID)}`;
-  showcaseUrl.searchParams.set('badgeTemplateId', SAKAI_SHOWCASE_TEMPLATE_ID);
-  return c.redirect(showcaseUrl.toString(), 308);
-});
-
 app.get('/showcase/:tenantId', async (c) => {
   const pathParams = parseTenantPathParams(c.req.param());
-  const badgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
+  const requestedBadgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
+  const badgeTemplateId =
+    requestedBadgeTemplateId ??
+    (pathParams.tenantId === SAKAI_SHOWCASE_TENANT_ID ? SAKAI_SHOWCASE_TEMPLATE_ID : null);
   const entries = await listPublicBadgeWallEntries(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     ...(badgeTemplateId === null ? {} : { badgeTemplateId }),
