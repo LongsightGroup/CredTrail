@@ -6,6 +6,7 @@ import {
   splitTenantScopedId,
   type Ed25519PrivateJwk,
   type Ed25519PublicJwk,
+  type P256PrivateJwk,
   type P256PublicJwk,
   type JsonObject,
   generateTenantDidSigningMaterial,
@@ -13,6 +14,7 @@ import {
   logError,
   logInfo,
   logWarn,
+  signCredentialWithDataIntegrityProof,
   signCredentialWithEd25519Signature2020,
   verifyCredentialProofWithDataIntegrity,
   verifyCredentialProofWithEd25519Signature2020,
@@ -331,6 +333,9 @@ type P256SigningPublicJwk = Extract<TenantSigningRegistryEntry['publicJwk'], { k
 type Ed25519SigningPrivateJwk = NonNullable<
   Extract<TenantSigningRegistryEntry['privateJwk'], { kty: 'OKP'; crv: 'Ed25519' }>
 >;
+type P256SigningPrivateJwk = NonNullable<
+  Extract<TenantSigningRegistryEntry['privateJwk'], { kty: 'EC'; crv: 'P-256' }>
+>;
 
 const isEd25519SigningPublicJwk = (
   jwk: TenantSigningRegistryEntry['publicJwk'],
@@ -346,6 +351,12 @@ const isEd25519SigningPrivateJwk = (
   jwk: TenantSigningRegistryEntry['privateJwk'],
 ): jwk is Ed25519SigningPrivateJwk => {
   return jwk?.kty === 'OKP';
+};
+
+const isP256SigningPrivateJwk = (
+  jwk: TenantSigningRegistryEntry['privateJwk'],
+): jwk is P256SigningPrivateJwk => {
+  return jwk?.kty === 'EC';
 };
 
 const toEd25519PublicJwk = (jwk: Ed25519SigningPublicJwk): Ed25519PublicJwk => {
@@ -398,6 +409,27 @@ const toEd25519PrivateJwk = (jwk: Ed25519SigningPrivateJwk): Ed25519PrivateJwk =
     kty: jwk.kty,
     crv: jwk.crv,
     x: jwk.x,
+    d: jwk.d,
+    kid: jwk.kid,
+  };
+};
+
+const toP256PrivateJwk = (jwk: P256SigningPrivateJwk): P256PrivateJwk => {
+  if (jwk.kid === undefined) {
+    return {
+      kty: jwk.kty,
+      crv: jwk.crv,
+      x: jwk.x,
+      y: jwk.y,
+      d: jwk.d,
+    };
+  }
+
+  return {
+    kty: jwk.kty,
+    crv: jwk.crv,
+    x: jwk.x,
+    y: jwk.y,
     d: jwk.d,
     kid: jwk.kid,
   };
@@ -5915,21 +5947,74 @@ app.post('/v1/signing/credentials', async (c) => {
     );
   }
 
-  if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
-    return c.json(
-      {
-        error: 'Credential signing endpoint requires an Ed25519 private key',
-        did: request.did,
-      },
-      422,
-    );
-  }
+  const proofType = request.proofType ?? 'Ed25519Signature2020';
+  const verificationMethod = `${request.did}#${signingEntry.keyId}`;
+  let signedCredential: JsonObject;
 
-  const signedCredential = await signCredentialWithEd25519Signature2020({
-    credential: request.credential,
-    privateJwk: toEd25519PrivateJwk(signingEntry.privateJwk),
-    verificationMethod: `${request.did}#${signingEntry.keyId}`,
-  });
+  if (proofType === 'DataIntegrityProof') {
+    const cryptosuite = request.cryptosuite;
+
+    if (cryptosuite === undefined) {
+      return c.json(
+        {
+          error: 'DataIntegrityProof signing requires a cryptosuite value',
+        },
+        400,
+      );
+    }
+
+    if (cryptosuite === 'eddsa-rdfc-2022') {
+      if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
+        return c.json(
+          {
+            error: 'DataIntegrity eddsa-rdfc-2022 signing requires an Ed25519 private key',
+            did: request.did,
+          },
+          422,
+        );
+      }
+
+      signedCredential = await signCredentialWithDataIntegrityProof({
+        credential: request.credential,
+        privateJwk: toEd25519PrivateJwk(signingEntry.privateJwk),
+        verificationMethod,
+        cryptosuite,
+      });
+    } else {
+      if (!isP256SigningPrivateJwk(signingEntry.privateJwk)) {
+        return c.json(
+          {
+            error: 'DataIntegrity ecdsa-sd-2023 signing requires a P-256 private key',
+            did: request.did,
+          },
+          422,
+        );
+      }
+
+      signedCredential = await signCredentialWithDataIntegrityProof({
+        credential: request.credential,
+        privateJwk: toP256PrivateJwk(signingEntry.privateJwk),
+        verificationMethod,
+        cryptosuite,
+      });
+    }
+  } else {
+    if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
+      return c.json(
+        {
+          error: 'Credential signing endpoint requires an Ed25519 private key',
+          did: request.did,
+        },
+        422,
+      );
+    }
+
+    signedCredential = await signCredentialWithEd25519Signature2020({
+      credential: request.credential,
+      privateJwk: toEd25519PrivateJwk(signingEntry.privateJwk),
+      verificationMethod,
+    });
+  }
 
   return c.json(
     {

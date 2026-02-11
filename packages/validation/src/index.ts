@@ -76,6 +76,24 @@ export const keyGenerationRequestSchema = z.object({
 export const signCredentialRequestSchema = z.object({
   did: didWebSchema,
   credential: jsonObjectSchema,
+  proofType: z.enum(['Ed25519Signature2020', 'DataIntegrityProof']).optional(),
+  cryptosuite: z.enum(['eddsa-rdfc-2022', 'ecdsa-sd-2023']).optional(),
+}).superRefine((value, ctx) => {
+  if (value.proofType === 'DataIntegrityProof' && value.cryptosuite === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cryptosuite'],
+      message: 'cryptosuite is required when proofType is DataIntegrityProof',
+    });
+  }
+
+  if (value.proofType !== 'DataIntegrityProof' && value.cryptosuite !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['cryptosuite'],
+      message: 'cryptosuite is only allowed when proofType is DataIntegrityProof',
+    });
+  }
 });
 
 export const tenantIdSchema = z.string().min(1);
