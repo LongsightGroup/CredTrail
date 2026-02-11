@@ -1006,6 +1006,7 @@ describe('GET /badges/:badgeIdentifier', () => {
       credentialSubject: {
         id: 'mailto:learner@example.edu',
         achievement: {
+          id: 'https://example.edu/badges/typescript-foundations',
           name: 'TypeScript Foundations',
           description: 'Awarded for completing TypeScript fundamentals.',
           criteria: {
@@ -1055,6 +1056,12 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/jsonld');
     expect(body).toContain('Share on LinkedIn');
     expect(body).toContain('linkedin.com/sharing/share-offsite');
+    expect(body).toContain('Validate Assertion (IMS)');
+    expect(body).toContain('Validate Badge Class (IMS)');
+    expect(body).toContain('Validate Issuer (IMS)');
+    expect(body).toContain('openbadgesvalidator.imsglobal.org/?url=');
+    expect(body).toContain('api.qrserver.com/v1/create-qr-code');
+    expect(body).toContain('QR code for this badge URL');
     expect(body).toContain('Open Badges 3.0 JSON');
     expect(body).toContain(
       '<link rel="alternate" type="application/ld+json" href="/credentials/v1/tenant_123%3Aassertion_456/jsonld"',

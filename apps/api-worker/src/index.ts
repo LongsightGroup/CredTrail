@@ -129,6 +129,7 @@ const SAKAI_ISSUER_URL = 'https://www.sakaiproject.org/';
 const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
 const DEFAULT_JOB_PROCESS_RETRY_DELAY_SECONDS = 30;
+const IMS_GLOBAL_OB2_VALIDATOR_BASE_URL = 'https://openbadgesvalidator.imsglobal.org/';
 
 const addSecondsToIso = (fromIso: string, seconds: number): string => {
   const fromMs = Date.parse(fromIso);
@@ -1001,6 +1002,7 @@ class HttpErrorResponse extends Error {
 }
 
 interface AchievementDetails {
+  badgeClassUri: string | null;
   description: string | null;
   criteriaUri: string | null;
   imageUri: string | null;
@@ -1011,10 +1013,17 @@ const achievementDetailsFromCredential = (credential: JsonObject): AchievementDe
   const achievement = asJsonObject(credentialSubject?.achievement);
 
   return {
+    badgeClassUri: linkedDataReferenceId(achievement?.id),
     description: asNonEmptyString(achievement?.description),
     criteriaUri: linkedDataReferenceId(achievement?.criteria),
     imageUri: linkedDataReferenceId(achievement?.image),
   };
+};
+
+const imsOb2ValidatorUrl = (targetUrl: string): string => {
+  const validatorUrl = new URL(IMS_GLOBAL_OB2_VALIDATOR_BASE_URL);
+  validatorUrl.searchParams.set('url', targetUrl);
+  return validatorUrl.toString();
 };
 
 interface EvidenceDetails {
@@ -1302,6 +1311,7 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
   const badgeName = badgeNameFromCredential(model.credential);
   const issuerName = issuerNameFromCredential(model.credential);
   const issuerUrl = issuerUrlFromCredential(model.credential);
+  const issuerIdentifier = issuerIdentifierFromCredential(model.credential);
   const recipientIdentifier = recipientFromCredential(model.credential);
   const recipientName =
     model.recipientDisplayName ??
@@ -1322,6 +1332,19 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
   const ob3JsonUrl = new URL(ob3JsonPath, requestUrl).toString();
   const credentialDownloadPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/download`;
   const credentialDownloadUrl = new URL(credentialDownloadPath, requestUrl).toString();
+  const assertionValidationTargetUrl = ob3JsonUrl;
+  const badgeClassValidationTargetUrl = achievementDetails.badgeClassUri ?? publicBadgeUrl;
+  const issuerValidationTargetUrl =
+    issuerUrl ??
+    (issuerIdentifier !== null && isWebUrl(issuerIdentifier) ? issuerIdentifier : publicBadgeUrl);
+  const assertionValidatorUrl = imsOb2ValidatorUrl(assertionValidationTargetUrl);
+  const badgeClassValidatorUrl = imsOb2ValidatorUrl(badgeClassValidationTargetUrl);
+  const issuerValidatorUrl = imsOb2ValidatorUrl(issuerValidationTargetUrl);
+  const qrCodeImageUrl = new URL('https://api.qrserver.com/v1/create-qr-code/');
+  qrCodeImageUrl.searchParams.set('size', '220x220');
+  qrCodeImageUrl.searchParams.set('format', 'svg');
+  qrCodeImageUrl.searchParams.set('margin', '0');
+  qrCodeImageUrl.searchParams.set('data', publicBadgeUrl);
   const linkedInShareUrl = new URL('https://www.linkedin.com/sharing/share-offsite/');
   linkedInShareUrl.searchParams.set('url', publicBadgeUrl);
   const issuedAt = `${formatIsoTimestamp(model.assertion.issuedAt)} UTC`;
@@ -1538,6 +1561,38 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
         font-size: 0.92rem;
       }
 
+      .public-badge__validator-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+      }
+
+      .public-badge__validator-note {
+        margin: 0;
+        color: #475569;
+        font-size: 0.92rem;
+      }
+
+      .public-badge__qr {
+        margin: 0;
+        display: grid;
+        justify-items: start;
+        gap: 0.45rem;
+      }
+
+      .public-badge__qr-image {
+        width: 11rem;
+        height: 11rem;
+        border-radius: 0.9rem;
+        border: 1px solid #d6dfeb;
+        background: #ffffff;
+      }
+
+      .public-badge__qr-caption {
+        color: #475569;
+        font-size: 0.9rem;
+      }
+
       .public-badge__evidence-list {
         margin: 0;
         padding-left: 1.2rem;
@@ -1641,13 +1696,51 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
           </a>
         </div>
         <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
+        <div class="public-badge__validator-links">
+          <a
+            class="public-badge__button"
+            href="${escapeHtml(assertionValidatorUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Validate Assertion (IMS)
+          </a>
+          <a
+            class="public-badge__button"
+            href="${escapeHtml(badgeClassValidatorUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Validate Badge Class (IMS)
+          </a>
+          <a
+            class="public-badge__button"
+            href="${escapeHtml(issuerValidatorUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Validate Issuer (IMS)
+          </a>
+        </div>
+        <p class="public-badge__validator-note">
+          Opens IMS Global OB2 validator with pre-filled URLs for assertion, badge class, and issuer checks.
+        </p>
+        <figure class="public-badge__qr">
+          <img
+            class="public-badge__qr-image"
+            src="${escapeHtml(qrCodeImageUrl.toString())}"
+            alt="QR code for this badge URL"
+            loading="lazy"
+          />
+          <figcaption class="public-badge__qr-caption">Scan to open the public badge URL.</figcaption>
+        </figure>
       </section>
 
       <details class="public-badge__card public-badge__technical">
         <summary>Technical details</summary>
         <dl class="public-badge__technical-grid">
           <dt>Issuer ID</dt>
-          <dd>${escapeHtml(issuerIdentifierFromCredential(model.credential) ?? 'Not available')}</dd>
+          <dd>${escapeHtml(issuerIdentifier ?? 'Not available')}</dd>
           <dt>Recipient identity</dt>
           <dd>${escapeHtml(model.assertion.recipientIdentity)}</dd>
           <dt>Recipient identity type</dt>
@@ -1664,6 +1757,12 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
           <dd><a href="${escapeHtml(ob3JsonPath)}">${escapeHtml(ob3JsonUrl)}</a></dd>
           <dt>Credential download</dt>
           <dd><a href="${escapeHtml(credentialDownloadPath)}">${escapeHtml(credentialDownloadUrl)}</a></dd>
+          <dt>IMS assertion validation</dt>
+          <dd><a href="${escapeHtml(assertionValidatorUrl)}">${escapeHtml(assertionValidatorUrl)}</a></dd>
+          <dt>IMS badge class validation</dt>
+          <dd><a href="${escapeHtml(badgeClassValidatorUrl)}">${escapeHtml(badgeClassValidatorUrl)}</a></dd>
+          <dt>IMS issuer validation</dt>
+          <dd><a href="${escapeHtml(issuerValidatorUrl)}">${escapeHtml(issuerValidatorUrl)}</a></dd>
         </dl>
       </details>
 
