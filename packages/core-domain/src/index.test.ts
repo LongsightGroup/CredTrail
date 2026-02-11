@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createDidDocument,
   createDidWeb,
+  decodeJwkPublicKeyMultibase,
   didWebDocumentPath,
+  encodeJwkPublicKeyMultibase,
   generateTenantDidSigningMaterial,
   signCredentialWithEd25519Signature2020,
   verifyCredentialProofWithEd25519Signature2020,
@@ -58,8 +60,13 @@ describe('credential signing', () => {
     });
 
     expect(didDocument.id).toBe(did);
+    expect(didDocument.verificationMethod[0].type).toBe('Multikey');
+    expect(didDocument.verificationMethod[0].publicKeyMultibase).toContain('z');
     expect(signedCredential.proof.type).toBe('Ed25519Signature2020');
     expect(signedCredential.proof.verificationMethod).toBe(`${did}#${signingMaterial.keyId}`);
+    const encodedMultibase = encodeJwkPublicKeyMultibase(signingMaterial.publicJwk);
+    expect(didDocument.verificationMethod[0].publicKeyMultibase).toBe(encodedMultibase);
+    expect(decodeJwkPublicKeyMultibase(encodedMultibase)).toBe(signingMaterial.publicJwk.x);
 
     const isValid = await verifyCredentialProofWithEd25519Signature2020({
       credential: signedCredential,
@@ -107,5 +114,11 @@ describe('credential signing', () => {
     });
 
     expect(isValid).toBe(false);
+  });
+
+  it('rejects multibase values that do not include the Ed25519 multicodec prefix', () => {
+    expect(() => decodeJwkPublicKeyMultibase('z3vQB7B6MrGQZaxCuFg4oh')).toThrow(
+      'Expected multicodec value with Ed25519 0xed01 prefix',
+    );
   });
 });

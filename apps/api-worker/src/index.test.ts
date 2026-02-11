@@ -70,6 +70,7 @@ vi.mock('@credtrail/db/postgres', () => {
 
 import {
   type JsonObject,
+  encodeJwkPublicKeyMultibase,
   generateTenantDidSigningMaterial,
   getImmutableCredentialObject,
 } from '@credtrail/core-domain';
@@ -2490,9 +2491,17 @@ describe('DID signing resolution from Postgres registration', () => {
 
     const response = await app.request('/.well-known/did.json', undefined, env);
     const body = await response.json<JsonObject>();
+    const verificationMethods = Array.isArray(body.verificationMethod) ? body.verificationMethod : [];
+    const firstVerificationMethod =
+      verificationMethods.length > 0 ? asJsonObject(verificationMethods[0]) : null;
 
     expect(response.status).toBe(200);
     expect(asString(body.id)).toBe('did:web:localhost');
+    expect(asString(firstVerificationMethod?.type)).toBe('Multikey');
+    expect(asString(firstVerificationMethod?.publicKeyMultibase)).toBe(
+      encodeJwkPublicKeyMultibase(signingMaterial.publicJwk),
+    );
+    expect(firstVerificationMethod?.publicKeyJwk).toBeUndefined();
     expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(fakeDb, 'did:web:localhost');
   });
 });

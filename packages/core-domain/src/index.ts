@@ -41,9 +41,9 @@ export interface GenerateTenantDidSigningMaterialInput {
 
 export interface DidVerificationMethod {
   id: string;
-  type: 'JsonWebKey2020';
+  type: 'Multikey';
   controller: string;
-  publicKeyJwk: Ed25519PublicJwk;
+  publicKeyMultibase: string;
 }
 
 export interface DidDocument {
@@ -400,6 +400,7 @@ export const didWebDocumentPath = (did: string): string => {
 export const createDidDocument = (input: CreateDidDocumentInput): DidDocument => {
   ensureDidWeb(input.did);
   const verificationMethodId = `${input.did}#${input.keyId}`;
+  const publicKeyMultibase = encodeJwkPublicKeyMultibase(input.publicJwk);
 
   return {
     '@context': ['https://www.w3.org/ns/did/v1'],
@@ -407,9 +408,9 @@ export const createDidDocument = (input: CreateDidDocumentInput): DidDocument =>
     verificationMethod: [
       {
         id: verificationMethodId,
-        type: 'JsonWebKey2020',
+        type: 'Multikey',
         controller: input.did,
-        publicKeyJwk: input.publicJwk,
+        publicKeyMultibase,
       },
     ],
     assertionMethod: [verificationMethodId],
@@ -489,7 +490,11 @@ export const verifyCredentialProofWithEd25519Signature2020 = async (
 
 export const encodeJwkPublicKeyMultibase = (publicJwk: Ed25519PublicJwk): string => {
   const publicKeyBytes = fromBase64Url(publicJwk.x);
-  return `z${base58Encode(publicKeyBytes)}`;
+  const multicodecValue = new Uint8Array(2 + publicKeyBytes.length);
+  multicodecValue[0] = 0xed;
+  multicodecValue[1] = 0x01;
+  multicodecValue.set(publicKeyBytes, 2);
+  return `z${base58Encode(multicodecValue)}`;
 };
 
 export const decodeJwkPublicKeyMultibase = (multibaseValue: string): string => {
@@ -497,8 +502,13 @@ export const decodeJwkPublicKeyMultibase = (multibaseValue: string): string => {
     throw new Error('Expected a base58btc multibase value');
   }
 
-  const bytes = base58Decode(multibaseValue.slice(1));
-  return toBase64Url(bytes);
+  const multicodecValue = base58Decode(multibaseValue.slice(1));
+
+  if (multicodecValue.length < 3 || multicodecValue[0] !== 0xed || multicodecValue[1] !== 0x01) {
+    throw new Error('Expected multicodec value with Ed25519 0xed01 prefix');
+  }
+
+  return toBase64Url(multicodecValue.slice(2));
 };
 
 export {
