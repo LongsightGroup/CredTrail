@@ -1545,6 +1545,45 @@ const gzipBytes = async (bytes: Uint8Array): Promise<Uint8Array> => {
   return new Uint8Array(compressedBuffer);
 };
 
+const base64UrlToBytes = (value: string): Uint8Array | null => {
+  if (value.trim().length === 0) {
+    return null;
+  }
+
+  const normalizedBase64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const paddedBase64 = `${normalizedBase64}${'='.repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
+
+  try {
+    const raw = atob(paddedBase64);
+    const bytes = new Uint8Array(raw.length);
+
+    for (let index = 0; index < raw.length; index += 1) {
+      bytes[index] = raw.charCodeAt(index);
+    }
+
+    return bytes;
+  } catch {
+    return null;
+  }
+};
+
+const gunzipBytes = async (bytes: Uint8Array): Promise<Uint8Array | null> => {
+  try {
+    const normalizedBytes = Uint8Array.from(bytes);
+    const sourceStream = new ReadableStream<BufferSource>({
+      start(controller): void {
+        controller.enqueue(normalizedBytes);
+        controller.close();
+      },
+    });
+    const decompressedStream = sourceStream.pipeThrough(new DecompressionStream('gzip'));
+    const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
+    return new Uint8Array(decompressedBuffer);
+  } catch {
+    return null;
+  }
+};
+
 interface RevocationStatusBitEntry {
   statusListIndex: number;
   revoked: boolean;
@@ -2161,6 +2200,7 @@ interface CredentialStatusVerificationCheckSummary extends CredentialVerificatio
   statusPurpose: string | null;
   statusListIndex: string | null;
   statusListCredential: string | null;
+  revoked: boolean | null;
 }
 
 interface CredentialVerificationChecksSummary {
@@ -2615,10 +2655,117 @@ const verifyCredentialDatesSummary = (
   };
 };
 
-const verifyCredentialStatusSummary = (
+const parseStatusListIndex = (value: string): number | null => {
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+};
+
+const decodedRevocationStatusBit = async (encodedList: string, statusListIndex: number): Promise<boolean | null> => {
+  if (!encodedList.startsWith('u')) {
+    return null;
+  }
+
+  const compressedBytes = base64UrlToBytes(encodedList.slice(1));
+
+  if (compressedBytes === null) {
+    return null;
+  }
+
+  const bitset = await gunzipBytes(compressedBytes);
+
+  if (bitset === null) {
+    return null;
+  }
+
+  const byteIndex = Math.floor(statusListIndex / 8);
+  const bitIndex = statusListIndex % 8;
+
+  if (byteIndex >= bitset.length) {
+    return null;
+  }
+
+  const byte = bitset[byteIndex] ?? 0;
+  return (byte & (1 << bitIndex)) !== 0;
+};
+
+const loadStatusListCredentialForVerification = async (
+  c: AppContext,
+  statusListCredentialUrl: string,
+): Promise<{ status: 'ok'; credential: JsonObject } | { status: 'error'; reason: string }> => {
+  let parsedStatusListCredentialUrl: URL;
+
+  try {
+    parsedStatusListCredentialUrl = new URL(statusListCredentialUrl);
+  } catch {
+    return {
+      status: 'error',
+      reason: 'credentialStatus statusListCredential must be a valid URL',
+    };
+  }
+
+  let statusListResponse: Response;
+
+  try {
+    const requestUrl = new URL(c.req.url);
+
+    if (parsedStatusListCredentialUrl.origin === requestUrl.origin) {
+      const pathWithQuery = `${parsedStatusListCredentialUrl.pathname}${parsedStatusListCredentialUrl.search}`;
+      statusListResponse = await app.request(
+        pathWithQuery,
+        {
+          method: 'GET',
+          headers: {
+            accept: 'application/ld+json, application/json',
+          },
+        },
+        c.env,
+      );
+    } else {
+      statusListResponse = await fetch(statusListCredentialUrl, {
+        headers: {
+          accept: 'application/ld+json, application/json',
+        },
+      });
+    }
+  } catch {
+    return {
+      status: 'error',
+      reason: 'credential status list could not be retrieved',
+    };
+  }
+
+  if (!statusListResponse.ok) {
+    return {
+      status: 'error',
+      reason: `credential status list request failed with HTTP ${String(statusListResponse.status)}`,
+    };
+  }
+
+  const statusListCredential = await statusListResponse.json<unknown>().catch(() => null);
+  const statusListCredentialObject = asJsonObject(statusListCredential);
+
+  if (statusListCredentialObject === null) {
+    return {
+      status: 'error',
+      reason: 'credential status list response must be a JSON object',
+    };
+  }
+
+  return {
+    status: 'ok',
+    credential: statusListCredentialObject,
+  };
+};
+
+const verifyCredentialStatusSummary = async (
+  c: AppContext,
   credential: JsonObject,
   expectedStatusList: CredentialStatusListReference | null,
-): CredentialStatusVerificationCheckSummary => {
+): Promise<CredentialStatusVerificationCheckSummary> => {
   const credentialStatus = credential.credentialStatus;
 
   if (credentialStatus === undefined) {
@@ -2630,6 +2777,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose: null,
       statusListIndex: null,
       statusListCredential: null,
+      revoked: null,
     };
   }
 
@@ -2643,6 +2791,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose: null,
       statusListIndex: null,
       statusListCredential: null,
+      revoked: null,
     };
   }
 
@@ -2659,6 +2808,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose,
       statusListIndex,
       statusListCredential,
+      revoked: null,
     };
   }
 
@@ -2675,6 +2825,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose,
       statusListIndex,
       statusListCredential,
+      revoked: null,
     };
   }
 
@@ -2686,6 +2837,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose,
       statusListIndex,
       statusListCredential,
+      revoked: null,
     };
   }
 
@@ -2697,6 +2849,7 @@ const verifyCredentialStatusSummary = (
       statusPurpose,
       statusListIndex,
       statusListCredential,
+      revoked: null,
     };
   }
 
@@ -2708,6 +2861,64 @@ const verifyCredentialStatusSummary = (
       statusPurpose,
       statusListIndex,
       statusListCredential,
+      revoked: null,
+    };
+  }
+
+  const normalizedStatusListIndex = parseStatusListIndex(statusListIndex);
+
+  if (normalizedStatusListIndex === null) {
+    return {
+      status: 'invalid',
+      reason: 'credentialStatus statusListIndex must be a non-negative integer string',
+      type: statusType,
+      statusPurpose,
+      statusListIndex,
+      statusListCredential,
+      revoked: null,
+    };
+  }
+
+  const statusListCredentialResult = await loadStatusListCredentialForVerification(c, statusListCredential);
+
+  if (statusListCredentialResult.status !== 'ok') {
+    return {
+      status: 'invalid',
+      reason: statusListCredentialResult.reason,
+      type: statusType,
+      statusPurpose,
+      statusListIndex,
+      statusListCredential,
+      revoked: null,
+    };
+  }
+
+  const statusListCredentialSubject = asJsonObject(statusListCredentialResult.credential.credentialSubject);
+  const encodedList = asNonEmptyString(statusListCredentialSubject?.encodedList);
+
+  if (encodedList === null) {
+    return {
+      status: 'invalid',
+      reason: 'credential status list is missing credentialSubject.encodedList',
+      type: statusType,
+      statusPurpose,
+      statusListIndex,
+      statusListCredential,
+      revoked: null,
+    };
+  }
+
+  const revoked = await decodedRevocationStatusBit(encodedList, normalizedStatusListIndex);
+
+  if (revoked === null) {
+    return {
+      status: 'invalid',
+      reason: 'credential status list encodedList could not be decoded for the specified statusListIndex',
+      type: statusType,
+      statusPurpose,
+      statusListIndex,
+      statusListCredential,
+      revoked: null,
     };
   }
 
@@ -2718,20 +2929,26 @@ const verifyCredentialStatusSummary = (
     statusPurpose: statusPurpose ?? 'revocation',
     statusListIndex,
     statusListCredential,
+    revoked,
   };
 };
 
-const summarizeCredentialVerificationChecks = (input: {
+const summarizeCredentialVerificationChecks = async (input: {
+  context: AppContext;
   credential: JsonObject;
   checkedAt: string;
   expectedStatusList: CredentialStatusListReference | null;
-}): CredentialVerificationChecksSummary => {
+}): Promise<CredentialVerificationChecksSummary> => {
   return {
     jsonLdSafeMode: verifyCredentialJsonLdSafeModeSummary(input.credential),
     credentialSchema: verifyCredentialSchemaSummary(input.credential),
     credentialSubject: verifyCredentialSubjectSummary(input.credential),
     dates: verifyCredentialDatesSummary(input.credential, input.checkedAt),
-    credentialStatus: verifyCredentialStatusSummary(input.credential, input.expectedStatusList),
+    credentialStatus: await verifyCredentialStatusSummary(
+      input.context,
+      input.credential,
+      input.expectedStatusList,
+    ),
   };
 };
 
@@ -5343,16 +5560,23 @@ app.get('/credentials/v1/:credentialId', async (c) => {
           result.value.assertion.statusListIndex,
         );
   const checkedAt = new Date().toISOString();
-  const lifecycle = summarizeCredentialLifecycleVerification(
-    result.value.credential,
-    result.value.assertion.revokedAt,
-    checkedAt,
-  );
-  const checks = summarizeCredentialVerificationChecks({
+  const checks = await summarizeCredentialVerificationChecks({
+    context: c,
     credential: result.value.credential,
     checkedAt,
     expectedStatusList: statusList,
   });
+  const resolvedRevokedAt =
+    checks.credentialStatus.status === 'valid'
+      ? checks.credentialStatus.revoked
+        ? checkedAt
+        : null
+      : result.value.assertion.revokedAt;
+  const lifecycle = summarizeCredentialLifecycleVerification(
+    result.value.credential,
+    resolvedRevokedAt,
+    checkedAt,
+  );
   const proof = await verifyCredentialProofSummary(c, result.value.credential);
 
   return c.json({

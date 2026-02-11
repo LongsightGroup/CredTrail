@@ -192,6 +192,7 @@ interface VerificationResponse {
         statusPurpose: string | null;
         statusListIndex: string | null;
         statusListCredential: string | null;
+        revoked: boolean | null;
       };
     };
     proof: {
@@ -2504,10 +2505,15 @@ describe('GET /credentials/v1/:credentialId', () => {
   beforeEach(() => {
     mockedFindAssertionById.mockReset();
     mockedGetImmutableCredentialObject.mockReset();
+    mockedListAssertionStatusListEntries.mockReset();
   });
 
   it('returns credential verification details for a valid credential', async () => {
     const env = createEnv();
+    const statusListSigningMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+      keyId: 'key-status-list',
+    });
     const credential: JsonObject = {
       '@context': ['https://www.w3.org/ns/credentials/v2'],
       id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
@@ -2528,6 +2534,21 @@ describe('GET /credentials/v1/:credentialId', () => {
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did: statusListSigningMaterial.did,
+        keyId: statusListSigningMaterial.keyId,
+        publicJwkJson: JSON.stringify(statusListSigningMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(statusListSigningMaterial.privateJwk),
+      }),
+    );
+    mockedListAssertionStatusListEntries.mockResolvedValue([
+      {
+        statusListIndex: 0,
+        revokedAt: null,
+      },
+    ]);
 
     const response = await app.request('/credentials/v1/tenant_123%3Aassertion_456', undefined, env);
     const body = await response.json<VerificationResponse>();
@@ -2550,6 +2571,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(body.verification.checks.dates.status).toBe('valid');
     expect(body.verification.checks.dates.validFrom).toBe('2026-02-10T22:00:00.000Z');
     expect(body.verification.checks.credentialStatus.status).toBe('valid');
+    expect(body.verification.checks.credentialStatus.revoked).toBe(false);
     expect(body.verification.proof.status).toBe('unchecked');
     expect(body.credential).toEqual(credential);
     expect(mockedFindAssertionById).toHaveBeenCalledWith(
@@ -2585,6 +2607,67 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(body.verification.reason).toBe('credential has been revoked by issuer');
     expect(body.verification.revokedAt).toBe('2026-02-11T01:00:00.000Z');
     expect(body.verification.proof.status).toBe('unchecked');
+  });
+
+  it('marks credential status as revoked when status list entry is revoked', async () => {
+    const env = createEnv();
+    const statusListSigningMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+      keyId: 'key-status-list',
+    });
+    const credential: JsonObject = {
+      '@context': ['https://www.w3.org/ns/credentials/v2'],
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      issuer: 'did:web:credtrail.test:tenant_123',
+      validFrom: '2026-02-10T22:00:00.000Z',
+      credentialSubject: {
+        id: 'mailto:learner@example.edu',
+      },
+      credentialStatus: {
+        id: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation#1',
+        type: 'BitstringStatusListEntry',
+        statusPurpose: 'revocation',
+        statusListIndex: '1',
+        statusListCredential: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation',
+      },
+    };
+
+    mockedFindAssertionById.mockResolvedValue(
+      sampleAssertion({
+        statusListIndex: 1,
+        revokedAt: null,
+      }),
+    );
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did: statusListSigningMaterial.did,
+        keyId: statusListSigningMaterial.keyId,
+        publicJwkJson: JSON.stringify(statusListSigningMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(statusListSigningMaterial.privateJwk),
+      }),
+    );
+    mockedListAssertionStatusListEntries.mockResolvedValue([
+      {
+        statusListIndex: 0,
+        revokedAt: null,
+      },
+      {
+        statusListIndex: 1,
+        revokedAt: '2026-02-11T01:00:00.000Z',
+      },
+    ]);
+
+    const response = await app.request('/credentials/v1/tenant_123%3Aassertion_456', undefined, env);
+    const body = await response.json<VerificationResponse>();
+
+    expect(response.status).toBe(200);
+    expect(body.verification.status).toBe('revoked');
+    expect(body.verification.reason).toBe('credential has been revoked by issuer');
+    expect(body.verification.checks.credentialStatus.status).toBe('valid');
+    expect(body.verification.checks.credentialStatus.revoked).toBe(true);
   });
 
   it('returns null status list metadata when assertion has no status list index', async () => {
