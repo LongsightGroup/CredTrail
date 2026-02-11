@@ -1734,7 +1734,16 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('Copy URL');
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/download');
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/jsonld');
-    expect(body).toContain('Share on LinkedIn');
+    expect(body).toContain('Add to LinkedIn Profile');
+    expect(body).toContain('linkedin.com/profile/add');
+    expect(body).toContain('startTask=CERTIFICATION_NAME');
+    expect(body).toContain('name=TypeScript+Foundations');
+    expect(body).toContain('organizationName=Example+University');
+    expect(body).toContain('issueYear=2026');
+    expect(body).toContain('issueMonth=2');
+    expect(body).toContain('certUrl=http%3A%2F%2Flocalhost%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+    expect(body).toContain('certId=urn%3Acredtrail%3Aassertion%3Atenant_123%253Aassertion_456');
+    expect(body).toContain('Share on LinkedIn Feed');
     expect(body).toContain('linkedin.com/sharing/share-offsite');
     expect(body).toContain('Validate Assertion (IMS)');
     expect(body).toContain('Validate Badge Class (IMS)');

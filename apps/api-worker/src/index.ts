@@ -897,6 +897,59 @@ const formatIsoTimestamp = (timestampIso: string): string => {
   }).format(new Date(timestampMs));
 };
 
+const linkedInIssuedDateFromIso = (
+  issuedAtIso: string,
+): {
+  issueYear: string;
+  issueMonth: string;
+} | null => {
+  const timestampMs = Date.parse(issuedAtIso);
+
+  if (!Number.isFinite(timestampMs)) {
+    return null;
+  }
+
+  const issuedAtDate = new Date(timestampMs);
+  return {
+    issueYear: String(issuedAtDate.getUTCFullYear()),
+    issueMonth: String(issuedAtDate.getUTCMonth() + 1),
+  };
+};
+
+const linkedInAddToProfileUrl = (input: {
+  badgeName: string;
+  issuerName: string;
+  issuedAtIso: string;
+  credentialUrl: string;
+  credentialId: string;
+}): string => {
+  const linkedInUrl = new URL('https://www.linkedin.com/profile/add');
+  linkedInUrl.searchParams.set('startTask', 'CERTIFICATION_NAME');
+  linkedInUrl.searchParams.set('name', input.badgeName);
+  linkedInUrl.searchParams.set('certUrl', input.credentialUrl);
+
+  const credentialId = input.credentialId.trim();
+
+  if (credentialId.length > 0) {
+    linkedInUrl.searchParams.set('certId', credentialId);
+  }
+
+  const issuerName = input.issuerName.trim();
+
+  if (issuerName.length > 0 && issuerName !== 'Unknown issuer') {
+    linkedInUrl.searchParams.set('organizationName', issuerName);
+  }
+
+  const issuedDate = linkedInIssuedDateFromIso(input.issuedAtIso);
+
+  if (issuedDate !== null) {
+    linkedInUrl.searchParams.set('issueYear', issuedDate.issueYear);
+    linkedInUrl.searchParams.set('issueMonth', issuedDate.issueMonth);
+  }
+
+  return linkedInUrl.toString();
+};
+
 const badgeNameFromCredential = (credential: JsonObject): string => {
   const credentialSubject = asJsonObject(credential.credentialSubject);
   const achievement = asJsonObject(credentialSubject?.achievement);
@@ -1562,6 +1615,13 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
   qrCodeImageUrl.searchParams.set('format', 'svg');
   qrCodeImageUrl.searchParams.set('margin', '0');
   qrCodeImageUrl.searchParams.set('data', publicBadgeUrl);
+  const linkedInAddProfileUrl = linkedInAddToProfileUrl({
+    badgeName,
+    issuerName,
+    issuedAtIso: model.assertion.issuedAt,
+    credentialUrl: publicBadgeUrl,
+    credentialId: credentialUri,
+  });
   const linkedInShareUrl = new URL('https://www.linkedin.com/sharing/share-offsite/');
   linkedInShareUrl.searchParams.set('url', publicBadgeUrl);
   const issuedAt = `${formatIsoTimestamp(model.assertion.issuedAt)} UTC`;
@@ -1905,11 +1965,19 @@ const publicBadgePage = (requestUrl: string, model: VerificationViewModel): stri
           <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download VC</a>
           <a
             class="public-badge__button public-badge__button--accent"
+            href="${escapeHtml(linkedInAddProfileUrl)}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Add to LinkedIn Profile
+          </a>
+          <a
+            class="public-badge__button"
             href="${escapeHtml(linkedInShareUrl.toString())}"
             target="_blank"
             rel="noopener noreferrer"
           >
-            Share on LinkedIn
+            Share on LinkedIn Feed
           </a>
         </div>
         <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
