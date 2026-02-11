@@ -2713,6 +2713,27 @@ describe('DID signing resolution from Postgres registration', () => {
     expect(firstVerificationMethod?.publicKeyJwk).toBeUndefined();
     expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(fakeDb, 'did:web:localhost');
   });
+
+  it('returns 422 when registration public key is not Ed25519', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateP256SigningMaterial('key-p256');
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'platform',
+        did: 'did:web:localhost',
+        keyId: 'key-p256',
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/.well-known/did.json', undefined, env);
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(422);
+    expect(body.error).toBe('DID document generation requires an Ed25519 public key');
+  });
 });
 
 describe('GET /credentials/v1/status-lists/:tenantId/revocation', () => {
@@ -2833,6 +2854,32 @@ describe('GET /credentials/v1/status-lists/:tenantId/revocation', () => {
       'did:web:credtrail.test:tenant_123',
     );
   });
+
+  it('returns 422 when tenant signing key is not Ed25519', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateP256SigningMaterial('key-p256');
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did: 'did:web:credtrail.test:tenant_123',
+        keyId: 'key-p256',
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request(
+      '/credentials/v1/status-lists/tenant_123/revocation',
+      undefined,
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(422);
+    expect(body.error).toBe('Revocation status list signing requires an Ed25519 private key');
+    expect(mockedListAssertionStatusListEntries).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /v1/signing/credentials', () => {
@@ -2885,6 +2932,48 @@ describe('POST /v1/signing/credentials', () => {
     expect(asString(body.did)).toBe(signingMaterial.did);
     expect(asJsonObject(signedCredential?.proof)).not.toBeNull();
     expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(fakeDb, signingMaterial.did);
+  });
+
+  it('returns 422 when signing key is not Ed25519', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateP256SigningMaterial('key-p256');
+    const did = 'did:web:credtrail.test:sakai';
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'sakai',
+        did,
+        keyId: 'key-p256',
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request(
+      '/v1/signing/credentials',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          did,
+          credential: {
+            '@context': ['https://www.w3.org/ns/credentials/v2'],
+            type: ['VerifiableCredential'],
+            issuer: did,
+            credentialSubject: {
+              id: 'urn:credtrail:subject:test',
+            },
+          },
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(422);
+    expect(body.error).toBe('Credential signing endpoint requires an Ed25519 private key');
   });
 });
 
