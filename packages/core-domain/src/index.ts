@@ -278,20 +278,25 @@ const importEd25519PublicKey = async (publicJwk: Ed25519PublicJwk): Promise<Cryp
   return crypto.subtle.importKey('jwk', publicJwk, { name: 'Ed25519' }, false, ['verify']);
 };
 
-const normalizePublicJwk = (jwk: JsonWebKey, keyId: string): Ed25519PublicJwk => {
+const normalizePublicJwk = (jwk: JsonWebKey, keyId?: string): Ed25519PublicJwk => {
   if (jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519' || typeof jwk.x !== 'string' || jwk.x.length === 0) {
     throw new Error('Generated public key is not an Ed25519 JWK');
   }
 
-  return {
+  const normalized: Ed25519PublicJwk = {
     kty: 'OKP',
     crv: 'Ed25519',
     x: jwk.x,
-    kid: keyId,
   };
+
+  if (keyId !== undefined) {
+    normalized.kid = keyId;
+  }
+
+  return normalized;
 };
 
-const normalizePrivateJwk = (jwk: JsonWebKey, keyId: string): Ed25519PrivateJwk => {
+const normalizePrivateJwk = (jwk: JsonWebKey, keyId?: string): Ed25519PrivateJwk => {
   if (
     jwk.kty !== 'OKP' ||
     jwk.crv !== 'Ed25519' ||
@@ -303,13 +308,18 @@ const normalizePrivateJwk = (jwk: JsonWebKey, keyId: string): Ed25519PrivateJwk 
     throw new Error('Generated private key is not an Ed25519 JWK');
   }
 
-  return {
+  const normalized: Ed25519PrivateJwk = {
     kty: 'OKP',
     crv: 'Ed25519',
     x: jwk.x,
     d: jwk.d,
-    kid: keyId,
   };
+
+  if (keyId !== undefined) {
+    normalized.kid = keyId;
+  }
+
+  return normalized;
 };
 
 const unsignedCredential = (credential: JsonObject): JsonObject => {
@@ -421,10 +431,11 @@ export const generateTenantDidSigningMaterial = async (
   input: GenerateTenantDidSigningMaterialInput,
 ): Promise<TenantDidSigningMaterial> => {
   ensureDidWeb(input.did);
-  const keyId = input.keyId ?? 'key-1';
   const generated = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
   const exportedPublicKey = await crypto.subtle.exportKey('jwk', generated.publicKey);
   const exportedPrivateKey = await crypto.subtle.exportKey('jwk', generated.privateKey);
+  const publicJwkWithoutKid = normalizePublicJwk(exportedPublicKey);
+  const keyId = input.keyId ?? encodeJwkPublicKeyMultibase(publicJwkWithoutKid);
   const publicJwk = normalizePublicJwk(exportedPublicKey, keyId);
   const privateJwk = normalizePrivateJwk(exportedPrivateKey, keyId);
 

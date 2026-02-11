@@ -121,4 +121,25 @@ describe('credential signing', () => {
       'Expected multicodec value with Ed25519 0xed01 prefix',
     );
   });
+
+  it('uses multibase-derived key IDs by default for generated signing material', async () => {
+    const did = createDidWeb({
+      host: 'issuers.credtrail.org',
+      pathSegments: ['tenant-c'],
+    });
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did,
+    });
+    const expectedKeyId = encodeJwkPublicKeyMultibase(signingMaterial.publicJwk);
+    const didDocument = createDidDocument({
+      did,
+      keyId: signingMaterial.keyId,
+      publicJwk: signingMaterial.publicJwk,
+    });
+
+    expect(signingMaterial.keyId).toBe(expectedKeyId);
+    expect(signingMaterial.publicJwk.kid).toBe(expectedKeyId);
+    expect(signingMaterial.privateJwk.kid).toBe(expectedKeyId);
+    expect(didDocument.verificationMethod[0].id).toBe(`${did}#${expectedKeyId}`);
+  });
 });
