@@ -295,6 +295,16 @@ const base64UrlToBytes = (value: string): Uint8Array => {
   return bytes;
 };
 
+const bytesToBase64UrlForTest = (bytes: Uint8Array): string => {
+  let raw = '';
+
+  for (const byte of bytes) {
+    raw += String.fromCharCode(byte);
+  }
+
+  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
+
 const sha256HexForTest = async (value: string): Promise<string> => {
   const encoded = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', encoded);
@@ -306,6 +316,11 @@ const sha256HexForTest = async (value: string): Promise<string> => {
   }
 
   return hexParts.join('');
+};
+
+const pkceS256CodeChallengeForTest = async (codeVerifier: string): Promise<string> => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier));
+  return bytesToBase64UrlForTest(new Uint8Array(digest));
 };
 
 const gunzip = async (bytes: Uint8Array): Promise<Uint8Array> => {
@@ -808,9 +823,11 @@ describe('OB3 OAuth2 endpoints', () => {
     mockedFindOAuthClientById.mockResolvedValue(sampleOAuthClientRecord());
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
     mockedCreateOAuthAuthorizationCode.mockResolvedValue(sampleOAuthAuthorizationCodeRecord());
+    const codeVerifier = 'test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB';
+    const codeChallenge = await pkceS256CodeChallengeForTest(codeVerifier);
 
     const response = await app.request(
-      '/ims/ob/v3p0/oauth/authorize?response_type=code&client_id=oc_client_123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=https%3A%2F%2Fpurl.imsglobal.org%2Fspec%2Fob%2Fv3p0%2Fscope%2Fcredential.readonly&state=state123',
+      `/ims/ob/v3p0/oauth/authorize?response_type=code&client_id=oc_client_123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=https%3A%2F%2Fpurl.imsglobal.org%2Fspec%2Fob%2Fv3p0%2Fscope%2Fcredential.readonly&state=state123&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`,
       {
         headers: {
           Cookie: 'credtrail_session=session-token',
@@ -831,6 +848,9 @@ describe('OB3 OAuth2 endpoints', () => {
     expect(redirectLocation.origin).toBe('https://client.example');
     expect(redirectLocation.pathname).toBe('/callback');
     expect(redirectLocation.searchParams.get('state')).toBe('state123');
+    expect(redirectLocation.searchParams.get('scope')).toBe(
+      'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly',
+    );
     expect(typeof redirectLocation.searchParams.get('code')).toBe('string');
 
     const firstCall = mockedCreateOAuthAuthorizationCode.mock.calls[0];
@@ -840,10 +860,54 @@ describe('OB3 OAuth2 endpoints', () => {
     expect(createInput?.tenantId).toBe('tenant_123');
     expect(createInput?.userId).toBe('usr_123');
     expect(createInput?.redirectUri).toBe('https://client.example/callback');
+    expect(createInput?.codeChallenge).toBe(codeChallenge);
+    expect(createInput?.codeChallengeMethod).toBe('S256');
+  });
+
+  it('rejects authorization requests that omit state', async () => {
+    mockedFindOAuthClientById.mockResolvedValue(sampleOAuthClientRecord());
+    const codeVerifier = 'test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB';
+    const codeChallenge = await pkceS256CodeChallengeForTest(codeVerifier);
+
+    const response = await app.request(
+      `/ims/ob/v3p0/oauth/authorize?response_type=code&client_id=oc_client_123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=https%3A%2F%2Fpurl.imsglobal.org%2Fspec%2Fob%2Fv3p0%2Fscope%2Fcredential.readonly&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=S256`,
+      {},
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_request');
+    expect(mockedCreateOAuthAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it('rejects authorization requests when code_challenge_method is not S256', async () => {
+    mockedFindOAuthClientById.mockResolvedValue(sampleOAuthClientRecord());
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/authorize?response_type=code&client_id=oc_client_123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=https%3A%2F%2Fpurl.imsglobal.org%2Fspec%2Fob%2Fv3p0%2Fscope%2Fcredential.readonly&state=state123&code_challenge=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&code_challenge_method=plain',
+      {},
+      createEnv(),
+    );
+
+    expect(response.status).toBe(302);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    if (location === null) {
+      throw new Error('Expected location header in authorization error response');
+    }
+
+    const redirectLocation = new URL(location);
+    expect(redirectLocation.searchParams.get('error')).toBe('invalid_request');
+    expect(redirectLocation.searchParams.get('error_description')).toContain('S256');
+    expect(redirectLocation.searchParams.get('state')).toBe('state123');
   });
 
   it('exchanges authorization code for access token with client_secret_basic authentication', async () => {
     const clientSecret = 'oauth-secret';
+    const codeVerifier = 'test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB';
+    const codeChallenge = await pkceS256CodeChallengeForTest(codeVerifier);
     const clientSecretHash = await sha256HexForTest(clientSecret);
     mockedFindOAuthClientById.mockResolvedValue(
       sampleOAuthClientRecord({
@@ -851,7 +915,12 @@ describe('OB3 OAuth2 endpoints', () => {
         clientSecretHash,
       }),
     );
-    mockedConsumeOAuthAuthorizationCode.mockResolvedValue(sampleOAuthAuthorizationCodeRecord());
+    mockedConsumeOAuthAuthorizationCode.mockResolvedValue(
+      sampleOAuthAuthorizationCodeRecord({
+        codeChallenge,
+        codeChallengeMethod: 'S256',
+      }),
+    );
     mockedCreateOAuthAccessToken.mockResolvedValue(sampleOAuthAccessTokenRecord());
 
     const response = await app.request(
@@ -862,7 +931,7 @@ describe('OB3 OAuth2 endpoints', () => {
           'content-type': 'application/x-www-form-urlencoded',
           authorization: `Basic ${btoa(`oc_client_123:${clientSecret}`)}`,
         },
-        body: 'grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback',
+        body: `grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=${encodeURIComponent('https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly')}&code_verifier=${encodeURIComponent(codeVerifier)}`,
       },
       createEnv(),
     );
@@ -895,7 +964,7 @@ describe('OB3 OAuth2 endpoints', () => {
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
         },
-        body: 'grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback',
+        body: `grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=${encodeURIComponent('https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly')}&code_verifier=${encodeURIComponent('test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB')}`,
       },
       createEnv(),
     );
@@ -904,6 +973,102 @@ describe('OB3 OAuth2 endpoints', () => {
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toContain('Basic');
     expect(body.error).toBe('invalid_client');
+  });
+
+  it('requires code_verifier for token exchange requests', async () => {
+    const clientSecret = 'oauth-secret';
+    const clientSecretHash = await sha256HexForTest(clientSecret);
+    mockedFindOAuthClientById.mockResolvedValue(
+      sampleOAuthClientRecord({
+        clientId: 'oc_client_123',
+        clientSecretHash,
+      }),
+    );
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/token',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          authorization: `Basic ${btoa(`oc_client_123:${clientSecret}`)}`,
+        },
+        body: `grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=${encodeURIComponent('https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly')}`,
+      },
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_request');
+    expect(mockedConsumeOAuthAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it('rejects token exchange when code_verifier does not match the code_challenge', async () => {
+    const clientSecret = 'oauth-secret';
+    const codeVerifier = 'test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB';
+    const clientSecretHash = await sha256HexForTest(clientSecret);
+    mockedFindOAuthClientById.mockResolvedValue(
+      sampleOAuthClientRecord({
+        clientId: 'oc_client_123',
+        clientSecretHash,
+      }),
+    );
+    mockedConsumeOAuthAuthorizationCode.mockResolvedValue(
+      sampleOAuthAuthorizationCodeRecord({
+        codeChallenge: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        codeChallengeMethod: 'S256',
+      }),
+    );
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/token',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          authorization: `Basic ${btoa(`oc_client_123:${clientSecret}`)}`,
+        },
+        body: `grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=${encodeURIComponent('https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly')}&code_verifier=${encodeURIComponent(codeVerifier)}`,
+      },
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_grant');
+    expect(mockedCreateOAuthAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects replayed or expired authorization codes', async () => {
+    const clientSecret = 'oauth-secret';
+    const codeVerifier = 'test-pkce-code-verifier-abcdefghijklmnopqrstuvwxyz0123456789AB';
+    const clientSecretHash = await sha256HexForTest(clientSecret);
+    mockedFindOAuthClientById.mockResolvedValue(
+      sampleOAuthClientRecord({
+        clientId: 'oc_client_123',
+        clientSecretHash,
+      }),
+    );
+    mockedConsumeOAuthAuthorizationCode.mockResolvedValue(null);
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/token',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          authorization: `Basic ${btoa(`oc_client_123:${clientSecret}`)}`,
+        },
+        body: `grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=${encodeURIComponent('https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly')}&code_verifier=${encodeURIComponent(codeVerifier)}`,
+      },
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_grant');
+    expect(mockedCreateOAuthAccessToken).not.toHaveBeenCalled();
   });
 });
 

@@ -186,6 +186,9 @@ const OB3_OAUTH_SUPPORTED_SCOPE_SET = new Set<string>(OB3_OAUTH_SUPPORTED_SCOPE_
 const OAUTH_GRANT_TYPE_AUTHORIZATION_CODE = 'authorization_code';
 const OAUTH_RESPONSE_TYPE_CODE = 'code';
 const OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC = 'client_secret_basic';
+const OAUTH_PKCE_CODE_CHALLENGE_METHOD_S256 = 'S256';
+const OAUTH_PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const OAUTH_PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 const OB3_OAUTH_SCOPE_DESCRIPTIONS: Record<string, string> = {
   [OB3_OAUTH_SCOPE_CREDENTIAL_READONLY]:
     'Permission to read AchievementCredentials for the authenticated entity.',
@@ -257,6 +260,20 @@ const sha256Hex = async (value: string): Promise<string> => {
   }
 
   return hex.join('');
+};
+
+const sha256Base64Url = async (value: string): Promise<string> => {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return bytesToBase64Url(new Uint8Array(digest));
+};
+
+const isPkceCodeChallenge = (value: string): boolean => {
+  return OAUTH_PKCE_CODE_CHALLENGE_PATTERN.test(value);
+};
+
+const isPkceCodeVerifier = (value: string): boolean => {
+  return OAUTH_PKCE_CODE_VERIFIER_PATTERN.test(value);
 };
 
 const sessionCookieSecure = (environment: string): boolean => {
@@ -3262,7 +3279,7 @@ app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
   const clientId = asNonEmptyString(c.req.query('client_id'));
   const responseType = asNonEmptyString(c.req.query('response_type'));
   const redirectUri = asNonEmptyString(c.req.query('redirect_uri'));
-  const state = c.req.query('state') ?? undefined;
+  const state = c.req.query('state');
   const db = resolveDatabase(c.env);
 
   if (clientId === null) {
@@ -3290,6 +3307,10 @@ app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
     );
   }
 
+  if (state === undefined || state.length === 0) {
+    return oauthErrorJson(c, 400, 'invalid_request', 'state is required');
+  }
+
   if (responseType !== OAUTH_RESPONSE_TYPE_CODE) {
     return c.redirect(
       oauthRedirectUriWithParams(redirectUri, {
@@ -3301,8 +3322,19 @@ app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
   }
 
   const requestedScopeRaw = asNonEmptyString(c.req.query('scope'));
-  const requestedScopeTokens =
-    requestedScopeRaw === null ? clientMetadata.scope : splitSpaceDelimited(requestedScopeRaw);
+
+  if (requestedScopeRaw === null) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'invalid_scope',
+        error_description: 'scope is required',
+        state,
+      }),
+      302,
+    );
+  }
+
+  const requestedScopeTokens = splitSpaceDelimited(requestedScopeRaw);
 
   if (
     requestedScopeTokens.length === 0 ||
@@ -3318,32 +3350,41 @@ app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
     );
   }
 
-  const codeChallenge = asNonEmptyString(c.req.query('code_challenge'));
-  const codeChallengeMethod = asNonEmptyString(c.req.query('code_challenge_method'));
+  const codeChallenge = c.req.query('code_challenge');
+  const codeChallengeMethod = c.req.query('code_challenge_method');
 
   if (
-    (codeChallenge === null && codeChallengeMethod !== null) ||
-    (codeChallenge !== null && codeChallengeMethod === null)
+    codeChallenge === undefined ||
+    codeChallenge.length === 0 ||
+    codeChallengeMethod === undefined ||
+    codeChallengeMethod.length === 0
   ) {
     return c.redirect(
       oauthRedirectUriWithParams(redirectUri, {
         error: 'invalid_request',
-        error_description: 'code_challenge and code_challenge_method must be supplied together',
+        error_description: 'code_challenge and code_challenge_method are required',
         state,
       }),
       302,
     );
   }
 
-  if (
-    codeChallengeMethod !== null &&
-    codeChallengeMethod !== 'S256' &&
-    codeChallengeMethod !== 'plain'
-  ) {
+  if (codeChallengeMethod !== OAUTH_PKCE_CODE_CHALLENGE_METHOD_S256) {
     return c.redirect(
       oauthRedirectUriWithParams(redirectUri, {
         error: 'invalid_request',
-        error_description: 'Unsupported code_challenge_method',
+        error_description: 'code_challenge_method must be S256',
+        state,
+      }),
+      302,
+    );
+  }
+
+  if (!isPkceCodeChallenge(codeChallenge)) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'invalid_request',
+        error_description: 'code_challenge must be a base64url-encoded SHA-256 digest',
         state,
       }),
       302,
@@ -3374,13 +3415,14 @@ app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
     redirectUri,
     scope: requestedScopeTokens.join(' '),
     expiresAt: addSecondsToIso(new Date().toISOString(), OAUTH_AUTHORIZATION_CODE_TTL_SECONDS),
-    ...(codeChallenge === null ? {} : { codeChallenge }),
-    ...(codeChallengeMethod === null ? {} : { codeChallengeMethod }),
+    codeChallenge,
+    codeChallengeMethod,
   });
 
   return c.redirect(
     oauthRedirectUriWithParams(redirectUri, {
       code: authorizationCode,
+      scope: requestedScopeTokens.join(' '),
       state,
     }),
     302,
@@ -3429,9 +3471,20 @@ app.post(`${OB3_BASE_PATH}/oauth/token`, async (c) => {
 
   const code = asNonEmptyString(formData.get('code'));
   const redirectUri = asNonEmptyString(formData.get('redirect_uri'));
+  const codeVerifier = formData.get('code_verifier');
+  const requestedScope = asNonEmptyString(formData.get('scope'));
 
-  if (code === null || redirectUri === null) {
-    return oauthTokenErrorJson(c, 400, 'invalid_request', 'code and redirect_uri are required');
+  if (code === null || redirectUri === null || codeVerifier === null || codeVerifier.length === 0) {
+    return oauthTokenErrorJson(
+      c,
+      400,
+      'invalid_request',
+      'code, redirect_uri, and code_verifier are required',
+    );
+  }
+
+  if (!isPkceCodeVerifier(codeVerifier)) {
+    return oauthTokenErrorJson(c, 400, 'invalid_request', 'code_verifier is invalid');
   }
 
   const consumedAuthorizationCode = await consumeOAuthAuthorizationCode(db, {
@@ -3445,27 +3498,40 @@ app.post(`${OB3_BASE_PATH}/oauth/token`, async (c) => {
     return oauthTokenErrorJson(c, 400, 'invalid_grant', 'Authorization code is invalid or expired');
   }
 
-  let grantedScopeTokens = splitSpaceDelimited(consumedAuthorizationCode.scope);
-  const requestedScope = asNonEmptyString(formData.get('scope'));
-
-  if (requestedScope !== null) {
-    const requestedScopeTokens = splitSpaceDelimited(requestedScope);
-
-    if (
-      requestedScopeTokens.length === 0 ||
-      !allScopesSupported(requestedScopeTokens) ||
-      !isSubset(requestedScopeTokens, grantedScopeTokens)
-    ) {
-      return oauthTokenErrorJson(
-        c,
-        400,
-        'invalid_scope',
-        'Requested scope exceeds authorization grant',
-      );
-    }
-
-    grantedScopeTokens = requestedScopeTokens;
+  if (
+    consumedAuthorizationCode.codeChallenge === null ||
+    consumedAuthorizationCode.codeChallengeMethod !== OAUTH_PKCE_CODE_CHALLENGE_METHOD_S256
+  ) {
+    return oauthTokenErrorJson(c, 400, 'invalid_grant', 'Authorization code is missing PKCE binding');
   }
+
+  const computedCodeChallenge = await sha256Base64Url(codeVerifier);
+
+  if (computedCodeChallenge !== consumedAuthorizationCode.codeChallenge) {
+    return oauthTokenErrorJson(c, 400, 'invalid_grant', 'PKCE verification failed');
+  }
+
+  if (requestedScope === null) {
+    return oauthTokenErrorJson(c, 400, 'invalid_request', 'scope is required');
+  }
+
+  let grantedScopeTokens = splitSpaceDelimited(consumedAuthorizationCode.scope);
+  const requestedScopeTokens = splitSpaceDelimited(requestedScope);
+
+  if (
+    requestedScopeTokens.length === 0 ||
+    !allScopesSupported(requestedScopeTokens) ||
+    !isSubset(requestedScopeTokens, grantedScopeTokens)
+  ) {
+    return oauthTokenErrorJson(
+      c,
+      400,
+      'invalid_scope',
+      'Requested scope exceeds authorization grant',
+    );
+  }
+
+  grantedScopeTokens = requestedScopeTokens;
 
   const accessToken = generateOpaqueToken();
   const accessTokenHash = await sha256Hex(accessToken);
