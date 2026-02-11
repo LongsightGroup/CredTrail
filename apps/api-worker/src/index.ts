@@ -648,6 +648,18 @@ const didDocumentForSigningEntry = (input: {
   return null;
 };
 
+const jwksDocumentForSigningEntry = (signingEntry: TenantSigningRegistryEntry): JsonObject => {
+  const publicJwk = isEd25519SigningPublicJwk(signingEntry.publicJwk)
+    ? toEd25519PublicJwk(signingEntry.publicJwk)
+    : isP256SigningPublicJwk(signingEntry.publicJwk)
+      ? toP256PublicJwk(signingEntry.publicJwk)
+      : signingEntry.publicJwk;
+
+  return {
+    keys: [publicJwk as unknown as JsonObject],
+  };
+};
+
 const resolveAbsoluteUrl = (requestUrl: string, configuredValue: string): string => {
   const trimmedValue = configuredValue.trim();
 
@@ -5669,6 +5681,41 @@ app.get('/:tenantSlug/did.json', async (c): Promise<Response> => {
   }
 
   return c.json(didDocument);
+});
+
+app.get('/.well-known/jwks.json', async (c): Promise<Response> => {
+  const did = didForWellKnownRequest(c.req.url);
+  const signingEntry = await resolveSigningEntryForDid(c, did);
+
+  if (signingEntry === null) {
+    return c.json(
+      {
+        error: 'No JWKS configured for request host',
+        did,
+      },
+      404,
+    );
+  }
+
+  return c.json(jwksDocumentForSigningEntry(signingEntry));
+});
+
+app.get('/:tenantSlug/jwks.json', async (c): Promise<Response> => {
+  const tenantSlug = c.req.param('tenantSlug');
+  const did = didForTenantPathRequest(c.req.url, tenantSlug);
+  const signingEntry = await resolveSigningEntryForDid(c, did);
+
+  if (signingEntry === null) {
+    return c.json(
+      {
+        error: 'No JWKS configured for tenant path',
+        did,
+      },
+      404,
+    );
+  }
+
+  return c.json(jwksDocumentForSigningEntry(signingEntry));
 });
 
 app.get('/credentials/v1/:credentialId', async (c) => {

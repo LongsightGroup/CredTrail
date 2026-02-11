@@ -3381,6 +3381,65 @@ describe('DID signing resolution from Postgres registration', () => {
     expect(asString(publicKeyJwk?.x)).toBe(signingMaterial.publicJwk.x);
     expect(asString(publicKeyJwk?.y)).toBe(signingMaterial.publicJwk.y);
   });
+
+  it('serves jwks.json from DB-backed signing registration', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:localhost',
+      keyId: 'key-root',
+    });
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'platform',
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/.well-known/jwks.json', undefined, env);
+    const body = await response.json<JsonObject>();
+    const keys = Array.isArray(body.keys) ? body.keys : [];
+    const firstKey = keys.length > 0 ? asJsonObject(keys[0]) : null;
+
+    expect(response.status).toBe(200);
+    expect(asString(firstKey?.kty)).toBe('OKP');
+    expect(asString(firstKey?.crv)).toBe('Ed25519');
+    expect(asString(firstKey?.kid)).toBe('key-root');
+  });
+
+  it('serves tenant-path jwks.json with P-256 key material', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateP256SigningMaterial('key-p256');
+
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'sakai',
+        did: 'did:web:localhost:sakai',
+        keyId: 'key-p256',
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/sakai/jwks.json', undefined, env);
+    const body = await response.json<JsonObject>();
+    const keys = Array.isArray(body.keys) ? body.keys : [];
+    const firstKey = keys.length > 0 ? asJsonObject(keys[0]) : null;
+
+    expect(response.status).toBe(200);
+    expect(asString(firstKey?.kty)).toBe('EC');
+    expect(asString(firstKey?.crv)).toBe('P-256');
+    expect(asString(firstKey?.kid)).toBe('key-p256');
+    expect(asString(firstKey?.x)).toBe(signingMaterial.publicJwk.x);
+    expect(asString(firstKey?.y)).toBe(signingMaterial.publicJwk.y);
+    expect(mockedFindTenantSigningRegistrationByDid).toHaveBeenCalledWith(
+      fakeDb,
+      'did:web:localhost:sakai',
+    );
+  });
 });
 
 describe('GET /credentials/v1/status-lists/:tenantId/revocation', () => {
