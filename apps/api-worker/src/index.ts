@@ -43,6 +43,7 @@ import {
   findMagicLinkTokenByHash,
   isMagicLinkTokenValid,
   listBadgeTemplates,
+  listPublicBadgeWallEntries,
   markLearnerIdentityLinkProofUsed,
   markMagicLinkTokenUsed,
   nextAssertionStatusListIndex,
@@ -54,6 +55,7 @@ import {
   updateBadgeTemplate,
   type AssertionRecord,
   type LearnerBadgeSummaryRecord,
+  type PublicBadgeWallEntryRecord,
   type SessionRecord,
   upsertUserByEmail,
 } from '@credtrail/db';
@@ -126,6 +128,8 @@ const SAKAI_REPO_NAME = 'sakai';
 const SAKAI_MIN_COMMIT_COUNT = 1000;
 const SAKAI_ISSUER_NAME = 'Sakai Project';
 const SAKAI_ISSUER_URL = 'https://www.sakaiproject.org/';
+const SAKAI_SHOWCASE_TENANT_ID = 'tenant_sakai';
+const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
 const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
 const DEFAULT_JOB_PROCESS_RETRY_DELAY_SECONDS = 30;
@@ -1935,6 +1939,158 @@ const learnerDashboardPage = (
   );
 };
 
+const tenantBadgeWallPage = (
+  requestUrl: string,
+  tenantId: string,
+  entries: readonly PublicBadgeWallEntryRecord[],
+  filterBadgeTemplateId: string | null,
+): string => {
+  const title = filterBadgeTemplateId === null ? `Badge Wall · ${tenantId}` : `Badge Wall · ${tenantId}`;
+  const subtitle =
+    filterBadgeTemplateId === null
+      ? `Public badge URLs issued under tenant "${tenantId}".`
+      : `Public badge URLs issued under tenant "${tenantId}" for badge template "${filterBadgeTemplateId}".`;
+  const cards =
+    entries.length === 0
+      ? ''
+      : entries
+          .map((entry) => {
+            const username = githubUsernameFromUrl(entry.recipientIdentity);
+            const recipientLabel = username === null ? entry.recipientIdentity : `@${username}`;
+            const avatarUrl = username === null ? null : githubAvatarUrlForUsername(username);
+            const badgePath = `/badges/${encodeURIComponent(entry.assertionPublicId)}`;
+            const badgeUrl = new URL(badgePath, requestUrl).toString();
+            const issuedAt = `${formatIsoTimestamp(entry.issuedAt)} UTC`;
+            const statusLabel = entry.revokedAt === null ? 'Verified' : 'Revoked';
+            const revokedLine =
+              entry.revokedAt === null
+                ? ''
+                : `<p class="badge-wall__meta">Revoked ${escapeHtml(
+                    formatIsoTimestamp(entry.revokedAt),
+                  )} UTC</p>`;
+            const avatarMarkup =
+              avatarUrl === null
+                ? ''
+                : `<img
+                    class="badge-wall__avatar"
+                    src="${escapeHtml(avatarUrl)}"
+                    alt="${escapeHtml(`${recipientLabel} GitHub avatar`)}"
+                    loading="lazy"
+                  />`;
+
+            return `<li class="badge-wall__item">
+              <div class="badge-wall__recipient">
+                ${avatarMarkup}
+                <div class="badge-wall__stack">
+                  <p class="badge-wall__name">${escapeHtml(recipientLabel)}</p>
+                  <p class="badge-wall__badge-title">${escapeHtml(entry.badgeTitle)}</p>
+                  <p class="badge-wall__meta">${escapeHtml(statusLabel)} · Issued ${escapeHtml(issuedAt)}</p>
+                  ${revokedLine}
+                </div>
+              </div>
+              <p class="badge-wall__url">
+                <a href="${escapeHtml(badgePath)}">${escapeHtml(badgeUrl)}</a>
+              </p>
+            </li>`;
+          })
+          .join('');
+  const listMarkup =
+    entries.length === 0
+      ? '<p class="badge-wall__empty">No public badges found for this showcase.</p>'
+      : `<ol class="badge-wall__list">${cards}</ol>`;
+
+  return renderPageShell(
+    `${title} | CredTrail`,
+    `<style>
+      .badge-wall {
+        display: grid;
+        gap: 1rem;
+        color: #0f172a;
+      }
+
+      .badge-wall__lead {
+        margin: 0;
+        color: #475569;
+      }
+
+      .badge-wall__count {
+        margin: 0;
+        font-weight: 600;
+      }
+
+      .badge-wall__list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .badge-wall__item {
+        border: 1px solid #d6dfeb;
+        border-radius: 0.9rem;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        padding: 0.9rem;
+        display: grid;
+        gap: 0.65rem;
+      }
+
+      .badge-wall__recipient {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+      }
+
+      .badge-wall__avatar {
+        width: 2.7rem;
+        height: 2.7rem;
+        border-radius: 999px;
+        border: 1px solid #d6dfeb;
+        object-fit: cover;
+        background: #f8fafc;
+      }
+
+      .badge-wall__stack {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .badge-wall__name {
+        margin: 0;
+        font-weight: 700;
+      }
+
+      .badge-wall__badge-title {
+        margin: 0;
+        color: #334155;
+      }
+
+      .badge-wall__meta {
+        margin: 0;
+        color: #475569;
+        font-size: 0.92rem;
+      }
+
+      .badge-wall__url {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .badge-wall__empty {
+        margin: 0;
+        color: #475569;
+      }
+    </style>
+    <section class="badge-wall">
+      <h1 style="margin:0;">${escapeHtml(title)}</h1>
+      <p class="badge-wall__lead">${escapeHtml(subtitle)}</p>
+      <p class="badge-wall__count">${escapeHtml(String(entries.length))} issued badges</p>
+      ${listMarkup}
+    </section>`,
+  );
+};
+
 app.use('*', async (c, next) => {
   const startedAt = Date.now();
   const requestUrl = new URL(c.req.url);
@@ -2225,6 +2381,24 @@ app.get('/badges/:badgeIdentifier', async (c) => {
   }
 
   return c.html(publicBadgePage(c.req.url, result.value));
+});
+
+app.get('/showcase/sakai', (c) => {
+  const showcaseUrl = new URL(c.req.url);
+  showcaseUrl.pathname = `/showcase/${encodeURIComponent(SAKAI_SHOWCASE_TENANT_ID)}`;
+  showcaseUrl.searchParams.set('badgeTemplateId', SAKAI_SHOWCASE_TEMPLATE_ID);
+  return c.redirect(showcaseUrl.toString(), 308);
+});
+
+app.get('/showcase/:tenantId', async (c) => {
+  const pathParams = parseTenantPathParams(c.req.param());
+  const badgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
+  const entries = await listPublicBadgeWallEntries(c.env.DB, {
+    tenantId: pathParams.tenantId,
+    ...(badgeTemplateId === null ? {} : { badgeTemplateId }),
+  });
+  c.header('Cache-Control', 'no-store');
+  return c.html(tenantBadgeWallPage(c.req.url, pathParams.tenantId, entries, badgeTemplateId));
 });
 
 app.get('/tenants/:tenantId/learner/dashboard', async (c) => {

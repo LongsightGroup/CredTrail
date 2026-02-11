@@ -224,6 +224,20 @@ export interface LearnerBadgeSummaryRecord {
   revokedAt: string | null;
 }
 
+export interface PublicBadgeWallEntryRecord {
+  assertionId: string;
+  assertionPublicId: string;
+  tenantId: string;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeDescription: string | null;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  issuedAt: string;
+  revokedAt: string | null;
+}
+
 export interface CreateAssertionInput {
   id: string;
   tenantId: string;
@@ -319,6 +333,12 @@ export interface ListLearnerBadgeSummariesInput {
   userId: string;
 }
 
+export interface ListPublicBadgeWallEntriesInput {
+  tenantId: string;
+  badgeTemplateId?: string | undefined;
+  limit?: number | undefined;
+}
+
 interface BadgeTemplateRow {
   id: string;
   tenantId: string;
@@ -358,6 +378,20 @@ interface LearnerBadgeSummaryRow {
   badgeTemplateId: string;
   badgeTitle: string;
   badgeDescription: string | null;
+  issuedAt: string;
+  revokedAt: string | null;
+}
+
+interface PublicBadgeWallEntryRow {
+  assertionId: string;
+  assertionPublicId: string;
+  tenantId: string;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeDescription: string | null;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
   issuedAt: string;
   revokedAt: string | null;
 }
@@ -1279,6 +1313,22 @@ const mapLearnerBadgeSummaryRow = (row: LearnerBadgeSummaryRow): LearnerBadgeSum
   };
 };
 
+const mapPublicBadgeWallEntryRow = (row: PublicBadgeWallEntryRow): PublicBadgeWallEntryRecord => {
+  return {
+    assertionId: row.assertionId,
+    assertionPublicId: row.assertionPublicId,
+    tenantId: row.tenantId,
+    badgeTemplateId: row.badgeTemplateId,
+    badgeTitle: row.badgeTitle,
+    badgeDescription: row.badgeDescription,
+    badgeImageUri: row.badgeImageUri,
+    recipientIdentity: row.recipientIdentity,
+    recipientIdentityType: row.recipientIdentityType,
+    issuedAt: row.issuedAt,
+    revokedAt: row.revokedAt,
+  };
+};
+
 export const createBadgeTemplate = async (
   db: D1Database,
   input: CreateBadgeTemplateInput,
@@ -1699,6 +1749,72 @@ export const listLearnerBadgeSummaries = async (
     .all<LearnerBadgeSummaryRow>();
 
   return result.results.map((row) => mapLearnerBadgeSummaryRow(row));
+};
+
+export const listPublicBadgeWallEntries = async (
+  db: D1Database,
+  input: ListPublicBadgeWallEntriesInput,
+): Promise<PublicBadgeWallEntryRecord[]> => {
+  const queryLimit = Math.max(1, Math.min(input.limit ?? 300, 1000));
+  const result =
+    input.badgeTemplateId === undefined
+      ? await db
+          .prepare(
+            `
+            SELECT
+              assertions.id AS assertionId,
+              assertions.public_id AS assertionPublicId,
+              assertions.tenant_id AS tenantId,
+              assertions.badge_template_id AS badgeTemplateId,
+              badge_templates.title AS badgeTitle,
+              badge_templates.description AS badgeDescription,
+              badge_templates.image_uri AS badgeImageUri,
+              assertions.recipient_identity AS recipientIdentity,
+              assertions.recipient_identity_type AS recipientIdentityType,
+              assertions.issued_at AS issuedAt,
+              assertions.revoked_at AS revokedAt
+            FROM assertions
+            INNER JOIN badge_templates
+              ON badge_templates.tenant_id = assertions.tenant_id
+              AND badge_templates.id = assertions.badge_template_id
+            WHERE assertions.tenant_id = ?
+              AND assertions.public_id IS NOT NULL
+            ORDER BY assertions.issued_at DESC
+            LIMIT ?
+          `,
+          )
+          .bind(input.tenantId, queryLimit)
+          .all<PublicBadgeWallEntryRow>()
+      : await db
+          .prepare(
+            `
+            SELECT
+              assertions.id AS assertionId,
+              assertions.public_id AS assertionPublicId,
+              assertions.tenant_id AS tenantId,
+              assertions.badge_template_id AS badgeTemplateId,
+              badge_templates.title AS badgeTitle,
+              badge_templates.description AS badgeDescription,
+              badge_templates.image_uri AS badgeImageUri,
+              assertions.recipient_identity AS recipientIdentity,
+              assertions.recipient_identity_type AS recipientIdentityType,
+              assertions.issued_at AS issuedAt,
+              assertions.revoked_at AS revokedAt
+            FROM assertions
+            INNER JOIN badge_templates
+              ON badge_templates.tenant_id = assertions.tenant_id
+              AND badge_templates.id = assertions.badge_template_id
+            WHERE assertions.tenant_id = ?
+              AND assertions.badge_template_id = ?
+              AND assertions.public_id IS NOT NULL
+            ORDER BY assertions.issued_at DESC
+            LIMIT ?
+          `,
+          )
+          .bind(input.tenantId, input.badgeTemplateId, queryLimit)
+          .all<PublicBadgeWallEntryRow>();
+
+  return result.results.map((row) => mapPublicBadgeWallEntryRow(row));
 };
 
 export const createAssertion = async (

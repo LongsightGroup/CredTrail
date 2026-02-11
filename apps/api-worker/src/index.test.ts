@@ -21,6 +21,7 @@ vi.mock('@credtrail/db', async () => {
     findLearnerProfileByIdentity: vi.fn(),
     findUserById: vi.fn(),
     listAssertionStatusListEntries: vi.fn(),
+    listPublicBadgeWallEntries: vi.fn(),
     touchSession: vi.fn(),
     listLearnerBadgeSummaries: vi.fn(),
     leaseJobQueueMessages: vi.fn(),
@@ -52,6 +53,7 @@ import {
   type LearnerIdentityLinkProofRecord,
   type LearnerBadgeSummaryRecord,
   type LearnerProfileRecord,
+  type PublicBadgeWallEntryRecord,
   type SessionRecord,
   addLearnerIdentityAlias,
   completeJobQueueMessage,
@@ -69,6 +71,7 @@ import {
   findLearnerProfileByIdentity,
   findUserById,
   listAssertionStatusListEntries,
+  listPublicBadgeWallEntries,
   listLearnerBadgeSummaries,
   leaseJobQueueMessages,
   markLearnerIdentityLinkProofUsed,
@@ -138,6 +141,7 @@ const mockedFindUserById = vi.mocked(findUserById);
 const mockedFindLearnerProfileById = vi.mocked(findLearnerProfileById);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
+const mockedListPublicBadgeWallEntries = vi.mocked(listPublicBadgeWallEntries);
 const mockedCreateAssertion = vi.mocked(createAssertion);
 const mockedNextAssertionStatusListIndex = vi.mocked(nextAssertionStatusListIndex);
 const mockedListAssertionStatusListEntries = vi.mocked(listAssertionStatusListEntries);
@@ -266,6 +270,25 @@ const sampleLearnerBadge = (
     badgeTitle: 'TypeScript Foundations',
     badgeDescription: 'Awarded for completing TS basics.',
     issuedAt: '2026-02-10T22:00:00.000Z',
+    revokedAt: null,
+    ...overrides,
+  };
+};
+
+const samplePublicBadgeWallEntry = (
+  overrides?: Partial<PublicBadgeWallEntryRecord>,
+): PublicBadgeWallEntryRecord => {
+  return {
+    assertionId: 'tenant_sakai:assertion_001',
+    assertionPublicId: 'a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf',
+    tenantId: 'tenant_sakai',
+    badgeTemplateId: 'badge_template_sakai_1000',
+    badgeTitle: 'Sakai 1000+ Commits Contributor',
+    badgeDescription: 'Awarded for 1000+ commits.',
+    badgeImageUri: null,
+    recipientIdentity: 'https://github.com/ottenhoff',
+    recipientIdentityType: 'url',
+    issuedAt: '2026-02-11T16:29:14.571Z',
     revokedAt: null,
     ...overrides,
   };
@@ -435,6 +458,85 @@ describe('canonical host redirects', () => {
 
     expect(response.status).toBe(308);
     expect(response.headers.get('location')).toBe('https://credtrail.test/healthz');
+  });
+});
+
+describe('GET /showcase/:tenantId', () => {
+  beforeEach(() => {
+    mockedListPublicBadgeWallEntries.mockReset();
+  });
+
+  it('renders public tenant badge wall entries with badge URLs', async () => {
+    const env = createEnv();
+    mockedListPublicBadgeWallEntries.mockResolvedValue([
+      samplePublicBadgeWallEntry(),
+      samplePublicBadgeWallEntry({
+        assertionPublicId: '620b51c5-c6f8-4506-8a5c-2daaa2eb6f04',
+        recipientIdentity: 'https://github.com/steveswinsburg',
+        badgeTitle: 'Sakai Distinguished Contributor',
+      }),
+    ]);
+
+    const response = await app.request('/showcase/tenant_sakai', undefined, env);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('Badge Wall · tenant_sakai');
+    expect(body).toContain('2 issued badges');
+    expect(body).toContain('/badges/a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf');
+    expect(body).toContain('/badges/620b51c5-c6f8-4506-8a5c-2daaa2eb6f04');
+    expect(body).toContain('http://localhost/badges/a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf');
+    expect(body).toContain('@ottenhoff');
+    expect(body).toContain('Sakai 1000+ Commits Contributor');
+    expect(body).toContain('Sakai Distinguished Contributor');
+    expect(body).toContain('github.com/ottenhoff.png');
+    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(env.DB, {
+      tenantId: 'tenant_sakai',
+    });
+  });
+
+  it('applies badgeTemplateId filter when provided', async () => {
+    const env = createEnv();
+    mockedListPublicBadgeWallEntries.mockResolvedValue([]);
+
+    const response = await app.request(
+      '/showcase/tenant_sakai?badgeTemplateId=badge_template_sakai_1000',
+      undefined,
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('badge template &quot;badge_template_sakai_1000&quot;');
+    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(env.DB, {
+      tenantId: 'tenant_sakai',
+      badgeTemplateId: 'badge_template_sakai_1000',
+    });
+  });
+
+  it('renders empty state when no badges are present', async () => {
+    const env = createEnv();
+    mockedListPublicBadgeWallEntries.mockResolvedValue([]);
+
+    const response = await app.request('/showcase/tenant_sakai', undefined, env);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('0 issued badges');
+    expect(body).toContain('No public badges found for this showcase.');
+  });
+});
+
+describe('GET /showcase/sakai', () => {
+  it('redirects to the generic tenant showcase with Sakai template filter', async () => {
+    const env = createEnv();
+    const response = await app.request('/showcase/sakai', undefined, env);
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe(
+      'http://localhost/showcase/tenant_sakai?badgeTemplateId=badge_template_sakai_1000',
+    );
   });
 });
 
