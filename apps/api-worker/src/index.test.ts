@@ -10,8 +10,12 @@ vi.mock('@credtrail/db', async () => {
     createAuditLog: vi.fn(),
     createAssertion: vi.fn(),
     createLearnerIdentityLinkProof: vi.fn(),
+    createOAuthAccessToken: vi.fn(),
+    createOAuthAuthorizationCode: vi.fn(),
+    createOAuthClient: vi.fn(),
     enqueueJobQueueMessage: vi.fn(),
     failJobQueueMessage: vi.fn(),
+    findOAuthClientById: vi.fn(),
     findAssertionById: vi.fn(),
     findAssertionByPublicId: vi.fn(),
     findAssertionByIdempotencyKey: vi.fn(),
@@ -30,6 +34,7 @@ vi.mock('@credtrail/db', async () => {
     leaseJobQueueMessages: vi.fn(),
     markLearnerIdentityLinkProofUsed: vi.fn(),
     nextAssertionStatusListIndex: vi.fn(),
+    consumeOAuthAuthorizationCode: vi.fn(),
     recordAssertionRevocation: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
     upsertBadgeTemplateById: vi.fn(),
@@ -69,6 +74,9 @@ import {
   type LearnerProfileRecord,
   type PublicBadgeWallEntryRecord,
   type SessionRecord,
+  type OAuthAccessTokenRecord,
+  type OAuthAuthorizationCodeRecord,
+  type OAuthClientRecord,
   type TenantRecord,
   type TenantSigningRegistrationRecord,
   type SqlDatabase,
@@ -78,6 +86,10 @@ import {
   createAuditLog,
   createAssertion,
   createLearnerIdentityLinkProof,
+  createOAuthAccessToken,
+  createOAuthAuthorizationCode,
+  createOAuthClient,
+  consumeOAuthAuthorizationCode,
   enqueueJobQueueMessage,
   failJobQueueMessage,
   findActiveSessionByHash,
@@ -90,6 +102,7 @@ import {
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileById,
   findLearnerProfileByIdentity,
+  findOAuthClientById,
   findUserById,
   listAssertionStatusListEntries,
   listPublicBadgeWallEntries,
@@ -130,6 +143,11 @@ interface VerificationResponse {
 
 interface ErrorResponse {
   error: string;
+}
+
+interface OAuthErrorResponse {
+  error: string;
+  error_description?: string | undefined;
 }
 
 interface ManualIssueResponse {
@@ -177,8 +195,13 @@ const mockedTouchSession = vi.mocked(touchSession);
 const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
 const mockedCreateLearnerIdentityLinkProof = vi.mocked(createLearnerIdentityLinkProof);
 const mockedFindLearnerIdentityLinkProofByHash = vi.mocked(findLearnerIdentityLinkProofByHash);
+const mockedFindOAuthClientById = vi.mocked(findOAuthClientById);
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedMarkLearnerIdentityLinkProofUsed = vi.mocked(markLearnerIdentityLinkProofUsed);
+const mockedCreateOAuthClient = vi.mocked(createOAuthClient);
+const mockedCreateOAuthAuthorizationCode = vi.mocked(createOAuthAuthorizationCode);
+const mockedConsumeOAuthAuthorizationCode = vi.mocked(consumeOAuthAuthorizationCode);
+const mockedCreateOAuthAccessToken = vi.mocked(createOAuthAccessToken);
 const mockedEnqueueJobQueueMessage = vi.mocked(enqueueJobQueueMessage);
 const mockedLeaseJobQueueMessages = vi.mocked(leaseJobQueueMessages);
 const mockedCompleteJobQueueMessage = vi.mocked(completeJobQueueMessage);
@@ -216,6 +239,11 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
   mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
+  mockedFindOAuthClientById.mockReset();
+  mockedCreateOAuthClient.mockReset();
+  mockedCreateOAuthAuthorizationCode.mockReset();
+  mockedConsumeOAuthAuthorizationCode.mockReset();
+  mockedCreateOAuthAccessToken.mockReset();
   mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
 });
 
@@ -267,6 +295,19 @@ const base64UrlToBytes = (value: string): Uint8Array => {
   return bytes;
 };
 
+const sha256HexForTest = async (value: string): Promise<string> => {
+  const encoded = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  const digestBytes = new Uint8Array(digest);
+  const hexParts: string[] = [];
+
+  for (const byte of digestBytes) {
+    hexParts.push(byte.toString(16).padStart(2, '0'));
+  }
+
+  return hexParts.join('');
+};
+
 const gunzip = async (bytes: Uint8Array): Promise<Uint8Array> => {
   const normalizedBytes = Uint8Array.from(bytes);
   const sourceStream = new ReadableStream<BufferSource>({
@@ -302,6 +343,64 @@ const sampleSession = (overrides?: { tenantId?: string }): SessionRecord => {
     lastSeenAt: '2026-02-10T22:00:00.000Z',
     revokedAt: null,
     createdAt: '2026-02-10T22:00:00.000Z',
+  };
+};
+
+const sampleOAuthClientRecord = (
+  overrides?: Partial<OAuthClientRecord>,
+): OAuthClientRecord => {
+  return {
+    clientId: 'oc_client_123',
+    clientSecretHash: 'secret-hash',
+    clientName: 'CredTrail Test Client',
+    redirectUrisJson: JSON.stringify(['https://client.example/callback']),
+    grantTypesJson: JSON.stringify(['authorization_code']),
+    responseTypesJson: JSON.stringify(['code']),
+    scope:
+      'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+    tokenEndpointAuthMethod: 'client_secret_basic',
+    createdAt: '2026-02-11T22:00:00.000Z',
+    updatedAt: '2026-02-11T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleOAuthAuthorizationCodeRecord = (
+  overrides?: Partial<OAuthAuthorizationCodeRecord>,
+): OAuthAuthorizationCodeRecord => {
+  return {
+    id: 'oac_123',
+    clientId: 'oc_client_123',
+    userId: 'usr_123',
+    tenantId: 'tenant_123',
+    codeHash: 'code-hash',
+    redirectUri: 'https://client.example/callback',
+    scope:
+      'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+    codeChallenge: null,
+    codeChallengeMethod: null,
+    expiresAt: '2026-02-11T22:05:00.000Z',
+    usedAt: null,
+    createdAt: '2026-02-11T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleOAuthAccessTokenRecord = (
+  overrides?: Partial<OAuthAccessTokenRecord>,
+): OAuthAccessTokenRecord => {
+  return {
+    id: 'oat_123',
+    clientId: 'oc_client_123',
+    userId: 'usr_123',
+    tenantId: 'tenant_123',
+    accessTokenHash: 'access-token-hash',
+    scope:
+      'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+    expiresAt: '2026-02-11T23:00:00.000Z',
+    revokedAt: null,
+    createdAt: '2026-02-11T22:00:00.000Z',
+    ...overrides,
   };
 };
 
@@ -635,6 +734,176 @@ describe('GET /ims/ob/v3p0/discovery', () => {
     expect(asString(scopes?.['https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update'])).toContain(
       'Permission',
     );
+  });
+});
+
+describe('OB3 OAuth2 endpoints', () => {
+  it('registers OAuth clients and returns client credentials', async () => {
+    mockedCreateOAuthClient.mockResolvedValue(
+      sampleOAuthClientRecord({
+        clientId: 'oc_registered_client',
+      }),
+    );
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/register',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_name: 'CredTrail Integration',
+          redirect_uris: ['https://client.example/callback'],
+          grant_types: ['authorization_code'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'client_secret_basic',
+          scope:
+            'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+        }),
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(201);
+    expect(body.client_id).toBe('oc_registered_client');
+    expect(typeof body.client_secret).toBe('string');
+    expect(body.client_secret_expires_at).toBe(0);
+    expect(body.token_endpoint_auth_method).toBe('client_secret_basic');
+    expect(body.grant_types).toEqual(['authorization_code']);
+    expect(body.response_types).toEqual(['code']);
+    expect(body.redirect_uris).toEqual(['https://client.example/callback']);
+
+    const firstCall = mockedCreateOAuthClient.mock.calls[0];
+    const createInput = firstCall?.[1];
+    expect(firstCall?.[0]).toBe(fakeDb);
+    expect(createInput?.clientId.startsWith('oc_')).toBe(true);
+    expect(createInput?.clientSecretHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(createInput?.redirectUrisJson).toBe('["https://client.example/callback"]');
+  });
+
+  it('rejects registration requests with invalid redirect_uris payload', async () => {
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/register',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_name: 'Broken Client',
+        }),
+      },
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('invalid_client_metadata');
+    expect(mockedCreateOAuthClient).not.toHaveBeenCalled();
+  });
+
+  it('issues authorization codes to authenticated resource owners', async () => {
+    mockedFindOAuthClientById.mockResolvedValue(sampleOAuthClientRecord());
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedCreateOAuthAuthorizationCode.mockResolvedValue(sampleOAuthAuthorizationCodeRecord());
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/authorize?response_type=code&client_id=oc_client_123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=https%3A%2F%2Fpurl.imsglobal.org%2Fspec%2Fob%2Fv3p0%2Fscope%2Fcredential.readonly&state=state123',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      createEnv(),
+    );
+
+    expect(response.status).toBe(302);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    if (location === null) {
+      throw new Error('Expected location header in authorization response');
+    }
+
+    const redirectLocation = new URL(location);
+    expect(redirectLocation.origin).toBe('https://client.example');
+    expect(redirectLocation.pathname).toBe('/callback');
+    expect(redirectLocation.searchParams.get('state')).toBe('state123');
+    expect(typeof redirectLocation.searchParams.get('code')).toBe('string');
+
+    const firstCall = mockedCreateOAuthAuthorizationCode.mock.calls[0];
+    const createInput = firstCall?.[1];
+    expect(firstCall?.[0]).toBe(fakeDb);
+    expect(createInput?.clientId).toBe('oc_client_123');
+    expect(createInput?.tenantId).toBe('tenant_123');
+    expect(createInput?.userId).toBe('usr_123');
+    expect(createInput?.redirectUri).toBe('https://client.example/callback');
+  });
+
+  it('exchanges authorization code for access token with client_secret_basic authentication', async () => {
+    const clientSecret = 'oauth-secret';
+    const clientSecretHash = await sha256HexForTest(clientSecret);
+    mockedFindOAuthClientById.mockResolvedValue(
+      sampleOAuthClientRecord({
+        clientId: 'oc_client_123',
+        clientSecretHash,
+      }),
+    );
+    mockedConsumeOAuthAuthorizationCode.mockResolvedValue(sampleOAuthAuthorizationCodeRecord());
+    mockedCreateOAuthAccessToken.mockResolvedValue(sampleOAuthAccessTokenRecord());
+
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/token',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          authorization: `Basic ${btoa(`oc_client_123:${clientSecret}`)}`,
+        },
+        body: 'grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback',
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('pragma')).toBe('no-cache');
+    expect(body.token_type).toBe('Bearer');
+    expect(typeof body.access_token).toBe('string');
+    expect(body.expires_in).toBe(3600);
+    expect(typeof body.scope).toBe('string');
+
+    const consumeCall = mockedConsumeOAuthAuthorizationCode.mock.calls[0];
+    const consumeInput = consumeCall?.[1];
+    expect(consumeCall?.[0]).toBe(fakeDb);
+    expect(consumeInput?.clientId).toBe('oc_client_123');
+    expect(consumeInput?.redirectUri).toBe('https://client.example/callback');
+    expect(consumeInput?.codeHash).toMatch(/^[a-f0-9]{64}$/);
+
+    const createAccessTokenCall = mockedCreateOAuthAccessToken.mock.calls[0];
+    expect(createAccessTokenCall?.[0]).toBe(fakeDb);
+  });
+
+  it('returns invalid_client when token endpoint request omits client_secret_basic auth', async () => {
+    const response = await app.request(
+      '/ims/ob/v3p0/oauth/token',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: 'grant_type=authorization_code&code=code-123&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback',
+      },
+      createEnv(),
+    );
+    const body = await response.json<OAuthErrorResponse>();
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain('Basic');
+    expect(body.error).toBe('invalid_client');
   });
 });
 

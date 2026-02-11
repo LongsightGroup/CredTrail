@@ -179,6 +179,85 @@ export interface SessionRecord {
   createdAt: string;
 }
 
+export interface OAuthClientRecord {
+  clientId: string;
+  clientSecretHash: string;
+  clientName: string | null;
+  redirectUrisJson: string;
+  grantTypesJson: string;
+  responseTypesJson: string;
+  scope: string;
+  tokenEndpointAuthMethod: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateOAuthClientInput {
+  clientId: string;
+  clientSecretHash: string;
+  clientName?: string | undefined;
+  redirectUrisJson: string;
+  grantTypesJson: string;
+  responseTypesJson: string;
+  scope: string;
+  tokenEndpointAuthMethod: string;
+}
+
+export interface OAuthAuthorizationCodeRecord {
+  id: string;
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  codeHash: string;
+  redirectUri: string;
+  scope: string;
+  codeChallenge: string | null;
+  codeChallengeMethod: string | null;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateOAuthAuthorizationCodeInput {
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  codeHash: string;
+  redirectUri: string;
+  scope: string;
+  expiresAt: string;
+  codeChallenge?: string | undefined;
+  codeChallengeMethod?: string | undefined;
+}
+
+export interface ConsumeOAuthAuthorizationCodeInput {
+  clientId: string;
+  codeHash: string;
+  redirectUri: string;
+  nowIso: string;
+}
+
+export interface OAuthAccessTokenRecord {
+  id: string;
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  accessTokenHash: string;
+  scope: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateOAuthAccessTokenInput {
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  accessTokenHash: string;
+  scope: string;
+  expiresAt: string;
+}
+
 export interface LearnerIdentityLinkProofRecord {
   id: string;
   tenantId: string;
@@ -534,6 +613,46 @@ interface AuditLogRow {
   createdAt: string;
 }
 
+interface OAuthClientRow {
+  clientId: string;
+  clientSecretHash: string;
+  clientName: string | null;
+  redirectUrisJson: string;
+  grantTypesJson: string;
+  responseTypesJson: string;
+  scope: string;
+  tokenEndpointAuthMethod: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface OAuthAuthorizationCodeRow {
+  id: string;
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  codeHash: string;
+  redirectUri: string;
+  scope: string;
+  codeChallenge: string | null;
+  codeChallengeMethod: string | null;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
+}
+
+interface OAuthAccessTokenRow {
+  id: string;
+  clientId: string;
+  userId: string;
+  tenantId: string;
+  accessTokenHash: string;
+  scope: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
 const isMissingTenantSigningRegistrationsTableError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
@@ -557,6 +676,27 @@ const isMissingAuditLogsTableError = (error: unknown): boolean => {
       error.message.includes('relation') ||
       error.message.includes('does not exist')) &&
     error.message.includes('audit_logs')
+  );
+};
+
+const isMissingOAuthTablesError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const tableMissing =
+    error.message.includes('oauth_clients') ||
+    error.message.includes('oauth_authorization_codes') ||
+    error.message.includes('oauth_access_tokens');
+
+  if (!tableMissing) {
+    return false;
+  }
+
+  return (
+    error.message.includes('no such table') ||
+    error.message.includes('relation') ||
+    error.message.includes('does not exist')
   );
 };
 
@@ -623,6 +763,99 @@ const ensureAuditLogsTable = async (db: SqlDatabase): Promise<void> => {
       `
       CREATE INDEX IF NOT EXISTS idx_audit_logs_action
         ON audit_logs (action)
+    `,
+    )
+    .run();
+};
+
+const ensureOAuthTables = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS oauth_clients (
+        client_id TEXT PRIMARY KEY,
+        client_secret_hash TEXT NOT NULL,
+        client_name TEXT,
+        redirect_uris_json TEXT NOT NULL,
+        grant_types_json TEXT NOT NULL,
+        response_types_json TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        token_endpoint_auth_method TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        code_hash TEXT NOT NULL UNIQUE,
+        redirect_uri TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        code_challenge TEXT,
+        code_challenge_method TEXT,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (client_id) REFERENCES oauth_clients (client_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        access_token_hash TEXT NOT NULL UNIQUE,
+        scope TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (client_id) REFERENCES oauth_clients (client_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_lookup
+        ON oauth_authorization_codes (client_id, code_hash)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_expires_at
+        ON oauth_authorization_codes (expires_at)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_lookup
+        ON oauth_access_tokens (client_id, access_token_hash)
     `,
     )
     .run();
@@ -1673,6 +1906,392 @@ export const revokeSessionByHash = async (
     )
     .bind(revokedAt, sessionTokenHash)
     .run();
+};
+
+const mapOAuthClientRow = (row: OAuthClientRow): OAuthClientRecord => {
+  return {
+    clientId: row.clientId,
+    clientSecretHash: row.clientSecretHash,
+    clientName: row.clientName,
+    redirectUrisJson: row.redirectUrisJson,
+    grantTypesJson: row.grantTypesJson,
+    responseTypesJson: row.responseTypesJson,
+    scope: row.scope,
+    tokenEndpointAuthMethod: row.tokenEndpointAuthMethod,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapOAuthAuthorizationCodeRow = (
+  row: OAuthAuthorizationCodeRow,
+): OAuthAuthorizationCodeRecord => {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    userId: row.userId,
+    tenantId: row.tenantId,
+    codeHash: row.codeHash,
+    redirectUri: row.redirectUri,
+    scope: row.scope,
+    codeChallenge: row.codeChallenge,
+    codeChallengeMethod: row.codeChallengeMethod,
+    expiresAt: row.expiresAt,
+    usedAt: row.usedAt,
+    createdAt: row.createdAt,
+  };
+};
+
+const mapOAuthAccessTokenRow = (row: OAuthAccessTokenRow): OAuthAccessTokenRecord => {
+  return {
+    id: row.id,
+    clientId: row.clientId,
+    userId: row.userId,
+    tenantId: row.tenantId,
+    accessTokenHash: row.accessTokenHash,
+    scope: row.scope,
+    expiresAt: row.expiresAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  };
+};
+
+export const createOAuthClient = async (
+  db: SqlDatabase,
+  input: CreateOAuthClientInput,
+): Promise<OAuthClientRecord> => {
+  const nowIso = new Date().toISOString();
+
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO oauth_clients (
+          client_id,
+          client_secret_hash,
+          client_name,
+          redirect_uris_json,
+          grant_types_json,
+          response_types_json,
+          scope,
+          token_endpoint_auth_method,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        input.clientId,
+        input.clientSecretHash,
+        input.clientName ?? null,
+        input.redirectUrisJson,
+        input.grantTypesJson,
+        input.responseTypesJson,
+        input.scope,
+        input.tokenEndpointAuthMethod,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingOAuthTablesError(error)) {
+      throw error;
+    }
+
+    await ensureOAuthTables(db);
+    await insertStatement();
+  }
+
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        client_id AS clientId,
+        client_secret_hash AS clientSecretHash,
+        client_name AS clientName,
+        redirect_uris_json AS redirectUrisJson,
+        grant_types_json AS grantTypesJson,
+        response_types_json AS responseTypesJson,
+        scope,
+        token_endpoint_auth_method AS tokenEndpointAuthMethod,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM oauth_clients
+      WHERE client_id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(input.clientId)
+    .first<OAuthClientRow>();
+
+  if (row === null) {
+    throw new Error(`Unable to create OAuth client "${input.clientId}"`);
+  }
+
+  return mapOAuthClientRow(row);
+};
+
+export const findOAuthClientById = async (
+  db: SqlDatabase,
+  clientId: string,
+): Promise<OAuthClientRecord | null> => {
+  const findStatement = (): Promise<OAuthClientRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          client_id AS clientId,
+          client_secret_hash AS clientSecretHash,
+          client_name AS clientName,
+          redirect_uris_json AS redirectUrisJson,
+          grant_types_json AS grantTypesJson,
+          response_types_json AS responseTypesJson,
+          scope,
+          token_endpoint_auth_method AS tokenEndpointAuthMethod,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM oauth_clients
+        WHERE client_id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(clientId)
+      .first<OAuthClientRow>();
+
+  let row: OAuthClientRow | null;
+
+  try {
+    row = await findStatement();
+  } catch (error: unknown) {
+    if (!isMissingOAuthTablesError(error)) {
+      throw error;
+    }
+
+    await ensureOAuthTables(db);
+    row = await findStatement();
+  }
+
+  if (row === null) {
+    return null;
+  }
+
+  return mapOAuthClientRow(row);
+};
+
+export const createOAuthAuthorizationCode = async (
+  db: SqlDatabase,
+  input: CreateOAuthAuthorizationCodeInput,
+): Promise<OAuthAuthorizationCodeRecord> => {
+  const id = createPrefixedId('oac');
+  const createdAt = new Date().toISOString();
+
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO oauth_authorization_codes (
+          id,
+          client_id,
+          user_id,
+          tenant_id,
+          code_hash,
+          redirect_uri,
+          scope,
+          code_challenge,
+          code_challenge_method,
+          expires_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        id,
+        input.clientId,
+        input.userId,
+        input.tenantId,
+        input.codeHash,
+        input.redirectUri,
+        input.scope,
+        input.codeChallenge ?? null,
+        input.codeChallengeMethod ?? null,
+        input.expiresAt,
+        createdAt,
+      )
+      .run();
+
+  try {
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingOAuthTablesError(error)) {
+      throw error;
+    }
+
+    await ensureOAuthTables(db);
+    await insertStatement();
+  }
+
+  return {
+    id,
+    clientId: input.clientId,
+    userId: input.userId,
+    tenantId: input.tenantId,
+    codeHash: input.codeHash,
+    redirectUri: input.redirectUri,
+    scope: input.scope,
+    codeChallenge: input.codeChallenge ?? null,
+    codeChallengeMethod: input.codeChallengeMethod ?? null,
+    expiresAt: input.expiresAt,
+    usedAt: null,
+    createdAt,
+  };
+};
+
+export const consumeOAuthAuthorizationCode = async (
+  db: SqlDatabase,
+  input: ConsumeOAuthAuthorizationCodeInput,
+): Promise<OAuthAuthorizationCodeRecord | null> => {
+  const selectStatement = (): Promise<OAuthAuthorizationCodeRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          client_id AS clientId,
+          user_id AS userId,
+          tenant_id AS tenantId,
+          code_hash AS codeHash,
+          redirect_uri AS redirectUri,
+          scope,
+          code_challenge AS codeChallenge,
+          code_challenge_method AS codeChallengeMethod,
+          expires_at AS expiresAt,
+          used_at AS usedAt,
+          created_at AS createdAt
+        FROM oauth_authorization_codes
+        WHERE client_id = ?
+          AND code_hash = ?
+          AND redirect_uri = ?
+          AND used_at IS NULL
+          AND expires_at > ?
+        LIMIT 1
+      `,
+      )
+      .bind(input.clientId, input.codeHash, input.redirectUri, input.nowIso)
+      .first<OAuthAuthorizationCodeRow>();
+
+  let row: OAuthAuthorizationCodeRow | null;
+
+  try {
+    row = await selectStatement();
+  } catch (error: unknown) {
+    if (!isMissingOAuthTablesError(error)) {
+      throw error;
+    }
+
+    await ensureOAuthTables(db);
+    row = await selectStatement();
+  }
+
+  if (row === null) {
+    return null;
+  }
+
+  await db
+    .prepare(
+      `
+      UPDATE oauth_authorization_codes
+      SET used_at = ?
+      WHERE id = ?
+        AND used_at IS NULL
+    `,
+    )
+    .bind(input.nowIso, row.id)
+    .run();
+
+  return mapOAuthAuthorizationCodeRow({
+    ...row,
+    usedAt: input.nowIso,
+  });
+};
+
+export const createOAuthAccessToken = async (
+  db: SqlDatabase,
+  input: CreateOAuthAccessTokenInput,
+): Promise<OAuthAccessTokenRecord> => {
+  const id = createPrefixedId('oat');
+  const createdAt = new Date().toISOString();
+
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO oauth_access_tokens (
+          id,
+          client_id,
+          user_id,
+          tenant_id,
+          access_token_hash,
+          scope,
+          expires_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        id,
+        input.clientId,
+        input.userId,
+        input.tenantId,
+        input.accessTokenHash,
+        input.scope,
+        input.expiresAt,
+        createdAt,
+      )
+      .run();
+
+  try {
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingOAuthTablesError(error)) {
+      throw error;
+    }
+
+    await ensureOAuthTables(db);
+    await insertStatement();
+  }
+
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        client_id AS clientId,
+        user_id AS userId,
+        tenant_id AS tenantId,
+        access_token_hash AS accessTokenHash,
+        scope,
+        expires_at AS expiresAt,
+        revoked_at AS revokedAt,
+        created_at AS createdAt
+      FROM oauth_access_tokens
+      WHERE id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(id)
+    .first<OAuthAccessTokenRow>();
+
+  if (row === null) {
+    throw new Error(`Unable to create OAuth access token "${id}"`);
+  }
+
+  return mapOAuthAccessTokenRow(row);
 };
 
 const mapTenantRow = (row: TenantRow): TenantRecord => {

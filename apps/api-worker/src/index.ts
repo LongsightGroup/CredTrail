@@ -24,7 +24,11 @@ import {
   createBadgeTemplate,
   createLearnerIdentityLinkProof,
   createMagicLinkToken,
+  createOAuthAccessToken,
+  createOAuthAuthorizationCode,
+  createOAuthClient,
   createSession,
+  consumeOAuthAuthorizationCode,
   enqueueJobQueueMessage,
   failJobQueueMessage,
   ensureTenantMembership,
@@ -44,6 +48,7 @@ import {
   listLearnerBadgeSummaries,
   leaseJobQueueMessages,
   findMagicLinkTokenByHash,
+  findOAuthClientById,
   isMagicLinkTokenValid,
   listBadgeTemplates,
   listPublicBadgeWallEntries,
@@ -146,6 +151,8 @@ const API_SERVICE_NAME = 'api-worker';
 const MAGIC_LINK_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LEARNER_IDENTITY_LINK_TTL_SECONDS = 10 * 60;
+const OAUTH_AUTHORIZATION_CODE_TTL_SECONDS = 5 * 60;
+const OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const SESSION_COOKIE_NAME = 'credtrail_session';
 const LANDING_ASSET_PATH_PREFIX = '/_astro/';
 const LANDING_STATIC_PATHS = new Set(['/credtrail-logo.png', '/favicon.svg']);
@@ -169,6 +176,16 @@ const OB3_OAUTH_SCOPE_CREDENTIAL_UPSERT =
 const OB3_OAUTH_SCOPE_PROFILE_READONLY =
   'https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly';
 const OB3_OAUTH_SCOPE_PROFILE_UPDATE = 'https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update';
+const OB3_OAUTH_SUPPORTED_SCOPE_URIS = [
+  OB3_OAUTH_SCOPE_CREDENTIAL_READONLY,
+  OB3_OAUTH_SCOPE_CREDENTIAL_UPSERT,
+  OB3_OAUTH_SCOPE_PROFILE_READONLY,
+  OB3_OAUTH_SCOPE_PROFILE_UPDATE,
+] as const;
+const OB3_OAUTH_SUPPORTED_SCOPE_SET = new Set<string>(OB3_OAUTH_SUPPORTED_SCOPE_URIS);
+const OAUTH_GRANT_TYPE_AUTHORIZATION_CODE = 'authorization_code';
+const OAUTH_RESPONSE_TYPE_CODE = 'code';
+const OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC = 'client_secret_basic';
 const OB3_OAUTH_SCOPE_DESCRIPTIONS: Record<string, string> = {
   [OB3_OAUTH_SCOPE_CREDENTIAL_READONLY]:
     'Permission to read AchievementCredentials for the authenticated entity.',
@@ -684,6 +701,248 @@ const ob3ServiceDescriptionDocument = (c: AppContext): JsonObject => {
       },
     },
   };
+};
+
+interface OAuthErrorResponse {
+  error: string;
+  error_description?: string | undefined;
+}
+
+interface OAuthClientMetadata {
+  clientId: string;
+  clientSecretHash: string;
+  redirectUris: string[];
+  grantTypes: string[];
+  responseTypes: string[];
+  scope: string[];
+  tokenEndpointAuthMethod: string;
+}
+
+const oauthErrorJson = (
+  c: AppContext,
+  status: 400 | 401 | 403 | 500,
+  error: string,
+  errorDescription?: string,
+): Response => {
+  return c.json(
+    {
+      error,
+      ...(errorDescription === undefined ? {} : { error_description: errorDescription }),
+    } satisfies OAuthErrorResponse,
+    status,
+  );
+};
+
+const oauthTokenErrorJson = (
+  c: AppContext,
+  status: 400 | 401 | 403 | 500,
+  error: string,
+  errorDescription?: string,
+  includeWwwAuthenticate = false,
+): Response => {
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+
+  if (includeWwwAuthenticate) {
+    c.header('WWW-Authenticate', 'Basic realm="OAuth2 Token Endpoint"');
+  }
+
+  return oauthErrorJson(c, status, error, errorDescription);
+};
+
+const splitSpaceDelimited = (value: string): string[] => {
+  const tokens = value
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0);
+  const seen = new Set<string>();
+  const uniqueTokens: string[] = [];
+
+  for (const token of tokens) {
+    if (!seen.has(token)) {
+      seen.add(token);
+      uniqueTokens.push(token);
+    }
+  }
+
+  return uniqueTokens;
+};
+
+const allScopesSupported = (scopes: readonly string[]): boolean => {
+  for (const scope of scopes) {
+    if (!OB3_OAUTH_SUPPORTED_SCOPE_SET.has(scope)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const isSubset = (subset: readonly string[], superset: readonly string[]): boolean => {
+  const supersetSet = new Set<string>(superset);
+
+  for (const value of subset) {
+    if (!supersetSet.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const parseStringArray = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const parsed: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== 'string') {
+      return null;
+    }
+
+    const normalized = entry.trim();
+
+    if (normalized.length === 0) {
+      return null;
+    }
+
+    parsed.push(normalized);
+  }
+
+  return parsed;
+};
+
+const parseOAuthClientMetadata = (record: {
+  clientId: string;
+  clientSecretHash: string;
+  redirectUrisJson: string;
+  grantTypesJson: string;
+  responseTypesJson: string;
+  scope: string;
+  tokenEndpointAuthMethod: string;
+}): OAuthClientMetadata | null => {
+  let redirectUrisRaw: unknown;
+  let grantTypesRaw: unknown;
+  let responseTypesRaw: unknown;
+
+  try {
+    redirectUrisRaw = JSON.parse(record.redirectUrisJson) as unknown;
+    grantTypesRaw = JSON.parse(record.grantTypesJson) as unknown;
+    responseTypesRaw = JSON.parse(record.responseTypesJson) as unknown;
+  } catch {
+    return null;
+  }
+
+  const redirectUris = parseStringArray(redirectUrisRaw);
+  const grantTypes = parseStringArray(grantTypesRaw);
+  const responseTypes = parseStringArray(responseTypesRaw);
+  const scope = splitSpaceDelimited(record.scope);
+
+  if (redirectUris === null || redirectUris.length === 0) {
+    return null;
+  }
+
+  for (const redirectUri of redirectUris) {
+    try {
+      const parsedRedirectUri = new URL(redirectUri);
+
+      if (parsedRedirectUri.protocol !== 'https:' && parsedRedirectUri.protocol !== 'http:') {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  if (
+    grantTypes?.length !== 1 ||
+    grantTypes[0] !== OAUTH_GRANT_TYPE_AUTHORIZATION_CODE
+  ) {
+    return null;
+  }
+
+  if (
+    responseTypes?.length !== 1 ||
+    responseTypes[0] !== OAUTH_RESPONSE_TYPE_CODE
+  ) {
+    return null;
+  }
+
+  if (
+    record.tokenEndpointAuthMethod !== OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC ||
+    scope.length === 0 ||
+    !allScopesSupported(scope)
+  ) {
+    return null;
+  }
+
+  return {
+    clientId: record.clientId,
+    clientSecretHash: record.clientSecretHash,
+    redirectUris,
+    grantTypes,
+    responseTypes,
+    scope,
+    tokenEndpointAuthMethod: record.tokenEndpointAuthMethod,
+  };
+};
+
+const parseBasicAuthorizationHeader = (
+  authorizationHeader: string | undefined,
+): { clientId: string; clientSecret: string } | null => {
+  if (authorizationHeader === undefined) {
+    return null;
+  }
+
+  const [scheme, credentials] = authorizationHeader.split(/\s+/, 2);
+
+  if (scheme !== 'Basic' || credentials === undefined) {
+    return null;
+  }
+
+  let decodedCredentials: string;
+
+  try {
+    decodedCredentials = atob(credentials);
+  } catch {
+    return null;
+  }
+
+  const separatorIndex = decodedCredentials.indexOf(':');
+
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  const clientId = decodedCredentials.slice(0, separatorIndex).trim();
+  const clientSecret = decodedCredentials.slice(separatorIndex + 1);
+
+  if (clientId.length === 0 || clientSecret.length === 0) {
+    return null;
+  }
+
+  return {
+    clientId,
+    clientSecret,
+  };
+};
+
+const oauthRedirectUriWithParams = (
+  redirectUri: string,
+  params: Record<string, string | undefined>,
+): string => {
+  const redirectTarget = new URL(redirectUri);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      redirectTarget.searchParams.set(key, value);
+    }
+  }
+
+  return redirectTarget.toString();
 };
 
 const BITSTRING_STATUS_LIST_CONTEXT = 'https://w3id.org/vc/status-list/bsl/v1';
@@ -2890,6 +3149,345 @@ app.put('/v1/admin/tenants/:tenantId/users/:userId/role', async (c) => {
 app.get(OB3_DISCOVERY_PATH, (c) => {
   c.header('Cache-Control', OB3_DISCOVERY_CACHE_CONTROL);
   return c.json(ob3ServiceDescriptionDocument(c));
+});
+
+app.post(`${OB3_BASE_PATH}/oauth/register`, async (c) => {
+  const payload = await c.req.json<unknown>().catch(() => null);
+  const body = asJsonObject(payload);
+
+  if (body === null) {
+    return oauthErrorJson(c, 400, 'invalid_client_metadata', 'Request body must be a JSON object');
+  }
+
+  const redirectUris = parseStringArray(body.redirect_uris);
+
+  if (redirectUris === null || redirectUris.length === 0) {
+    return oauthErrorJson(
+      c,
+      400,
+      'invalid_client_metadata',
+      'redirect_uris is required and must be a non-empty array of URLs',
+    );
+  }
+
+  for (const redirectUri of redirectUris) {
+    try {
+      const parsedRedirectUri = new URL(redirectUri);
+
+      if (parsedRedirectUri.protocol !== 'https:' && parsedRedirectUri.protocol !== 'http:') {
+        return oauthErrorJson(c, 400, 'invalid_redirect_uri', 'redirect_uris must use http or https');
+      }
+    } catch {
+      return oauthErrorJson(c, 400, 'invalid_redirect_uri', 'redirect_uris must contain valid URLs');
+    }
+  }
+
+  const grantTypes = body.grant_types === undefined ? [OAUTH_GRANT_TYPE_AUTHORIZATION_CODE] : parseStringArray(body.grant_types);
+
+  if (
+    grantTypes?.length !== 1 ||
+    grantTypes[0] !== OAUTH_GRANT_TYPE_AUTHORIZATION_CODE
+  ) {
+    return oauthErrorJson(
+      c,
+      400,
+      'invalid_client_metadata',
+      'Only authorization_code grant type is currently supported',
+    );
+  }
+
+  const responseTypes =
+    body.response_types === undefined ? [OAUTH_RESPONSE_TYPE_CODE] : parseStringArray(body.response_types);
+
+  if (
+    responseTypes?.length !== 1 ||
+    responseTypes[0] !== OAUTH_RESPONSE_TYPE_CODE
+  ) {
+    return oauthErrorJson(c, 400, 'invalid_client_metadata', 'Only response_type "code" is currently supported');
+  }
+
+  const tokenEndpointAuthMethod =
+    asNonEmptyString(body.token_endpoint_auth_method) ?? OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC;
+
+  if (tokenEndpointAuthMethod !== OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC) {
+    return oauthErrorJson(
+      c,
+      400,
+      'invalid_client_metadata',
+      'Only token_endpoint_auth_method "client_secret_basic" is supported',
+    );
+  }
+
+  const scopeFromRequest = asNonEmptyString(body.scope);
+  const scopeTokens =
+    scopeFromRequest === null ? [...OB3_OAUTH_SUPPORTED_SCOPE_URIS] : splitSpaceDelimited(scopeFromRequest);
+
+  if (scopeTokens.length === 0 || !allScopesSupported(scopeTokens)) {
+    return oauthErrorJson(c, 400, 'invalid_scope', 'Requested scope contains unsupported values');
+  }
+
+  const clientId = `oc_${generateOpaqueToken()}`;
+  const clientSecret = generateOpaqueToken();
+  const clientSecretHash = await sha256Hex(clientSecret);
+  const createdClient = await createOAuthClient(resolveDatabase(c.env), {
+    clientId,
+    clientSecretHash,
+    clientName: asNonEmptyString(body.client_name) ?? undefined,
+    redirectUrisJson: JSON.stringify(redirectUris),
+    grantTypesJson: JSON.stringify(grantTypes),
+    responseTypesJson: JSON.stringify(responseTypes),
+    scope: scopeTokens.join(' '),
+    tokenEndpointAuthMethod,
+  });
+  const issuedAt = Math.floor(Date.parse(createdClient.createdAt) / 1000);
+
+  return c.json(
+    {
+      client_id: createdClient.clientId,
+      client_secret: clientSecret,
+      client_id_issued_at: Number.isFinite(issuedAt) ? issuedAt : Math.floor(Date.now() / 1000),
+      client_secret_expires_at: 0,
+      redirect_uris: redirectUris,
+      grant_types: grantTypes,
+      response_types: responseTypes,
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
+      scope: scopeTokens.join(' '),
+      ...(createdClient.clientName === null ? {} : { client_name: createdClient.clientName }),
+    },
+    201,
+  );
+});
+
+app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
+  const clientId = asNonEmptyString(c.req.query('client_id'));
+  const responseType = asNonEmptyString(c.req.query('response_type'));
+  const redirectUri = asNonEmptyString(c.req.query('redirect_uri'));
+  const state = c.req.query('state') ?? undefined;
+  const db = resolveDatabase(c.env);
+
+  if (clientId === null) {
+    return oauthErrorJson(c, 400, 'invalid_request', 'client_id is required');
+  }
+
+  const registeredClient = await findOAuthClientById(db, clientId);
+
+  if (registeredClient === null) {
+    return oauthErrorJson(c, 400, 'invalid_client', 'Unknown client_id');
+  }
+
+  const clientMetadata = parseOAuthClientMetadata(registeredClient);
+
+  if (clientMetadata === null) {
+    return oauthErrorJson(c, 500, 'server_error', 'Stored client metadata is invalid');
+  }
+
+  if (redirectUri === null || !clientMetadata.redirectUris.includes(redirectUri)) {
+    return oauthErrorJson(
+      c,
+      400,
+      'invalid_redirect_uri',
+      'redirect_uri is required and must match a registered redirect URI',
+    );
+  }
+
+  if (responseType !== OAUTH_RESPONSE_TYPE_CODE) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'unsupported_response_type',
+        state,
+      }),
+      302,
+    );
+  }
+
+  const requestedScopeRaw = asNonEmptyString(c.req.query('scope'));
+  const requestedScopeTokens =
+    requestedScopeRaw === null ? clientMetadata.scope : splitSpaceDelimited(requestedScopeRaw);
+
+  if (
+    requestedScopeTokens.length === 0 ||
+    !allScopesSupported(requestedScopeTokens) ||
+    !isSubset(requestedScopeTokens, clientMetadata.scope)
+  ) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'invalid_scope',
+        state,
+      }),
+      302,
+    );
+  }
+
+  const codeChallenge = asNonEmptyString(c.req.query('code_challenge'));
+  const codeChallengeMethod = asNonEmptyString(c.req.query('code_challenge_method'));
+
+  if (
+    (codeChallenge === null && codeChallengeMethod !== null) ||
+    (codeChallenge !== null && codeChallengeMethod === null)
+  ) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'invalid_request',
+        error_description: 'code_challenge and code_challenge_method must be supplied together',
+        state,
+      }),
+      302,
+    );
+  }
+
+  if (
+    codeChallengeMethod !== null &&
+    codeChallengeMethod !== 'S256' &&
+    codeChallengeMethod !== 'plain'
+  ) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'invalid_request',
+        error_description: 'Unsupported code_challenge_method',
+        state,
+      }),
+      302,
+    );
+  }
+
+  const session = await resolveSessionFromCookie(c);
+
+  if (session === null) {
+    return c.redirect(
+      oauthRedirectUriWithParams(redirectUri, {
+        error: 'access_denied',
+        error_description: 'Resource owner is not authenticated',
+        state,
+      }),
+      302,
+    );
+  }
+
+  const authorizationCode = generateOpaqueToken();
+  const authorizationCodeHash = await sha256Hex(authorizationCode);
+
+  await createOAuthAuthorizationCode(db, {
+    clientId: clientMetadata.clientId,
+    userId: session.userId,
+    tenantId: session.tenantId,
+    codeHash: authorizationCodeHash,
+    redirectUri,
+    scope: requestedScopeTokens.join(' '),
+    expiresAt: addSecondsToIso(new Date().toISOString(), OAUTH_AUTHORIZATION_CODE_TTL_SECONDS),
+    ...(codeChallenge === null ? {} : { codeChallenge }),
+    ...(codeChallengeMethod === null ? {} : { codeChallengeMethod }),
+  });
+
+  return c.redirect(
+    oauthRedirectUriWithParams(redirectUri, {
+      code: authorizationCode,
+      state,
+    }),
+    302,
+  );
+});
+
+app.post(`${OB3_BASE_PATH}/oauth/token`, async (c) => {
+  const db = resolveDatabase(c.env);
+  const basicAuth = parseBasicAuthorizationHeader(c.req.header('authorization'));
+
+  if (basicAuth === null) {
+    return oauthTokenErrorJson(
+      c,
+      401,
+      'invalid_client',
+      'Client authentication with client_secret_basic is required',
+      true,
+    );
+  }
+
+  const registeredClient = await findOAuthClientById(db, basicAuth.clientId);
+
+  if (registeredClient === null) {
+    return oauthTokenErrorJson(c, 401, 'invalid_client', 'Unknown client_id', true);
+  }
+
+  const providedSecretHash = await sha256Hex(basicAuth.clientSecret);
+
+  if (providedSecretHash !== registeredClient.clientSecretHash) {
+    return oauthTokenErrorJson(c, 401, 'invalid_client', 'Client authentication failed', true);
+  }
+
+  const clientMetadata = parseOAuthClientMetadata(registeredClient);
+
+  if (clientMetadata === null) {
+    return oauthTokenErrorJson(c, 401, 'invalid_client', 'Invalid client registration', true);
+  }
+
+  const rawBody = await c.req.text();
+  const formData = new URLSearchParams(rawBody);
+  const grantType = asNonEmptyString(formData.get('grant_type'));
+
+  if (grantType !== OAUTH_GRANT_TYPE_AUTHORIZATION_CODE) {
+    return oauthTokenErrorJson(c, 400, 'unsupported_grant_type', 'Only authorization_code is supported');
+  }
+
+  const code = asNonEmptyString(formData.get('code'));
+  const redirectUri = asNonEmptyString(formData.get('redirect_uri'));
+
+  if (code === null || redirectUri === null) {
+    return oauthTokenErrorJson(c, 400, 'invalid_request', 'code and redirect_uri are required');
+  }
+
+  const consumedAuthorizationCode = await consumeOAuthAuthorizationCode(db, {
+    clientId: clientMetadata.clientId,
+    codeHash: await sha256Hex(code),
+    redirectUri,
+    nowIso: new Date().toISOString(),
+  });
+
+  if (consumedAuthorizationCode === null) {
+    return oauthTokenErrorJson(c, 400, 'invalid_grant', 'Authorization code is invalid or expired');
+  }
+
+  let grantedScopeTokens = splitSpaceDelimited(consumedAuthorizationCode.scope);
+  const requestedScope = asNonEmptyString(formData.get('scope'));
+
+  if (requestedScope !== null) {
+    const requestedScopeTokens = splitSpaceDelimited(requestedScope);
+
+    if (
+      requestedScopeTokens.length === 0 ||
+      !allScopesSupported(requestedScopeTokens) ||
+      !isSubset(requestedScopeTokens, grantedScopeTokens)
+    ) {
+      return oauthTokenErrorJson(
+        c,
+        400,
+        'invalid_scope',
+        'Requested scope exceeds authorization grant',
+      );
+    }
+
+    grantedScopeTokens = requestedScopeTokens;
+  }
+
+  const accessToken = generateOpaqueToken();
+  const accessTokenHash = await sha256Hex(accessToken);
+
+  await createOAuthAccessToken(db, {
+    clientId: clientMetadata.clientId,
+    userId: consumedAuthorizationCode.userId,
+    tenantId: consumedAuthorizationCode.tenantId,
+    accessTokenHash,
+    scope: grantedScopeTokens.join(' '),
+    expiresAt: addSecondsToIso(new Date().toISOString(), OAUTH_ACCESS_TOKEN_TTL_SECONDS),
+  });
+
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+
+  return c.json({
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
+    scope: grantedScopeTokens.join(' '),
+  });
 });
 
 app.get('/.well-known/did.json', async (c) => {
