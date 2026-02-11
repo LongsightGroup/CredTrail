@@ -6,7 +6,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 
 - `apps/api-worker`: Primary Worker serving API + server-rendered UI.
 - `packages/core-domain`: Shared domain models and helpers.
-- `packages/db`: D1 query helpers, tenant scoping utilities, and DB-backed job queue storage.
+- `packages/db`: Postgres query helpers, tenant scoping utilities, and DB-backed job queue storage.
 - `packages/validation`: Zod schemas for HTTP and queue boundaries.
 - `packages/lti`: LTI 1.3 parsing/validation primitives.
 - `packages/ui-components`: Server-rendered HTML helper components.
@@ -14,7 +14,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 
 ## Async jobs
 
-- Queue messages are stored in D1 table `job_queue_messages`.
+- Queue messages are stored in Postgres table `job_queue_messages`.
 - Use `POST /v1/jobs/process` to lease and process pending jobs.
 - Hosted deployment can run the same processor via Cloudflare Cron scheduled events.
 

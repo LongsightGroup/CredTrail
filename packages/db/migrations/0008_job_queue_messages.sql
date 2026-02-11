@@ -1,4 +1,4 @@
--- Persist async job messages in D1 so queue state is database-backed.
+-- Persist async job messages so queue state is database-backed.
 
 CREATE TABLE IF NOT EXISTS job_queue_messages (
   id TEXT PRIMARY KEY,

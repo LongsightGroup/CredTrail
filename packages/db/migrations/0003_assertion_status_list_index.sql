@@ -1,6 +1,6 @@
 -- Add per-tenant status list index support for BitstringStatusList revocation.
 
-ALTER TABLE assertions ADD COLUMN status_list_index INTEGER;
+ALTER TABLE assertions ADD COLUMN IF NOT EXISTS status_list_index INTEGER;
 
 WITH ranked_assertions AS (
   SELECT

@@ -14,7 +14,7 @@ Constraints from product and architecture:
 
 - Open Badges 3.0 only for v1.
 - `did:web` issuer identity with per-tenant Ed25519 keys.
-- Server-rendered product with Cloudflare Workers, D1, R2, and Queues.
+- Server-rendered product with Cloudflare Workers, Postgres, R2, and queue processing.
 - Single-path implementation policy for v1 (no parallel implementations for the same capability).
 - PRD requirement to decide between `Ed25519Signature2020` and JWT-VC before foundation completion.
 

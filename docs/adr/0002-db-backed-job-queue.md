@@ -14,14 +14,14 @@ Cloudflare Queue product.
 Current platform constraints:
 
 - Runtime remains Cloudflare Workers for hosted operation.
-- Shared tenant data remains in D1.
+- Shared tenant data remains in Postgres.
 - Immutable credential objects remain in R2.
 - v1 architecture continues to prefer one clear path per capability.
 
 ## Decision
 
-Use a D1-backed `job_queue_messages` table as the queue transport and source of truth for async
-jobs. API endpoints enqueue messages into D1 directly. Cloudflare Queue bindings are removed from
+Use a Postgres-backed `job_queue_messages` table as the queue transport and source of truth for
+async jobs. API endpoints enqueue messages into Postgres directly. Cloudflare Queue bindings are removed from
 the API runtime configuration.
 
 ## Rationale
@@ -35,15 +35,14 @@ the API runtime configuration.
 
 - Queue lifecycle semantics (retry, dead-letter, leases) must be explicitly implemented in
   application logic and schema over time.
-- Existing queue payload contracts remain useful and are stored as JSON in D1.
+- Existing queue payload contracts remain useful and are stored as JSON in Postgres.
 - SaaS configuration no longer needs queue producer/consumer bindings.
 
 ## Rollback Plan
 
-If D1-backed queueing is not viable under load or reliability requirements:
+If Postgres-backed queueing is not viable under load or reliability requirements:
 
 1. Reintroduce an adapter interface for queue transport.
 2. Add Cloudflare Queue transport behind that adapter without changing HTTP contracts.
-3. Migrate pending D1 queue messages into the selected transport.
+3. Migrate pending Postgres queue messages into the selected transport.
 4. Keep idempotency-key behavior stable through the migration.
-

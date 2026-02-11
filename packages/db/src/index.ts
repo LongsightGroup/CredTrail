@@ -14,6 +14,32 @@ export const withTenantScope = (sql: string, context: TenantQueryContext): Tenan
   };
 };
 
+export interface SqlExecutionMeta {
+  rowsRead?: number | undefined;
+  rowsWritten?: number | undefined;
+  durationMs?: number | undefined;
+}
+
+export interface SqlRunResult {
+  success: boolean;
+  meta: SqlExecutionMeta;
+}
+
+export interface SqlQueryResult<T> extends SqlRunResult {
+  results: T[];
+}
+
+export interface SqlPreparedStatement {
+  bind(...params: unknown[]): SqlPreparedStatement;
+  first<T>(): Promise<T | null>;
+  all<T>(): Promise<SqlQueryResult<T>>;
+  run(): Promise<SqlRunResult>;
+}
+
+export interface SqlDatabase {
+  prepare(sql: string): SqlPreparedStatement;
+}
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -471,7 +497,7 @@ export const normalizeEmail = (email: string): string => {
   return email.trim().toLowerCase();
 };
 
-export const upsertUserByEmail = async (db: D1Database, email: string): Promise<UserRecord> => {
+export const upsertUserByEmail = async (db: SqlDatabase, email: string): Promise<UserRecord> => {
   const normalizedEmail = normalizeEmail(email);
   const createdUserId = createPrefixedId('usr');
 
@@ -504,7 +530,7 @@ export const upsertUserByEmail = async (db: D1Database, email: string): Promise<
   return user;
 };
 
-export const findUserById = async (db: D1Database, userId: string): Promise<UserRecord | null> => {
+export const findUserById = async (db: SqlDatabase, userId: string): Promise<UserRecord | null> => {
   const user = await db
     .prepare(
       `
@@ -539,7 +565,7 @@ export const normalizeLearnerIdentityValue = (
 };
 
 export const findLearnerProfileById = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   learnerProfileId: string,
 ): Promise<LearnerProfileRecord | null> => {
@@ -566,7 +592,7 @@ export const findLearnerProfileById = async (
 };
 
 export const listLearnerIdentitiesByProfile = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   learnerProfileId: string,
 ): Promise<LearnerIdentityRecord[]> => {
@@ -596,7 +622,7 @@ export const listLearnerIdentitiesByProfile = async (
 };
 
 export const addLearnerIdentityAlias = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: AddLearnerIdentityAliasInput,
 ): Promise<LearnerIdentityRecord> => {
   const identityId = createPrefixedId('lid');
@@ -680,7 +706,7 @@ export const addLearnerIdentityAlias = async (
 };
 
 export const createLearnerProfile = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateLearnerProfileInput,
 ): Promise<LearnerProfileRecord> => {
   const learnerProfileId = createPrefixedId('lpr');
@@ -730,7 +756,7 @@ export const createLearnerProfile = async (
 };
 
 export const findLearnerProfileByIdentity = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: FindLearnerProfileByIdentityInput,
 ): Promise<LearnerProfileRecord | null> => {
   const normalizedIdentityValue = normalizeLearnerIdentityValue(input.identityType, input.identityValue);
@@ -761,7 +787,7 @@ export const findLearnerProfileByIdentity = async (
 };
 
 export const resolveLearnerProfileForIdentity = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: ResolveLearnerProfileForIdentityInput,
 ): Promise<LearnerProfileRecord> => {
   const existingProfile = await findLearnerProfileByIdentity(db, {
@@ -784,7 +810,7 @@ export const resolveLearnerProfileForIdentity = async (
 };
 
 const findLearnerProfileByVerifiedIdentity = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: FindLearnerProfileByIdentityInput,
 ): Promise<LearnerProfileRecord | null> => {
   const normalizedIdentityValue = normalizeLearnerIdentityValue(input.identityType, input.identityValue);
@@ -816,7 +842,7 @@ const findLearnerProfileByVerifiedIdentity = async (
 };
 
 export const resolveLearnerProfileFromSaml = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: ResolveLearnerProfileFromSamlInput,
 ): Promise<ResolveLearnerProfileFromSamlResult> => {
   const samlSubject =
@@ -908,7 +934,7 @@ export const resolveLearnerProfileFromSaml = async (
 };
 
 export const ensureTenantMembership = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   userId: string,
 ): Promise<void> => {
@@ -924,7 +950,7 @@ export const ensureTenantMembership = async (
 };
 
 export const createMagicLinkToken = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateMagicLinkTokenInput,
 ): Promise<MagicLinkTokenRecord> => {
   const id = createPrefixedId('mlt');
@@ -959,7 +985,7 @@ export const createMagicLinkToken = async (
 };
 
 export const createLearnerIdentityLinkProof = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateLearnerIdentityLinkProofInput,
 ): Promise<LearnerIdentityLinkProofRecord> => {
   const id = createPrefixedId('lip');
@@ -1011,7 +1037,7 @@ export const createLearnerIdentityLinkProof = async (
 };
 
 export const findMagicLinkTokenByHash = async (
-  db: D1Database,
+  db: SqlDatabase,
   magicTokenHash: string,
 ): Promise<MagicLinkTokenRecord | null> => {
   const token = await db
@@ -1037,7 +1063,7 @@ export const findMagicLinkTokenByHash = async (
 };
 
 export const findLearnerIdentityLinkProofByHash = async (
-  db: D1Database,
+  db: SqlDatabase,
   tokenHash: string,
 ): Promise<LearnerIdentityLinkProofRecord | null> => {
   const proof = await db
@@ -1066,7 +1092,7 @@ export const findLearnerIdentityLinkProofByHash = async (
 };
 
 export const markMagicLinkTokenUsed = async (
-  db: D1Database,
+  db: SqlDatabase,
   tokenId: string,
   usedAt: string,
 ): Promise<void> => {
@@ -1084,7 +1110,7 @@ export const markMagicLinkTokenUsed = async (
 };
 
 export const markLearnerIdentityLinkProofUsed = async (
-  db: D1Database,
+  db: SqlDatabase,
   proofId: string,
   usedAt: string,
 ): Promise<void> => {
@@ -1135,7 +1161,7 @@ export const isLearnerIdentityLinkProofValid = (
 };
 
 export const createSession = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateSessionInput,
 ): Promise<SessionRecord> => {
   const id = createPrefixedId('ses');
@@ -1180,7 +1206,7 @@ export const createSession = async (
 };
 
 export const findActiveSessionByHash = async (
-  db: D1Database,
+  db: SqlDatabase,
   sessionTokenHash: string,
   nowIso: string,
 ): Promise<SessionRecord | null> => {
@@ -1209,7 +1235,7 @@ export const findActiveSessionByHash = async (
   return session;
 };
 
-export const touchSession = async (db: D1Database, sessionId: string, seenAt: string): Promise<void> => {
+export const touchSession = async (db: SqlDatabase, sessionId: string, seenAt: string): Promise<void> => {
   await db
     .prepare(
       `
@@ -1223,7 +1249,7 @@ export const touchSession = async (db: D1Database, sessionId: string, seenAt: st
 };
 
 export const revokeSessionByHash = async (
-  db: D1Database,
+  db: SqlDatabase,
   sessionTokenHash: string,
   revokedAt: string,
 ): Promise<void> => {
@@ -1330,7 +1356,7 @@ const mapPublicBadgeWallEntryRow = (row: PublicBadgeWallEntryRow): PublicBadgeWa
 };
 
 export const createBadgeTemplate = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateBadgeTemplateInput,
 ): Promise<BadgeTemplateRecord> => {
   const id = createPrefixedId('bt');
@@ -1385,7 +1411,7 @@ export const createBadgeTemplate = async (
 };
 
 export const listBadgeTemplates = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: ListBadgeTemplatesInput,
 ): Promise<BadgeTemplateRecord[]> => {
   const query = input.includeArchived
@@ -1432,7 +1458,7 @@ export const listBadgeTemplates = async (
 };
 
 export const findBadgeTemplateById = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   badgeTemplateId: string,
 ): Promise<BadgeTemplateRecord | null> => {
@@ -1468,7 +1494,7 @@ export const findBadgeTemplateById = async (
 };
 
 export const updateBadgeTemplate = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: UpdateBadgeTemplateInput,
 ): Promise<BadgeTemplateRecord | null> => {
   const setClauses: string[] = [];
@@ -1521,7 +1547,7 @@ export const updateBadgeTemplate = async (
 };
 
 export const setBadgeTemplateArchivedState = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: SetBadgeTemplateArchiveStateInput,
 ): Promise<BadgeTemplateRecord | null> => {
   const updatedAt = new Date().toISOString();
@@ -1543,7 +1569,7 @@ export const setBadgeTemplateArchivedState = async (
 };
 
 export const findAssertionById = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   assertionId: string,
 ): Promise<AssertionRecord | null> => {
@@ -1583,7 +1609,7 @@ export const findAssertionById = async (
 };
 
 export const findAssertionByIdempotencyKey = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
   idempotencyKey: string,
 ): Promise<AssertionRecord | null> => {
@@ -1623,7 +1649,7 @@ export const findAssertionByIdempotencyKey = async (
 };
 
 export const findAssertionByPublicId = async (
-  db: D1Database,
+  db: SqlDatabase,
   publicId: string,
 ): Promise<AssertionRecord | null> => {
   const row = await db
@@ -1661,7 +1687,7 @@ export const findAssertionByPublicId = async (
 };
 
 export const listLearnerBadgeSummaries = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: ListLearnerBadgeSummariesInput,
 ): Promise<LearnerBadgeSummaryRecord[]> => {
   const user = await findUserById(db, input.userId);
@@ -1752,7 +1778,7 @@ export const listLearnerBadgeSummaries = async (
 };
 
 export const listPublicBadgeWallEntries = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: ListPublicBadgeWallEntriesInput,
 ): Promise<PublicBadgeWallEntryRecord[]> => {
   const queryLimit = Math.max(1, Math.min(input.limit ?? 300, 1000));
@@ -1818,7 +1844,7 @@ export const listPublicBadgeWallEntries = async (
 };
 
 export const createAssertion = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CreateAssertionInput,
 ): Promise<AssertionRecord> => {
   const nowIso = new Date().toISOString();
@@ -1884,7 +1910,7 @@ export const createAssertion = async (
 };
 
 export const nextAssertionStatusListIndex = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
 ): Promise<number> => {
   const row = await db
@@ -1907,7 +1933,7 @@ export const nextAssertionStatusListIndex = async (
 };
 
 export const listAssertionStatusListEntries = async (
-  db: D1Database,
+  db: SqlDatabase,
   tenantId: string,
 ): Promise<AssertionStatusListEntryRecord[]> => {
   const result = await db
@@ -1958,7 +1984,7 @@ const mapJobQueueMessageRow = (row: JobQueueMessageRow): JobQueueMessageRecord =
 };
 
 export const enqueueJobQueueMessage = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: EnqueueJobQueueMessageInput,
 ): Promise<JobQueueMessageRecord> => {
   const messageId = createPrefixedId('job');
@@ -2024,7 +2050,7 @@ export const enqueueJobQueueMessage = async (
 };
 
 export const leaseJobQueueMessages = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: LeaseJobQueueMessagesInput,
 ): Promise<JobQueueMessageRecord[]> => {
   const leaseToken = createPrefixedId('lease');
@@ -2097,7 +2123,7 @@ export const leaseJobQueueMessages = async (
 };
 
 export const completeJobQueueMessage = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: CompleteJobQueueMessageInput,
 ): Promise<void> => {
   await db
@@ -2119,7 +2145,7 @@ export const completeJobQueueMessage = async (
 };
 
 export const failJobQueueMessage = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: FailJobQueueMessageInput,
 ): Promise<JobQueueMessageStatus | null> => {
   const retryAt = addSecondsToIso(input.nowIso, input.retryDelaySeconds);
@@ -2163,7 +2189,7 @@ export const failJobQueueMessage = async (
 };
 
 export const recordAssertionRevocation = async (
-  db: D1Database,
+  db: SqlDatabase,
   input: RecordAssertionRevocationInput,
 ): Promise<RecordAssertionRevocationResult> => {
   const assertion = await findAssertionById(db, input.tenantId, input.assertionId);

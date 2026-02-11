@@ -1,14 +1,11 @@
 -- Add stable opaque public permalink identifiers for badge assertions.
 
-ALTER TABLE assertions ADD COLUMN public_id TEXT;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+ALTER TABLE assertions ADD COLUMN IF NOT EXISTS public_id TEXT;
 
 UPDATE assertions
-SET public_id =
-  LOWER(HEX(RANDOMBLOB(4))) || '-' ||
-  LOWER(HEX(RANDOMBLOB(2))) || '-' ||
-  LOWER(HEX(RANDOMBLOB(2))) || '-' ||
-  LOWER(HEX(RANDOMBLOB(2))) || '-' ||
-  LOWER(HEX(RANDOMBLOB(6)))
+SET public_id = gen_random_uuid()::text
 WHERE public_id IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_assertions_public_id

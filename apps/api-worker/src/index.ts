@@ -57,8 +57,10 @@ import {
   type LearnerBadgeSummaryRecord,
   type PublicBadgeWallEntryRecord,
   type SessionRecord,
+  type SqlDatabase,
   upsertUserByEmail,
 } from '@credtrail/db';
+import { createPostgresDatabase } from '@credtrail/db/postgres';
 import { renderPageShell } from '@credtrail/ui-components';
 import {
   parseBadgeTemplateListQuery,
@@ -94,7 +96,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 
 interface AppBindings {
   APP_ENV: string;
-  DB: D1Database;
+  DATABASE_URL?: string;
   BADGE_OBJECTS: R2Bucket;
   PLATFORM_DOMAIN: string;
   MARKETING_SITE_ORIGIN?: string;
@@ -134,6 +136,30 @@ const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
 const DEFAULT_JOB_PROCESS_RETRY_DELAY_SECONDS = 30;
 const IMS_GLOBAL_OB2_VALIDATOR_BASE_URL = 'https://openbadgesvalidator.imsglobal.org/';
+const databasesByUrl = new Map<string, SqlDatabase>();
+
+const resolveDatabase = (bindings: AppBindings): SqlDatabase => {
+  if (bindings.DATABASE_URL === undefined) {
+    throw new Error('DATABASE_URL is required');
+  }
+  const databaseUrl = bindings.DATABASE_URL.trim();
+
+  if (databaseUrl.length === 0) {
+    throw new Error('DATABASE_URL is required');
+  }
+
+  const existingDatabase = databasesByUrl.get(databaseUrl);
+
+  if (existingDatabase !== undefined) {
+    return existingDatabase;
+  }
+
+  const database = createPostgresDatabase({
+    databaseUrl,
+  });
+  databasesByUrl.set(databaseUrl, database);
+  return database;
+};
 
 const addSecondsToIso = (fromIso: string, seconds: number): string => {
   const fromMs = Date.parse(fromIso);
@@ -186,6 +212,7 @@ const observabilityContext = (bindings: AppBindings): ObservabilityContext => {
 };
 
 const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | null> => {
+  const db = resolveDatabase(c.env);
   const sessionToken = getCookie(c, SESSION_COOKIE_NAME);
 
   if (sessionToken === undefined) {
@@ -194,7 +221,7 @@ const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | 
 
   const sessionTokenHash = await sha256Hex(sessionToken);
   const nowIso = new Date().toISOString();
-  const session = await findActiveSessionByHash(c.env.DB, sessionTokenHash, nowIso);
+  const session = await findActiveSessionByHash(db, sessionTokenHash, nowIso);
 
   if (session === null) {
     deleteCookie(c, SESSION_COOKIE_NAME, {
@@ -203,7 +230,7 @@ const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | 
     return null;
   }
 
-  await touchSession(c.env.DB, session.id, nowIso);
+  await touchSession(db, session.id, nowIso);
   return session;
 };
 
@@ -520,7 +547,7 @@ const processQueuedJob = async (c: AppContext, job: QueueJob): Promise<void> => 
       );
       return;
     case 'revoke_badge':
-      await recordAssertionRevocation(c.env.DB, {
+      await recordAssertionRevocation(resolveDatabase(c.env), {
         tenantId: job.tenantId,
         assertionId: job.payload.assertionId,
         revocationId: job.payload.revocationId,
@@ -546,7 +573,7 @@ const processQueuedJobs = async (
   requestInput: ProcessQueueConfig,
 ): Promise<ProcessQueueRunResult> => {
   const nowIso = new Date().toISOString();
-  const leasedMessages = await leaseJobQueueMessages(c.env.DB, {
+  const leasedMessages = await leaseJobQueueMessages(resolveDatabase(c.env), {
     limit: requestInput.limit,
     leaseSeconds: requestInput.leaseSeconds,
     nowIso,
@@ -571,7 +598,7 @@ const processQueuedJobs = async (
     try {
       const job = queueJobFromMessage(leasedMessage);
       await processQueuedJob(c, job);
-      await completeJobQueueMessage(c.env.DB, {
+      await completeJobQueueMessage(resolveDatabase(c.env), {
         id: leasedMessage.id,
         leaseToken,
         nowIso: new Date().toISOString(),
@@ -601,7 +628,7 @@ const processQueuedJobs = async (
         detail,
       });
 
-      const status = await failJobQueueMessage(c.env.DB, {
+      const status = await failJobQueueMessage(resolveDatabase(c.env), {
         id: leasedMessage.id,
         leaseToken,
         nowIso: new Date().toISOString(),
@@ -1188,7 +1215,7 @@ const loadCredentialForAssertion = async (
 };
 
 const loadRecipientDisplayNameForAssertion = async (
-  db: D1Database,
+  db: SqlDatabase,
   assertion: AssertionRecord,
 ): Promise<string | null> => {
   if (assertion.learnerProfileId === null) {
@@ -1204,7 +1231,7 @@ const loadRecipientDisplayNameForAssertion = async (
 };
 
 const loadVerificationViewModel = async (
-  db: D1Database,
+  db: SqlDatabase,
   store: R2Bucket,
   credentialId: string,
 ): Promise<VerificationLookupResult> => {
@@ -1237,7 +1264,7 @@ const loadVerificationViewModel = async (
 };
 
 const loadPublicBadgeViewModel = async (
-  db: D1Database,
+  db: SqlDatabase,
   store: R2Bucket,
   badgeIdentifier: string,
 ): Promise<PublicBadgeLookupResult> => {
@@ -2218,7 +2245,7 @@ app.get('/:tenantSlug/did.json', (c) => {
 
 app.get('/credentials/v1/:credentialId', async (c) => {
   const pathParams = parseCredentialPathParams(c.req.param());
-  const result = await loadVerificationViewModel(c.env.DB, c.env.BADGE_OBJECTS, pathParams.credentialId);
+  const result = await loadVerificationViewModel(resolveDatabase(c.env), c.env.BADGE_OBJECTS, pathParams.credentialId);
 
   if (result.status !== 'ok') {
     const statusCode = result.status === 'invalid_id' ? 400 : 404;
@@ -2285,7 +2312,7 @@ app.get('/credentials/v1/status-lists/:tenantId/revocation', async (c) => {
     );
   }
 
-  const assertions = await listAssertionStatusListEntries(c.env.DB, pathParams.tenantId);
+  const assertions = await listAssertionStatusListEntries(resolveDatabase(c.env), pathParams.tenantId);
   const statusEntries = assertions.map((assertion) => {
     return {
       statusListIndex: assertion.statusListIndex,
@@ -2308,7 +2335,7 @@ app.get('/credentials/v1/status-lists/:tenantId/revocation', async (c) => {
 
 app.get('/credentials/v1/:credentialId/jsonld', async (c) => {
   const pathParams = parseCredentialPathParams(c.req.param());
-  const result = await loadVerificationViewModel(c.env.DB, c.env.BADGE_OBJECTS, pathParams.credentialId);
+  const result = await loadVerificationViewModel(resolveDatabase(c.env), c.env.BADGE_OBJECTS, pathParams.credentialId);
 
   if (result.status !== 'ok') {
     const statusCode = result.status === 'invalid_id' ? 400 : 404;
@@ -2331,7 +2358,7 @@ app.get('/credentials/v1/:credentialId/jsonld', async (c) => {
 
 app.get('/credentials/v1/:credentialId/download', async (c) => {
   const pathParams = parseCredentialPathParams(c.req.param());
-  const result = await loadVerificationViewModel(c.env.DB, c.env.BADGE_OBJECTS, pathParams.credentialId);
+  const result = await loadVerificationViewModel(resolveDatabase(c.env), c.env.BADGE_OBJECTS, pathParams.credentialId);
 
   if (result.status !== 'ok') {
     const statusCode = result.status === 'invalid_id' ? 400 : 404;
@@ -2368,7 +2395,7 @@ app.get('/badges/:badgeIdentifier/public_url', (c) => {
 
 app.get('/badges/:badgeIdentifier', async (c) => {
   const badgeIdentifier = c.req.param('badgeIdentifier');
-  const result = await loadPublicBadgeViewModel(c.env.DB, c.env.BADGE_OBJECTS, badgeIdentifier);
+  const result = await loadPublicBadgeViewModel(resolveDatabase(c.env), c.env.BADGE_OBJECTS, badgeIdentifier);
 
   c.header('Cache-Control', 'no-store');
 
@@ -2393,7 +2420,7 @@ app.get('/showcase/sakai', (c) => {
 app.get('/showcase/:tenantId', async (c) => {
   const pathParams = parseTenantPathParams(c.req.param());
   const badgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
-  const entries = await listPublicBadgeWallEntries(c.env.DB, {
+  const entries = await listPublicBadgeWallEntries(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     ...(badgeTemplateId === null ? {} : { badgeTemplateId }),
   });
@@ -2423,7 +2450,7 @@ app.get('/tenants/:tenantId/learner/dashboard', async (c) => {
     );
   }
 
-  const badges = await listLearnerBadgeSummaries(c.env.DB, {
+  const badges = await listLearnerBadgeSummaries(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     userId: session.userId,
   });
@@ -2456,7 +2483,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/request', async (c)
     );
   }
 
-  const user = await findUserById(c.env.DB, session.userId);
+  const user = await findUserById(resolveDatabase(c.env), session.userId);
 
   if (user === null) {
     return c.json(
@@ -2467,13 +2494,13 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/request', async (c)
     );
   }
 
-  const learnerProfile = await resolveLearnerProfileForIdentity(c.env.DB, {
+  const learnerProfile = await resolveLearnerProfileForIdentity(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     identityType: 'email',
     identityValue: user.email,
   });
   const normalizedEmail = request.email.trim().toLowerCase();
-  const existingProfile = await findLearnerProfileByIdentity(c.env.DB, {
+  const existingProfile = await findLearnerProfileByIdentity(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     identityType: 'email',
     identityValue: normalizedEmail,
@@ -2503,7 +2530,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/request', async (c)
   const proofToken = generateOpaqueToken();
   const tokenHash = await sha256Hex(proofToken);
 
-  await createLearnerIdentityLinkProof(c.env.DB, {
+  await createLearnerIdentityLinkProof(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     learnerProfileId: learnerProfile.id,
     requestedByUserId: session.userId,
@@ -2564,7 +2591,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) 
   }
 
   const nowIso = new Date().toISOString();
-  const proof = await findLearnerIdentityLinkProofByHash(c.env.DB, await sha256Hex(request.token));
+  const proof = await findLearnerIdentityLinkProofByHash(resolveDatabase(c.env), await sha256Hex(request.token));
 
   if (proof === null || !isLearnerIdentityLinkProofValid(proof, nowIso)) {
     return c.json(
@@ -2584,7 +2611,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) 
     );
   }
 
-  const existingProfile = await findLearnerProfileByIdentity(c.env.DB, {
+  const existingProfile = await findLearnerProfileByIdentity(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     identityType: proof.identityType,
     identityValue: proof.identityValue,
@@ -2600,7 +2627,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) 
   }
 
   if (existingProfile === null) {
-    await addLearnerIdentityAlias(c.env.DB, {
+    await addLearnerIdentityAlias(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       learnerProfileId: proof.learnerProfileId,
       identityType: proof.identityType,
@@ -2610,7 +2637,7 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) 
     });
   }
 
-  await markLearnerIdentityLinkProofUsed(c.env.DB, proof.id, nowIso);
+  await markLearnerIdentityLinkProofUsed(resolveDatabase(c.env), proof.id, nowIso);
 
   return c.json({
     status: existingProfile === null ? 'linked' : 'already_linked',
@@ -2635,13 +2662,13 @@ app.post('/v1/auth/magic-link/request', async (c) => {
   const request = parseMagicLinkRequest(payload);
   const nowIso = new Date().toISOString();
   const expiresAt = addSecondsToIso(nowIso, MAGIC_LINK_TTL_SECONDS);
-  const user = await upsertUserByEmail(c.env.DB, request.email);
-  await ensureTenantMembership(c.env.DB, request.tenantId, user.id);
+  const user = await upsertUserByEmail(resolveDatabase(c.env), request.email);
+  await ensureTenantMembership(resolveDatabase(c.env), request.tenantId, user.id);
 
   const magicLinkToken = generateOpaqueToken();
   const magicTokenHash = await sha256Hex(magicLinkToken);
 
-  await createMagicLinkToken(c.env.DB, {
+  await createMagicLinkToken(resolveDatabase(c.env), {
     tenantId: request.tenantId,
     userId: user.id,
     magicTokenHash,
@@ -2677,7 +2704,7 @@ app.post('/v1/auth/magic-link/verify', async (c) => {
   const request = parseMagicLinkVerifyRequest(payload);
   const nowIso = new Date().toISOString();
   const magicTokenHash = await sha256Hex(request.token);
-  const token = await findMagicLinkTokenByHash(c.env.DB, magicTokenHash);
+  const token = await findMagicLinkTokenByHash(resolveDatabase(c.env), magicTokenHash);
 
   if (token === null || !isMagicLinkTokenValid(token, nowIso)) {
     return c.json(
@@ -2688,11 +2715,11 @@ app.post('/v1/auth/magic-link/verify', async (c) => {
     );
   }
 
-  await markMagicLinkTokenUsed(c.env.DB, token.id, nowIso);
+  await markMagicLinkTokenUsed(resolveDatabase(c.env), token.id, nowIso);
 
   const sessionToken = generateOpaqueToken();
   const sessionTokenHash = await sha256Hex(sessionToken);
-  const session = await createSession(c.env.DB, {
+  const session = await createSession(resolveDatabase(c.env), {
     tenantId: token.tenantId,
     userId: token.userId,
     sessionTokenHash,
@@ -2740,7 +2767,7 @@ app.post('/v1/auth/logout', async (c) => {
 
   if (sessionToken !== undefined) {
     const sessionTokenHash = await sha256Hex(sessionToken);
-    await revokeSessionByHash(c.env.DB, sessionTokenHash, new Date().toISOString());
+    await revokeSessionByHash(resolveDatabase(c.env), sessionTokenHash, new Date().toISOString());
   }
 
   deleteCookie(c, SESSION_COOKIE_NAME, {
@@ -2777,7 +2804,7 @@ app.get('/v1/tenants/:tenantId/badge-templates', async (c) => {
     );
   }
 
-  const templates = await listBadgeTemplates(c.env.DB, {
+  const templates = await listBadgeTemplates(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     includeArchived: query.includeArchived,
   });
@@ -2813,7 +2840,7 @@ app.post('/v1/tenants/:tenantId/badge-templates', async (c) => {
   }
 
   try {
-    const template = await createBadgeTemplate(c.env.DB, {
+    const template = await createBadgeTemplate(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       slug: request.slug,
       title: request.title,
@@ -2866,7 +2893,7 @@ app.get('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
     );
   }
 
-  const template = await findBadgeTemplateById(c.env.DB, pathParams.tenantId, pathParams.badgeTemplateId);
+  const template = await findBadgeTemplateById(resolveDatabase(c.env), pathParams.tenantId, pathParams.badgeTemplateId);
 
   if (template === null) {
     return c.json(
@@ -2908,7 +2935,7 @@ app.patch('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) =>
   }
 
   try {
-    const template = await updateBadgeTemplate(c.env.DB, {
+    const template = await updateBadgeTemplate(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       id: pathParams.badgeTemplateId,
       slug: request.slug,
@@ -2967,7 +2994,7 @@ app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive', async
     );
   }
 
-  const template = await setBadgeTemplateArchivedState(c.env.DB, {
+  const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     id: pathParams.badgeTemplateId,
     isArchived: true,
@@ -3010,7 +3037,7 @@ app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/unarchive', asy
     );
   }
 
-  const template = await setBadgeTemplateArchivedState(c.env.DB, {
+  const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
     id: pathParams.badgeTemplateId,
     isArchived: false,
@@ -3058,7 +3085,7 @@ const issueBadgeForTenant = async (
   issuedByUserId?: string,
   options?: DirectIssueBadgeOptions,
 ): Promise<DirectIssueBadgeResult> => {
-  const badgeTemplate = await findBadgeTemplateById(c.env.DB, tenantId, request.badgeTemplateId);
+  const badgeTemplate = await findBadgeTemplateById(resolveDatabase(c.env), tenantId, request.badgeTemplateId);
 
   if (badgeTemplate === null) {
     throw new HttpErrorResponse(404, {
@@ -3073,7 +3100,7 @@ const issueBadgeForTenant = async (
   }
 
   const idempotencyKey = request.idempotencyKey ?? crypto.randomUUID();
-  const existingAssertion = await findAssertionByIdempotencyKey(c.env.DB, tenantId, idempotencyKey);
+  const existingAssertion = await findAssertionByIdempotencyKey(resolveDatabase(c.env), tenantId, idempotencyKey);
 
   if (existingAssertion !== null) {
     const existingCredential = await getImmutableCredentialObject(c.env.BADGE_OBJECTS, {
@@ -3119,7 +3146,7 @@ const issueBadgeForTenant = async (
   }
 
   const requestBaseUrl = new URL(c.req.url);
-  const learnerProfile = await resolveLearnerProfileForIdentity(c.env.DB, {
+  const learnerProfile = await resolveLearnerProfileForIdentity(resolveDatabase(c.env), {
     tenantId,
     identityType: request.recipientIdentityType,
     identityValue: request.recipientIdentity,
@@ -3129,7 +3156,7 @@ const issueBadgeForTenant = async (
   });
   const issuedAt = new Date().toISOString();
   const assertionId = createTenantScopedId(tenantId);
-  const statusListIndex = await nextAssertionStatusListIndex(c.env.DB, tenantId);
+  const statusListIndex = await nextAssertionStatusListIndex(resolveDatabase(c.env), tenantId);
   const statusListCredentialUrl = revocationStatusListUrlForTenant(requestBaseUrl.toString(), tenantId);
   const issuer =
     options?.issuerName === undefined
@@ -3183,7 +3210,7 @@ const issueBadgeForTenant = async (
     credential: signedCredential,
   });
 
-  const createdAssertion = await createAssertion(c.env.DB, {
+  const createdAssertion = await createAssertion(resolveDatabase(c.env), {
     id: assertionId,
     tenantId,
     learnerProfileId: learnerProfile.id,
@@ -3482,7 +3509,7 @@ app.post('/v1/issue', async (c) => {
   const request = parseIssueBadgeRequest(payload);
   const queued = issueBadgeQueueJobFromRequest(request);
 
-  await enqueueJobQueueMessage(c.env.DB, {
+  await enqueueJobQueueMessage(resolveDatabase(c.env), {
     tenantId: queued.job.tenantId,
     jobType: queued.job.jobType,
     payload: queued.job.payload,
@@ -3505,7 +3532,7 @@ app.post('/v1/revoke', async (c) => {
   const request = parseRevokeBadgeRequest(payload);
   const queued = revokeBadgeQueueJobFromRequest(request);
 
-  await enqueueJobQueueMessage(c.env.DB, {
+  await enqueueJobQueueMessage(resolveDatabase(c.env), {
     tenantId: queued.job.tenantId,
     jobType: queued.job.jobType,
     payload: queued.job.payload,

@@ -7,9 +7,9 @@ This file defines execution standards for humans and coding agents working in th
 - Language: TypeScript everywhere.
 - Runtime: Cloudflare Workers.
 - Framework: Hono.
-- Data: Cloudflare D1.
+- Data: Postgres.
 - Object storage: Cloudflare R2.
-- Async jobs: DB-backed job messages in D1.
+- Async jobs: DB-backed job messages in Postgres.
 - UI: server-rendered HTML + htmx + Shoelace.
 - React is out of scope for v1.
 - Standards scope: Open Badges 3.0 only.
@@ -82,7 +82,7 @@ Type safety is a release gate:
 
 ## 7) Tenancy and Data Safety
 
-- All tenants use shared D1 with strict tenant isolation in v1.
+- All tenants use shared Postgres with strict tenant isolation in v1.
 - Do not bypass tenant scoping in queries.
 - Use idempotency keys for issuance and revocation operations.
 

@@ -1,8 +1,6 @@
 -- Initial shared-tenant schema for Open Badges 3.0 foundation.
 -- Scope: tenants, users, memberships, badge_templates, assertions, revocations.
 
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS tenants (
   id TEXT PRIMARY KEY,
   slug TEXT NOT NULL UNIQUE,

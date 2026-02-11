@@ -41,6 +41,12 @@ vi.mock('@credtrail/core-domain', async () => {
   };
 });
 
+vi.mock('@credtrail/db/postgres', () => {
+  return {
+    createPostgresDatabase: vi.fn(),
+  };
+});
+
 import {
   type JsonObject,
   generateTenantDidSigningMaterial,
@@ -55,6 +61,7 @@ import {
   type LearnerProfileRecord,
   type PublicBadgeWallEntryRecord,
   type SessionRecord,
+  type SqlDatabase,
   addLearnerIdentityAlias,
   completeJobQueueMessage,
   createAssertion,
@@ -81,6 +88,7 @@ import {
   touchSession,
   type JobQueueMessageRecord,
 } from '@credtrail/db';
+import { createPostgresDatabase } from '@credtrail/db/postgres';
 
 import worker, { app, sendIssuanceEmailNotification } from './index';
 
@@ -156,10 +164,14 @@ const mockedLeaseJobQueueMessages = vi.mocked(leaseJobQueueMessages);
 const mockedCompleteJobQueueMessage = vi.mocked(completeJobQueueMessage);
 const mockedFailJobQueueMessage = vi.mocked(failJobQueueMessage);
 const mockedRecordAssertionRevocation = vi.mocked(recordAssertionRevocation);
+const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
+const fakeDb = {
+  prepare: vi.fn(),
+} as unknown as SqlDatabase;
 
 const createEnv = (): {
   APP_ENV: string;
-  DB: D1Database;
+  DATABASE_URL: string;
   BADGE_OBJECTS: R2Bucket;
   PLATFORM_DOMAIN: string;
   MARKETING_SITE_ORIGIN?: string;
@@ -167,11 +179,16 @@ const createEnv = (): {
 } => {
   return {
     APP_ENV: 'test',
-    DB: {} as D1Database,
+    DATABASE_URL: 'postgres://credtrail-test.local/db',
     BADGE_OBJECTS: {} as R2Bucket,
     PLATFORM_DOMAIN: 'credtrail.test',
   };
 };
+
+beforeEach(() => {
+  mockedCreatePostgresDatabase.mockReset();
+  mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+});
 
 const sampleAssertion = (overrides?: {
   revokedAt?: string | null;
@@ -491,7 +508,7 @@ describe('GET /showcase/:tenantId', () => {
     expect(body).toContain('Sakai 1000+ Commits Contributor');
     expect(body).toContain('Sakai Distinguished Contributor');
     expect(body).toContain('github.com/ottenhoff.png');
-    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(env.DB, {
+    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_sakai',
     });
   });
@@ -509,7 +526,7 @@ describe('GET /showcase/:tenantId', () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain('badge template &quot;badge_template_sakai_1000&quot;');
-    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(env.DB, {
+    expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_sakai',
       badgeTemplateId: 'badge_template_sakai_1000',
     });
@@ -573,7 +590,7 @@ describe('POST /v1/issue and /v1/revoke', () => {
     expect(typeof body.assertionId).toBe('string');
     expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
     expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         jobType: 'issue_badge',
@@ -608,7 +625,7 @@ describe('POST /v1/issue and /v1/revoke', () => {
     expect(typeof body.revocationId).toBe('string');
     expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
     expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         jobType: 'revoke_badge',
@@ -768,7 +785,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
     expect(body.credential).toEqual(credential);
     expect(mockedFindAssertionById).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       'tenant_123',
       'tenant_123:assertion_456',
     );
@@ -1348,7 +1365,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain('/badges/public_assertion_999');
     expect(body).toContain('Verified');
     expect(body).toContain('Revoked');
-    expect(mockedListLearnerBadgeSummaries).toHaveBeenCalledWith(env.DB, {
+    expect(mockedListLearnerBadgeSummaries).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       userId: 'usr_123',
     });
@@ -1458,19 +1475,19 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     expect(secondIssueResponse.status).toBe(201);
     expect(firstSubjectId).toBe('urn:credtrail:learner:tenant_123:lpr_123');
     expect(secondSubjectId).toBe('urn:credtrail:learner:tenant_123:lpr_123');
-    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(1, env.DB, {
+    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(1, fakeDb, {
       tenantId: 'tenant_123',
       identityType: 'email',
       identityValue: 'student@umich.edu',
     });
-    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(2, env.DB, {
+    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(2, fakeDb, {
       tenantId: 'tenant_123',
       identityType: 'email',
       identityValue: 'student@gmail.com',
     });
     expect(mockedCreateAssertion).toHaveBeenNthCalledWith(
       1,
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         learnerProfileId: 'lpr_123',
@@ -1479,7 +1496,7 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     );
     expect(mockedCreateAssertion).toHaveBeenNthCalledWith(
       2,
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         learnerProfileId: 'lpr_123',
@@ -1553,14 +1570,14 @@ describe('POST /v1/tenants/:tenantId/assertions/sakai-commit-issue', () => {
     expect(body.repository).toBe('sakaiproject/sakai');
     expect(asString(asJsonObject(body.credential.issuer)?.name)).toBe('Sakai Project');
     expect(asString(asJsonObject(body.credential.issuer)?.url)).toBe('https://www.sakaiproject.org/');
-    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenCalledWith(env.DB, {
+    expect(mockedResolveLearnerProfileForIdentity).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       identityType: 'url',
       identityValue: 'https://github.com/student-dev',
       displayName: '@student-dev',
     });
     expect(mockedCreateAssertion).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         learnerProfileId: 'lpr_123',
@@ -1682,7 +1699,7 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     expect(requestBody.identityValue).toBe('learner@gmail.com');
     expect(typeof requestBody.token).toBe('string');
     expect(mockedCreateLearnerIdentityLinkProof).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       expect.objectContaining({
         tenantId: 'tenant_123',
         learnerProfileId: 'lpr_123',
@@ -1714,7 +1731,7 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     expect(verifyResponse.status).toBe(200);
     expect(verifyBody.status).toBe('linked');
     expect(verifyBody.identityValue).toBe('learner@gmail.com');
-    expect(mockedAddLearnerIdentityAlias).toHaveBeenCalledWith(env.DB, {
+    expect(mockedAddLearnerIdentityAlias).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       learnerProfileId: 'lpr_123',
       identityType: 'email',
@@ -1723,7 +1740,7 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
       isVerified: true,
     });
     expect(mockedMarkLearnerIdentityLinkProofUsed).toHaveBeenCalledWith(
-      env.DB,
+      fakeDb,
       'lip_123',
       expect.any(String),
     );

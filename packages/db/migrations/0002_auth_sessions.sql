@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS magic_link_tokens (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,

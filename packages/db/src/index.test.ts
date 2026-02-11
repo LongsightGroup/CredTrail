@@ -9,6 +9,10 @@ import {
   resolveLearnerProfileForIdentity,
   resolveLearnerProfileFromSaml,
   type LearnerIdentityType,
+  type SqlDatabase,
+  type SqlExecutionMeta,
+  type SqlQueryResult,
+  type SqlRunResult,
 } from './index';
 
 interface FakeLearnerProfileRow {
@@ -34,10 +38,10 @@ interface FakeLearnerIdentityRow {
 
 class FakeStatement {
   private readonly sql: string;
-  private readonly db: FakeD1Database;
+  private readonly db: FakeSqlDatabase;
   private boundParams: unknown[] = [];
 
-  constructor(db: FakeD1Database, sql: string) {
+  constructor(db: FakeSqlDatabase, sql: string) {
     this.db = db;
     this.sql = sql;
   }
@@ -47,7 +51,7 @@ class FakeStatement {
     return this;
   }
 
-  run(): Promise<D1Result> {
+  run(): Promise<SqlRunResult> {
     const normalizedSql = this.normalizedSql();
 
     if (normalizedSql.includes('INSERT INTO learner_profiles')) {
@@ -65,7 +69,7 @@ class FakeStatement {
       return Promise.resolve(this.successResult());
     }
 
-    throw new Error(`Unsupported run SQL in fake D1: ${normalizedSql}`);
+    throw new Error(`Unsupported run SQL in fake DB: ${normalizedSql}`);
   }
 
   first<T>(): Promise<T | null> {
@@ -94,10 +98,10 @@ class FakeStatement {
       return Promise.resolve(this.selectLearnerProfileByIdentity() as T | null);
     }
 
-    throw new Error(`Unsupported first SQL in fake D1: ${normalizedSql}`);
+    throw new Error(`Unsupported first SQL in fake DB: ${normalizedSql}`);
   }
 
-  all<T>(): Promise<D1Result<T>> {
+  all<T>(): Promise<SqlQueryResult<T>> {
     const normalizedSql = this.normalizedSql();
 
     if (
@@ -111,7 +115,7 @@ class FakeStatement {
       });
     }
 
-    throw new Error(`Unsupported all SQL in fake D1: ${normalizedSql}`);
+    throw new Error(`Unsupported all SQL in fake DB: ${normalizedSql}`);
   }
 
   private normalizedSql(): string {
@@ -418,15 +422,15 @@ class FakeStatement {
     );
   }
 
-  private successResult(): D1Result {
+  private successResult(): SqlRunResult {
     return {
       success: true,
-      meta: {} as D1Meta & Record<string, unknown>,
-    } as D1Result;
+      meta: {} as SqlExecutionMeta,
+    };
   }
 }
 
-class FakeD1Database {
+class FakeSqlDatabase {
   learnerProfiles: FakeLearnerProfileRow[] = [];
   learnerIdentities: FakeLearnerIdentityRow[] = [];
 
@@ -435,8 +439,8 @@ class FakeD1Database {
   }
 }
 
-const createFakeDb = (): D1Database => {
-  return new FakeD1Database() as unknown as D1Database;
+const createFakeDb = (): SqlDatabase => {
+  return new FakeSqlDatabase() as unknown as SqlDatabase;
 };
 
 describe('normalizeLearnerIdentityValue', () => {
