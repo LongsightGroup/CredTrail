@@ -7,6 +7,7 @@ vi.mock('@credtrail/db', async () => {
     ...actual,
     addLearnerIdentityAlias: vi.fn(),
     completeJobQueueMessage: vi.fn(),
+    createAuditLog: vi.fn(),
     createAssertion: vi.fn(),
     createLearnerIdentityLinkProof: vi.fn(),
     enqueueJobQueueMessage: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock('@credtrail/db', async () => {
     findAssertionByPublicId: vi.fn(),
     findAssertionByIdempotencyKey: vi.fn(),
     findBadgeTemplateById: vi.fn(),
+    findTenantMembership: vi.fn(),
     findTenantSigningRegistrationByDid: vi.fn(),
     findActiveSessionByHash: vi.fn(),
     findLearnerProfileById: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@credtrail/db', async () => {
     recordAssertionRevocation: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
     upsertBadgeTemplateById: vi.fn(),
+    upsertTenantMembershipRole: vi.fn(),
     upsertTenant: vi.fn(),
     upsertTenantSigningRegistration: vi.fn(),
   };
@@ -57,6 +60,7 @@ import {
   getImmutableCredentialObject,
 } from '@credtrail/core-domain';
 import {
+  type AuditLogRecord,
   type AssertionRecord,
   type AssertionStatusListEntryRecord,
   type BadgeTemplateRecord,
@@ -68,8 +72,10 @@ import {
   type TenantRecord,
   type TenantSigningRegistrationRecord,
   type SqlDatabase,
+  type TenantMembershipRecord,
   addLearnerIdentityAlias,
   completeJobQueueMessage,
+  createAuditLog,
   createAssertion,
   createLearnerIdentityLinkProof,
   enqueueJobQueueMessage,
@@ -79,6 +85,7 @@ import {
   findAssertionByPublicId,
   findAssertionByIdempotencyKey,
   findBadgeTemplateById,
+  findTenantMembership,
   findTenantSigningRegistrationByDid,
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileById,
@@ -95,6 +102,7 @@ import {
   touchSession,
   type JobQueueMessageRecord,
   upsertBadgeTemplateById,
+  upsertTenantMembershipRole,
   upsertTenant,
   upsertTenantSigningRegistration,
 } from '@credtrail/db';
@@ -153,6 +161,7 @@ const mockedFindAssertionById = vi.mocked(findAssertionById);
 const mockedFindAssertionByPublicId = vi.mocked(findAssertionByPublicId);
 const mockedFindAssertionByIdempotencyKey = vi.mocked(findAssertionByIdempotencyKey);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
+const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantSigningRegistrationByDid = vi.mocked(findTenantSigningRegistrationByDid);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
@@ -175,9 +184,11 @@ const mockedLeaseJobQueueMessages = vi.mocked(leaseJobQueueMessages);
 const mockedCompleteJobQueueMessage = vi.mocked(completeJobQueueMessage);
 const mockedFailJobQueueMessage = vi.mocked(failJobQueueMessage);
 const mockedRecordAssertionRevocation = vi.mocked(recordAssertionRevocation);
+const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedUpsertTenant = vi.mocked(upsertTenant);
 const mockedUpsertTenantSigningRegistration = vi.mocked(upsertTenantSigningRegistration);
 const mockedUpsertBadgeTemplateById = vi.mocked(upsertBadgeTemplateById);
+const mockedUpsertTenantMembershipRole = vi.mocked(upsertTenantMembershipRole);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -203,7 +214,9 @@ const createEnv = (): {
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
   mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
+  mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
 });
 
 const sampleAssertion = (overrides?: {
@@ -379,6 +392,34 @@ const sampleTenantSigningRegistration = (
     }),
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleTenantMembership = (
+  overrides?: Partial<TenantMembershipRecord>,
+): TenantMembershipRecord => {
+  return {
+    tenantId: 'tenant_123',
+    userId: 'usr_123',
+    role: 'issuer',
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
+  return {
+    id: 'aud_123',
+    tenantId: 'tenant_123',
+    actorUserId: 'usr_123',
+    action: 'assertion.issued',
+    targetType: 'assertion',
+    targetId: 'tenant_123:assertion_456',
+    metadataJson: null,
+    occurredAt: '2026-02-10T22:00:00.000Z',
+    createdAt: '2026-02-10T22:00:00.000Z',
     ...overrides,
   };
 };
@@ -773,6 +814,74 @@ describe('PUT /v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', () 
   });
 });
 
+describe('PUT /v1/admin/tenants/:tenantId/users/:userId/role', () => {
+  beforeEach(() => {
+    mockedUpsertTenantMembershipRole.mockReset();
+    mockedCreateAuditLog.mockReset();
+    mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
+  });
+
+  it('upserts membership role via bootstrap admin API and writes audit log', async () => {
+    const env = {
+      ...createEnv(),
+      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+    };
+
+    mockedUpsertTenantMembershipRole.mockResolvedValue({
+      membership: sampleTenantMembership({
+        tenantId: 'sakai',
+        userId: 'usr_admin',
+        role: 'admin',
+      }),
+      previousRole: 'viewer',
+      changed: true,
+    });
+
+    const response = await app.request(
+      '/v1/admin/tenants/sakai/users/usr_admin/role',
+      {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer bootstrap-secret',
+        },
+        body: JSON.stringify({
+          role: 'admin',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{
+      tenantId: string;
+      userId: string;
+      role: string;
+      previousRole: string | null;
+      changed: boolean;
+    }>();
+
+    expect(response.status).toBe(201);
+    expect(body.tenantId).toBe('sakai');
+    expect(body.userId).toBe('usr_admin');
+    expect(body.role).toBe('admin');
+    expect(body.previousRole).toBe('viewer');
+    expect(body.changed).toBe(true);
+    expect(mockedUpsertTenantMembershipRole).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'sakai',
+      userId: 'usr_admin',
+      role: 'admin',
+    });
+    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'sakai',
+        action: 'membership.role_changed',
+        targetType: 'membership',
+        targetId: 'sakai:usr_admin',
+      }),
+    );
+  });
+});
+
 describe('GET /showcase/:tenantId', () => {
   beforeEach(() => {
     mockedListPublicBadgeWallEntries.mockReset();
@@ -924,6 +1033,8 @@ describe('POST /v1/jobs/process', () => {
     mockedCompleteJobQueueMessage.mockReset();
     mockedFailJobQueueMessage.mockReset();
     mockedRecordAssertionRevocation.mockReset();
+    mockedCreateAuditLog.mockReset();
+    mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
   it('processes leased jobs and marks them completed', async () => {
@@ -1004,6 +1115,53 @@ describe('POST /v1/jobs/process', () => {
     expect(body.retried).toBe(1);
     expect(body.deadLettered).toBe(0);
     expect(mockedCompleteJobQueueMessage).not.toHaveBeenCalled();
+  });
+
+  it('writes audit logs for processed revoke jobs', async () => {
+    const env = createEnv();
+
+    mockedLeaseJobQueueMessages.mockResolvedValue([
+      sampleLeasedQueueMessage({
+        jobType: 'revoke_badge',
+        tenantId: 'tenant_123',
+        payloadJson: JSON.stringify({
+          revocationId: 'rev_123',
+          assertionId: 'tenant_123:assertion_456',
+          reason: 'Policy violation',
+          requestedAt: '2026-02-10T22:00:00.000Z',
+          requestedByUserId: 'usr_123',
+        }),
+      }),
+    ]);
+    mockedRecordAssertionRevocation.mockResolvedValue({
+      status: 'revoked',
+      revokedAt: '2026-02-10T22:01:00.000Z',
+    });
+
+    const response = await app.request(
+      '/v1/jobs/process',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockedRecordAssertionRevocation).toHaveBeenCalledTimes(1);
+    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        actorUserId: 'usr_123',
+        action: 'assertion.revoked',
+        targetType: 'assertion',
+        targetId: 'tenant_123:assertion_456',
+      }),
+    );
   });
 });
 
@@ -1800,12 +1958,16 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
 describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
+    mockedFindTenantMembership.mockReset();
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
     mockedTouchSession.mockReset();
     mockedFindBadgeTemplateById.mockReset();
     mockedFindAssertionByIdempotencyKey.mockReset();
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedNextAssertionStatusListIndex.mockReset();
     mockedCreateAssertion.mockReset();
+    mockedCreateAuditLog.mockReset();
+    mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
   it('uses stable learner subject identifiers across old and new recipient emails', async () => {
@@ -1906,18 +2068,65 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
         recipientIdentity: 'student@gmail.com',
       }),
     );
+    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        action: 'assertion.issued',
+        targetType: 'assertion',
+      }),
+    );
+  });
+
+  it('returns 403 when role is viewer for manual issuance', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedFindTenantMembership.mockResolvedValue(
+      sampleTenantMembership({
+        role: 'viewer',
+      }),
+    );
+    mockedTouchSession.mockResolvedValue();
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/manual-issue',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          badgeTemplateId: 'badge_template_001',
+          recipientIdentity: 'student@umich.edu',
+          recipientIdentityType: 'email',
+          idempotencyKey: 'idem-viewer',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe('Insufficient role for requested action');
+    expect(mockedCreateAssertion).not.toHaveBeenCalled();
   });
 });
 
 describe('POST /v1/tenants/:tenantId/assertions/sakai-commit-issue', () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
+    mockedFindTenantMembership.mockReset();
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
     mockedTouchSession.mockReset();
     mockedFindBadgeTemplateById.mockReset();
     mockedFindAssertionByIdempotencyKey.mockReset();
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedNextAssertionStatusListIndex.mockReset();
     mockedCreateAssertion.mockReset();
+    mockedCreateAuditLog.mockReset();
+    mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
   it('issues badge when GitHub commit threshold is met', async () => {
@@ -1986,6 +2195,14 @@ describe('POST /v1/tenants/:tenantId/assertions/sakai-commit-issue', () => {
         learnerProfileId: 'lpr_123',
         recipientIdentityType: 'url',
         recipientIdentity: 'https://github.com/student-dev',
+      }),
+    );
+    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        action: 'assertion.issued',
+        targetType: 'assertion',
       }),
     );
 

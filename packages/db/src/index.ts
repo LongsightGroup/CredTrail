@@ -109,6 +109,55 @@ export interface UserRecord {
   email: string;
 }
 
+export type TenantMembershipRole = 'owner' | 'admin' | 'issuer' | 'viewer';
+
+export interface TenantMembershipRecord {
+  tenantId: string;
+  userId: string;
+  role: TenantMembershipRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTenantMembershipRoleInput {
+  tenantId: string;
+  userId: string;
+  role: TenantMembershipRole;
+}
+
+export interface UpsertTenantMembershipRoleResult {
+  membership: TenantMembershipRecord;
+  previousRole: TenantMembershipRole | null;
+  changed: boolean;
+}
+
+export interface EnsureTenantMembershipResult {
+  membership: TenantMembershipRecord;
+  created: boolean;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  tenantId: string;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadataJson: string | null;
+  occurredAt: string;
+  createdAt: string;
+}
+
+export interface CreateAuditLogInput {
+  tenantId: string;
+  actorUserId?: string | undefined;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata?: unknown;
+  occurredAt?: string | undefined;
+}
+
 export interface MagicLinkTokenRecord {
   id: string;
   tenantId: string;
@@ -463,6 +512,26 @@ interface TenantSigningRegistrationRow {
   privateJwkJson: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TenantMembershipRow {
+  tenantId: string;
+  userId: string;
+  role: TenantMembershipRole;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AuditLogRow {
+  id: string;
+  tenantId: string;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadataJson: string | null;
+  occurredAt: string;
+  createdAt: string;
 }
 
 const isMissingTenantSigningRegistrationsTableError = (error: unknown): boolean => {
@@ -1064,16 +1133,165 @@ export const ensureTenantMembership = async (
   db: SqlDatabase,
   tenantId: string,
   userId: string,
-): Promise<void> => {
-  await db
+): Promise<EnsureTenantMembershipResult> => {
+  const existing = await findTenantMembership(db, tenantId, userId);
+
+  if (existing !== null) {
+    return {
+      membership: existing,
+      created: false,
+    };
+  }
+
+  const upserted = await upsertTenantMembershipRole(db, {
+    tenantId,
+    userId,
+    role: 'viewer',
+  });
+
+  return {
+    membership: upserted.membership,
+    created: true,
+  };
+};
+
+export const findTenantMembership = async (
+  db: SqlDatabase,
+  tenantId: string,
+  userId: string,
+): Promise<TenantMembershipRecord | null> => {
+  const row = await db
     .prepare(
       `
-      INSERT OR IGNORE INTO memberships (tenant_id, user_id, role)
-      VALUES (?, ?, 'viewer')
+      SELECT
+        tenant_id AS tenantId,
+        user_id AS userId,
+        role,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM memberships
+      WHERE tenant_id = ?
+        AND user_id = ?
+      LIMIT 1
     `,
     )
     .bind(tenantId, userId)
+    .first<TenantMembershipRow>();
+
+  if (row === null) {
+    return null;
+  }
+
+  return mapTenantMembershipRow(row);
+};
+
+export const upsertTenantMembershipRole = async (
+  db: SqlDatabase,
+  input: UpsertTenantMembershipRoleInput,
+): Promise<UpsertTenantMembershipRoleResult> => {
+  const existing = await findTenantMembership(db, input.tenantId, input.userId);
+  const nowIso = new Date().toISOString();
+
+  await db
+    .prepare(
+      `
+      INSERT INTO memberships (
+        tenant_id,
+        user_id,
+        role,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (tenant_id, user_id)
+      DO UPDATE SET
+        role = excluded.role,
+        updated_at = excluded.updated_at
+    `,
+    )
+    .bind(input.tenantId, input.userId, input.role, nowIso, nowIso)
     .run();
+
+  const membership = await findTenantMembership(db, input.tenantId, input.userId);
+
+  if (membership === null) {
+    throw new Error(
+      `Unable to upsert membership role for tenant "${input.tenantId}" and user "${input.userId}"`,
+    );
+  }
+
+  return {
+    membership,
+    previousRole: existing?.role ?? null,
+    changed: existing?.role !== membership.role,
+  };
+};
+
+export const createAuditLog = async (
+  db: SqlDatabase,
+  input: CreateAuditLogInput,
+): Promise<AuditLogRecord> => {
+  const id = createPrefixedId('aud');
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  const metadataJson =
+    input.metadata === undefined ? null : JSON.stringify(input.metadata);
+
+  await db
+    .prepare(
+      `
+      INSERT INTO audit_logs (
+        id,
+        tenant_id,
+        actor_user_id,
+        action,
+        target_type,
+        target_id,
+        metadata_json,
+        occurred_at,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .bind(
+      id,
+      input.tenantId,
+      input.actorUserId ?? null,
+      input.action,
+      input.targetType,
+      input.targetId,
+      metadataJson,
+      occurredAt,
+      occurredAt,
+    )
+    .run();
+
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        tenant_id AS tenantId,
+        actor_user_id AS actorUserId,
+        action,
+        target_type AS targetType,
+        target_id AS targetId,
+        metadata_json AS metadataJson,
+        occurred_at AS occurredAt,
+        created_at AS createdAt
+      FROM audit_logs
+      WHERE id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(id)
+    .first<AuditLogRow>();
+
+  if (row === null) {
+    throw new Error(`Unable to create audit log "${id}"`);
+  }
+
+  return mapAuditLogRow(row);
 };
 
 export const createMagicLinkToken = async (
@@ -1417,6 +1635,30 @@ const mapTenantSigningRegistrationRow = (
     privateJwkJson: row.privateJwkJson,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+};
+
+const mapTenantMembershipRow = (row: TenantMembershipRow): TenantMembershipRecord => {
+  return {
+    tenantId: row.tenantId,
+    userId: row.userId,
+    role: row.role,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapAuditLogRow = (row: AuditLogRow): AuditLogRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    actorUserId: row.actorUserId,
+    action: row.action,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    metadataJson: row.metadataJson,
+    occurredAt: row.occurredAt,
+    createdAt: row.createdAt,
   };
 };
 

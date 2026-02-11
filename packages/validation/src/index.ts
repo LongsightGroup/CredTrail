@@ -59,6 +59,7 @@ export const resourceIdSchema = z.string().min(1);
 export const userIdSchema = z.string().min(1);
 export const isoTimestampSchema = z.string().datetime();
 export const tenantPlanTierSchema = z.enum(['free', 'team', 'institution', 'enterprise']);
+export const tenantMembershipRoleSchema = z.enum(['owner', 'admin', 'issuer', 'viewer']);
 export const recipientIdentityTypeSchema = z.enum(['email', 'email_sha256', 'did', 'url']);
 export const badgeTemplateSlugSchema = z
   .string()
@@ -76,6 +77,10 @@ export const tenantPathParamsSchema = z.object({
 
 export const badgeTemplatePathParamsSchema = tenantPathParamsSchema.extend({
   badgeTemplateId: resourceIdSchema,
+});
+
+export const tenantUserPathParamsSchema = tenantPathParamsSchema.extend({
+  userId: userIdSchema,
 });
 
 export const credentialPathParamsSchema = z.object({
@@ -148,6 +153,10 @@ export const adminUpsertTenantSigningRegistrationRequestSchema = z.object({
 });
 
 export const adminUpsertBadgeTemplateByIdRequestSchema = createBadgeTemplateRequestSchema;
+
+export const adminUpsertTenantMembershipRoleRequestSchema = z.object({
+  role: tenantMembershipRoleSchema,
+});
 
 export const magicLinkRequestSchema = z.object({
   tenantId: tenantIdSchema,
@@ -285,6 +294,7 @@ export type IssueSakaiCommitBadgeRequest = z.infer<typeof issueSakaiCommitBadgeR
 export type TenantPathParams = z.infer<typeof tenantPathParamsSchema>;
 export type BadgeTemplatePathParams = z.infer<typeof badgeTemplatePathParamsSchema>;
 export type CredentialPathParams = z.infer<typeof credentialPathParamsSchema>;
+export type TenantUserPathParams = z.infer<typeof tenantUserPathParamsSchema>;
 export type BadgeTemplateListQuery = z.infer<typeof badgeTemplateListQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
@@ -293,6 +303,9 @@ export type AdminUpsertTenantSigningRegistrationRequest = z.infer<
   typeof adminUpsertTenantSigningRegistrationRequestSchema
 >;
 export type AdminUpsertBadgeTemplateByIdRequest = z.infer<typeof adminUpsertBadgeTemplateByIdRequestSchema>;
+export type AdminUpsertTenantMembershipRoleRequest = z.infer<
+  typeof adminUpsertTenantMembershipRoleRequestSchema
+>;
 
 export const parseQueueJob = (input: unknown): QueueJob => {
   return queueJobSchema.parse(input);
@@ -364,6 +377,10 @@ export const parseCredentialPathParams = (input: unknown): CredentialPathParams 
   return credentialPathParamsSchema.parse(input);
 };
 
+export const parseTenantUserPathParams = (input: unknown): TenantUserPathParams => {
+  return tenantUserPathParamsSchema.parse(input);
+};
+
 export const parseBadgeTemplateListQuery = (input: unknown): BadgeTemplateListQuery => {
   return badgeTemplateListQuerySchema.parse(input);
 };
@@ -390,4 +407,10 @@ export const parseAdminUpsertBadgeTemplateByIdRequest = (
   input: unknown,
 ): AdminUpsertBadgeTemplateByIdRequest => {
   return adminUpsertBadgeTemplateByIdRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantMembershipRoleRequest = (
+  input: unknown,
+): AdminUpsertTenantMembershipRoleRequest => {
+  return adminUpsertTenantMembershipRoleRequestSchema.parse(input);
 };

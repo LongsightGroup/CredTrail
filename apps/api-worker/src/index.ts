@@ -19,6 +19,7 @@ import {
 import {
   addLearnerIdentityAlias,
   completeJobQueueMessage,
+  createAuditLog,
   createAssertion,
   createBadgeTemplate,
   createLearnerIdentityLinkProof,
@@ -30,6 +31,7 @@ import {
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileById,
   findLearnerProfileByIdentity,
+  findTenantMembership,
   findUserById,
   findAssertionById,
   findAssertionByPublicId,
@@ -54,6 +56,7 @@ import {
   setBadgeTemplateArchivedState,
   touchSession,
   upsertBadgeTemplateById,
+  upsertTenantMembershipRole,
   upsertTenant,
   upsertTenantSigningRegistration,
   updateBadgeTemplate,
@@ -62,6 +65,7 @@ import {
   type PublicBadgeWallEntryRecord,
   type SessionRecord,
   type SqlDatabase,
+  type TenantMembershipRole,
   upsertUserByEmail,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -74,6 +78,7 @@ import {
   parseCredentialPathParams,
   parseCreateBadgeTemplateRequest,
   parseAdminUpsertBadgeTemplateByIdRequest,
+  parseAdminUpsertTenantMembershipRoleRequest,
   parseAdminUpsertTenantRequest,
   parseAdminUpsertTenantSigningRegistrationRequest,
   type IssueBadgeQueueJob,
@@ -89,6 +94,7 @@ import {
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
   parseTenantPathParams,
+  parseTenantUserPathParams,
   type RevokeBadgeQueueJob,
   type RevokeBadgeRequest,
   type ManualIssueBadgeRequest,
@@ -392,6 +398,73 @@ const isUniqueConstraintError = (error: unknown): boolean => {
   );
 };
 
+const ISSUER_ROLES: TenantMembershipRole[] = ['owner', 'admin', 'issuer'];
+const ADMIN_ROLES: TenantMembershipRole[] = ['owner', 'admin'];
+
+const hasRequiredRole = (
+  membershipRole: TenantMembershipRole,
+  allowedRoles: readonly TenantMembershipRole[],
+): boolean => {
+  return allowedRoles.includes(membershipRole);
+};
+
+const requireTenantRole = async (
+  c: AppContext,
+  tenantId: string,
+  allowedRoles: readonly TenantMembershipRole[],
+): Promise<
+  | {
+      session: SessionRecord;
+      membershipRole: TenantMembershipRole;
+    }
+  | Response
+> => {
+  const session = await resolveSessionFromCookie(c);
+
+  if (session === null) {
+    return c.json(
+      {
+        error: 'Not authenticated',
+      },
+      401,
+    );
+  }
+
+  if (session.tenantId !== tenantId) {
+    return c.json(
+      {
+        error: 'Forbidden for requested tenant',
+      },
+      403,
+    );
+  }
+
+  const membership = await findTenantMembership(resolveDatabase(c.env), tenantId, session.userId);
+
+  if (membership === null) {
+    return c.json(
+      {
+        error: 'Membership not found for requested tenant',
+      },
+      403,
+    );
+  }
+
+  if (!hasRequiredRole(membership.role, allowedRoles)) {
+    return c.json(
+      {
+        error: 'Insufficient role for requested action',
+      },
+      403,
+    );
+  }
+
+  return {
+    session,
+    membershipRole: membership.role,
+  };
+};
+
 const didForWellKnownRequest = (requestUrl: string): string => {
   const request = new URL(requestUrl);
   return createDidWeb({ host: request.host });
@@ -641,8 +714,8 @@ const processQueuedJob = async (c: AppContext, job: QueueJob): Promise<void> => 
         job.payload.requestedByUserId,
       );
       return;
-    case 'revoke_badge':
-      await recordAssertionRevocation(resolveDatabase(c.env), {
+    case 'revoke_badge': {
+      const revocationResult = await recordAssertionRevocation(resolveDatabase(c.env), {
         tenantId: job.tenantId,
         assertionId: job.payload.assertionId,
         revocationId: job.payload.revocationId,
@@ -651,7 +724,25 @@ const processQueuedJob = async (c: AppContext, job: QueueJob): Promise<void> => 
         revokedByUserId: job.payload.requestedByUserId,
         revokedAt: new Date().toISOString(),
       });
+      await createAuditLog(resolveDatabase(c.env), {
+        tenantId: job.tenantId,
+        ...(job.payload.requestedByUserId === undefined
+          ? {}
+          : {
+              actorUserId: job.payload.requestedByUserId,
+            }),
+        action: 'assertion.revoked',
+        targetType: 'assertion',
+        targetId: job.payload.assertionId,
+        metadata: {
+          revocationId: job.payload.revocationId,
+          reason: job.payload.reason,
+          status: revocationResult.status,
+          revokedAt: revocationResult.revokedAt,
+        },
+      });
       return;
+    }
     case 'rebuild_verification_cache':
     case 'import_migration_batch':
       logInfo(observabilityContext(c.env), 'queue_job_received', {
@@ -2316,6 +2407,21 @@ app.put('/v1/admin/tenants/:tenantId', async (c) => {
       isActive: request.isActive,
     });
 
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      action: 'tenant.upserted',
+      targetType: 'tenant',
+      targetId: pathParams.tenantId,
+      metadata: {
+        slug: tenant.slug,
+        displayName: tenant.displayName,
+        planTier: tenant.planTier,
+        issuerDomain: tenant.issuerDomain,
+        didWeb: tenant.didWeb,
+        isActive: tenant.isActive,
+      },
+    });
+
     return c.json(
       {
         tenant,
@@ -2364,6 +2470,18 @@ app.put('/v1/admin/tenants/:tenantId/signing-registration', async (c) => {
           }),
     });
 
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      action: 'tenant.signing_registration_upserted',
+      targetType: 'tenant_signing_registration',
+      targetId: pathParams.tenantId,
+      metadata: {
+        did: registration.did,
+        keyId: registration.keyId,
+        hasPrivateKey: registration.privateJwkJson !== null,
+      },
+    });
+
     return c.json(
       {
         tenantId: registration.tenantId,
@@ -2409,6 +2527,20 @@ app.put('/v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c
       imageUri: request.imageUri,
     });
 
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      action: 'badge_template.upserted',
+      targetType: 'badge_template',
+      targetId: pathParams.badgeTemplateId,
+      metadata: {
+        slug: template.slug,
+        title: template.title,
+        description: template.description,
+        criteriaUri: template.criteriaUri,
+        imageUri: template.imageUri,
+      },
+    });
+
     return c.json(
       {
         tenantId: pathParams.tenantId,
@@ -2428,6 +2560,52 @@ app.put('/v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c
 
     throw error;
   }
+});
+
+app.put('/v1/admin/tenants/:tenantId/users/:userId/role', async (c) => {
+  const unauthorizedResponse = requireBootstrapAdmin(c);
+
+  if (unauthorizedResponse !== null) {
+    return unauthorizedResponse;
+  }
+
+  const pathParams = parseTenantUserPathParams(c.req.param());
+  const payload = await c.req.json<unknown>();
+  const request = parseAdminUpsertTenantMembershipRoleRequest(payload);
+  const roleResult = await upsertTenantMembershipRole(resolveDatabase(c.env), {
+    tenantId: pathParams.tenantId,
+    userId: pathParams.userId,
+    role: request.role,
+  });
+
+  await createAuditLog(resolveDatabase(c.env), {
+    tenantId: pathParams.tenantId,
+    action:
+      roleResult.previousRole === null
+        ? 'membership.role_assigned'
+        : roleResult.previousRole === roleResult.membership.role
+          ? 'membership.role_reasserted'
+          : 'membership.role_changed',
+    targetType: 'membership',
+    targetId: `${pathParams.tenantId}:${pathParams.userId}`,
+    metadata: {
+      userId: pathParams.userId,
+      previousRole: roleResult.previousRole,
+      role: roleResult.membership.role,
+      changed: roleResult.changed,
+    },
+  });
+
+  return c.json(
+    {
+      tenantId: pathParams.tenantId,
+      userId: pathParams.userId,
+      role: roleResult.membership.role,
+      previousRole: roleResult.previousRole,
+      changed: roleResult.changed,
+    },
+    201,
+  );
 });
 
 app.get('/.well-known/did.json', async (c) => {
@@ -2892,7 +3070,21 @@ app.post('/v1/auth/magic-link/request', async (c) => {
   const nowIso = new Date().toISOString();
   const expiresAt = addSecondsToIso(nowIso, MAGIC_LINK_TTL_SECONDS);
   const user = await upsertUserByEmail(resolveDatabase(c.env), request.email);
-  await ensureTenantMembership(resolveDatabase(c.env), request.tenantId, user.id);
+  const membershipResult = await ensureTenantMembership(resolveDatabase(c.env), request.tenantId, user.id);
+
+  if (membershipResult.created) {
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: request.tenantId,
+      actorUserId: user.id,
+      action: 'membership.role_assigned',
+      targetType: 'membership',
+      targetId: `${request.tenantId}:${user.id}`,
+      metadata: {
+        userId: user.id,
+        role: membershipResult.membership.role,
+      },
+    });
+  }
 
   const magicLinkToken = generateOpaqueToken();
   const magicTokenHash = await sha256Hex(magicLinkToken);
@@ -3048,25 +3240,13 @@ app.post('/v1/tenants/:tenantId/badge-templates', async (c) => {
   const pathParams = parseTenantPathParams(c.req.param());
   const payload = await c.req.json<unknown>();
   const request = parseCreateBadgeTemplateRequest(payload);
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session, membershipRole } = roleCheck;
 
   try {
     const template = await createBadgeTemplate(resolveDatabase(c.env), {
@@ -3077,6 +3257,19 @@ app.post('/v1/tenants/:tenantId/badge-templates', async (c) => {
       criteriaUri: request.criteriaUri,
       imageUri: request.imageUri,
       createdByUserId: session.userId,
+    });
+
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'badge_template.created',
+      targetType: 'badge_template',
+      targetId: template.id,
+      metadata: {
+        role: membershipRole,
+        slug: template.slug,
+        title: template.title,
+      },
     });
 
     return c.json(
@@ -3143,25 +3336,13 @@ app.patch('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) =>
   const pathParams = parseBadgeTemplatePathParams(c.req.param());
   const payload = await c.req.json<unknown>();
   const request = parseUpdateBadgeTemplateRequest(payload);
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session, membershipRole } = roleCheck;
 
   try {
     const template = await updateBadgeTemplate(resolveDatabase(c.env), {
@@ -3183,6 +3364,19 @@ app.patch('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) =>
       );
     }
 
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'badge_template.updated',
+      targetType: 'badge_template',
+      targetId: template.id,
+      metadata: {
+        role: membershipRole,
+        slug: template.slug,
+        title: template.title,
+      },
+    });
+
     return c.json({
       tenantId: pathParams.tenantId,
       template,
@@ -3203,25 +3397,13 @@ app.patch('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) =>
 
 app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive', async (c) => {
   const pathParams = parseBadgeTemplatePathParams(c.req.param());
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session, membershipRole } = roleCheck;
 
   const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
@@ -3238,6 +3420,18 @@ app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive', async
     );
   }
 
+  await createAuditLog(resolveDatabase(c.env), {
+    tenantId: pathParams.tenantId,
+    actorUserId: session.userId,
+    action: 'badge_template.archived_state_changed',
+    targetType: 'badge_template',
+    targetId: template.id,
+    metadata: {
+      role: membershipRole,
+      isArchived: template.isArchived,
+    },
+  });
+
   return c.json({
     tenantId: pathParams.tenantId,
     template,
@@ -3246,25 +3440,13 @@ app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive', async
 
 app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/unarchive', async (c) => {
   const pathParams = parseBadgeTemplatePathParams(c.req.param());
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session, membershipRole } = roleCheck;
 
   const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
     tenantId: pathParams.tenantId,
@@ -3280,6 +3462,18 @@ app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/unarchive', asy
       404,
     );
   }
+
+  await createAuditLog(resolveDatabase(c.env), {
+    tenantId: pathParams.tenantId,
+    actorUserId: session.userId,
+    action: 'badge_template.archived_state_changed',
+    targetType: 'badge_template',
+    targetId: template.id,
+    metadata: {
+      role: membershipRole,
+      isArchived: template.isArchived,
+    },
+  });
 
   return c.json({
     tenantId: pathParams.tenantId,
@@ -3452,6 +3646,21 @@ const issueBadgeForTenant = async (
     ...(issuedByUserId === undefined ? {} : { issuedByUserId }),
   });
 
+  await createAuditLog(resolveDatabase(c.env), {
+    tenantId,
+    ...(issuedByUserId === undefined ? {} : { actorUserId: issuedByUserId }),
+    action: 'assertion.issued',
+    targetType: 'assertion',
+    targetId: createdAssertion.id,
+    metadata: {
+      assertionPublicId: createdAssertion.publicId,
+      badgeTemplateId: createdAssertion.badgeTemplateId,
+      recipientIdentity: createdAssertion.recipientIdentity,
+      recipientIdentityType: createdAssertion.recipientIdentityType,
+      issuedAt: createdAssertion.issuedAt,
+    },
+  });
+
   if (request.recipientIdentityType === 'email') {
     const recipientEmail = request.recipientIdentity.trim().toLowerCase();
     const publicBadgePath = publicBadgePathForAssertion(createdAssertion);
@@ -3502,25 +3711,13 @@ app.post('/v1/tenants/:tenantId/assertions/manual-issue', async (c): Promise<Res
   const pathParams = parseTenantPathParams(c.req.param());
   const payload = await c.req.json<unknown>();
   const request = parseManualIssueBadgeRequest(payload);
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session } = roleCheck;
 
   try {
     const result = await issueBadgeForTenant(c, pathParams.tenantId, request, session.userId);
@@ -3538,25 +3735,13 @@ app.post('/v1/tenants/:tenantId/assertions/sakai-commit-issue', async (c): Promi
   const pathParams = parseTenantPathParams(c.req.param());
   const payload = await c.req.json<unknown>();
   const request = parseIssueSakaiCommitBadgeRequest(payload);
-  const session = await resolveSessionFromCookie(c);
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
-  if (session === null) {
-    return c.json(
-      {
-        error: 'Not authenticated',
-      },
-      401,
-    );
+  if (roleCheck instanceof Response) {
+    return roleCheck;
   }
 
-  if (session.tenantId !== pathParams.tenantId) {
-    return c.json(
-      {
-        error: 'Forbidden for requested tenant',
-      },
-      403,
-    );
-  }
+  const { session } = roleCheck;
 
   let commitCount: number;
 

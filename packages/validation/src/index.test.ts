@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseAdminUpsertTenantMembershipRoleRequest,
   parseBadgeTemplateListQuery,
   parseBadgeTemplatePathParams,
   parseCredentialPathParams,
@@ -16,6 +17,7 @@ import {
   parseQueueJob,
   parseRevokeBadgeRequest,
   parseSignCredentialRequest,
+  parseTenantUserPathParams,
   parseTenantSigningRegistry,
   parseUpdateBadgeTemplateRequest,
 } from './index';
@@ -308,9 +310,37 @@ describe('badge template parsers', () => {
     expect(params.credentialId).toBe('tenant_123:assertion_456');
   });
 
+  it('parses tenant/user path params for membership role routes', () => {
+    const params = parseTenantUserPathParams({
+      tenantId: 'tenant_123',
+      userId: 'usr_456',
+    });
+
+    expect(params.tenantId).toBe('tenant_123');
+    expect(params.userId).toBe('usr_456');
+  });
+
   it('defaults includeArchived to false in list query', () => {
     const query = parseBadgeTemplateListQuery({});
 
     expect(query.includeArchived).toBe(false);
+  });
+});
+
+describe('admin membership role parser', () => {
+  it('accepts valid membership role updates', () => {
+    const payload = parseAdminUpsertTenantMembershipRoleRequest({
+      role: 'admin',
+    });
+
+    expect(payload.role).toBe('admin');
+  });
+
+  it('rejects invalid membership roles', () => {
+    expect(() => {
+      parseAdminUpsertTenantMembershipRoleRequest({
+        role: 'superadmin',
+      });
+    }).toThrowError();
   });
 });
