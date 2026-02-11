@@ -13,6 +13,8 @@ import {
   logInfo,
   logWarn,
   signCredentialWithEd25519Signature2020,
+  verifyCredentialProofWithDataIntegrity,
+  verifyCredentialProofWithEd25519Signature2020,
   storeImmutableCredentialObject,
   type ObservabilityContext,
 } from '@credtrail/core-domain';
@@ -2055,6 +2057,156 @@ const issuerIdentifierFromCredential = (credential: JsonObject): string | null =
 const recipientFromCredential = (credential: JsonObject): string => {
   const credentialSubject = asJsonObject(credential.credentialSubject);
   return asString(credentialSubject?.id) ?? 'Unknown recipient';
+};
+
+interface CredentialProofVerificationSummary {
+  status: 'valid' | 'invalid' | 'unchecked';
+  format: string | null;
+  cryptosuite: string | null;
+  verificationMethod: string | null;
+  reason: string | null;
+}
+
+const verifyCredentialProofSummary = async (
+  c: AppContext,
+  credential: JsonObject,
+): Promise<CredentialProofVerificationSummary> => {
+  const proof = asJsonObject(credential.proof);
+
+  if (proof === null) {
+    return {
+      status: 'unchecked',
+      format: null,
+      cryptosuite: null,
+      verificationMethod: null,
+      reason: 'credential has no proof object',
+    };
+  }
+
+  const proofType = asNonEmptyString(proof.type);
+  const proofValue = asNonEmptyString(proof.proofValue);
+  const proofPurpose = asNonEmptyString(proof.proofPurpose);
+  const verificationMethod = asNonEmptyString(proof.verificationMethod);
+  const methodDid =
+    verificationMethod === null
+      ? null
+      : (() => {
+          const [didPart] = verificationMethod.split('#', 2);
+          return didPart === undefined || didPart.length === 0 ? null : didPart;
+        })();
+  const issuerIdentifier = issuerIdentifierFromCredential(credential);
+  const issuerDid = methodDid ?? issuerIdentifier;
+
+  if (proofType === null || proofValue === null || proofPurpose === null || verificationMethod === null) {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'proof object is missing required fields',
+    };
+  }
+
+  if (proofPurpose !== 'assertionMethod') {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'proofPurpose must be assertionMethod',
+    };
+  }
+
+  if (!issuerDid?.startsWith('did:')) {
+    return {
+      status: 'unchecked',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'issuer DID could not be resolved for proof verification',
+    };
+  }
+
+  const signingEntry = await resolveSigningEntryForDid(c, issuerDid);
+
+  if (signingEntry === null) {
+    return {
+      status: 'unchecked',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: `no signing configuration for issuer DID ${issuerDid}`,
+    };
+  }
+
+  if (proofType === 'Ed25519Signature2020') {
+    const isValid = await verifyCredentialProofWithEd25519Signature2020({
+      credential: {
+        ...credential,
+        proof: {
+          type: 'Ed25519Signature2020',
+          created: asString(proof.created) ?? '',
+          proofPurpose: 'assertionMethod',
+          verificationMethod,
+          proofValue,
+        },
+      },
+      publicJwk: toEd25519PublicJwk(signingEntry.publicJwk),
+    });
+
+    return {
+      status: isValid ? 'valid' : 'invalid',
+      format: proofType,
+      cryptosuite: null,
+      verificationMethod,
+      reason: isValid ? null : 'signature verification failed',
+    };
+  }
+
+  if (proofType === 'DataIntegrityProof') {
+    const cryptosuite = asNonEmptyString(proof.cryptosuite);
+
+    if (cryptosuite !== 'eddsa-rdfc-2022' && cryptosuite !== 'ecdsa-sd-2023') {
+      return {
+        status: 'invalid',
+        format: proofType,
+        cryptosuite,
+        verificationMethod,
+        reason: 'unsupported Data Integrity cryptosuite',
+      };
+    }
+
+    const isValid = await verifyCredentialProofWithDataIntegrity({
+      credential: {
+        ...credential,
+        proof: {
+          type: 'DataIntegrityProof',
+          cryptosuite,
+          created: asString(proof.created) ?? '',
+          proofPurpose: 'assertionMethod',
+          verificationMethod,
+          proofValue,
+        },
+      },
+      publicJwk: toEd25519PublicJwk(signingEntry.publicJwk),
+    });
+
+    return {
+      status: isValid ? 'valid' : 'invalid',
+      format: proofType,
+      cryptosuite,
+      verificationMethod,
+      reason: isValid ? null : 'signature verification failed',
+    };
+  }
+
+  return {
+    status: 'unchecked',
+    format: proofType,
+    cryptosuite: asNonEmptyString(proof.cryptosuite),
+    verificationMethod,
+    reason: 'proof format is not currently supported',
+  };
 };
 
 const githubUsernameFromUrl = (value: string): string | null => {
@@ -4449,6 +4601,7 @@ app.get('/credentials/v1/:credentialId', async (c) => {
           revocationStatusListUrlForTenant(c.req.url, result.value.assertion.tenantId),
           result.value.assertion.statusListIndex,
         );
+  const proof = await verifyCredentialProofSummary(c, result.value.credential);
 
   return c.json({
     assertionId: result.value.assertion.id,
@@ -4458,6 +4611,7 @@ app.get('/credentials/v1/:credentialId', async (c) => {
       status: result.value.assertion.revokedAt === null ? 'valid' : 'revoked',
       revokedAt: result.value.assertion.revokedAt,
       statusList,
+      proof,
     },
     credential: result.value.credential,
   });

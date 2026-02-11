@@ -73,6 +73,7 @@ import {
   encodeJwkPublicKeyMultibase,
   generateTenantDidSigningMaterial,
   getImmutableCredentialObject,
+  signCredentialWithEd25519Signature2020,
 } from '@credtrail/core-domain';
 import {
   type AuditLogRecord,
@@ -159,6 +160,13 @@ interface VerificationResponse {
       statusListIndex: string;
       statusListCredential: string;
     } | null;
+    proof: {
+      status: 'valid' | 'invalid' | 'unchecked';
+      format: string | null;
+      cryptosuite: string | null;
+      verificationMethod: string | null;
+      reason: string | null;
+    };
   };
   credential: JsonObject;
 }
@@ -2454,6 +2462,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(body.verification.statusList?.statusListCredential).toBe(
       'http://localhost/credentials/v1/status-lists/tenant_123/revocation',
     );
+    expect(body.verification.proof.status).toBe('unchecked');
     expect(body.credential).toEqual(credential);
     expect(mockedFindAssertionById).toHaveBeenCalledWith(
       fakeDb,
@@ -2486,6 +2495,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(response.status).toBe(200);
     expect(body.verification.status).toBe('revoked');
     expect(body.verification.revokedAt).toBe('2026-02-11T01:00:00.000Z');
+    expect(body.verification.proof.status).toBe('unchecked');
   });
 
   it('returns null status list metadata when assertion has no status list index', async () => {
@@ -2507,6 +2517,56 @@ describe('GET /credentials/v1/:credentialId', () => {
 
     expect(response.status).toBe(200);
     expect(body.verification.statusList).toBeNull();
+    expect(body.verification.proof.status).toBe('unchecked');
+  });
+
+  it('verifies Ed25519Signature2020 proofs when issuer signing keys are resolvable', async () => {
+    const env = createEnv();
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+      keyId: 'key-1',
+    });
+    const credential = await signCredentialWithEd25519Signature2020({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        issuer: signingMaterial.did,
+        credentialSubject: {
+          id: 'mailto:learner@example.edu',
+          achievement: {
+            id: 'urn:credtrail:badge:001',
+            type: ['Achievement'],
+            name: 'Sakai Contributor',
+          },
+        },
+      },
+      privateJwk: signingMaterial.privateJwk,
+      verificationMethod: `${signingMaterial.did}#${signingMaterial.keyId}`,
+      createdAt: '2026-02-11T00:00:00.000Z',
+    });
+
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
+      sampleTenantSigningRegistration({
+        tenantId: 'tenant_123',
+        did: signingMaterial.did,
+        keyId: signingMaterial.keyId,
+        publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
+        privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
+      }),
+    );
+
+    const response = await app.request('/credentials/v1/tenant_123%3Aassertion_456', undefined, env);
+    const body = await response.json<VerificationResponse>();
+
+    expect(response.status).toBe(200);
+    expect(body.verification.proof.status).toBe('valid');
+    expect(body.verification.proof.format).toBe('Ed25519Signature2020');
+    expect(body.verification.proof.verificationMethod).toBe(
+      'did:web:credtrail.test:tenant_123#key-1',
+    );
   });
 
   it('returns 400 for non-tenant-scoped credential identifiers', async () => {
