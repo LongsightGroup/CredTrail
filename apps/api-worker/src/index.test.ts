@@ -717,6 +717,30 @@ const generateP256SigningMaterial = async (
   };
 };
 
+const createDidKeyHolderMaterial = async (): Promise<{
+  did: string;
+  verificationMethod: string;
+  privateJwk: {
+    kty: 'OKP';
+    crv: 'Ed25519';
+    x: string;
+    d: string;
+    kid?: string;
+  };
+}> => {
+  const signingMaterial = await generateTenantDidSigningMaterial({
+    did: 'did:web:credtrail.test:holder',
+  });
+  const multibase = encodeJwkPublicKeyMultibase(signingMaterial.publicJwk);
+  const did = `did:key:${multibase}`;
+
+  return {
+    did,
+    verificationMethod: `${did}#${multibase}`,
+    privateJwk: signingMaterial.privateJwk,
+  };
+};
+
 const sampleTenantSigningRegistration = (
   overrides?: Partial<TenantSigningRegistrationRecord>,
 ): TenantSigningRegistrationRecord => {
@@ -3747,6 +3771,267 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(response.status).toBe(404);
     expect(body.error).toBe('Credential not found');
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
+  });
+});
+
+describe('Verifiable Presentation endpoints', () => {
+  beforeEach(() => {
+    mockedFindActiveSessionByHash.mockReset();
+    mockedTouchSession.mockReset();
+    mockedListLearnerBadgeSummaries.mockReset();
+    mockedFindAssertionById.mockReset();
+    mockedGetImmutableCredentialObject.mockReset();
+  });
+
+  it('creates a signed VP for authenticated learner-selected credentials', async () => {
+    const env = createEnv();
+    const holder = await createDidKeyHolderMaterial();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListLearnerBadgeSummaries.mockResolvedValue([sampleLearnerBadge()]);
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue({
+      '@context': ['https://www.w3.org/ns/credentials/v2'],
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      issuer: 'did:web:credtrail.test:tenant_123',
+      validFrom: '2026-02-10T22:00:00.000Z',
+      credentialSubject: {
+        id: holder.did,
+        achievement: {
+          type: ['Achievement'],
+          name: 'TypeScript Foundations',
+        },
+      },
+    });
+
+    const response = await app.request(
+      '/v1/presentations/create',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          holderDid: holder.did,
+          holderPrivateJwk: holder.privateJwk,
+          credentialIds: ['tenant_123:assertion_456'],
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+    const presentation = asJsonObject(body.presentation);
+
+    expect(response.status).toBe(200);
+    expect(body.credentialCount).toBe(1);
+    expect(body.holderDid).toBe(holder.did);
+    expect(asString(presentation?.holder)).toBe(holder.did);
+    expect(asJsonObject(presentation?.proof)).not.toBeNull();
+  });
+
+  it('rejects VP creation when credential is not owned by authenticated learner', async () => {
+    const env = createEnv();
+    const holder = await createDidKeyHolderMaterial();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
+
+    const response = await app.request(
+      '/v1/presentations/create',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          holderDid: holder.did,
+          holderPrivateJwk: holder.privateJwk,
+          credentialIds: ['tenant_123:assertion_456'],
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain('not accessible');
+    expect(mockedFindAssertionById).not.toHaveBeenCalled();
+  });
+
+  it('verifies VP holder proof and mixed EdDSA/ECDSA credential proofs', async () => {
+    const holder = await createDidKeyHolderMaterial();
+    const ed25519Issuer = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+    });
+    const p256IssuerKeys = await generateP256SigningMaterial('key-p256');
+    const p256IssuerDid = 'did:web:credtrail.test:tenant_123:p256';
+
+    const ed25519Credential = await signCredentialWithEd25519Signature2020({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        id: 'urn:credtrail:credential:ed25519',
+        issuer: ed25519Issuer.did,
+        validFrom: '2026-02-10T22:00:00.000Z',
+        credentialSubject: {
+          id: holder.did,
+          achievement: {
+            type: ['Achievement'],
+            name: 'Ed25519 Badge',
+          },
+        },
+      },
+      privateJwk: ed25519Issuer.privateJwk,
+      verificationMethod: ed25519Issuer.did + '#' + ed25519Issuer.keyId,
+    });
+
+    const ecdsaCredential = await signCredentialWithDataIntegrityProof({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        id: 'urn:credtrail:credential:ecdsa',
+        issuer: p256IssuerDid,
+        validFrom: '2026-02-10T22:00:00.000Z',
+        credentialSubject: {
+          id: holder.did,
+          achievement: {
+            type: ['Achievement'],
+            name: 'ECDSA Badge',
+          },
+        },
+      },
+      privateJwk: p256IssuerKeys.privateJwk,
+      verificationMethod: p256IssuerDid + '#key-p256',
+      cryptosuite: 'ecdsa-sd-2023',
+    });
+
+    const presentation = await signCredentialWithEd25519Signature2020({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiablePresentation'],
+        holder: holder.did,
+        verifiableCredential: [ed25519Credential, ecdsaCredential],
+      },
+      privateJwk: holder.privateJwk,
+      verificationMethod: holder.verificationMethod,
+    });
+
+    const env = {
+      ...createEnv(),
+      TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
+        [ed25519Issuer.did]: {
+          tenantId: 'tenant_123',
+          keyId: ed25519Issuer.keyId,
+          publicJwk: ed25519Issuer.publicJwk,
+        },
+        [p256IssuerDid]: {
+          tenantId: 'tenant_123',
+          keyId: 'key-p256',
+          publicJwk: p256IssuerKeys.publicJwk,
+        },
+      }),
+    };
+
+    const response = await app.request(
+      '/v1/presentations/verify',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          presentation,
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+    const credentials = Array.isArray(body.credentials) ? body.credentials.map((entry) => asJsonObject(entry)) : [];
+    const proofFormats = credentials
+      .map((entry) => asJsonObject(entry?.proof))
+      .map((proof) => asString(proof?.format))
+      .filter((format): format is string => format !== null);
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('valid');
+    expect(body.credentialCount).toBe(2);
+    expect(asString(asJsonObject(asJsonObject(body.holder)?.proof)?.status)).toBe('valid');
+    expect(proofFormats).toEqual(expect.arrayContaining(['Ed25519Signature2020', 'DataIntegrityProof']));
+    expect(credentials.every((entry) => asString(entry?.status) === 'valid')).toBe(true);
+  });
+
+  it('returns invalid when VP credential subject does not match holder DID', async () => {
+    const holder = await createDidKeyHolderMaterial();
+    const issuer = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+    });
+
+    const credential = await signCredentialWithEd25519Signature2020({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        id: 'urn:credtrail:credential:mismatch',
+        issuer: issuer.did,
+        validFrom: '2026-02-10T22:00:00.000Z',
+        credentialSubject: {
+          id: 'did:key:z6MkpresentationMismatchHolder',
+          achievement: {
+            type: ['Achievement'],
+            name: 'Mismatch Badge',
+          },
+        },
+      },
+      privateJwk: issuer.privateJwk,
+      verificationMethod: issuer.did + '#' + issuer.keyId,
+    });
+
+    const presentation = await signCredentialWithEd25519Signature2020({
+      credential: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiablePresentation'],
+        holder: holder.did,
+        verifiableCredential: [credential],
+      },
+      privateJwk: holder.privateJwk,
+      verificationMethod: holder.verificationMethod,
+    });
+
+    const env = {
+      ...createEnv(),
+      TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
+        [issuer.did]: {
+          tenantId: 'tenant_123',
+          keyId: issuer.keyId,
+          publicJwk: issuer.publicJwk,
+        },
+      }),
+    };
+
+    const response = await app.request(
+      '/v1/presentations/verify',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          presentation,
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+    const credentials = Array.isArray(body.credentials) ? body.credentials.map((entry) => asJsonObject(entry)) : [];
+    const firstBindingStatus = asString(asJsonObject(credentials[0]?.binding)?.status);
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('invalid');
+    expect(firstBindingStatus).toBe('invalid');
   });
 });
 

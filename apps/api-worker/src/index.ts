@@ -4,6 +4,7 @@ import {
   createDidWeb,
   createTenantScopedId,
   splitTenantScopedId,
+  decodeJwkPublicKeyMultibase,
   type DataIntegrityCryptosuite,
   type Ed25519PrivateJwk,
   type Ed25519PublicJwk,
@@ -134,6 +135,8 @@ import {
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
   parseLearnerDidSettingsRequest,
+  parsePresentationCreateRequest,
+  parsePresentationVerifyRequest,
   parseManualIssueBadgeRequest,
   parseIssueSakaiCommitBadgeRequest,
   parseMagicLinkRequest,
@@ -4658,6 +4661,318 @@ const signCredentialForDid = async (input: SignCredentialForDidInput): Promise<S
   };
 };
 
+interface PresentationCredentialBindingSummary {
+  status: 'valid' | 'invalid';
+  reason: string | null;
+}
+
+interface PresentationCredentialVerificationResult {
+  credentialId: string | null;
+  subjectId: string | null;
+  binding: PresentationCredentialBindingSummary;
+  proof: CredentialProofVerificationSummary;
+  checks: CredentialVerificationChecksSummary;
+  lifecycle: CredentialLifecycleVerificationSummary;
+  status: 'valid' | 'invalid';
+}
+
+const didKeyMultibaseFromDid = (did: string): string | null => {
+  if (!did.startsWith('did:key:')) {
+    return null;
+  }
+
+  const multibase = did.slice('did:key:'.length).trim();
+  return multibase.length === 0 ? null : multibase;
+};
+
+const didKeyVerificationMethod = (did: string): string | null => {
+  const multibase = didKeyMultibaseFromDid(did);
+  return multibase === null ? null : did + '#' + multibase;
+};
+
+const ed25519PublicJwkFromDidKey = (did: string): Ed25519PublicJwk | null => {
+  const multibase = didKeyMultibaseFromDid(did);
+
+  if (multibase === null) {
+    return null;
+  }
+
+  try {
+    return {
+      kty: 'OKP',
+      crv: 'Ed25519',
+      x: decodeJwkPublicKeyMultibase(multibase),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const verifiableCredentialObjectsFromPresentation = (presentation: JsonObject): JsonObject[] | null => {
+  const verifiableCredentialValue = presentation.verifiableCredential;
+
+  if (!Array.isArray(verifiableCredentialValue)) {
+    return null;
+  }
+
+  const credentials: JsonObject[] = [];
+
+  for (const entry of verifiableCredentialValue) {
+    const credential = asJsonObject(entry);
+
+    if (credential === null) {
+      return null;
+    }
+
+    credentials.push(credential);
+  }
+
+  return credentials;
+};
+
+const statusListReferenceFromCredentialForPresentation = (
+  credential: JsonObject,
+): CredentialStatusListReference | null => {
+  const credentialStatus = asJsonObject(credential.credentialStatus);
+
+  if (credentialStatus === null) {
+    return null;
+  }
+
+  const type = asNonEmptyString(credentialStatus.type);
+  const statusPurpose = asNonEmptyString(credentialStatus.statusPurpose) ?? 'revocation';
+  const statusListIndex = asNonEmptyString(credentialStatus.statusListIndex);
+  const statusListCredential = asNonEmptyString(credentialStatus.statusListCredential);
+
+  if (type === null || statusListIndex === null || statusListCredential === null || statusPurpose !== 'revocation') {
+    return null;
+  }
+
+  return {
+    id: statusListCredential + '#' + statusListIndex,
+    type,
+    statusPurpose: 'revocation',
+    statusListIndex,
+    statusListCredential,
+  };
+};
+
+const credentialChecksPassPresentationPolicy = (checks: CredentialVerificationChecksSummary): boolean => {
+  return (
+    checks.jsonLdSafeMode.status === 'valid' &&
+    checks.credentialSchema.status !== 'invalid' &&
+    checks.credentialSubject.status === 'valid' &&
+    checks.dates.status === 'valid' &&
+    checks.credentialStatus.status !== 'invalid'
+  );
+};
+
+const verifyDidKeyHolderProofSummary = async (
+  presentation: JsonObject,
+  holderDid: string,
+): Promise<CredentialProofVerificationSummary> => {
+  const proof = selectCredentialProofObject(presentation);
+
+  if (proof === null) {
+    return {
+      status: 'unchecked',
+      format: null,
+      cryptosuite: null,
+      verificationMethod: null,
+      reason: 'presentation has no proof object',
+    };
+  }
+
+  const proofType = asNonEmptyString(proof.type);
+  const proofValue = asNonEmptyString(proof.proofValue);
+  const proofPurpose = asNonEmptyString(proof.proofPurpose);
+  const verificationMethod = asNonEmptyString(proof.verificationMethod);
+  const expectedVerificationMethod = didKeyVerificationMethod(holderDid);
+
+  if (proofType === null || proofValue === null || proofPurpose === null || verificationMethod === null) {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'proof object is missing required fields',
+    };
+  }
+
+  if (expectedVerificationMethod === null || verificationMethod !== expectedVerificationMethod) {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'verificationMethod must match the did:key holder DID',
+    };
+  }
+
+  if (proofPurpose !== 'assertionMethod') {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'proofPurpose must be assertionMethod',
+    };
+  }
+
+  const holderPublicJwk = ed25519PublicJwkFromDidKey(holderDid);
+
+  if (holderPublicJwk === null) {
+    return {
+      status: 'invalid',
+      format: proofType,
+      cryptosuite: asNonEmptyString(proof.cryptosuite),
+      verificationMethod,
+      reason: 'holder DID did:key value is not a valid Ed25519 multibase key',
+    };
+  }
+
+  if (proofType === 'Ed25519Signature2020') {
+    const isValid = await verifyCredentialProofWithEd25519Signature2020({
+      credential: {
+        ...presentation,
+        proof: {
+          type: 'Ed25519Signature2020',
+          created: asString(proof.created) ?? '',
+          proofPurpose: 'assertionMethod',
+          verificationMethod,
+          proofValue,
+        },
+      },
+      publicJwk: holderPublicJwk,
+    });
+
+    return {
+      status: isValid ? 'valid' : 'invalid',
+      format: proofType,
+      cryptosuite: null,
+      verificationMethod,
+      reason: isValid ? null : 'signature verification failed',
+    };
+  }
+
+  if (proofType === 'DataIntegrityProof') {
+    const cryptosuite = asNonEmptyString(proof.cryptosuite);
+
+    if (cryptosuite !== 'eddsa-rdfc-2022') {
+      return {
+        status: 'invalid',
+        format: proofType,
+        cryptosuite,
+        verificationMethod,
+        reason: 'did:key holder proofs only support DataIntegrity cryptosuite eddsa-rdfc-2022',
+      };
+    }
+
+    const isValid = await verifyCredentialProofWithDataIntegrity({
+      credential: {
+        ...presentation,
+        proof: {
+          type: 'DataIntegrityProof',
+          cryptosuite,
+          created: asString(proof.created) ?? '',
+          proofPurpose: 'assertionMethod',
+          verificationMethod,
+          proofValue,
+        },
+      },
+      publicJwk: holderPublicJwk,
+    });
+
+    return {
+      status: isValid ? 'valid' : 'invalid',
+      format: proofType,
+      cryptosuite,
+      verificationMethod,
+      reason: isValid ? null : 'signature verification failed',
+    };
+  }
+
+  return {
+    status: 'unchecked',
+    format: proofType,
+    cryptosuite: asNonEmptyString(proof.cryptosuite),
+    verificationMethod,
+    reason: 'proof format is not currently supported',
+  };
+};
+
+const verifyPresentationHolderProofSummary = async (
+  c: AppContext,
+  presentation: JsonObject,
+  holderDid: string,
+): Promise<CredentialProofVerificationSummary> => {
+  if (holderDid.startsWith('did:key:')) {
+    return verifyDidKeyHolderProofSummary(presentation, holderDid);
+  }
+
+  return verifyCredentialProofSummary(c, {
+    ...presentation,
+    issuer: holderDid,
+  });
+};
+
+const verifyCredentialInPresentation = async (input: {
+  context: AppContext;
+  credential: JsonObject;
+  holderDid: string;
+  checkedAt: string;
+}): Promise<PresentationCredentialVerificationResult> => {
+  const credentialId = asNonEmptyString(input.credential.id);
+  const credentialSubject = asJsonObject(input.credential.credentialSubject);
+  const subjectId = asNonEmptyString(credentialSubject?.id);
+  const binding: PresentationCredentialBindingSummary =
+    subjectId === null
+      ? {
+          status: 'invalid',
+          reason: 'credentialSubject.id is missing',
+        }
+      : subjectId !== input.holderDid
+        ? {
+            status: 'invalid',
+            reason: 'credentialSubject.id must match presentation holder DID',
+          }
+        : {
+            status: 'valid',
+            reason: null,
+          };
+  const checks = await summarizeCredentialVerificationChecks({
+    context: input.context,
+    credential: input.credential,
+    checkedAt: input.checkedAt,
+    expectedStatusList: statusListReferenceFromCredentialForPresentation(input.credential),
+  });
+  const resolvedRevokedAt =
+    checks.credentialStatus.status === 'valid'
+      ? checks.credentialStatus.revoked
+        ? input.checkedAt
+        : null
+      : null;
+  const lifecycle = summarizeCredentialLifecycleVerification(input.credential, resolvedRevokedAt, input.checkedAt);
+  const proof = await verifyCredentialProofSummary(input.context, input.credential);
+  const status: 'valid' | 'invalid' =
+    binding.status === 'valid' &&
+    proof.status === 'valid' &&
+    credentialChecksPassPresentationPolicy(checks) &&
+    lifecycle.state === 'active'
+      ? 'valid'
+      : 'invalid';
+
+  return {
+    credentialId,
+    subjectId,
+    binding,
+    proof,
+    checks,
+    lifecycle,
+    status,
+  };
+};
+
 const githubUsernameFromUrl = (value: string): string | null => {
   try {
     const parsedUrl = new URL(value);
@@ -8050,6 +8365,230 @@ app.get('/credentials/v1/:credentialId', async (c) => {
       proof,
     },
     credential: result.value.credential,
+  });
+});
+
+app.post('/v1/presentations/create', async (c): Promise<Response> => {
+  const session = await resolveSessionFromCookie(c);
+
+  if (session === null) {
+    return c.json(
+      {
+        error: 'Not authenticated',
+      },
+      401,
+    );
+  }
+
+  let request: ReturnType<typeof parsePresentationCreateRequest>;
+
+  try {
+    request = parsePresentationCreateRequest(await c.req.json<unknown>());
+  } catch {
+    return c.json(
+      {
+        error: 'Invalid presentation create request payload',
+      },
+      400,
+    );
+  }
+
+  if (!request.holderDid.startsWith('did:key:')) {
+    return c.json(
+      {
+        error: 'Presentation creation currently supports did:key holder DIDs only',
+      },
+      422,
+    );
+  }
+
+  const expectedHolderPublicJwk = ed25519PublicJwkFromDidKey(request.holderDid);
+
+  if (expectedHolderPublicJwk === null) {
+    return c.json(
+      {
+        error: 'holderDid is not a valid did:key identifier',
+      },
+      422,
+    );
+  }
+
+  if (request.holderPrivateJwk.x !== expectedHolderPublicJwk.x) {
+    return c.json(
+      {
+        error: 'holderPrivateJwk does not match holderDid public key',
+      },
+      422,
+    );
+  }
+
+  const holderPrivateJwk: Ed25519PrivateJwk = {
+    kty: request.holderPrivateJwk.kty,
+    crv: request.holderPrivateJwk.crv,
+    x: request.holderPrivateJwk.x,
+    d: request.holderPrivateJwk.d,
+    ...(request.holderPrivateJwk.kid === undefined ? {} : { kid: request.holderPrivateJwk.kid }),
+  };
+  const db = resolveDatabase(c.env);
+  const learnerBadges = await listLearnerBadgeSummaries(db, {
+    tenantId: session.tenantId,
+    userId: session.userId,
+  });
+  const learnerAssertionIds = new Set<string>(learnerBadges.map((badge) => badge.assertionId));
+  const selectedCredentials: JsonObject[] = [];
+
+  for (const credentialId of request.credentialIds) {
+    const tenantScopedCredentialId = parseTenantScopedCredentialId(credentialId);
+
+    if (tenantScopedCredentialId?.tenantId !== session.tenantId) {
+      return c.json(
+        {
+          error: 'credentialIds must contain tenant-scoped assertion identifiers for the active session tenant',
+          credentialId,
+        },
+        422,
+      );
+    }
+
+    if (!learnerAssertionIds.has(credentialId)) {
+      return c.json(
+        {
+          error: 'Credential is not accessible for the authenticated learner account',
+          credentialId,
+        },
+        403,
+      );
+    }
+
+    const assertion = await findAssertionById(db, session.tenantId, credentialId);
+
+    if (assertion === null) {
+      return c.json(
+        {
+          error: 'Credential not found',
+          credentialId,
+        },
+        404,
+      );
+    }
+
+    const credential = await loadCredentialForAssertion(c.env.BADGE_OBJECTS, assertion);
+    const credentialSubject = asJsonObject(credential.credentialSubject);
+    const subjectId = asNonEmptyString(credentialSubject?.id);
+
+    if (subjectId !== request.holderDid) {
+      return c.json(
+        {
+          error: 'Credential subject DID does not match requested presentation holder DID',
+          credentialId,
+          subjectId,
+        },
+        422,
+      );
+    }
+
+    selectedCredentials.push(credential);
+  }
+
+  const verificationMethod = didKeyVerificationMethod(request.holderDid);
+
+  if (verificationMethod === null) {
+    return c.json(
+      {
+        error: 'Unable to resolve holder verification method from holder DID',
+      },
+      422,
+    );
+  }
+
+  const presentation = await signCredentialWithEd25519Signature2020({
+    credential: {
+      '@context': [VC_DATA_MODEL_CONTEXT_URL],
+      type: ['VerifiablePresentation'],
+      holder: request.holderDid,
+      verifiableCredential: selectedCredentials,
+    },
+    privateJwk: holderPrivateJwk,
+    verificationMethod,
+  });
+
+  c.header('Cache-Control', 'no-store');
+
+  return c.json({
+    holderDid: request.holderDid,
+    verificationMethod,
+    credentialCount: selectedCredentials.length,
+    presentation,
+  });
+});
+
+app.post('/v1/presentations/verify', async (c): Promise<Response> => {
+  let request: ReturnType<typeof parsePresentationVerifyRequest>;
+
+  try {
+    request = parsePresentationVerifyRequest(await c.req.json<unknown>());
+  } catch {
+    return c.json(
+      {
+        error: 'Invalid presentation verification request payload',
+      },
+      400,
+    );
+  }
+
+  const presentation = request.presentation;
+  const holderDid = asNonEmptyString(presentation.holder);
+  const presentationTypes = normalizedStringValues(presentation.type);
+  const contextUrls: string[] = [];
+  collectContextUrls(presentation['@context'], contextUrls);
+  const credentials = verifiableCredentialObjectsFromPresentation(presentation);
+
+  if (
+    holderDid === null ||
+    !presentationTypes.includes('VerifiablePresentation') ||
+    !contextUrls.includes(VC_DATA_MODEL_CONTEXT_URL) ||
+    credentials === null ||
+    credentials.length === 0
+  ) {
+    return c.json(
+      {
+        error: 'Payload must be a VerifiablePresentation with holder DID and at least one verifiableCredential',
+      },
+      400,
+    );
+  }
+
+  const checkedAt = new Date().toISOString();
+  const holderProof = await verifyPresentationHolderProofSummary(c, presentation, holderDid);
+  const credentialResults: PresentationCredentialVerificationResult[] = [];
+
+  for (const credential of credentials) {
+    credentialResults.push(
+      await verifyCredentialInPresentation({
+        context: c,
+        credential,
+        holderDid,
+        checkedAt,
+      }),
+    );
+  }
+
+  const status: 'valid' | 'invalid' =
+    holderProof.status === 'valid' && credentialResults.every((entry) => entry.status === 'valid')
+      ? 'valid'
+      : 'invalid';
+
+  c.header('Cache-Control', 'no-store');
+
+  return c.json({
+    status,
+    checkedAt,
+    holder: {
+      did: holderDid,
+      proof: holderProof,
+    },
+    credentialCount: credentialResults.length,
+    credentials: credentialResults,
   });
 });
 

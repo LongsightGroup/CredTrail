@@ -266,6 +266,28 @@ export const learnerDidSettingsRequestSchema = z.object({
     }),
 });
 
+export const presentationCreateRequestSchema = z
+  .object({
+    holderDid: z.string().trim().min(1).max(2048).startsWith('did:'),
+    holderPrivateJwk: ed25519PrivateJwkSchema,
+    credentialIds: z.array(resourceIdSchema).min(1).max(25),
+  })
+  .superRefine((value, ctx) => {
+    const uniqueIds = new Set(value.credentialIds);
+
+    if (uniqueIds.size !== value.credentialIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['credentialIds'],
+        message: 'credentialIds must not contain duplicates',
+      });
+    }
+  });
+
+export const presentationVerifyRequestSchema = z.object({
+  presentation: jsonObjectSchema,
+});
+
 export const issueBadgeRequestSchema = z.object({
   tenantId: tenantIdSchema,
   badgeTemplateId: resourceIdSchema,
@@ -378,6 +400,8 @@ export type MagicLinkVerifyRequest = z.infer<typeof magicLinkVerifyRequestSchema
 export type LearnerIdentityLinkRequest = z.infer<typeof learnerIdentityLinkRequestSchema>;
 export type LearnerIdentityLinkVerifyRequest = z.infer<typeof learnerIdentityLinkVerifyRequestSchema>;
 export type LearnerDidSettingsRequest = z.infer<typeof learnerDidSettingsRequestSchema>;
+export type PresentationCreateRequest = z.infer<typeof presentationCreateRequestSchema>;
+export type PresentationVerifyRequest = z.infer<typeof presentationVerifyRequestSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
@@ -447,6 +471,14 @@ export const parseLearnerIdentityLinkVerifyRequest = (
 
 export const parseLearnerDidSettingsRequest = (input: unknown): LearnerDidSettingsRequest => {
   return learnerDidSettingsRequestSchema.parse(input);
+};
+
+export const parsePresentationCreateRequest = (input: unknown): PresentationCreateRequest => {
+  return presentationCreateRequestSchema.parse(input);
+};
+
+export const parsePresentationVerifyRequest = (input: unknown): PresentationVerifyRequest => {
+  return presentationVerifyRequestSchema.parse(input);
 };
 
 export const parseIssueBadgeRequest = (input: unknown): IssueBadgeRequest => {

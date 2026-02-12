@@ -15,6 +15,8 @@ import {
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
   parseLearnerDidSettingsRequest,
+  parsePresentationCreateRequest,
+  parsePresentationVerifyRequest,
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
   parseProcessQueueRequest,
@@ -301,6 +303,52 @@ describe('learner DID settings parser', () => {
         did: 'did:example:123',
       });
     }).toThrowError();
+  });
+});
+
+describe('presentation parser', () => {
+  it('accepts a valid presentation create payload', () => {
+    const request = parsePresentationCreateRequest({
+      holderDid: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+      holderPrivateJwk: {
+        kty: 'OKP',
+        crv: 'Ed25519',
+        x: '11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0',
+        d: 'nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU',
+      },
+      credentialIds: ['tenant_123:assertion_456'],
+    });
+
+    expect(request.holderDid).toContain('did:key:');
+    expect(request.credentialIds).toHaveLength(1);
+  });
+
+  it('rejects duplicate credential identifiers in create payload', () => {
+    expect(() => {
+      parsePresentationCreateRequest({
+        holderDid: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+        holderPrivateJwk: {
+          kty: 'OKP',
+          crv: 'Ed25519',
+          x: '11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0',
+          d: 'nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU',
+        },
+        credentialIds: ['tenant_123:assertion_456', 'tenant_123:assertion_456'],
+      });
+    }).toThrowError();
+  });
+
+  it('accepts a valid presentation verify payload', () => {
+    const request = parsePresentationVerifyRequest({
+      presentation: {
+        '@context': ['https://www.w3.org/ns/credentials/v2'],
+        type: ['VerifiablePresentation'],
+        holder: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+        verifiableCredential: [],
+      },
+    });
+
+    expect(request.presentation.type).toEqual(['VerifiablePresentation']);
   });
 });
 

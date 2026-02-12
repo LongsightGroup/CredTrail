@@ -28,6 +28,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - **Open Badges 3.0** - Full OB3 spec compliance with W3C Verifiable Credentials Data Model 2.0
 - **IMS Global validator** - Deep-links to official IMS validator on badge pages
 - **Proof formats** - Support for both VC-JWT and JSON-LD embedded proofs (EdDSA)
+- **Verifiable Presentations** - VP create/verify APIs for holder-bound credential sharing
 - **DID documents** - Serve `did:web` documents for issuer public key discovery
 - **Canonical URLs** - OB3 JSON discovery links on public pages
 - **Achievement metadata** - Rich achievement descriptions with evidence links
@@ -69,7 +70,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - `packages/validation`: Zod schemas for HTTP and queue boundaries.
 - `packages/lti`: LTI 1.3 parsing/validation primitives.
 - `packages/ui-components`: Server-rendered HTML helper components.
-- `docs`: Implementation docs and ADRs (including `docs/LEARNER_DID_SETUP.md` for learner DID setup).
+- `docs`: Implementation docs and ADRs (including `docs/LEARNER_DID_SETUP.md` and `docs/VERIFIABLE_PRESENTATIONS.md`).
 
 ## Async jobs
 
