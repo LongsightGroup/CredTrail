@@ -14,6 +14,7 @@ import {
   parseManualIssueBadgeRequest,
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
+  parseLearnerDidSettingsRequest,
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
   parseProcessQueueRequest,
@@ -276,6 +277,28 @@ describe('learner identity link parsers', () => {
     expect(() => {
       parseLearnerIdentityLinkRequest({
         email: 'invalid',
+      });
+    }).toThrowError();
+  });
+});
+
+describe('learner DID settings parser', () => {
+  it('accepts supported DID methods and empty clear value', () => {
+    const keyDid = parseLearnerDidSettingsRequest({ did: 'did:key:z6MkhY1pD8x7Jk9hN8YvKQxN5f3qU8d9sF4A2B3C4D5E6F7' });
+    const webDid = parseLearnerDidSettingsRequest({ did: 'did:web:wallet.example.edu:alice' });
+    const ionDid = parseLearnerDidSettingsRequest({ did: 'did:ion:EiAxyz123' });
+    const clearDid = parseLearnerDidSettingsRequest({ did: '' });
+
+    expect(keyDid.did).toContain('did:key:');
+    expect(webDid.did).toContain('did:web:');
+    expect(ionDid.did).toContain('did:ion:');
+    expect(clearDid.did).toBe('');
+  });
+
+  it('rejects unsupported DID methods', () => {
+    expect(() => {
+      parseLearnerDidSettingsRequest({
+        did: 'did:example:123',
       });
     }).toThrowError();
   });

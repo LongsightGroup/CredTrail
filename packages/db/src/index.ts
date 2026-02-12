@@ -452,6 +452,12 @@ export interface AddLearnerIdentityAliasInput {
   isVerified?: boolean | undefined;
 }
 
+export interface RemoveLearnerIdentityAliasesByTypeInput {
+  tenantId: string;
+  learnerProfileId: string;
+  identityType: LearnerIdentityType;
+}
+
 export interface FindLearnerProfileByIdentityInput {
   tenantId: string;
   identityType: LearnerIdentityType;
@@ -1564,6 +1570,18 @@ export const addLearnerIdentityAlias = async (
   }
 
   return mapLearnerIdentityRow(insertedRow);
+};
+
+export const removeLearnerIdentityAliasesByType = async (
+  db: SqlDatabase,
+  input: RemoveLearnerIdentityAliasesByTypeInput,
+): Promise<number> => {
+  const result = await db
+    .prepare('DELETE FROM learner_identities WHERE tenant_id = ? AND learner_profile_id = ? AND identity_type = ?')
+    .bind(input.tenantId, input.learnerProfileId, input.identityType)
+    .run();
+
+  return result.meta.rowsWritten ?? 0;
 };
 
 export const createLearnerProfile = async (

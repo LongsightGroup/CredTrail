@@ -21,6 +21,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - **Account linking** - Link institutional identities with email fallback for post-graduation access
 - **Identity recovery** - Maintain badge access after institutional email loss
 - **Multiple identities** - Support for learner identity aliases across institutions
+- **Learner DID settings** - Optional `did:key`, `did:web`, or `did:ion` subject IDs for privacy-preserving issuance
 
 ### ✅ Verification & Standards Compliance
 - **Public verification API** - `/credentials/v1/{id}` endpoint for third-party verification
@@ -68,7 +69,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - `packages/validation`: Zod schemas for HTTP and queue boundaries.
 - `packages/lti`: LTI 1.3 parsing/validation primitives.
 - `packages/ui-components`: Server-rendered HTML helper components.
-- `docs`: Implementation docs and ADRs.
+- `docs`: Implementation docs and ADRs (including `docs/LEARNER_DID_SETUP.md` for learner DID setup).
 
 ## Async jobs
 

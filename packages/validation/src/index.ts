@@ -251,6 +251,21 @@ export const learnerIdentityLinkVerifyRequestSchema = z.object({
   token: z.string().min(20),
 });
 
+const isSupportedLearnerDidMethod = (value: string): boolean => {
+  return value.startsWith('did:key:') || value.startsWith('did:web:') || value.startsWith('did:ion:');
+};
+
+export const learnerDidSettingsRequestSchema = z.object({
+  did: z
+    .string()
+    .trim()
+    .max(2048)
+    .optional()
+    .refine((value) => value === undefined || value.length === 0 || isSupportedLearnerDidMethod(value), {
+      message: 'did must use did:key, did:web, or did:ion',
+    }),
+});
+
 export const issueBadgeRequestSchema = z.object({
   tenantId: tenantIdSchema,
   badgeTemplateId: resourceIdSchema,
@@ -362,6 +377,7 @@ export type MagicLinkRequest = z.infer<typeof magicLinkRequestSchema>;
 export type MagicLinkVerifyRequest = z.infer<typeof magicLinkVerifyRequestSchema>;
 export type LearnerIdentityLinkRequest = z.infer<typeof learnerIdentityLinkRequestSchema>;
 export type LearnerIdentityLinkVerifyRequest = z.infer<typeof learnerIdentityLinkVerifyRequestSchema>;
+export type LearnerDidSettingsRequest = z.infer<typeof learnerDidSettingsRequestSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
@@ -427,6 +443,10 @@ export const parseLearnerIdentityLinkVerifyRequest = (
   input: unknown,
 ): LearnerIdentityLinkVerifyRequest => {
   return learnerIdentityLinkVerifyRequestSchema.parse(input);
+};
+
+export const parseLearnerDidSettingsRequest = (input: unknown): LearnerDidSettingsRequest => {
+  return learnerDidSettingsRequestSchema.parse(input);
 };
 
 export const parseIssueBadgeRequest = (input: unknown): IssueBadgeRequest => {

@@ -44,6 +44,7 @@ vi.mock('@credtrail/db', async () => {
     consumeOAuthAuthorizationCode: vi.fn(),
     consumeOAuthRefreshToken: vi.fn(),
     recordAssertionRevocation: vi.fn(),
+    removeLearnerIdentityAliasesByType: vi.fn(),
     revokeOAuthAccessTokenByHash: vi.fn(),
     revokeOAuthRefreshTokenByHash: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
@@ -145,6 +146,7 @@ import {
   markLearnerIdentityLinkProofUsed,
   nextAssertionStatusListIndex,
   recordAssertionRevocation,
+  removeLearnerIdentityAliasesByType,
   revokeOAuthAccessTokenByHash,
   revokeOAuthRefreshTokenByHash,
   resolveLearnerProfileForIdentity,
@@ -280,6 +282,7 @@ const mockedCreateLearnerIdentityLinkProof = vi.mocked(createLearnerIdentityLink
 const mockedFindLearnerIdentityLinkProofByHash = vi.mocked(findLearnerIdentityLinkProofByHash);
 const mockedFindOAuthClientById = vi.mocked(findOAuthClientById);
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
+const mockedRemoveLearnerIdentityAliasesByType = vi.mocked(removeLearnerIdentityAliasesByType);
 const mockedMarkLearnerIdentityLinkProofUsed = vi.mocked(markLearnerIdentityLinkProofUsed);
 const mockedCreateOAuthClient = vi.mocked(createOAuthClient);
 const mockedCreateOAuthAuthorizationCode = vi.mocked(createOAuthAuthorizationCode);
@@ -353,6 +356,8 @@ beforeEach(() => {
   mockedListLtiIssuerRegistrations.mockResolvedValue([]);
   mockedListLearnerIdentitiesByProfile.mockReset();
   mockedListLearnerIdentitiesByProfile.mockResolvedValue([]);
+  mockedRemoveLearnerIdentityAliasesByType.mockReset();
+  mockedRemoveLearnerIdentityAliasesByType.mockResolvedValue(0);
   mockedUpsertLtiIssuerRegistration.mockReset();
   mockedDeleteLtiIssuerRegistrationByIssuer.mockReset();
   mockedListOb3SubjectCredentials.mockReset();
@@ -5274,6 +5279,12 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
     mockedTouchSession.mockReset();
+    mockedFindUserById.mockReset();
+    mockedFindUserById.mockResolvedValue(sampleUserRecord());
+    mockedResolveLearnerProfileForIdentity.mockReset();
+    mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
+    mockedListLearnerIdentitiesByProfile.mockReset();
+    mockedListLearnerIdentitiesByProfile.mockResolvedValue([]);
     mockedListLearnerBadgeSummaries.mockReset();
   });
 
@@ -5349,10 +5360,50 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain('/badges/public_assertion_999');
     expect(body).toContain('Verified');
     expect(body).toContain('Revoked');
+    expect(body).toContain('Profile settings');
+    expect(body).toContain('No learner DID is currently configured.');
+    expect(mockedListLearnerIdentitiesByProfile).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'lpr_123');
     expect(mockedListLearnerBadgeSummaries).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       userId: 'usr_123',
     });
+  });
+
+  it('renders configured learner DID and status notice', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListLearnerIdentitiesByProfile.mockResolvedValue([
+      {
+        id: 'lid_did_123',
+        tenantId: 'tenant_123',
+        learnerProfileId: 'lpr_123',
+        identityType: 'did',
+        identityValue: 'did:key:z6MkhLearnerDidExample',
+        isPrimary: false,
+        isVerified: true,
+        createdAt: '2026-02-10T22:00:00.000Z',
+        updatedAt: '2026-02-10T22:00:00.000Z',
+      },
+    ]);
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/dashboard?didStatus=updated',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Learner DID updated. Newly issued badges will use this DID as credentialSubject.id.');
+    expect(body).toContain('Current DID:');
+    expect(body).toContain('did:key:z6MkhLearnerDidExample');
   });
 
   it('renders empty state when learner has no earned badges yet', async () => {
@@ -5375,6 +5426,194 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain('No badges have been issued to this learner account yet.');
+  });
+});
+
+describe('POST /tenants/:tenantId/learner/settings/did', () => {
+  beforeEach(() => {
+    mockedFindActiveSessionByHash.mockReset();
+    mockedTouchSession.mockReset();
+    mockedFindUserById.mockReset();
+    mockedResolveLearnerProfileForIdentity.mockReset();
+    mockedFindLearnerProfileByIdentity.mockReset();
+    mockedRemoveLearnerIdentityAliasesByType.mockReset();
+    mockedAddLearnerIdentityAlias.mockReset();
+  });
+
+  it('returns 401 when no learner session is present', async () => {
+    const env = createEnv();
+    const response = await app.request('/tenants/tenant_123/learner/settings/did', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        did: 'did:key:z6MkhLearnerDidExample',
+      }).toString(),
+    }, env);
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe('Not authenticated');
+  });
+
+  it('saves learner DID and redirects with updated status', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindUserById.mockResolvedValue(sampleUserRecord());
+    mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
+    mockedFindLearnerProfileByIdentity.mockResolvedValue(null);
+    mockedRemoveLearnerIdentityAliasesByType.mockResolvedValue(0);
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/settings/did',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: new URLSearchParams({
+          did: 'did:key:z6MkhLearnerDidExample',
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    const redirectUrl = new URL(location ?? '', 'http://localhost');
+    expect(redirectUrl.pathname).toBe('/tenants/tenant_123/learner/dashboard');
+    expect(redirectUrl.searchParams.get('didStatus')).toBe('updated');
+    expect(mockedRemoveLearnerIdentityAliasesByType).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      learnerProfileId: 'lpr_123',
+      identityType: 'did',
+    });
+    expect(mockedAddLearnerIdentityAlias).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      learnerProfileId: 'lpr_123',
+      identityType: 'did',
+      identityValue: 'did:key:z6MkhLearnerDidExample',
+      isPrimary: false,
+      isVerified: true,
+    });
+  });
+
+  it('clears learner DID and redirects with cleared status', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindUserById.mockResolvedValue(sampleUserRecord());
+    mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
+    mockedRemoveLearnerIdentityAliasesByType.mockResolvedValue(1);
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/settings/did',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: new URLSearchParams({
+          did: '',
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    const redirectUrl = new URL(location ?? '', 'http://localhost');
+    expect(redirectUrl.pathname).toBe('/tenants/tenant_123/learner/dashboard');
+    expect(redirectUrl.searchParams.get('didStatus')).toBe('cleared');
+    expect(mockedRemoveLearnerIdentityAliasesByType).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      learnerProfileId: 'lpr_123',
+      identityType: 'did',
+    });
+    expect(mockedAddLearnerIdentityAlias).not.toHaveBeenCalled();
+    expect(mockedFindLearnerProfileByIdentity).not.toHaveBeenCalled();
+  });
+
+  it('rejects DID already linked to another learner profile', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindUserById.mockResolvedValue(sampleUserRecord());
+    mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
+    mockedFindLearnerProfileByIdentity.mockResolvedValue(
+      sampleLearnerProfile({
+        id: 'lpr_other',
+      }),
+    );
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/settings/did',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: new URLSearchParams({
+          did: 'did:key:z6MkhConflictingDid',
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    const redirectUrl = new URL(location ?? '', 'http://localhost');
+    expect(redirectUrl.pathname).toBe('/tenants/tenant_123/learner/dashboard');
+    expect(redirectUrl.searchParams.get('didStatus')).toBe('conflict');
+    expect(mockedRemoveLearnerIdentityAliasesByType).not.toHaveBeenCalled();
+    expect(mockedAddLearnerIdentityAlias).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid DID values and redirects with invalid status', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/settings/did',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: new URLSearchParams({
+          did: 'did:example:unsupported',
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('location');
+    expect(location).not.toBeNull();
+
+    const redirectUrl = new URL(location ?? '', 'http://localhost');
+    expect(redirectUrl.pathname).toBe('/tenants/tenant_123/learner/dashboard');
+    expect(redirectUrl.searchParams.get('didStatus')).toBe('invalid');
+    expect(mockedFindUserById).not.toHaveBeenCalled();
+    expect(mockedRemoveLearnerIdentityAliasesByType).not.toHaveBeenCalled();
+    expect(mockedAddLearnerIdentityAlias).not.toHaveBeenCalled();
   });
 });
 
@@ -5534,6 +5773,68 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
         targetType: 'assertion',
       }),
     );
+  });
+
+  it('uses learner DID alias as credentialSubject.id when configured', async () => {
+    const signingMaterial = await generateTenantDidSigningMaterial({
+      did: 'did:web:credtrail.test:tenant_123',
+    });
+    const env = {
+      ...createEnv(),
+      BADGE_OBJECTS: createInMemoryBadgeObjects(),
+      TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
+        'did:web:credtrail.test:tenant_123': {
+          tenantId: 'tenant_123',
+          keyId: signingMaterial.keyId,
+          publicJwk: signingMaterial.publicJwk,
+          privateJwk: signingMaterial.privateJwk,
+        },
+      }),
+    };
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
+    mockedFindAssertionByIdempotencyKey.mockResolvedValue(null);
+    mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
+    mockedListLearnerIdentitiesByProfile.mockResolvedValue([
+      {
+        id: 'lid_did_subject_123',
+        tenantId: 'tenant_123',
+        learnerProfileId: 'lpr_123',
+        identityType: 'did',
+        identityValue: 'did:key:z6MkhLearnerSubjectDid',
+        isPrimary: false,
+        isVerified: true,
+        createdAt: '2026-02-10T22:00:00.000Z',
+        updatedAt: '2026-02-10T22:00:00.000Z',
+      },
+    ]);
+    mockedNextAssertionStatusListIndex.mockResolvedValue(0);
+    mockedCreateAssertion.mockResolvedValue(sampleAssertion());
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/manual-issue',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          badgeTemplateId: 'badge_template_001',
+          recipientIdentity: 'student@umich.edu',
+          recipientIdentityType: 'email',
+          idempotencyKey: 'idem-did-subject',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ManualIssueResponse>();
+    const subjectId = asString(asJsonObject(body.credential.credentialSubject)?.id);
+
+    expect(response.status).toBe(201);
+    expect(subjectId).toBe('did:key:z6MkhLearnerSubjectDid');
   });
 
   it('issues badges with remote signer custody when tenant private keys are not present in runtime', async () => {

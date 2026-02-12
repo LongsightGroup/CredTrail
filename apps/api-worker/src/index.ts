@@ -57,6 +57,7 @@ import {
   listLtiIssuerRegistrations,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
+  removeLearnerIdentityAliasesByType,
   leaseJobQueueMessages,
   findMagicLinkTokenByHash,
   findOb3SubjectProfile,
@@ -132,6 +133,7 @@ import {
   parseKeyGenerationRequest,
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
+  parseLearnerDidSettingsRequest,
   parseManualIssueBadgeRequest,
   parseIssueSakaiCommitBadgeRequest,
   parseMagicLinkRequest,
@@ -6306,59 +6308,117 @@ export const sendIssuanceEmailNotification = async (
   }
 };
 
+type LearnerDidSettingsNotice = 'updated' | 'cleared' | 'conflict' | 'invalid';
+
+const learnerDidSettingsNoticeFromQuery = (value: string | undefined): LearnerDidSettingsNotice | null => {
+  switch (value) {
+    case 'updated':
+    case 'cleared':
+    case 'conflict':
+    case 'invalid':
+      return value;
+    default:
+      return null;
+  }
+};
+
 const learnerDashboardPage = (
   requestUrl: string,
   tenantId: string,
   badges: readonly LearnerBadgeSummaryRecord[],
+  learnerDid: string | null,
+  didNotice: LearnerDidSettingsNotice | null,
 ): string => {
-  if (badges.length === 0) {
-    return renderPageShell(
-      'Learner dashboard | CredTrail',
-      `<section style="display:grid;gap:1rem;max-width:48rem;">
-        <h1 style="margin:0;">Your badges</h1>
-        <p style="margin:0;">No badges have been issued to this learner account yet.</p>
-      </section>`,
-    );
-  }
+  const didNoticeMarkup =
+    didNotice === null
+      ? ''
+      : didNotice === 'updated'
+        ? '<p style="margin:0;color:#166534;font-weight:600;">Learner DID updated. Newly issued badges will use this DID as credentialSubject.id.</p>'
+        : didNotice === 'cleared'
+          ? '<p style="margin:0;color:#334155;font-weight:600;">Learner DID cleared. Badge issuance will fall back to the default learner subject identifier.</p>'
+          : didNotice === 'conflict'
+            ? '<p style="margin:0;color:#a32020;font-weight:600;">That DID is already linked to another learner profile in this tenant.</p>'
+            : '<p style="margin:0;color:#a32020;font-weight:600;">DID must use one of the supported methods: did:key, did:web, or did:ion.</p>';
+  const didValue = learnerDid ?? '';
+  const didSummaryMarkup =
+    learnerDid === null
+      ? '<p style="margin:0;color:#475569;">No learner DID is currently configured.</p>'
+      : `<p style="margin:0;color:#0f172a;overflow-wrap:anywhere;">Current DID: <code>${escapeHtml(learnerDid)}</code></p>`;
+  const didSettingsCard = `<article style="display:grid;gap:0.75rem;background:#ffffff;border:1px solid #d6dfeb;border-radius:1rem;padding:1rem;">
+    <h2 style="margin:0;">Profile settings</h2>
+    <p style="margin:0;color:#334155;">
+      Set an optional learner DID to issue privacy-preserving badges directly to your wallet identifier.
+      Supported methods: <code>did:key</code>, <code>did:web</code>, and <code>did:ion</code>.
+    </p>
+    ${didNoticeMarkup}
+    ${didSummaryMarkup}
+    <form method="post" action="/tenants/${encodeURIComponent(tenantId)}/learner/settings/did" style="display:grid;gap:0.6rem;">
+      <label style="font-weight:600;display:grid;gap:0.3rem;">
+        Learner DID
+        <input
+          name="did"
+          type="text"
+          value="${escapeHtml(didValue)}"
+          placeholder="did:key:z6Mk..."
+          style="padding:0.55rem 0.65rem;border:1px solid #cbd5e1;border-radius:0.5rem;"
+        />
+      </label>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button type="submit" style="padding:0.45rem 0.85rem;border-radius:0.5rem;border:1px solid #1d4ed8;background:#1d4ed8;color:#ffffff;font-weight:600;cursor:pointer;">Save DID</button>
+        <button
+          type="submit"
+          name="did"
+          value=""
+          style="padding:0.45rem 0.85rem;border-radius:0.5rem;border:1px solid #94a3b8;background:#ffffff;color:#1e293b;font-weight:600;cursor:pointer;"
+        >
+          Clear DID
+        </button>
+      </div>
+    </form>
+  </article>`;
 
-  const cards = badges
-    .map((badge) => {
-      const statusLabel = badge.revokedAt === null ? 'Verified' : 'Revoked';
-      const statusVariant = badge.revokedAt === null ? 'success' : 'danger';
-      const publicBadgeId = badge.assertionPublicId ?? badge.assertionId;
-      const publicBadgePath = `/badges/${encodeURIComponent(publicBadgeId)}`;
-      const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
-      const descriptionMarkup =
-        badge.badgeDescription === null
-          ? ''
-          : `<p style="margin:0;color:#3d4b66;">${escapeHtml(badge.badgeDescription)}</p>`;
-      const revokedAtMarkup =
-        badge.revokedAt === null
-          ? ''
-          : `<p style="margin:0;color:#a32020;">Revoked at ${escapeHtml(formatIsoTimestamp(badge.revokedAt))} UTC</p>`;
+  const badgesMarkup =
+    badges.length === 0
+      ? '<p style="margin:0;">No badges have been issued to this learner account yet.</p>'
+      : `<div style="display:grid;gap:0.9rem;">${badges
+          .map((badge) => {
+            const statusLabel = badge.revokedAt === null ? 'Verified' : 'Revoked';
+            const statusVariant = badge.revokedAt === null ? 'success' : 'danger';
+            const publicBadgeId = badge.assertionPublicId ?? badge.assertionId;
+            const publicBadgePath = `/badges/${encodeURIComponent(publicBadgeId)}`;
+            const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
+            const descriptionMarkup =
+              badge.badgeDescription === null
+                ? ''
+                : `<p style="margin:0;color:#3d4b66;">${escapeHtml(badge.badgeDescription)}</p>`;
+            const revokedAtMarkup =
+              badge.revokedAt === null
+                ? ''
+                : `<p style="margin:0;color:#a32020;">Revoked at ${escapeHtml(formatIsoTimestamp(badge.revokedAt))} UTC</p>`;
 
-      return `<article style="display:grid;gap:0.75rem;background:#ffffff;border:1px solid #d6dfeb;border-radius:1rem;padding:1rem;">
-        <div style="display:flex;justify-content:space-between;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-          <h2 style="margin:0;">${escapeHtml(badge.badgeTitle)}</h2>
-          <sl-badge variant="${statusVariant}" pill>${statusLabel}</sl-badge>
-        </div>
-        ${descriptionMarkup}
-        <p style="margin:0;">Issued at ${escapeHtml(formatIsoTimestamp(badge.issuedAt))} UTC</p>
-        ${revokedAtMarkup}
-        <p style="margin:0;">
-          Public badge page:
-          <a href="${escapeHtml(publicBadgePath)}">${escapeHtml(publicBadgeUrl)}</a>
-        </p>
-      </article>`;
-    })
-    .join('');
+            return `<article style="display:grid;gap:0.75rem;background:#ffffff;border:1px solid #d6dfeb;border-radius:1rem;padding:1rem;">
+              <div style="display:flex;justify-content:space-between;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <h3 style="margin:0;">${escapeHtml(badge.badgeTitle)}</h3>
+                <sl-badge variant="${statusVariant}" pill>${statusLabel}</sl-badge>
+              </div>
+              ${descriptionMarkup}
+              <p style="margin:0;">Issued at ${escapeHtml(formatIsoTimestamp(badge.issuedAt))} UTC</p>
+              ${revokedAtMarkup}
+              <p style="margin:0;">
+                Public badge page:
+                <a href="${escapeHtml(publicBadgePath)}">${escapeHtml(publicBadgeUrl)}</a>
+              </p>
+            </article>`;
+          })
+          .join('')}</div>`;
 
   return renderPageShell(
     'Learner dashboard | CredTrail',
-    `<section style="display:grid;gap:1rem;">
+    `<section style="display:grid;gap:1rem;max-width:56rem;">
       <h1 style="margin:0;">Your badges</h1>
       <p style="margin:0;color:#3d4b66;">Tenant: ${escapeHtml(tenantId)}</p>
-      <div style="display:grid;gap:0.9rem;">${cards}</div>
+      ${didSettingsCard}
+      ${badgesMarkup}
     </section>`,
   );
 };
@@ -8239,13 +8299,135 @@ app.get('/tenants/:tenantId/learner/dashboard', async (c) => {
     );
   }
 
-  const badges = await listLearnerBadgeSummaries(resolveDatabase(c.env), {
+  const db = resolveDatabase(c.env);
+  const user = await findUserById(db, session.userId);
+
+  if (user === null) {
+    return c.json(
+      {
+        error: 'Authenticated user not found',
+      },
+      404,
+    );
+  }
+
+  const learnerProfile = await resolveLearnerProfileForIdentity(db, {
+    tenantId: pathParams.tenantId,
+    identityType: 'email',
+    identityValue: user.email,
+  });
+  const learnerIdentities = await listLearnerIdentitiesByProfile(db, pathParams.tenantId, learnerProfile.id);
+  const learnerDid = learnerIdentities.find((identity) => identity.identityType === 'did')?.identityValue ?? null;
+  const badges = await listLearnerBadgeSummaries(db, {
     tenantId: pathParams.tenantId,
     userId: session.userId,
   });
+  const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query('didStatus'));
 
   c.header('Cache-Control', 'no-store');
-  return c.html(learnerDashboardPage(c.req.url, pathParams.tenantId, badges));
+  return c.html(learnerDashboardPage(c.req.url, pathParams.tenantId, badges, learnerDid, didNotice));
+});
+
+app.post('/tenants/:tenantId/learner/settings/did', async (c): Promise<Response> => {
+  const pathParams = parseTenantPathParams(c.req.param());
+  const session = await resolveSessionFromCookie(c);
+
+  if (session === null) {
+    return c.json(
+      {
+        error: 'Not authenticated',
+      },
+      401,
+    );
+  }
+
+  if (session.tenantId !== pathParams.tenantId) {
+    return c.json(
+      {
+        error: 'Forbidden for requested tenant',
+      },
+      403,
+    );
+  }
+
+  const dashboardUrl = new URL(`/tenants/${encodeURIComponent(pathParams.tenantId)}/learner/dashboard`, c.req.url);
+  const contentType = c.req.header('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    dashboardUrl.searchParams.set('didStatus', 'invalid');
+    return c.redirect(dashboardUrl.toString(), 303);
+  }
+
+  const rawBody = await c.req.text();
+  const formData = new URLSearchParams(rawBody);
+
+  let request: ReturnType<typeof parseLearnerDidSettingsRequest>;
+
+  try {
+    request = parseLearnerDidSettingsRequest({
+      did: formData.get('did') ?? undefined,
+    });
+  } catch {
+    dashboardUrl.searchParams.set('didStatus', 'invalid');
+    return c.redirect(dashboardUrl.toString(), 303);
+  }
+
+  const db = resolveDatabase(c.env);
+  const user = await findUserById(db, session.userId);
+
+  if (user === null) {
+    return c.json(
+      {
+        error: 'Authenticated user not found',
+      },
+      404,
+    );
+  }
+
+  const learnerProfile = await resolveLearnerProfileForIdentity(db, {
+    tenantId: pathParams.tenantId,
+    identityType: 'email',
+    identityValue: user.email,
+  });
+  const submittedDid = request.did ?? '';
+
+  if (submittedDid.length === 0) {
+    await removeLearnerIdentityAliasesByType(db, {
+      tenantId: pathParams.tenantId,
+      learnerProfileId: learnerProfile.id,
+      identityType: 'did',
+    });
+    dashboardUrl.searchParams.set('didStatus', 'cleared');
+    return c.redirect(dashboardUrl.toString(), 303);
+  }
+
+  const existingDidProfile = await findLearnerProfileByIdentity(db, {
+    tenantId: pathParams.tenantId,
+    identityType: 'did',
+    identityValue: submittedDid,
+  });
+
+  if (existingDidProfile !== null && existingDidProfile.id !== learnerProfile.id) {
+    dashboardUrl.searchParams.set('didStatus', 'conflict');
+    return c.redirect(dashboardUrl.toString(), 303);
+  }
+
+  await removeLearnerIdentityAliasesByType(db, {
+    tenantId: pathParams.tenantId,
+    learnerProfileId: learnerProfile.id,
+    identityType: 'did',
+  });
+  await addLearnerIdentityAlias(db, {
+    tenantId: pathParams.tenantId,
+    learnerProfileId: learnerProfile.id,
+    identityType: 'did',
+    identityValue: submittedDid,
+    isPrimary: false,
+    isVerified: true,
+  });
+
+  dashboardUrl.searchParams.set('didStatus', 'updated');
+  return c.redirect(dashboardUrl.toString(), 303);
 });
 
 app.post('/v1/tenants/:tenantId/learner/identity-links/email/request', async (c) => {
@@ -9562,6 +9744,8 @@ const issueBadgeForTenant = async (
   const statusListIndex = await nextAssertionStatusListIndex(db, tenantId);
   const statusListCredentialUrl = revocationStatusListUrlForTenant(requestBaseUrl.toString(), tenantId);
   const learnerIdentities = await listLearnerIdentitiesByProfile(db, tenantId, learnerProfile.id);
+  const learnerDidSubjectId =
+    learnerIdentities.find((identity) => identity.identityType === 'did')?.identityValue ?? learnerProfile.subjectId;
   const recipientIdentifiers = recipientIdentifiersForIssueRequest(request, learnerProfile.id, learnerIdentities);
   const credentialSubjectIdentifiers: JsonObject[] = recipientIdentifiers.map((entry) => {
     return {
@@ -9592,7 +9776,7 @@ const issueBadgeForTenant = async (
       validFrom: issuedAt,
       credentialStatus: credentialStatusForAssertion(statusListCredentialUrl, statusListIndex),
       credentialSubject: {
-        id: learnerProfile.subjectId,
+        id: learnerDidSubjectId,
         identifier: credentialSubjectIdentifiers,
         achievement: {
           id: `urn:credtrail:badge-template:${encodeURIComponent(badgeTemplate.id)}`,
