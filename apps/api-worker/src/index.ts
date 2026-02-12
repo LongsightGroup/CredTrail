@@ -91,6 +91,19 @@ import {
 import { createPostgresDatabase } from '@credtrail/db/postgres';
 import { renderPageShell } from '@credtrail/ui-components';
 import {
+  LTI_CLAIM_DEPLOYMENT_ID,
+  LTI_CLAIM_MESSAGE_TYPE,
+  LTI_CLAIM_RESOURCE_LINK,
+  LTI_CLAIM_TARGET_LINK_URI,
+  LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+  parseLtiLaunchClaims,
+  parseLtiOidcLoginInitiationRequest,
+  resolveLtiRoleKind,
+  type LtiLaunchClaims,
+  type LtiOidcLoginInitiationRequest,
+  type LtiRoleKind,
+} from '@credtrail/lti';
+import {
   parseBadgeTemplateListQuery,
   parseBadgeTemplatePathParams,
   parseProcessQueueRequest,
@@ -148,6 +161,8 @@ interface AppBindings {
   GITHUB_TOKEN?: string;
   JOB_PROCESSOR_TOKEN?: string;
   BOOTSTRAP_ADMIN_TOKEN?: string;
+  LTI_ISSUER_REGISTRY_JSON?: string;
+  LTI_STATE_SIGNING_SECRET?: string;
   OB3_DISCOVERY_TITLE?: string;
   OB3_TERMS_OF_SERVICE_URL?: string;
   OB3_PRIVACY_POLICY_URL?: string;
@@ -186,6 +201,13 @@ const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
 const DEFAULT_JOB_PROCESS_RETRY_DELAY_SECONDS = 30;
 const IMS_GLOBAL_OB2_VALIDATOR_BASE_URL = 'https://openbadgesvalidator.imsglobal.org/';
+const LTI_OIDC_LOGIN_PATH = '/v1/lti/oidc/login';
+const LTI_LAUNCH_PATH = '/v1/lti/launch';
+const LTI_OIDC_SCOPE = 'openid';
+const LTI_OIDC_RESPONSE_TYPE = 'id_token';
+const LTI_OIDC_RESPONSE_MODE = 'form_post';
+const LTI_OIDC_PROMPT = 'none';
+const LTI_STATE_TTL_SECONDS = 10 * 60;
 const OB3_BASE_PATH = '/ims/ob/v3p0';
 const OB3_DISCOVERY_PATH = `${OB3_BASE_PATH}/discovery`;
 const OB3_OAUTH_SCOPE_CREDENTIAL_READONLY =
@@ -330,6 +352,420 @@ const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | 
 
   await touchSession(db, session.id, nowIso);
   return session;
+};
+
+interface LtiIssuerRegistryEntry {
+  authorizationEndpoint: string;
+  clientId: string;
+  allowUnsignedIdToken: boolean;
+}
+
+type LtiIssuerRegistry = Record<string, LtiIssuerRegistryEntry>;
+
+interface LtiStatePayload {
+  iss: string;
+  clientId: string;
+  nonce: string;
+  loginHint: string;
+  targetLinkUri: string;
+  ltiMessageHint?: string;
+  ltiDeploymentId?: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+const isIsoTimestamp = (value: string): boolean => {
+  return Number.isFinite(Date.parse(value));
+};
+
+const parseLtiStatePayload = (input: unknown): LtiStatePayload | null => {
+  const payload = asJsonObject(input);
+
+  if (payload === null) {
+    return null;
+  }
+
+  const iss = asNonEmptyString(payload.iss);
+  const clientId = asNonEmptyString(payload.clientId);
+  const nonce = asNonEmptyString(payload.nonce);
+  const loginHint = asNonEmptyString(payload.loginHint);
+  const targetLinkUri = asNonEmptyString(payload.targetLinkUri);
+  const issuedAt = asNonEmptyString(payload.issuedAt);
+  const expiresAt = asNonEmptyString(payload.expiresAt);
+  let ltiMessageHint: string | undefined;
+  let ltiDeploymentId: string | undefined;
+
+  if (
+    iss === null ||
+    clientId === null ||
+    nonce === null ||
+    loginHint === null ||
+    targetLinkUri === null ||
+    issuedAt === null ||
+    expiresAt === null
+  ) {
+    return null;
+  }
+
+  if (!isAbsoluteHttpUrl(iss) || !isAbsoluteHttpUrl(targetLinkUri)) {
+    return null;
+  }
+
+  if (!isIsoTimestamp(issuedAt) || !isIsoTimestamp(expiresAt)) {
+    return null;
+  }
+
+  if (payload.ltiMessageHint !== undefined) {
+    const parsedLtiMessageHint = asNonEmptyString(payload.ltiMessageHint);
+
+    if (parsedLtiMessageHint === null) {
+      return null;
+    }
+
+    ltiMessageHint = parsedLtiMessageHint;
+  }
+
+  if (payload.ltiDeploymentId !== undefined) {
+    const parsedLtiDeploymentId = asNonEmptyString(payload.ltiDeploymentId);
+
+    if (parsedLtiDeploymentId === null) {
+      return null;
+    }
+
+    ltiDeploymentId = parsedLtiDeploymentId;
+  }
+
+  return {
+    iss,
+    clientId,
+    nonce,
+    loginHint,
+    targetLinkUri,
+    issuedAt,
+    expiresAt,
+    ...(ltiMessageHint === undefined ? {} : { ltiMessageHint }),
+    ...(ltiDeploymentId === undefined ? {} : { ltiDeploymentId }),
+  };
+};
+
+const normalizeLtiIssuer = (issuer: string): string => {
+  return issuer.trim().replace(/\/+$/g, '');
+};
+
+const isAbsoluteHttpUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const normalizeAbsoluteUrlForComparison = (value: string): string | null => {
+  try {
+    const parsed = new URL(value);
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): LtiIssuerRegistry => {
+  if (rawRegistry === undefined || rawRegistry.trim().length === 0) {
+    return {};
+  }
+
+  let parsedRegistry: unknown;
+
+  try {
+    parsedRegistry = JSON.parse(rawRegistry);
+  } catch {
+    throw new Error('LTI_ISSUER_REGISTRY_JSON is not valid JSON');
+  }
+
+  const registryObject = asJsonObject(parsedRegistry);
+
+  if (registryObject === null) {
+    throw new Error('LTI_ISSUER_REGISTRY_JSON must be a JSON object keyed by issuer URL');
+  }
+
+  const registry: LtiIssuerRegistry = {};
+
+  for (const [issuer, candidate] of Object.entries(registryObject)) {
+    const entryObject = asJsonObject(candidate);
+
+    if (entryObject === null) {
+      throw new Error(`LTI_ISSUER_REGISTRY_JSON["${issuer}"] must be an object`);
+    }
+
+    const authorizationEndpoint = asNonEmptyString(entryObject.authorizationEndpoint);
+    const clientId = asNonEmptyString(entryObject.clientId);
+    const allowUnsignedIdToken = entryObject.allowUnsignedIdToken;
+
+    if (authorizationEndpoint === null || !isAbsoluteHttpUrl(authorizationEndpoint)) {
+      throw new Error(
+        `LTI_ISSUER_REGISTRY_JSON["${issuer}"].authorizationEndpoint must be an absolute http(s) URL`,
+      );
+    }
+
+    if (clientId === null) {
+      throw new Error(`LTI_ISSUER_REGISTRY_JSON["${issuer}"].clientId must be a non-empty string`);
+    }
+
+    if (allowUnsignedIdToken !== undefined && typeof allowUnsignedIdToken !== 'boolean') {
+      throw new Error(
+        `LTI_ISSUER_REGISTRY_JSON["${issuer}"].allowUnsignedIdToken must be a boolean when provided`,
+      );
+    }
+
+    registry[normalizeLtiIssuer(issuer)] = {
+      authorizationEndpoint,
+      clientId,
+      allowUnsignedIdToken: allowUnsignedIdToken ?? false,
+    };
+  }
+
+  return registry;
+};
+
+const ltiStateSigningSecret = (env: AppBindings): string => {
+  const configuredSecret = env.LTI_STATE_SIGNING_SECRET?.trim();
+  return configuredSecret === undefined || configuredSecret.length === 0
+    ? `${env.PLATFORM_DOMAIN}:lti-state-secret`
+    : configuredSecret;
+};
+
+const textToBase64Url = (value: string): string => {
+  return bytesToBase64Url(new TextEncoder().encode(value));
+};
+
+const base64UrlToText = (value: string): string | null => {
+  const normalizedBase64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const paddedBase64 = `${normalizedBase64}${'='.repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
+
+  try {
+    return atob(paddedBase64);
+  } catch {
+    return null;
+  }
+};
+
+const signLtiStatePayload = async (payload: LtiStatePayload, secret: string): Promise<string> => {
+  const encodedPayload = textToBase64Url(JSON.stringify(payload));
+  const signature = await sha256Base64Url(`${encodedPayload}.${secret}`);
+  return `${encodedPayload}.${signature}`;
+};
+
+type LtiStateValidationResult =
+  | {
+      status: 'ok';
+      payload: LtiStatePayload;
+    }
+  | {
+      status: 'invalid';
+      reason: string;
+    };
+
+const validateLtiStateToken = async (
+  stateToken: string,
+  secret: string,
+  nowIso: string,
+): Promise<LtiStateValidationResult> => {
+  const [encodedPayload, providedSignature] = stateToken.split('.', 2);
+
+  if (
+    encodedPayload === undefined ||
+    providedSignature === undefined ||
+    encodedPayload.length === 0 ||
+    providedSignature.length === 0
+  ) {
+    return {
+      status: 'invalid',
+      reason: 'state token is malformed',
+    };
+  }
+
+  const expectedSignature = await sha256Base64Url(`${encodedPayload}.${secret}`);
+
+  if (providedSignature !== expectedSignature) {
+    return {
+      status: 'invalid',
+      reason: 'state token signature is invalid',
+    };
+  }
+
+  const payloadJson = base64UrlToText(encodedPayload);
+
+  if (payloadJson === null) {
+    return {
+      status: 'invalid',
+      reason: 'state token payload is not valid base64url data',
+    };
+  }
+
+  let parsedPayload: unknown;
+
+  try {
+    parsedPayload = JSON.parse(payloadJson);
+  } catch {
+    return {
+      status: 'invalid',
+      reason: 'state token payload is not valid JSON',
+    };
+  }
+
+  const payload = parseLtiStatePayload(parsedPayload);
+
+  if (payload === null) {
+    return {
+      status: 'invalid',
+      reason: 'state token payload failed validation',
+    };
+  }
+
+  const nowMs = Date.parse(nowIso);
+  const expiresAtMs = Date.parse(payload.expiresAt);
+
+  if (!Number.isFinite(nowMs) || !Number.isFinite(expiresAtMs) || nowMs >= expiresAtMs) {
+    return {
+      status: 'invalid',
+      reason: 'state token is expired',
+    };
+  }
+
+  return {
+    status: 'ok',
+    payload,
+  };
+};
+
+const ltiAudienceIncludesClientId = (
+  audienceClaim: LtiLaunchClaims['aud'],
+  clientId: string,
+): boolean => {
+  if (typeof audienceClaim === 'string') {
+    return audienceClaim === clientId;
+  }
+
+  return audienceClaim.includes(clientId);
+};
+
+const ltiRoleLabel = (roleKind: LtiRoleKind): string => {
+  if (roleKind === 'instructor') {
+    return 'Instructor';
+  }
+
+  if (roleKind === 'learner') {
+    return 'Learner';
+  }
+
+  return 'Unknown role';
+};
+
+const ltiLaunchResultPage = (input: {
+  roleKind: LtiRoleKind;
+  issuer: string;
+  deploymentId: string;
+  subjectId: string;
+  targetLinkUri: string;
+  messageType: string;
+}): string => {
+  return renderPageShell(
+    'LTI Launch Complete | CredTrail',
+    `<section style="display:grid;gap:1rem;max-width:52rem;">
+      <h1 style="margin:0;">LTI 1.3 launch complete</h1>
+      <p style="margin:0;color:#334155;">
+        Launch accepted for <strong>${escapeHtml(ltiRoleLabel(input.roleKind))}</strong>.
+      </p>
+      <dl style="margin:0;display:grid;grid-template-columns:minmax(12rem,max-content) 1fr;gap:0.45rem 0.8rem;">
+        <dt style="font-weight:600;">Issuer</dt>
+        <dd style="margin:0;overflow-wrap:anywhere;">${escapeHtml(input.issuer)}</dd>
+        <dt style="font-weight:600;">Deployment ID</dt>
+        <dd style="margin:0;overflow-wrap:anywhere;">${escapeHtml(input.deploymentId)}</dd>
+        <dt style="font-weight:600;">LTI subject</dt>
+        <dd style="margin:0;overflow-wrap:anywhere;">${escapeHtml(input.subjectId)}</dd>
+        <dt style="font-weight:600;">Message type</dt>
+        <dd style="margin:0;overflow-wrap:anywhere;">${escapeHtml(input.messageType)}</dd>
+        <dt style="font-weight:600;">Target link URI</dt>
+        <dd style="margin:0;overflow-wrap:anywhere;">${escapeHtml(input.targetLinkUri)}</dd>
+      </dl>
+      <p style="margin:0;color:#475569;">
+        Next step: link LTI identity to a CredTrail user/session in the upcoming session-linking flow.
+      </p>
+    </section>`,
+  );
+};
+
+const ltiLoginInputFromRequest = async (c: AppContext): Promise<Record<string, string>> => {
+  if (c.req.method === 'GET') {
+    return {
+      iss: c.req.query('iss') ?? '',
+      login_hint: c.req.query('login_hint') ?? '',
+      target_link_uri: c.req.query('target_link_uri') ?? '',
+      ...(c.req.query('client_id') === undefined ? {} : { client_id: c.req.query('client_id') ?? '' }),
+      ...(c.req.query('lti_message_hint') === undefined
+        ? {}
+        : {
+            lti_message_hint: c.req.query('lti_message_hint') ?? '',
+          }),
+      ...(c.req.query('lti_deployment_id') === undefined
+        ? {}
+        : {
+            lti_deployment_id: c.req.query('lti_deployment_id') ?? '',
+          }),
+    };
+  }
+
+  const contentType = c.req.header('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    return {};
+  }
+
+  const rawBody = await c.req.text();
+  const formData = new URLSearchParams(rawBody);
+
+  return {
+    iss: formData.get('iss') ?? '',
+    login_hint: formData.get('login_hint') ?? '',
+    target_link_uri: formData.get('target_link_uri') ?? '',
+    ...(formData.get('client_id') === null ? {} : { client_id: formData.get('client_id') ?? '' }),
+    ...(formData.get('lti_message_hint') === null
+      ? {}
+      : {
+          lti_message_hint: formData.get('lti_message_hint') ?? '',
+        }),
+    ...(formData.get('lti_deployment_id') === null
+      ? {}
+      : {
+          lti_deployment_id: formData.get('lti_deployment_id') ?? '',
+        }),
+  };
+};
+
+const ltiLaunchFormInputFromRequest = async (c: AppContext): Promise<{ idToken: string | null; state: string | null }> => {
+  const contentType = c.req.header('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    return {
+      idToken: null,
+      state: null,
+    };
+  }
+
+  const rawBody = await c.req.text();
+  const formData = new URLSearchParams(rawBody);
+
+  return {
+    idToken: formData.get('id_token'),
+    state: formData.get('state'),
+  };
 };
 
 type Ed25519SigningPublicJwk = Extract<TenantSigningRegistryEntry['publicJwk'], { kty: 'OKP'; crv: 'Ed25519' }>;
@@ -7445,6 +7881,341 @@ app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) 
     identityType: proof.identityType,
     identityValue: proof.identityValue,
   });
+});
+
+const ltiOidcLoginHandler = async (c: AppContext): Promise<Response> => {
+  let registry: LtiIssuerRegistry;
+
+  try {
+    registry = parseLtiIssuerRegistryFromEnv(c.env.LTI_ISSUER_REGISTRY_JSON);
+  } catch (error) {
+    await captureSentryException({
+      context: observabilityContext(c.env),
+      dsn: c.env.SENTRY_DSN,
+      error,
+      message: 'LTI issuer registry configuration is invalid',
+      tags: {
+        path: LTI_OIDC_LOGIN_PATH,
+        method: c.req.method,
+      },
+    });
+    return c.json(
+      {
+        error: 'LTI issuer registry configuration is invalid',
+      },
+      500,
+    );
+  }
+
+  let loginRequest: LtiOidcLoginInitiationRequest;
+
+  try {
+    loginRequest = parseLtiOidcLoginInitiationRequest(await ltiLoginInputFromRequest(c));
+  } catch {
+    return c.json(
+      {
+        error: 'Invalid LTI OIDC login initiation request',
+      },
+      400,
+    );
+  }
+
+  const issuerEntry = registry[normalizeLtiIssuer(loginRequest.iss)];
+
+  if (issuerEntry === undefined) {
+    return c.json(
+      {
+        error: 'Unknown LTI issuer',
+      },
+      400,
+    );
+  }
+
+  const clientId = loginRequest.client_id ?? issuerEntry.clientId;
+
+  if (loginRequest.client_id !== undefined && loginRequest.client_id !== issuerEntry.clientId) {
+    return c.json(
+      {
+        error: 'client_id does not match configured issuer registration',
+      },
+      400,
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const nonce = generateOpaqueToken();
+  const statePayload: LtiStatePayload = {
+    iss: normalizeLtiIssuer(loginRequest.iss),
+    clientId,
+    nonce,
+    loginHint: loginRequest.login_hint,
+    targetLinkUri: loginRequest.target_link_uri,
+    ...(loginRequest.lti_message_hint === undefined
+      ? {}
+      : {
+          ltiMessageHint: loginRequest.lti_message_hint,
+        }),
+    ...(loginRequest.lti_deployment_id === undefined
+      ? {}
+      : {
+          ltiDeploymentId: loginRequest.lti_deployment_id,
+        }),
+    issuedAt: nowIso,
+    expiresAt: addSecondsToIso(nowIso, LTI_STATE_TTL_SECONDS),
+  };
+  const stateToken = await signLtiStatePayload(statePayload, ltiStateSigningSecret(c.env));
+  const authorizationRequestUrl = new URL(issuerEntry.authorizationEndpoint);
+  authorizationRequestUrl.searchParams.set('scope', LTI_OIDC_SCOPE);
+  authorizationRequestUrl.searchParams.set('response_type', LTI_OIDC_RESPONSE_TYPE);
+  authorizationRequestUrl.searchParams.set('response_mode', LTI_OIDC_RESPONSE_MODE);
+  authorizationRequestUrl.searchParams.set('prompt', LTI_OIDC_PROMPT);
+  authorizationRequestUrl.searchParams.set('client_id', clientId);
+  authorizationRequestUrl.searchParams.set('redirect_uri', new URL(LTI_LAUNCH_PATH, c.req.url).toString());
+  authorizationRequestUrl.searchParams.set('login_hint', loginRequest.login_hint);
+  authorizationRequestUrl.searchParams.set('state', stateToken);
+  authorizationRequestUrl.searchParams.set('nonce', nonce);
+
+  if (loginRequest.lti_message_hint !== undefined) {
+    authorizationRequestUrl.searchParams.set('lti_message_hint', loginRequest.lti_message_hint);
+  }
+
+  if (loginRequest.lti_deployment_id !== undefined) {
+    authorizationRequestUrl.searchParams.set('lti_deployment_id', loginRequest.lti_deployment_id);
+  }
+
+  return c.redirect(authorizationRequestUrl.toString(), 302);
+};
+
+app.get(LTI_OIDC_LOGIN_PATH, ltiOidcLoginHandler);
+app.post(LTI_OIDC_LOGIN_PATH, ltiOidcLoginHandler);
+
+app.post(LTI_LAUNCH_PATH, async (c): Promise<Response> => {
+  const formInput = await ltiLaunchFormInputFromRequest(c);
+
+  if (formInput.idToken === null || formInput.idToken.trim().length === 0) {
+    return c.json(
+      {
+        error: 'id_token is required',
+      },
+      400,
+    );
+  }
+
+  if (formInput.state === null || formInput.state.trim().length === 0) {
+    return c.json(
+      {
+        error: 'state is required',
+      },
+      400,
+    );
+  }
+
+  let registry: LtiIssuerRegistry;
+
+  try {
+    registry = parseLtiIssuerRegistryFromEnv(c.env.LTI_ISSUER_REGISTRY_JSON);
+  } catch (error) {
+    await captureSentryException({
+      context: observabilityContext(c.env),
+      dsn: c.env.SENTRY_DSN,
+      error,
+      message: 'LTI issuer registry configuration is invalid',
+      tags: {
+        path: LTI_LAUNCH_PATH,
+        method: c.req.method,
+      },
+    });
+    return c.json(
+      {
+        error: 'LTI issuer registry configuration is invalid',
+      },
+      500,
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const validatedState = await validateLtiStateToken(
+    formInput.state,
+    ltiStateSigningSecret(c.env),
+    nowIso,
+  );
+
+  if (validatedState.status !== 'ok') {
+    return c.json(
+      {
+        error: `Invalid launch state: ${validatedState.reason}`,
+      },
+      400,
+    );
+  }
+
+  const issuerEntry = registry[normalizeLtiIssuer(validatedState.payload.iss)];
+
+  if (issuerEntry === undefined) {
+    return c.json(
+      {
+        error: 'No issuer registration configured for state.iss',
+      },
+      400,
+    );
+  }
+
+  const idTokenHeader = parseCompactJwsHeaderObject(formInput.idToken);
+  const idTokenPayload = parseCompactJwsPayloadObject(formInput.idToken);
+
+  if (idTokenHeader === null || idTokenPayload === null) {
+    return c.json(
+      {
+        error: 'id_token must be a compact JWT with valid JSON header and payload',
+      },
+      400,
+    );
+  }
+
+  const algorithm = asNonEmptyString(idTokenHeader.alg);
+
+  if (algorithm === null || algorithm.toLowerCase() === 'none') {
+    return c.json(
+      {
+        error: 'id_token must specify a JOSE alg and must not use "none"',
+      },
+      400,
+    );
+  }
+
+  if (!issuerEntry.allowUnsignedIdToken) {
+    return c.json(
+      {
+        error:
+          'LTI issuer requires signature verification configuration; set allowUnsignedIdToken only for test launches',
+      },
+      501,
+    );
+  }
+
+  let launchClaims: LtiLaunchClaims;
+
+  try {
+    launchClaims = parseLtiLaunchClaims(idTokenPayload);
+  } catch {
+    return c.json(
+      {
+        error: 'id_token launch claims are invalid for LTI 1.3',
+      },
+      400,
+    );
+  }
+
+  if (normalizeLtiIssuer(launchClaims.iss) !== normalizeLtiIssuer(validatedState.payload.iss)) {
+    return c.json(
+      {
+        error: 'id_token issuer does not match state issuer',
+      },
+      400,
+    );
+  }
+
+  if (!ltiAudienceIncludesClientId(launchClaims.aud, validatedState.payload.clientId)) {
+    return c.json(
+      {
+        error: 'id_token aud does not include configured client_id',
+      },
+      400,
+    );
+  }
+
+  if (launchClaims.nonce !== validatedState.payload.nonce) {
+    return c.json(
+      {
+        error: 'id_token nonce does not match launch state nonce',
+      },
+      400,
+    );
+  }
+
+  const nowEpochSeconds = Math.floor(Date.parse(nowIso) / 1000);
+
+  if (launchClaims.exp <= nowEpochSeconds) {
+    return c.json(
+      {
+        error: 'id_token is expired',
+      },
+      400,
+    );
+  }
+
+  if (launchClaims.iat > nowEpochSeconds + 60) {
+    return c.json(
+      {
+        error: 'id_token iat is in the future',
+      },
+      400,
+    );
+  }
+
+  if (
+    validatedState.payload.ltiDeploymentId !== undefined &&
+    launchClaims[LTI_CLAIM_DEPLOYMENT_ID] !== validatedState.payload.ltiDeploymentId
+  ) {
+    return c.json(
+      {
+        error: 'id_token deployment_id does not match launch initiation',
+      },
+      400,
+    );
+  }
+
+  if (launchClaims[LTI_CLAIM_MESSAGE_TYPE] !== LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST) {
+    return c.json(
+      {
+        error: `Unsupported LTI message_type: ${launchClaims[LTI_CLAIM_MESSAGE_TYPE]}`,
+      },
+      400,
+    );
+  }
+
+  const targetLinkUriClaim = launchClaims[LTI_CLAIM_TARGET_LINK_URI];
+  const normalizedStateTargetLinkUri = normalizeAbsoluteUrlForComparison(validatedState.payload.targetLinkUri);
+  const normalizedClaimTargetLinkUri =
+    targetLinkUriClaim === undefined ? null : normalizeAbsoluteUrlForComparison(targetLinkUriClaim);
+
+  if (
+    targetLinkUriClaim !== undefined &&
+    normalizedStateTargetLinkUri !== null &&
+    normalizedClaimTargetLinkUri !== normalizedStateTargetLinkUri
+  ) {
+    return c.json(
+      {
+        error: 'id_token target_link_uri does not match launch initiation',
+      },
+      400,
+    );
+  }
+
+  const resourceLinkClaim = launchClaims[LTI_CLAIM_RESOURCE_LINK];
+
+  if (resourceLinkClaim === undefined || asNonEmptyString(resourceLinkClaim.id) === null) {
+    return c.json(
+      {
+        error: 'id_token for LtiResourceLinkRequest must include resource_link.id',
+      },
+      400,
+    );
+  }
+
+  const roleKind = resolveLtiRoleKind(launchClaims);
+  c.header('Cache-Control', 'no-store');
+
+  return c.html(
+    ltiLaunchResultPage({
+      roleKind,
+      issuer: launchClaims.iss,
+      deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
+      subjectId: launchClaims.sub,
+      targetLinkUri: launchClaims[LTI_CLAIM_TARGET_LINK_URI] ?? validatedState.payload.targetLinkUri,
+      messageType: launchClaims[LTI_CLAIM_MESSAGE_TYPE],
+    }),
+  );
 });
 
 app.get('/', (c) => {

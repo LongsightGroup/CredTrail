@@ -6,6 +6,7 @@
   "dependencies": {
     "@credtrail/core-domain": "workspace:*",
     "@credtrail/db": "workspace:*",
+    "@credtrail/lti": "workspace:*",
     "@credtrail/ui-components": "workspace:*",
     "@credtrail/validation": "workspace:*",
     "hono": "^4.7.2",

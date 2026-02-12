@@ -44,6 +44,9 @@ importers:
       '@credtrail/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@credtrail/lti':
+        specifier: workspace:*
+        version: link:../../packages/lti
       '@credtrail/ui-components':
         specifier: workspace:*
         version: link:../../packages/ui-components
