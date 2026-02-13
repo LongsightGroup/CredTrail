@@ -6007,6 +6007,89 @@ describe('GET /credentials/v1/:credentialId/download', () => {
     expect(body).toContain('"OpenBadgeCredential"');
   });
 
+  it('keeps credential downloads available after LMS issuer migration', async () => {
+    const env = createEnv();
+    env.LTI_STATE_SIGNING_SECRET = 'test-lti-state-secret';
+    const targetLinkUri = 'https://tool.example.edu/v1/lti/launch';
+    const oldIssuer = 'https://canvas-old.example.edu';
+    const newIssuer = 'https://canvas-new.example.edu';
+
+    mockedListLtiIssuerRegistrations
+      .mockResolvedValueOnce([
+        sampleLtiIssuerRegistration({
+          issuer: oldIssuer,
+          clientId: 'canvas-old-client',
+          authorizationEndpoint: 'https://canvas-old.example.edu/api/lti/authorize_redirect',
+          allowUnsignedIdToken: true,
+        }),
+      ])
+      .mockResolvedValueOnce([
+        sampleLtiIssuerRegistration({
+          issuer: newIssuer,
+          clientId: 'canvas-new-client',
+          authorizationEndpoint: 'https://canvas-new.example.edu/api/lti/authorize_redirect',
+          allowUnsignedIdToken: true,
+        }),
+      ]);
+
+    const oldLoginResponse = await app.request(
+      '/v1/lti/oidc/login?iss=' +
+        encodeURIComponent(oldIssuer) +
+        '&login_hint=' +
+        encodeURIComponent('old-login-hint') +
+        '&target_link_uri=' +
+        encodeURIComponent(targetLinkUri),
+      undefined,
+      env,
+    );
+    const oldLoginLocation = oldLoginResponse.headers.get('location');
+
+    const newLoginResponse = await app.request(
+      '/v1/lti/oidc/login?iss=' +
+        encodeURIComponent(newIssuer) +
+        '&login_hint=' +
+        encodeURIComponent('new-login-hint') +
+        '&target_link_uri=' +
+        encodeURIComponent(targetLinkUri),
+      undefined,
+      env,
+    );
+    const newLoginLocation = newLoginResponse.headers.get('location');
+
+    const credential: JsonObject = {
+      '@context': ['https://www.w3.org/ns/credentials/v2'],
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+    };
+
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const downloadResponse = await app.request(
+      '/credentials/v1/tenant_123%3Aassertion_456/download',
+      undefined,
+      env,
+    );
+    const downloadBody = await downloadResponse.text();
+
+    expect(oldLoginResponse.status).toBe(302);
+    expect(newLoginResponse.status).toBe(302);
+    expect(oldLoginLocation).not.toBeNull();
+    expect(newLoginLocation).not.toBeNull();
+
+    const oldRedirectUrl = new URL(oldLoginLocation ?? '');
+    const newRedirectUrl = new URL(newLoginLocation ?? '');
+
+    expect(oldRedirectUrl.origin + oldRedirectUrl.pathname).toBe(
+      'https://canvas-old.example.edu/api/lti/authorize_redirect',
+    );
+    expect(newRedirectUrl.origin + newRedirectUrl.pathname).toBe(
+      'https://canvas-new.example.edu/api/lti/authorize_redirect',
+    );
+    expect(downloadResponse.status).toBe(200);
+    expect(downloadBody).toContain('OpenBadgeCredential');
+  });
+
   it('returns 400 for invalid credential identifier', async () => {
     const env = createEnv();
     const response = await app.request('/credentials/v1/assertion_456/download', undefined, env);
@@ -6241,6 +6324,67 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
     expect(body).toContain(
       '<link rel="canonical" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22"',
+    );
+  });
+
+  it('keeps public badge pages available after LMS course deletion', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      credentialSubject: {
+        achievement: {
+          name: 'TypeScript Foundations',
+        },
+      },
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedListLtiIssuerRegistrations.mockResolvedValue([]);
+
+    const response = await app.request(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      undefined,
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('TypeScript Foundations');
+    expect(body).toContain('Verified');
+    expect(mockedListLtiIssuerRegistrations).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds canonical and LinkedIn links for the current platform host after platform move', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      issuer: {
+        name: 'Example University',
+      },
+      credentialSubject: {
+        achievement: {
+          name: 'TypeScript Foundations',
+        },
+      },
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const response = await app.request(
+      'http://badges.newcredtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      undefined,
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      '<link rel="canonical" href="http://badges.newcredtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22"',
+    );
+    expect(body).toContain(
+      'certUrl=http%3A%2F%2Fbadges.newcredtrail.test%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
     );
   });
 

@@ -70,7 +70,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - `packages/validation`: Zod schemas for HTTP and queue boundaries.
 - `packages/lti`: LTI 1.3 parsing/validation primitives.
 - `packages/ui-components`: Server-rendered HTML helper components.
-- `docs`: Implementation docs and ADRs (including `docs/LEARNER_DID_SETUP.md` and `docs/VERIFIABLE_PRESENTATIONS.md`).
+- `docs`: Implementation docs and ADRs (including `docs/LEARNER_DID_SETUP.md`, `docs/VERIFIABLE_PRESENTATIONS.md`, and `docs/LMS_INDEPENDENCE_MIGRATION_RUNBOOK.md`).
 
 ## Async jobs
 
