@@ -572,6 +572,68 @@ export interface AssertionRecord {
   updatedAt: string;
 }
 
+export type AssertionLifecycleState = 'active' | 'suspended' | 'revoked' | 'expired';
+
+export type AssertionLifecycleTransitionSource = 'manual' | 'automation';
+
+export type AssertionLifecycleReasonCode =
+  | 'administrative_hold'
+  | 'policy_violation'
+  | 'appeal_pending'
+  | 'appeal_resolved'
+  | 'credential_expired'
+  | 'issuer_requested'
+  | 'other';
+
+export interface AssertionLifecycleEventRecord {
+  id: string;
+  tenantId: string;
+  assertionId: string;
+  fromState: AssertionLifecycleState;
+  toState: AssertionLifecycleState;
+  reasonCode: AssertionLifecycleReasonCode;
+  reason: string | null;
+  transitionSource: AssertionLifecycleTransitionSource;
+  actorUserId: string | null;
+  transitionedAt: string;
+  createdAt: string;
+}
+
+export interface ListAssertionLifecycleEventsInput {
+  tenantId: string;
+  assertionId: string;
+  limit?: number | undefined;
+}
+
+export interface ResolveAssertionLifecycleStateResult {
+  state: AssertionLifecycleState;
+  source: 'assertion_revocation' | 'lifecycle_event' | 'default_active';
+  reasonCode: AssertionLifecycleReasonCode | null;
+  reason: string | null;
+  transitionedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface RecordAssertionLifecycleTransitionInput {
+  tenantId: string;
+  assertionId: string;
+  toState: AssertionLifecycleState;
+  reasonCode: AssertionLifecycleReasonCode;
+  reason?: string | undefined;
+  transitionSource: AssertionLifecycleTransitionSource;
+  actorUserId?: string | undefined;
+  transitionedAt: string;
+}
+
+export interface RecordAssertionLifecycleTransitionResult {
+  status: 'transitioned' | 'already_in_state' | 'invalid_transition';
+  fromState: AssertionLifecycleState;
+  toState: AssertionLifecycleState;
+  currentState: AssertionLifecycleState;
+  event: AssertionLifecycleEventRecord | null;
+  message: string | null;
+}
+
 export interface LearnerBadgeSummaryRecord {
   assertionId: string;
   assertionPublicId: string | null;
@@ -893,6 +955,19 @@ const isMissingAuditLogsTableError = (error: unknown): boolean => {
   );
 };
 
+const isMissingAssertionLifecycleEventsTableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    (error.message.includes('no such table') ||
+      error.message.includes('relation') ||
+      error.message.includes('does not exist')) &&
+    error.message.includes('assertion_lifecycle_events')
+  );
+};
+
 const isMissingOAuthTablesError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return false;
@@ -1052,6 +1127,58 @@ const ensureAuditLogsTable = async (db: SqlDatabase): Promise<void> => {
       `
       CREATE INDEX IF NOT EXISTS idx_audit_logs_action
         ON audit_logs (action)
+    `,
+    )
+    .run();
+};
+
+const ensureAssertionLifecycleEventsTable = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS assertion_lifecycle_events (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        assertion_id TEXT NOT NULL,
+        from_state TEXT NOT NULL CHECK (from_state IN ('active', 'suspended', 'revoked', 'expired')),
+        to_state TEXT NOT NULL CHECK (to_state IN ('active', 'suspended', 'revoked', 'expired')),
+        reason_code TEXT NOT NULL CHECK (
+          reason_code IN (
+            'administrative_hold',
+            'policy_violation',
+            'appeal_pending',
+            'appeal_resolved',
+            'credential_expired',
+            'issuer_requested',
+            'other'
+          )
+        ),
+        reason TEXT,
+        transition_source TEXT NOT NULL CHECK (transition_source IN ('manual', 'automation')),
+        actor_user_id TEXT,
+        transitioned_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id, assertion_id) REFERENCES assertions (tenant_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_assertion_lifecycle_events_tenant_assertion_transitioned
+        ON assertion_lifecycle_events (tenant_id, assertion_id, transitioned_at DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_assertion_lifecycle_events_tenant_state
+        ON assertion_lifecycle_events (tenant_id, to_state)
     `,
     )
     .run();
@@ -1256,6 +1383,20 @@ interface AssertionRow {
   updatedAt: string;
 }
 
+interface AssertionLifecycleEventRow {
+  id: string;
+  tenantId: string;
+  assertionId: string;
+  fromState: AssertionLifecycleState;
+  toState: AssertionLifecycleState;
+  reasonCode: AssertionLifecycleReasonCode;
+  reason: string | null;
+  transitionSource: AssertionLifecycleTransitionSource;
+  actorUserId: string | null;
+  transitionedAt: string;
+  createdAt: string;
+}
+
 interface LearnerBadgeSummaryRow {
   assertionId: string;
   assertionPublicId: string | null;
@@ -1357,6 +1498,73 @@ const addSecondsToIso = (fromIso: string, seconds: number): string => {
   }
 
   return new Date(fromMs + seconds * 1000).toISOString();
+};
+
+const ASSERTION_LIFECYCLE_REASON_CODES = new Set<AssertionLifecycleReasonCode>([
+  'administrative_hold',
+  'policy_violation',
+  'appeal_pending',
+  'appeal_resolved',
+  'credential_expired',
+  'issuer_requested',
+  'other',
+]);
+
+const ASSERTION_LIFECYCLE_ALLOWED_TRANSITIONS: Record<
+  AssertionLifecycleState,
+  ReadonlySet<AssertionLifecycleState>
+> = {
+  active: new Set<AssertionLifecycleState>(['suspended', 'revoked', 'expired']),
+  suspended: new Set<AssertionLifecycleState>(['active', 'revoked', 'expired']),
+  expired: new Set<AssertionLifecycleState>(['active', 'revoked']),
+  revoked: new Set<AssertionLifecycleState>(),
+};
+
+const assertionLifecycleStateFromRecords = (input: {
+  assertion: AssertionRecord;
+  latestEvent: AssertionLifecycleEventRecord | null;
+}): ResolveAssertionLifecycleStateResult => {
+  if (input.assertion.revokedAt !== null && input.latestEvent?.toState === 'revoked') {
+    return {
+      state: 'revoked',
+      source: 'lifecycle_event',
+      reasonCode: input.latestEvent.reasonCode,
+      reason: input.latestEvent.reason ?? 'credential has been revoked by issuer',
+      transitionedAt: input.latestEvent.transitionedAt,
+      revokedAt: input.assertion.revokedAt,
+    };
+  }
+
+  if (input.assertion.revokedAt !== null) {
+    return {
+      state: 'revoked',
+      source: 'assertion_revocation',
+      reasonCode: null,
+      reason: 'credential has been revoked by issuer',
+      transitionedAt: input.assertion.revokedAt,
+      revokedAt: input.assertion.revokedAt,
+    };
+  }
+
+  if (input.latestEvent !== null) {
+    return {
+      state: input.latestEvent.toState,
+      source: 'lifecycle_event',
+      reasonCode: input.latestEvent.reasonCode,
+      reason: input.latestEvent.reason,
+      transitionedAt: input.latestEvent.transitionedAt,
+      revokedAt: null,
+    };
+  }
+
+  return {
+    state: 'active',
+    source: 'default_active',
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    revokedAt: null,
+  };
 };
 
 export const normalizeEmail = (email: string): string => {
@@ -3341,6 +3549,24 @@ const mapAssertionRow = (row: AssertionRow): AssertionRecord => {
   };
 };
 
+const mapAssertionLifecycleEventRow = (
+  row: AssertionLifecycleEventRow,
+): AssertionLifecycleEventRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    assertionId: row.assertionId,
+    fromState: row.fromState,
+    toState: row.toState,
+    reasonCode: row.reasonCode,
+    reason: row.reason,
+    transitionSource: row.transitionSource,
+    actorUserId: row.actorUserId,
+    transitionedAt: row.transitionedAt,
+    createdAt: row.createdAt,
+  };
+};
+
 const mapRecipientIdentifierRow = (row: RecipientIdentifierRow): RecipientIdentifierRecord => {
   return {
     assertionId: row.assertionId,
@@ -4118,6 +4344,324 @@ export const findAssertionByPublicId = async (
   }
 
   return mapAssertionRow(row);
+};
+
+const findLatestAssertionLifecycleEvent = async (
+  db: SqlDatabase,
+  tenantId: string,
+  assertionId: string,
+): Promise<AssertionLifecycleEventRecord | null> => {
+  const latestStatement = (): Promise<AssertionLifecycleEventRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          assertion_id AS assertionId,
+          from_state AS fromState,
+          to_state AS toState,
+          reason_code AS reasonCode,
+          reason,
+          transition_source AS transitionSource,
+          actor_user_id AS actorUserId,
+          transitioned_at AS transitionedAt,
+          created_at AS createdAt
+        FROM assertion_lifecycle_events
+        WHERE tenant_id = ?
+          AND assertion_id = ?
+        ORDER BY transitioned_at DESC, created_at DESC, id DESC
+        LIMIT 1
+      `,
+      )
+      .bind(tenantId, assertionId)
+      .first<AssertionLifecycleEventRow>();
+
+  let row: AssertionLifecycleEventRow | null;
+
+  try {
+    row = await latestStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionLifecycleEventsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionLifecycleEventsTable(db);
+    row = await latestStatement();
+  }
+
+  return row === null ? null : mapAssertionLifecycleEventRow(row);
+};
+
+const findAssertionLifecycleEventById = async (
+  db: SqlDatabase,
+  id: string,
+): Promise<AssertionLifecycleEventRecord | null> => {
+  const lookupStatement = (): Promise<AssertionLifecycleEventRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          assertion_id AS assertionId,
+          from_state AS fromState,
+          to_state AS toState,
+          reason_code AS reasonCode,
+          reason,
+          transition_source AS transitionSource,
+          actor_user_id AS actorUserId,
+          transitioned_at AS transitionedAt,
+          created_at AS createdAt
+        FROM assertion_lifecycle_events
+        WHERE id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(id)
+      .first<AssertionLifecycleEventRow>();
+
+  let row: AssertionLifecycleEventRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionLifecycleEventsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionLifecycleEventsTable(db);
+    row = await lookupStatement();
+  }
+
+  return row === null ? null : mapAssertionLifecycleEventRow(row);
+};
+
+export const listAssertionLifecycleEvents = async (
+  db: SqlDatabase,
+  input: ListAssertionLifecycleEventsInput,
+): Promise<AssertionLifecycleEventRecord[]> => {
+  const queryLimit = Math.max(1, Math.min(input.limit ?? 50, 200));
+  const listStatement = (): Promise<SqlQueryResult<AssertionLifecycleEventRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          assertion_id AS assertionId,
+          from_state AS fromState,
+          to_state AS toState,
+          reason_code AS reasonCode,
+          reason,
+          transition_source AS transitionSource,
+          actor_user_id AS actorUserId,
+          transitioned_at AS transitionedAt,
+          created_at AS createdAt
+        FROM assertion_lifecycle_events
+        WHERE tenant_id = ?
+          AND assertion_id = ?
+        ORDER BY transitioned_at DESC, created_at DESC, id DESC
+        LIMIT ?
+      `,
+      )
+      .bind(input.tenantId, input.assertionId, queryLimit)
+      .all<AssertionLifecycleEventRow>();
+
+  let result: SqlQueryResult<AssertionLifecycleEventRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionLifecycleEventsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionLifecycleEventsTable(db);
+    result = await listStatement();
+  }
+
+  return result.results.map((row) => mapAssertionLifecycleEventRow(row));
+};
+
+export const resolveAssertionLifecycleState = async (
+  db: SqlDatabase,
+  tenantId: string,
+  assertionId: string,
+): Promise<ResolveAssertionLifecycleStateResult | null> => {
+  const assertion = await findAssertionById(db, tenantId, assertionId);
+
+  if (assertion === null) {
+    return null;
+  }
+
+  const latestEvent = await findLatestAssertionLifecycleEvent(db, tenantId, assertionId);
+  return assertionLifecycleStateFromRecords({
+    assertion,
+    latestEvent,
+  });
+};
+
+export const recordAssertionLifecycleTransition = async (
+  db: SqlDatabase,
+  input: RecordAssertionLifecycleTransitionInput,
+): Promise<RecordAssertionLifecycleTransitionResult> => {
+  const transitionedAtMs = Date.parse(input.transitionedAt);
+
+  if (!Number.isFinite(transitionedAtMs)) {
+    throw new Error('transitionedAt must be a valid ISO timestamp');
+  }
+
+  if (!ASSERTION_LIFECYCLE_REASON_CODES.has(input.reasonCode)) {
+    throw new Error(`Unsupported assertion lifecycle reason code: ${input.reasonCode}`);
+  }
+
+  if (input.transitionSource === 'manual' && input.actorUserId === undefined) {
+    throw new Error('Manual lifecycle transitions require actorUserId');
+  }
+
+  if (input.transitionSource === 'automation' && input.actorUserId !== undefined) {
+    throw new Error('Automated lifecycle transitions must not set actorUserId');
+  }
+
+  const assertion = await findAssertionById(db, input.tenantId, input.assertionId);
+
+  if (assertion === null) {
+    throw new Error(`Assertion ${input.assertionId} not found for tenant ${input.tenantId}`);
+  }
+
+  const latestEvent = await findLatestAssertionLifecycleEvent(db, input.tenantId, input.assertionId);
+  const current = assertionLifecycleStateFromRecords({
+    assertion,
+    latestEvent,
+  });
+
+  if (current.state === input.toState) {
+    return {
+      status: 'already_in_state',
+      fromState: current.state,
+      toState: input.toState,
+      currentState: current.state,
+      event: null,
+      message: `assertion is already in ${current.state} state`,
+    };
+  }
+
+  const allowedTransitions = ASSERTION_LIFECYCLE_ALLOWED_TRANSITIONS[current.state];
+
+  if (!allowedTransitions.has(input.toState)) {
+    return {
+      status: 'invalid_transition',
+      fromState: current.state,
+      toState: input.toState,
+      currentState: current.state,
+      event: null,
+      message: `transition from ${current.state} to ${input.toState} is not allowed`,
+    };
+  }
+
+  const normalizedReason = input.reason?.trim();
+  const reason = normalizedReason === undefined || normalizedReason.length === 0 ? null : normalizedReason;
+  let effectiveTransitionedAt = input.transitionedAt;
+
+  if (input.toState === 'revoked') {
+    const revocationResult = await recordAssertionRevocation(db, {
+      tenantId: input.tenantId,
+      assertionId: input.assertionId,
+      revocationId: createPrefixedId('rev'),
+      reason: reason ?? input.reasonCode,
+      idempotencyKey: createPrefixedId('idem'),
+      ...(input.actorUserId === undefined ? {} : { revokedByUserId: input.actorUserId }),
+      revokedAt: input.transitionedAt,
+    });
+
+    if (revocationResult.status === 'already_revoked') {
+      return {
+        status: 'already_in_state',
+        fromState: current.state,
+        toState: input.toState,
+        currentState: 'revoked',
+        event: null,
+        message: 'assertion is already in revoked state',
+      };
+    }
+
+    effectiveTransitionedAt = revocationResult.revokedAt;
+  }
+
+  const eventId = createPrefixedId('ale');
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO assertion_lifecycle_events (
+          id,
+          tenant_id,
+          assertion_id,
+          from_state,
+          to_state,
+          reason_code,
+          reason,
+          transition_source,
+          actor_user_id,
+          transitioned_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        eventId,
+        input.tenantId,
+        input.assertionId,
+        current.state,
+        input.toState,
+        input.reasonCode,
+        reason,
+        input.transitionSource,
+        input.actorUserId ?? null,
+        effectiveTransitionedAt,
+        effectiveTransitionedAt,
+      )
+      .run();
+
+  try {
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionLifecycleEventsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionLifecycleEventsTable(db);
+    await insertStatement();
+  }
+
+  await db
+    .prepare(
+      `
+      UPDATE assertions
+      SET updated_at = ?
+      WHERE tenant_id = ?
+        AND id = ?
+    `,
+    )
+    .bind(effectiveTransitionedAt, input.tenantId, input.assertionId)
+    .run();
+
+  const event = await findAssertionLifecycleEventById(db, eventId);
+
+  if (event === null) {
+    throw new Error(`Unable to load assertion lifecycle event ${eventId} after insert`);
+  }
+
+  return {
+    status: 'transitioned',
+    fromState: current.state,
+    toState: input.toState,
+    currentState: input.toState,
+    event,
+    message: null,
+  };
 };
 
 export const listLearnerBadgeSummaries = async (

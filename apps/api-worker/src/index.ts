@@ -55,6 +55,9 @@ import {
   findActiveSessionByHash,
   isLearnerIdentityLinkProofValid,
   listAssertionStatusListEntries,
+  listAssertionLifecycleEvents,
+  resolveAssertionLifecycleState,
+  recordAssertionLifecycleTransition,
   listLtiIssuerRegistrations,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
@@ -116,6 +119,8 @@ import {
 import {
   parseBadgeTemplateListQuery,
   parseBadgeTemplatePathParams,
+  parseAssertionPathParams,
+  parseAssertionLifecycleTransitionRequest,
   parseProcessQueueRequest,
   parseQueueJob,
   parseCredentialPathParams,
@@ -5312,6 +5317,11 @@ const parseTenantScopedCredentialId = (
   }
 };
 
+const assertionBelongsToTenant = (tenantId: string, assertionId: string): boolean => {
+  const scoped = parseTenantScopedCredentialId(assertionId);
+  return scoped !== null && scoped.tenantId === tenantId;
+};
+
 const publicBadgePermalinkSegment = (assertion: AssertionRecord): string => {
   return assertion.publicId ?? assertion.id;
 };
@@ -10458,6 +10468,207 @@ app.post('/v1/tenants/:tenantId/assertions/manual-issue', async (c): Promise<Res
   }
 });
 
+app.get('/v1/tenants/:tenantId/assertions/:assertionId/lifecycle', async (c): Promise<Response> => {
+  const pathParams = parseAssertionPathParams(c.req.param());
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+  if (roleCheck instanceof Response) {
+    return roleCheck;
+  }
+
+  if (!assertionBelongsToTenant(pathParams.tenantId, pathParams.assertionId)) {
+    return c.json(
+      {
+        error: 'assertionId must be a tenant-scoped identifier for the active tenant',
+      },
+      422,
+    );
+  }
+
+  const db = resolveDatabase(c.env);
+  const assertion = await findAssertionById(db, pathParams.tenantId, pathParams.assertionId);
+
+  if (assertion === null) {
+    return c.json(
+      {
+        error: 'Assertion not found',
+      },
+      404,
+    );
+  }
+
+  const lifecycle = await resolveAssertionLifecycleState(db, pathParams.tenantId, pathParams.assertionId);
+
+  if (lifecycle === null) {
+    return c.json(
+      {
+        error: 'Assertion not found',
+      },
+      404,
+    );
+  }
+
+  const events = await listAssertionLifecycleEvents(db, {
+    tenantId: pathParams.tenantId,
+    assertionId: pathParams.assertionId,
+  });
+
+  c.header('Cache-Control', 'no-store');
+
+  return c.json({
+    assertionId: assertion.id,
+    tenantId: assertion.tenantId,
+    state: lifecycle.state,
+    source: lifecycle.source,
+    reasonCode: lifecycle.reasonCode,
+    reason: lifecycle.reason,
+    transitionedAt: lifecycle.transitionedAt,
+    revokedAt: lifecycle.revokedAt,
+    events,
+  });
+});
+
+app.post('/v1/tenants/:tenantId/assertions/:assertionId/lifecycle/transition', async (c): Promise<Response> => {
+  const pathParams = parseAssertionPathParams(c.req.param());
+  const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+  if (roleCheck instanceof Response) {
+    return roleCheck;
+  }
+
+  const { session } = roleCheck;
+
+  if (!assertionBelongsToTenant(pathParams.tenantId, pathParams.assertionId)) {
+    return c.json(
+      {
+        error: 'assertionId must be a tenant-scoped identifier for the active tenant',
+      },
+      422,
+    );
+  }
+
+  let request: ReturnType<typeof parseAssertionLifecycleTransitionRequest>;
+
+  try {
+    request = parseAssertionLifecycleTransitionRequest(await c.req.json<unknown>());
+  } catch {
+    return c.json(
+      {
+        error: 'Invalid lifecycle transition request payload',
+      },
+      400,
+    );
+  }
+
+  if (request.transitionSource === 'automation') {
+    return c.json(
+      {
+        error: 'Automation lifecycle transitions are only allowed via trusted internal jobs',
+      },
+      422,
+    );
+  }
+
+  const db = resolveDatabase(c.env);
+
+  try {
+    const transitionResult = await recordAssertionLifecycleTransition(db, {
+      tenantId: pathParams.tenantId,
+      assertionId: pathParams.assertionId,
+      toState: request.toState,
+      reasonCode: request.reasonCode,
+      ...(request.reason === undefined ? {} : { reason: request.reason }),
+      transitionSource: 'manual',
+      actorUserId: session.userId,
+      transitionedAt: request.transitionedAt ?? new Date().toISOString(),
+    });
+
+    if (transitionResult.status === 'invalid_transition') {
+      return c.json(
+        {
+          error: 'Lifecycle transition not allowed',
+          fromState: transitionResult.fromState,
+          toState: transitionResult.toState,
+          currentState: transitionResult.currentState,
+          message: transitionResult.message,
+        },
+        409,
+      );
+    }
+
+    if (transitionResult.status === 'already_in_state') {
+      c.header('Cache-Control', 'no-store');
+
+      return c.json({
+        status: transitionResult.status,
+        fromState: transitionResult.fromState,
+        toState: transitionResult.toState,
+        currentState: transitionResult.currentState,
+        message: transitionResult.message,
+      });
+    }
+
+    const event = transitionResult.event;
+
+    if (event === null) {
+      throw new Error('Lifecycle transition result is missing event details');
+    }
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'assertion.lifecycle_transitioned',
+      targetType: 'assertion',
+      targetId: pathParams.assertionId,
+      metadata: {
+        eventId: event.id,
+        fromState: event.fromState,
+        toState: event.toState,
+        reasonCode: event.reasonCode,
+        reason: event.reason,
+        transitionSource: event.transitionSource,
+        transitionedAt: event.transitionedAt,
+      },
+    });
+
+    c.header('Cache-Control', 'no-store');
+
+    return c.json({
+      status: transitionResult.status,
+      fromState: transitionResult.fromState,
+      toState: transitionResult.toState,
+      currentState: transitionResult.currentState,
+      message: transitionResult.message,
+      event,
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message.includes('not found for tenant')) {
+        return c.json(
+          {
+            error: 'Assertion not found',
+          },
+          404,
+        );
+      }
+
+      if (
+        error.message.includes('Manual lifecycle transitions require actorUserId') ||
+        error.message.includes('Automated lifecycle transitions must not set actorUserId') ||
+        error.message.includes('transitionedAt must be a valid ISO timestamp')
+      ) {
+        return c.json(
+          {
+            error: error.message,
+          },
+          422,
+        );
+      }
+    }
+
+    throw error;
+  }
+});
 app.post('/v1/tenants/:tenantId/assertions/sakai-commit-issue', async (c): Promise<Response> => {
   const pathParams = parseTenantPathParams(c.req.param());
   const payload = await c.req.json<unknown>();

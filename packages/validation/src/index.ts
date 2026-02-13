@@ -140,6 +140,24 @@ export const credentialPathParamsSchema = z.object({
   credentialId: resourceIdSchema,
 });
 
+export const assertionLifecycleStateSchema = z.enum(['active', 'suspended', 'revoked', 'expired']);
+
+export const assertionLifecycleTransitionSourceSchema = z.enum(['manual', 'automation']);
+
+export const assertionLifecycleReasonCodeSchema = z.enum([
+  'administrative_hold',
+  'policy_violation',
+  'appeal_pending',
+  'appeal_resolved',
+  'credential_expired',
+  'issuer_requested',
+  'other',
+]);
+
+export const assertionPathParamsSchema = tenantPathParamsSchema.extend({
+  assertionId: resourceIdSchema,
+});
+
 export const badgeTemplateListQuerySchema = z.object({
   includeArchived: z.preprocess((input) => {
     if (input === undefined) {
@@ -288,6 +306,14 @@ export const presentationVerifyRequestSchema = z.object({
   presentation: jsonObjectSchema,
 });
 
+export const assertionLifecycleTransitionRequestSchema = z.object({
+  toState: assertionLifecycleStateSchema,
+  reasonCode: assertionLifecycleReasonCodeSchema,
+  reason: z.string().trim().min(1).max(512).optional(),
+  transitionSource: assertionLifecycleTransitionSourceSchema.default('manual'),
+  transitionedAt: isoTimestampSchema.optional(),
+});
+
 export const issueBadgeRequestSchema = z.object({
   tenantId: tenantIdSchema,
   badgeTemplateId: resourceIdSchema,
@@ -402,6 +428,11 @@ export type LearnerIdentityLinkVerifyRequest = z.infer<typeof learnerIdentityLin
 export type LearnerDidSettingsRequest = z.infer<typeof learnerDidSettingsRequestSchema>;
 export type PresentationCreateRequest = z.infer<typeof presentationCreateRequestSchema>;
 export type PresentationVerifyRequest = z.infer<typeof presentationVerifyRequestSchema>;
+export type AssertionLifecycleTransitionRequest = z.infer<typeof assertionLifecycleTransitionRequestSchema>;
+export type AssertionPathParams = z.infer<typeof assertionPathParamsSchema>;
+export type AssertionLifecycleState = z.infer<typeof assertionLifecycleStateSchema>;
+export type AssertionLifecycleReasonCode = z.infer<typeof assertionLifecycleReasonCodeSchema>;
+export type AssertionLifecycleTransitionSource = z.infer<typeof assertionLifecycleTransitionSourceSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
@@ -479,6 +510,16 @@ export const parsePresentationCreateRequest = (input: unknown): PresentationCrea
 
 export const parsePresentationVerifyRequest = (input: unknown): PresentationVerifyRequest => {
   return presentationVerifyRequestSchema.parse(input);
+};
+
+export const parseAssertionLifecycleTransitionRequest = (
+  input: unknown,
+): AssertionLifecycleTransitionRequest => {
+  return assertionLifecycleTransitionRequestSchema.parse(input);
+};
+
+export const parseAssertionPathParams = (input: unknown): AssertionPathParams => {
+  return assertionPathParamsSchema.parse(input);
 };
 
 export const parseIssueBadgeRequest = (input: unknown): IssueBadgeRequest => {

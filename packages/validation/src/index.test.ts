@@ -17,6 +17,8 @@ import {
   parseLearnerDidSettingsRequest,
   parsePresentationCreateRequest,
   parsePresentationVerifyRequest,
+  parseAssertionLifecycleTransitionRequest,
+  parseAssertionPathParams,
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
   parseProcessQueueRequest,
@@ -349,6 +351,50 @@ describe('presentation parser', () => {
     });
 
     expect(request.presentation.type).toEqual(['VerifiablePresentation']);
+  });
+});
+
+describe('assertion lifecycle parsers', () => {
+  it('accepts valid assertion lifecycle transition payloads', () => {
+    const payload = parseAssertionLifecycleTransitionRequest({
+      toState: 'suspended',
+      reasonCode: 'administrative_hold',
+      reason: 'Pending registrar review',
+      transitionSource: 'manual',
+      transitionedAt: '2026-02-12T23:00:00.000Z',
+    });
+
+    expect(payload.toState).toBe('suspended');
+    expect(payload.reasonCode).toBe('administrative_hold');
+    expect(payload.transitionSource).toBe('manual');
+  });
+
+  it('defaults transitionSource to manual when omitted', () => {
+    const payload = parseAssertionLifecycleTransitionRequest({
+      toState: 'expired',
+      reasonCode: 'credential_expired',
+    });
+
+    expect(payload.transitionSource).toBe('manual');
+  });
+
+  it('rejects invalid assertion lifecycle state values', () => {
+    expect(() => {
+      parseAssertionLifecycleTransitionRequest({
+        toState: 'paused',
+        reasonCode: 'other',
+      });
+    }).toThrowError();
+  });
+
+  it('parses assertion path params', () => {
+    const pathParams = parseAssertionPathParams({
+      tenantId: 'tenant_123',
+      assertionId: 'tenant_123:assertion_456',
+    });
+
+    expect(pathParams.tenantId).toBe('tenant_123');
+    expect(pathParams.assertionId).toBe('tenant_123:assertion_456');
   });
 });
 

@@ -32,6 +32,9 @@ vi.mock('@credtrail/db', async () => {
     findLearnerProfileByIdentity: vi.fn(),
     findUserById: vi.fn(),
     listAssertionStatusListEntries: vi.fn(),
+    listAssertionLifecycleEvents: vi.fn(),
+    resolveAssertionLifecycleState: vi.fn(),
+    recordAssertionLifecycleTransition: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
     listPublicBadgeWallEntries: vi.fn(),
     touchSession: vi.fn(),
@@ -137,6 +140,9 @@ import {
   findOb3SubjectProfile,
   findUserById,
   listAssertionStatusListEntries,
+  listAssertionLifecycleEvents,
+  resolveAssertionLifecycleState,
+  recordAssertionLifecycleTransition,
   listLtiIssuerRegistrations,
   listPublicBadgeWallEntries,
   listLearnerBadgeSummaries,
@@ -274,6 +280,9 @@ const mockedCreateAssertion = vi.mocked(createAssertion);
 const mockedCreateSession = vi.mocked(createSession);
 const mockedNextAssertionStatusListIndex = vi.mocked(nextAssertionStatusListIndex);
 const mockedListAssertionStatusListEntries = vi.mocked(listAssertionStatusListEntries);
+const mockedListAssertionLifecycleEvents = vi.mocked(listAssertionLifecycleEvents);
+const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
+const mockedRecordAssertionLifecycleTransition = vi.mocked(recordAssertionLifecycleTransition);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
@@ -354,6 +363,18 @@ beforeEach(() => {
   mockedFindActiveOAuthAccessTokenByHash.mockReset();
   mockedListLtiIssuerRegistrations.mockReset();
   mockedListLtiIssuerRegistrations.mockResolvedValue([]);
+  mockedListAssertionLifecycleEvents.mockReset();
+  mockedListAssertionLifecycleEvents.mockResolvedValue([]);
+  mockedResolveAssertionLifecycleState.mockReset();
+  mockedResolveAssertionLifecycleState.mockResolvedValue({
+    state: 'active',
+    source: 'default_active',
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    revokedAt: null,
+  });
+  mockedRecordAssertionLifecycleTransition.mockReset();
   mockedListLearnerIdentitiesByProfile.mockReset();
   mockedListLearnerIdentitiesByProfile.mockResolvedValue([]);
   mockedRemoveLearnerIdentityAliasesByType.mockReset();
@@ -2600,6 +2621,207 @@ describe('POST /v1/issue and /v1/revoke', () => {
         jobType: 'revoke_badge',
       }),
     );
+  });
+});
+
+describe('assertion lifecycle endpoints', () => {
+  beforeEach(() => {
+    mockedFindActiveSessionByHash.mockReset();
+    mockedTouchSession.mockReset();
+    mockedFindAssertionById.mockReset();
+    mockedResolveAssertionLifecycleState.mockReset();
+    mockedListAssertionLifecycleEvents.mockReset();
+    mockedRecordAssertionLifecycleTransition.mockReset();
+    mockedCreateAuditLog.mockClear();
+  });
+
+  it('returns assertion lifecycle state and history for issuer roles', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedResolveAssertionLifecycleState.mockResolvedValue({
+      state: 'suspended',
+      source: 'lifecycle_event',
+      reasonCode: 'administrative_hold',
+      reason: 'Pending registrar review',
+      transitionedAt: '2026-02-12T23:10:00.000Z',
+      revokedAt: null,
+    });
+    mockedListAssertionLifecycleEvents.mockResolvedValue([
+      {
+        id: 'ale_123',
+        tenantId: 'tenant_123',
+        assertionId: 'tenant_123:assertion_456',
+        fromState: 'active',
+        toState: 'suspended',
+        reasonCode: 'administrative_hold',
+        reason: 'Pending registrar review',
+        transitionSource: 'manual',
+        actorUserId: 'usr_123',
+        transitionedAt: '2026-02-12T23:10:00.000Z',
+        createdAt: '2026-02-12T23:10:00.000Z',
+      },
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body.state).toBe('suspended');
+    expect(body.reasonCode).toBe('administrative_hold');
+    expect(Array.isArray(body.events)).toBe(true);
+    expect(mockedResolveAssertionLifecycleState).toHaveBeenCalledWith(
+      fakeDb,
+      'tenant_123',
+      'tenant_123:assertion_456',
+    );
+  });
+
+  it('applies manual lifecycle transition and writes audit log', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedRecordAssertionLifecycleTransition.mockResolvedValue({
+      status: 'transitioned',
+      fromState: 'active',
+      toState: 'suspended',
+      currentState: 'suspended',
+      message: null,
+      event: {
+        id: 'ale_456',
+        tenantId: 'tenant_123',
+        assertionId: 'tenant_123:assertion_456',
+        fromState: 'active',
+        toState: 'suspended',
+        reasonCode: 'administrative_hold',
+        reason: 'Registrar hold',
+        transitionSource: 'manual',
+        actorUserId: 'usr_123',
+        transitionedAt: '2026-02-12T23:15:00.000Z',
+        createdAt: '2026-02-12T23:15:00.000Z',
+      },
+    });
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          toState: 'suspended',
+          reasonCode: 'administrative_hold',
+          reason: 'Registrar hold',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body.status).toBe('transitioned');
+    expect(mockedRecordAssertionLifecycleTransition).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        assertionId: 'tenant_123:assertion_456',
+        toState: 'suspended',
+        reasonCode: 'administrative_hold',
+        transitionSource: 'manual',
+        actorUserId: 'usr_123',
+      }),
+    );
+    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        action: 'assertion.lifecycle_transitioned',
+        targetType: 'assertion',
+        targetId: 'tenant_123:assertion_456',
+      }),
+    );
+  });
+
+  it('returns 422 when caller attempts automation transition source', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          toState: 'expired',
+          reasonCode: 'credential_expired',
+          transitionSource: 'automation',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(422);
+    expect(body.error).toBe('Automation lifecycle transitions are only allowed via trusted internal jobs');
+    expect(mockedRecordAssertionLifecycleTransition).not.toHaveBeenCalled();
+    expect(mockedCreateAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when lifecycle transition is not allowed', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedRecordAssertionLifecycleTransition.mockResolvedValue({
+      status: 'invalid_transition',
+      fromState: 'revoked',
+      toState: 'active',
+      currentState: 'revoked',
+      event: null,
+      message: 'transition from revoked to active is not allowed',
+    });
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'credtrail_session=session-token',
+        },
+        body: JSON.stringify({
+          toState: 'active',
+          reasonCode: 'appeal_resolved',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe('Lifecycle transition not allowed');
+    expect(mockedCreateAuditLog).not.toHaveBeenCalled();
   });
 });
 
