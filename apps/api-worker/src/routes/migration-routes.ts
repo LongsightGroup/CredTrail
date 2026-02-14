@@ -1,7 +1,10 @@
 import {
   enqueueJobQueueMessage,
   findLearnerProfileByIdentity,
+  listImportMigrationBatchQueueMessages,
   listBadgeTemplates,
+  retryFailedImportMigrationBatchQueueMessages,
+  type ImportMigrationBatchQueueMessageRecord,
   type LearnerIdentityType,
   type SessionRecord,
   type SqlDatabase,
@@ -10,6 +13,9 @@ import {
 import type { Hono } from 'hono';
 import {
   ob2ImportConversionRequestSchema,
+  parseMigrationBatchPathParams,
+  parseMigrationBatchRetryRequest,
+  parseMigrationProgressQuery,
   parseMigrationBatchUploadQuery,
   parseOb2ImportConversionRequest,
   parseTenantPathParams,
@@ -74,6 +80,23 @@ interface BatchUploadRowValidationResult {
   errors: string[];
   warnings: string[];
   diffPreview: DryRunDiffPreview | null;
+}
+
+interface MigrationBatchProgressSummary {
+  batchId: string;
+  source: 'file_upload' | 'credly_export' | 'unknown';
+  fileName: string | null;
+  format: string | null;
+  totalRows: number;
+  pendingRows: number;
+  processingRows: number;
+  completedRows: number;
+  failedRows: number;
+  retryableRows: number;
+  failedRowNumbers: number[];
+  latestError: string | null;
+  firstQueuedAt: string;
+  lastUpdatedAt: string;
 }
 
 const learnerIdentityTypeFromRecipientIdentityType = (
@@ -290,6 +313,121 @@ const runBatchRowValidation = async (input: {
   return {
     reports,
     queuedRows,
+  };
+};
+
+const summarizeMigrationBatchProgress = (
+  messages: readonly ImportMigrationBatchQueueMessageRecord[],
+): {
+  totals: {
+    messages: number;
+    batches: number;
+    pendingRows: number;
+    processingRows: number;
+    completedRows: number;
+    failedRows: number;
+  };
+  batches: MigrationBatchProgressSummary[];
+} => {
+  const summaries = new Map<string, MigrationBatchProgressSummary>();
+
+  for (const message of messages) {
+    const key = `${message.source}:${message.batchId}`;
+    const existing = summaries.get(key);
+    const summary =
+      existing ??
+      ({
+        batchId: message.batchId,
+        source: message.source,
+        fileName: message.fileName,
+        format: message.format,
+        totalRows: 0,
+        pendingRows: 0,
+        processingRows: 0,
+        completedRows: 0,
+        failedRows: 0,
+        retryableRows: 0,
+        failedRowNumbers: [],
+        latestError: null,
+        firstQueuedAt: message.createdAt,
+        lastUpdatedAt: message.updatedAt,
+      } satisfies MigrationBatchProgressSummary);
+    summary.totalRows += 1;
+
+    if (summary.fileName === null && message.fileName !== null) {
+      summary.fileName = message.fileName;
+    }
+
+    if (summary.format === null && message.format !== null) {
+      summary.format = message.format;
+    }
+
+    if (message.createdAt < summary.firstQueuedAt) {
+      summary.firstQueuedAt = message.createdAt;
+    }
+
+    if (message.updatedAt > summary.lastUpdatedAt) {
+      summary.lastUpdatedAt = message.updatedAt;
+    }
+
+    if (message.lastError !== null && message.lastError.trim().length > 0) {
+      summary.latestError = message.lastError;
+    }
+
+    if (message.status === 'pending') {
+      summary.pendingRows += 1;
+    } else if (message.status === 'processing') {
+      summary.processingRows += 1;
+    } else if (message.status === 'completed') {
+      summary.completedRows += 1;
+    } else {
+      summary.failedRows += 1;
+      summary.retryableRows += 1;
+
+      if (message.rowNumber !== null) {
+        summary.failedRowNumbers.push(message.rowNumber);
+      }
+    }
+
+    if (existing === undefined) {
+      summaries.set(key, summary);
+    }
+  }
+
+  const batches = Array.from(summaries.values())
+    .map((summary) => {
+      summary.failedRowNumbers.sort((left, right) => left - right);
+
+      return {
+        ...summary,
+        failedRowNumbers: summary.failedRowNumbers.slice(0, 50),
+      };
+    })
+    .sort((left, right) => {
+      return right.lastUpdatedAt.localeCompare(left.lastUpdatedAt);
+    });
+  const totals = batches.reduce(
+    (accumulator, summary) => {
+      accumulator.messages += summary.totalRows;
+      accumulator.pendingRows += summary.pendingRows;
+      accumulator.processingRows += summary.processingRows;
+      accumulator.completedRows += summary.completedRows;
+      accumulator.failedRows += summary.failedRows;
+      return accumulator;
+    },
+    {
+      messages: 0,
+      batches: batches.length,
+      pendingRows: 0,
+      processingRows: 0,
+      completedRows: 0,
+      failedRows: 0,
+    },
+  );
+
+  return {
+    totals,
+    batches,
   };
 };
 
@@ -646,6 +784,142 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         invalidRows,
         queuedRows,
         rows: reports,
+      },
+      200,
+    );
+  });
+
+  app.get('/v1/tenants/:tenantId/migrations/progress', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    let query;
+
+    try {
+      query = parseMigrationProgressQuery({
+        source: c.req.query('source'),
+        limit: c.req.query('limit'),
+      });
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid migration progress query parameters',
+        },
+        400,
+      );
+    }
+
+    const messages = await listImportMigrationBatchQueueMessages(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      ...(query.source === 'all' ? {} : { source: query.source }),
+      limit: query.limit,
+    });
+    const progress = summarizeMigrationBatchProgress(messages);
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        filters: {
+          source: query.source,
+          limit: query.limit,
+        },
+        totals: progress.totals,
+        batches: progress.batches,
+      },
+      200,
+    );
+  });
+
+  app.post('/v1/tenants/:tenantId/migrations/batches/:batchId/retry', async (c) => {
+    const pathParams = parseMigrationBatchPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    let rawBody: unknown = {};
+    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+
+    if (contentType.includes('application/json')) {
+      const bodyText = await c.req.text();
+
+      if (bodyText.trim().length > 0) {
+        try {
+          rawBody = JSON.parse(bodyText) as unknown;
+        } catch {
+          return c.json(
+            {
+              error: 'Invalid retry request payload',
+            },
+            400,
+          );
+        }
+      }
+    } else if (contentType.length > 0) {
+      try {
+        rawBody = await c.req.json<unknown>();
+      } catch {
+        return c.json(
+          {
+            error: 'Invalid retry request payload',
+          },
+          400,
+        );
+      }
+    }
+
+    let request;
+
+    try {
+      request = parseMigrationBatchRetryRequest(rawBody);
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid retry request payload',
+        },
+        400,
+      );
+    }
+
+    const retryResult = await retryFailedImportMigrationBatchQueueMessages(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      batchId: pathParams.batchId,
+      ...(request.source === undefined ? {} : { source: request.source }),
+      ...(request.rowNumbers === undefined ? {} : { rowNumbers: request.rowNumbers }),
+    });
+
+    if (retryResult.matched === 0) {
+      return c.json(
+        {
+          error: 'Migration batch was not found for tenant',
+        },
+        404,
+      );
+    }
+
+    const refreshedMessages = await listImportMigrationBatchQueueMessages(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      ...(request.source === undefined ? {} : { source: request.source }),
+      limit: 1000,
+    });
+    const refreshedProgress = summarizeMigrationBatchProgress(
+      refreshedMessages.filter((message) => {
+        return message.batchId === pathParams.batchId;
+      }),
+    );
+    const batchSummary = refreshedProgress.batches[0] ?? null;
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        batchId: pathParams.batchId,
+        retry: retryResult,
+        batch: batchSummary,
       },
       200,
     );

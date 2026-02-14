@@ -1056,6 +1056,36 @@ export interface FailJobQueueMessageInput {
   retryDelaySeconds: number;
 }
 
+export type MigrationBatchSource = 'file_upload' | 'credly_export' | 'unknown';
+
+export interface ImportMigrationBatchQueueMessageRecord extends JobQueueMessageRecord {
+  source: MigrationBatchSource;
+  batchId: string;
+  rowNumber: number | null;
+  fileName: string | null;
+  format: string | null;
+}
+
+export interface ListImportMigrationBatchQueueMessagesInput {
+  tenantId: string;
+  source?: Exclude<MigrationBatchSource, 'unknown'> | undefined;
+  limit?: number | undefined;
+}
+
+export interface RetryFailedImportMigrationBatchQueueMessagesInput {
+  tenantId: string;
+  batchId: string;
+  source?: Exclude<MigrationBatchSource, 'unknown'> | undefined;
+  rowNumbers?: readonly number[] | undefined;
+  nowIso?: string | undefined;
+}
+
+export interface RetryFailedImportMigrationBatchQueueMessagesResult {
+  matched: number;
+  retried: number;
+  skippedNotFailed: number;
+}
+
 export interface RecordAssertionRevocationInput {
   tenantId: string;
   assertionId: string;
@@ -8683,6 +8713,65 @@ const mapJobQueueMessageRow = (row: JobQueueMessageRow): JobQueueMessageRecord =
   };
 };
 
+const migrationBatchPayloadFromJson = (payloadJson: string): {
+  source: MigrationBatchSource;
+  batchId: string;
+  rowNumber: number | null;
+  fileName: string | null;
+  format: string | null;
+} | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(payloadJson) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const payload = parsed as Record<string, unknown>;
+  const rawBatchId = payload.batchId;
+
+  if (typeof rawBatchId !== 'string') {
+    return null;
+  }
+
+  const batchId = rawBatchId.trim();
+
+  if (batchId.length === 0) {
+    return null;
+  }
+
+  const source =
+    payload.source === 'file_upload' || payload.source === 'credly_export'
+      ? payload.source
+      : 'unknown';
+  const rowNumberRaw = payload.rowNumber;
+  const rowNumber =
+    typeof rowNumberRaw === 'number' && Number.isInteger(rowNumberRaw) && rowNumberRaw > 0
+      ? rowNumberRaw
+      : null;
+  const fileName =
+    typeof payload.fileName === 'string' && payload.fileName.trim().length > 0
+      ? payload.fileName.trim()
+      : null;
+  const format =
+    typeof payload.format === 'string' && payload.format.trim().length > 0
+      ? payload.format.trim()
+      : null;
+
+  return {
+    source,
+    batchId,
+    rowNumber,
+    fileName,
+    format,
+  };
+};
+
 export const enqueueJobQueueMessage = async (
   db: SqlDatabase,
   input: EnqueueJobQueueMessageInput,
@@ -8886,6 +8975,131 @@ export const failJobQueueMessage = async (
   }
 
   return row.status;
+};
+
+export const listImportMigrationBatchQueueMessages = async (
+  db: SqlDatabase,
+  input: ListImportMigrationBatchQueueMessagesInput,
+): Promise<ImportMigrationBatchQueueMessageRecord[]> => {
+  const limit = input.limit ?? 200;
+  const boundedLimit = Math.max(1, Math.min(limit, 1000));
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        tenant_id AS tenantId,
+        job_type AS jobType,
+        payload_json AS payloadJson,
+        idempotency_key AS idempotencyKey,
+        attempt_count AS attemptCount,
+        max_attempts AS maxAttempts,
+        available_at AS availableAt,
+        leased_until AS leasedUntil,
+        lease_token AS leaseToken,
+        last_error AS lastError,
+        completed_at AS completedAt,
+        failed_at AS failedAt,
+        status,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM job_queue_messages
+      WHERE tenant_id = ?
+        AND job_type = 'import_migration_batch'
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    )
+    .bind(input.tenantId, boundedLimit)
+    .all<JobQueueMessageRow>();
+  const parsedMessages: ImportMigrationBatchQueueMessageRecord[] = [];
+
+  for (const row of result.results) {
+    const payload = migrationBatchPayloadFromJson(row.payloadJson);
+
+    if (payload === null) {
+      continue;
+    }
+
+    if (input.source !== undefined && payload.source !== input.source) {
+      continue;
+    }
+
+    parsedMessages.push({
+      ...mapJobQueueMessageRow(row),
+      source: payload.source,
+      batchId: payload.batchId,
+      rowNumber: payload.rowNumber,
+      fileName: payload.fileName,
+      format: payload.format,
+    });
+  }
+
+  return parsedMessages;
+};
+
+export const retryFailedImportMigrationBatchQueueMessages = async (
+  db: SqlDatabase,
+  input: RetryFailedImportMigrationBatchQueueMessagesInput,
+): Promise<RetryFailedImportMigrationBatchQueueMessagesResult> => {
+  const nowIso = input.nowIso ?? new Date().toISOString();
+  const rowNumberFilter =
+    input.rowNumbers === undefined ? null : new Set<number>(input.rowNumbers);
+  const candidateRows = await listImportMigrationBatchQueueMessages(db, {
+    tenantId: input.tenantId,
+    ...(input.source === undefined ? {} : { source: input.source }),
+    limit: 1000,
+  });
+  let matched = 0;
+  let retried = 0;
+  let skippedNotFailed = 0;
+
+  for (const row of candidateRows) {
+    if (row.batchId !== input.batchId) {
+      continue;
+    }
+
+    if (
+      rowNumberFilter !== null &&
+      (row.rowNumber === null || !rowNumberFilter.has(row.rowNumber))
+    ) {
+      continue;
+    }
+
+    matched += 1;
+
+    if (row.status !== 'failed') {
+      skippedNotFailed += 1;
+      continue;
+    }
+
+    await db
+      .prepare(
+        `
+        UPDATE job_queue_messages
+        SET status = 'pending',
+            attempt_count = 0,
+            available_at = ?,
+            leased_until = NULL,
+            lease_token = NULL,
+            last_error = NULL,
+            failed_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND tenant_id = ?
+          AND job_type = 'import_migration_batch'
+      `,
+      )
+      .bind(nowIso, nowIso, row.id, input.tenantId)
+      .run();
+    retried += 1;
+  }
+
+  return {
+    matched,
+    retried,
+    skippedNotFailed,
+  };
 };
 
 export const recordAssertionRevocation = async (

@@ -12,6 +12,10 @@
 
 `POST /v1/tenants/:tenantId/migrations/credly/ingest?dryRun=true|false`
 
+`GET /v1/tenants/:tenantId/migrations/progress?source=all|file_upload|credly_export&limit=1..200`
+
+`POST /v1/tenants/:tenantId/migrations/batches/:batchId/retry`
+
 Auth: tenant session with issuer role (`owner`, `admin`, or `issuer`).
 
 ## Request
@@ -37,6 +41,8 @@ Batch upload endpoint (`/batch-upload`):
 
 Credly ingestion endpoint (`/migrations/credly/ingest`) follows the same dry-run and queueing semantics.  
 See `docs/CREDLY_EXPORT_INGESTION.md` for supported Credly JSON/CSV shapes.
+
+Migration progress and retry controls are documented in `docs/MIGRATION_PROGRESS_DASHBOARD.md`.
 
 ## Response
 

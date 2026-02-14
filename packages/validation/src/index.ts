@@ -187,6 +187,10 @@ export const tenantApiKeyPathParamsSchema = tenantPathParamsSchema.extend({
   apiKeyId: resourceIdSchema,
 });
 
+export const migrationBatchPathParamsSchema = tenantPathParamsSchema.extend({
+  batchId: z.string().trim().min(1).max(128),
+});
+
 export const tenantDedicatedDbProvisioningRequestPathParamsSchema = tenantPathParamsSchema.extend({
   requestId: resourceIdSchema,
 });
@@ -638,6 +642,34 @@ export const migrationBatchUploadQuerySchema = z.object({
   }, z.boolean()),
 });
 
+export const migrationProgressQuerySchema = z.object({
+  source: z.preprocess((input) => {
+    if (input === undefined) {
+      return 'all';
+    }
+
+    return input;
+  }, z.enum(['all', 'file_upload', 'credly_export'])),
+  limit: z.preprocess((input) => {
+    if (input === undefined) {
+      return 50;
+    }
+
+    if (typeof input === 'string') {
+      const parsed = Number.parseInt(input, 10);
+
+      return Number.isFinite(parsed) ? parsed : input;
+    }
+
+    return input;
+  }, z.number().int().min(1).max(200)),
+});
+
+export const migrationBatchRetryRequestSchema = z.object({
+  source: z.enum(['file_upload', 'credly_export']).optional(),
+  rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
+});
+
 export const ob2ImportConversionRequestSchema = z
   .object({
     ob2Assertion: jsonObjectSchema.optional(),
@@ -743,11 +775,14 @@ export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
 export type MigrationBatchUploadQuery = z.infer<typeof migrationBatchUploadQuerySchema>;
+export type MigrationProgressQuery = z.infer<typeof migrationProgressQuerySchema>;
+export type MigrationBatchRetryRequest = z.infer<typeof migrationBatchRetryRequestSchema>;
 export type Ob2ImportConversionRequest = z.infer<typeof ob2ImportConversionRequestSchema>;
 export type IssueBadgeQueueJob = z.infer<typeof issueBadgeQueueJobSchema>;
 export type RevokeBadgeQueueJob = z.infer<typeof revokeBadgeQueueJobSchema>;
 export type ManualIssueBadgeRequest = z.infer<typeof manualIssueBadgeRequestSchema>;
 export type TenantPathParams = z.infer<typeof tenantPathParamsSchema>;
+export type MigrationBatchPathParams = z.infer<typeof migrationBatchPathParamsSchema>;
 export type BadgeTemplatePathParams = z.infer<typeof badgeTemplatePathParamsSchema>;
 export type CredentialPathParams = z.infer<typeof credentialPathParamsSchema>;
 export type TenantUserPathParams = z.infer<typeof tenantUserPathParamsSchema>;
@@ -896,6 +931,14 @@ export const parseMigrationBatchUploadQuery = (input: unknown): MigrationBatchUp
   return migrationBatchUploadQuerySchema.parse(input);
 };
 
+export const parseMigrationProgressQuery = (input: unknown): MigrationProgressQuery => {
+  return migrationProgressQuerySchema.parse(input);
+};
+
+export const parseMigrationBatchRetryRequest = (input: unknown): MigrationBatchRetryRequest => {
+  return migrationBatchRetryRequestSchema.parse(input);
+};
+
 export const parseOb2ImportConversionRequest = (input: unknown): Ob2ImportConversionRequest => {
   return ob2ImportConversionRequestSchema.parse(input);
 };
@@ -906,6 +949,10 @@ export const parseManualIssueBadgeRequest = (input: unknown): ManualIssueBadgeRe
 
 export const parseTenantPathParams = (input: unknown): TenantPathParams => {
   return tenantPathParamsSchema.parse(input);
+};
+
+export const parseMigrationBatchPathParams = (input: unknown): MigrationBatchPathParams => {
+  return migrationBatchPathParamsSchema.parse(input);
 };
 
 export const parseBadgeTemplatePathParams = (input: unknown): BadgeTemplatePathParams => {

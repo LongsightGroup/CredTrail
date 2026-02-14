@@ -9,7 +9,9 @@ vi.mock('@credtrail/db', async () => {
     findActiveSessionByHash: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
+    listImportMigrationBatchQueueMessages: vi.fn(),
     listBadgeTemplates: vi.fn(),
+    retryFailedImportMigrationBatchQueueMessages: vi.fn(),
     touchSession: vi.fn(),
   };
 });
@@ -25,9 +27,12 @@ import {
   findLearnerProfileByIdentity,
   findActiveSessionByHash,
   findTenantMembership,
+  listImportMigrationBatchQueueMessages,
   listBadgeTemplates,
+  retryFailedImportMigrationBatchQueueMessages,
   touchSession,
   type BadgeTemplateRecord,
+  type ImportMigrationBatchQueueMessageRecord,
   type LearnerProfileRecord,
   type SessionRecord,
   type SqlDatabase,
@@ -41,7 +46,11 @@ const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedEnqueueJobQueueMessage = vi.mocked(enqueueJobQueueMessage);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
+const mockedListImportMigrationBatchQueueMessages = vi.mocked(listImportMigrationBatchQueueMessages);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
+const mockedRetryFailedImportMigrationBatchQueueMessages = vi.mocked(
+  retryFailedImportMigrationBatchQueueMessages,
+);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
@@ -115,6 +124,35 @@ const sampleLearnerProfile = (): LearnerProfileRecord => {
   };
 };
 
+const sampleMigrationQueueMessage = (
+  overrides?: Partial<ImportMigrationBatchQueueMessageRecord>,
+): ImportMigrationBatchQueueMessageRecord => {
+  return {
+    id: 'job_mig_123',
+    tenantId: 'tenant_123',
+    jobType: 'import_migration_batch',
+    payloadJson: '{"batchId":"batch_123"}',
+    idempotencyKey: 'migration-batch:batch_123:1',
+    attemptCount: 1,
+    maxAttempts: 8,
+    availableAt: '2026-02-14T12:00:00.000Z',
+    leasedUntil: null,
+    leaseToken: null,
+    lastError: null,
+    completedAt: null,
+    failedAt: null,
+    status: 'pending',
+    createdAt: '2026-02-14T12:00:00.000Z',
+    updatedAt: '2026-02-14T12:00:00.000Z',
+    source: 'file_upload',
+    batchId: 'batch_123',
+    rowNumber: 1,
+    fileName: 'migration.csv',
+    format: 'csv',
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -143,8 +181,16 @@ beforeEach(() => {
   mockedFindLearnerProfileByIdentity.mockResolvedValue(null);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership());
+  mockedListImportMigrationBatchQueueMessages.mockReset();
+  mockedListImportMigrationBatchQueueMessages.mockResolvedValue([]);
   mockedListBadgeTemplates.mockReset();
   mockedListBadgeTemplates.mockResolvedValue([]);
+  mockedRetryFailedImportMigrationBatchQueueMessages.mockReset();
+  mockedRetryFailedImportMigrationBatchQueueMessages.mockResolvedValue({
+    matched: 0,
+    retried: 0,
+    skippedNotFailed: 0,
+  });
   mockedTouchSession.mockReset();
   mockedTouchSession.mockResolvedValue();
 });
@@ -594,5 +640,155 @@ describe('POST /v1/tenants/:tenantId/migrations/credly/ingest', () => {
         source: 'credly_export',
       }),
     );
+  });
+});
+
+describe('migration progress dashboard and retry controls', () => {
+  it('returns migration batch progress summaries for tenant dashboards', async () => {
+    const env = createEnv();
+    mockedListImportMigrationBatchQueueMessages.mockResolvedValue([
+      sampleMigrationQueueMessage({
+        id: 'job_mig_1',
+        batchId: 'batch_abc',
+        rowNumber: 1,
+        status: 'completed',
+        completedAt: '2026-02-14T12:05:00.000Z',
+      }),
+      sampleMigrationQueueMessage({
+        id: 'job_mig_2',
+        batchId: 'batch_abc',
+        rowNumber: 2,
+        status: 'failed',
+        lastError: 'Badge template not found',
+        failedAt: '2026-02-14T12:05:30.000Z',
+        updatedAt: '2026-02-14T12:05:30.000Z',
+      }),
+      sampleMigrationQueueMessage({
+        id: 'job_mig_3',
+        source: 'credly_export',
+        batchId: 'batch_xyz',
+        rowNumber: 1,
+        status: 'pending',
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/progress?source=all&limit=25',
+      {
+        method: 'GET',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(mockedListImportMigrationBatchQueueMessages).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        limit: 25,
+      }),
+    );
+    expect(body.tenantId).toBe('tenant_123');
+
+    const totals = body.totals as Record<string, unknown>;
+    expect(totals.messages).toBe(3);
+    expect(totals.batches).toBe(2);
+    expect(totals.failedRows).toBe(1);
+
+    const batches = body.batches as Record<string, unknown>[];
+    const uploadBatch = batches.find((batch) => batch.batchId === 'batch_abc');
+    expect(uploadBatch?.failedRows).toBe(1);
+    expect(uploadBatch?.retryableRows).toBe(1);
+    expect(uploadBatch?.latestError).toBe('Badge template not found');
+  });
+
+  it('retries failed migration batch rows and returns refreshed batch state', async () => {
+    const env = createEnv();
+    mockedRetryFailedImportMigrationBatchQueueMessages.mockResolvedValue({
+      matched: 2,
+      retried: 1,
+      skippedNotFailed: 1,
+    });
+    mockedListImportMigrationBatchQueueMessages.mockResolvedValue([
+      sampleMigrationQueueMessage({
+        id: 'job_mig_1',
+        batchId: 'batch_retry',
+        rowNumber: 1,
+        status: 'pending',
+      }),
+      sampleMigrationQueueMessage({
+        id: 'job_mig_2',
+        batchId: 'batch_retry',
+        rowNumber: 2,
+        status: 'completed',
+        completedAt: '2026-02-14T12:10:00.000Z',
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/batches/batch_retry/retry',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: 'file_upload',
+          rowNumbers: [1, 2],
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(mockedRetryFailedImportMigrationBatchQueueMessages).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        batchId: 'batch_retry',
+        source: 'file_upload',
+        rowNumbers: [1, 2],
+      }),
+    );
+
+    const retry = body.retry as Record<string, unknown>;
+    expect(retry.retried).toBe(1);
+
+    const batch = body.batch as Record<string, unknown>;
+    expect(batch.batchId).toBe('batch_retry');
+    expect(batch.failedRows).toBe(0);
+    expect(batch.pendingRows).toBe(1);
+  });
+
+  it('returns 404 when retry target batch does not exist', async () => {
+    const env = createEnv();
+    mockedRetryFailedImportMigrationBatchQueueMessages.mockResolvedValue({
+      matched: 0,
+      retried: 0,
+      skippedNotFailed: 0,
+    });
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/batches/missing_batch/retry',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe('Migration batch was not found for tenant');
   });
 });

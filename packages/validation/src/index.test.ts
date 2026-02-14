@@ -32,6 +32,9 @@ import {
   parseAssertionPathParams,
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
+  parseMigrationBatchPathParams,
+  parseMigrationBatchRetryRequest,
+  parseMigrationProgressQuery,
   parseMigrationBatchUploadQuery,
   parseOb2ImportConversionRequest,
   parseProcessQueueRequest,
@@ -288,6 +291,50 @@ describe('migration batch upload query parser', () => {
         dryRun: 'nope',
       });
     }).toThrowError();
+  });
+});
+
+describe('migration progress parser', () => {
+  it('defaults progress query values', () => {
+    const query = parseMigrationProgressQuery({});
+    expect(query.source).toBe('all');
+    expect(query.limit).toBe(50);
+  });
+
+  it('parses source and limit filters', () => {
+    const query = parseMigrationProgressQuery({
+      source: 'credly_export',
+      limit: '25',
+    });
+    expect(query.source).toBe('credly_export');
+    expect(query.limit).toBe(25);
+  });
+
+  it('rejects invalid source filters', () => {
+    expect(() => {
+      parseMigrationProgressQuery({
+        source: 'legacy_csv',
+      });
+    }).toThrowError();
+  });
+
+  it('parses migration batch path params', () => {
+    const params = parseMigrationBatchPathParams({
+      tenantId: 'tenant_123',
+      batchId: 'cc8f1dc6-ff06-4f4f-b915-c0de703ff5e0',
+    });
+
+    expect(params.batchId).toContain('cc8f');
+  });
+
+  it('parses retry payload row filters', () => {
+    const request = parseMigrationBatchRetryRequest({
+      source: 'file_upload',
+      rowNumbers: [1, 2, 3],
+    });
+
+    expect(request.source).toBe('file_upload');
+    expect(request.rowNumbers).toEqual([1, 2, 3]);
   });
 });
 
