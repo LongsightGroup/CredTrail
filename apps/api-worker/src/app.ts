@@ -543,6 +543,7 @@ registerLtiRoutes({
 
 registerMigrationRoutes({
   app,
+  resolveDatabase,
   requireTenantRole,
   ISSUER_ROLES,
 });

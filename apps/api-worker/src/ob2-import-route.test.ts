@@ -6,7 +6,9 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     findActiveSessionByHash: vi.fn(),
+    findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
+    listBadgeTemplates: vi.fn(),
     touchSession: vi.fn(),
   };
 });
@@ -18,9 +20,13 @@ vi.mock('@credtrail/db/postgres', () => {
 });
 
 import {
+  findLearnerProfileByIdentity,
   findActiveSessionByHash,
   findTenantMembership,
+  listBadgeTemplates,
   touchSession,
+  type BadgeTemplateRecord,
+  type LearnerProfileRecord,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
@@ -30,7 +36,9 @@ import { createPostgresDatabase } from '@credtrail/db/postgres';
 import { app } from './index';
 
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
+const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
+const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
@@ -74,13 +82,47 @@ const sampleMembership = (): TenantMembershipRecord => {
   };
 };
 
+const sampleTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
+  return {
+    id: 'badge_template_123',
+    tenantId: 'tenant_123',
+    slug: 'migration-foundations',
+    title: 'Migration Foundations',
+    description: 'Old description',
+    criteriaUri: 'https://issuer.test/badges/old-criteria',
+    imageUri: 'https://issuer.test/badges/old-image',
+    createdByUserId: 'usr_123',
+    ownerOrgUnitId: 'tenant_123:org:institution',
+    governanceMetadataJson: null,
+    isArchived: false,
+    createdAt: '2026-02-14T12:00:00.000Z',
+    updatedAt: '2026-02-14T12:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleLearnerProfile = (): LearnerProfileRecord => {
+  return {
+    id: 'lpr_123',
+    tenantId: 'tenant_123',
+    subjectId: 'did:key:z6Mkexample',
+    displayName: 'Learner',
+    createdAt: '2026-02-14T12:00:00.000Z',
+    updatedAt: '2026-02-14T12:00:00.000Z',
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindActiveSessionByHash.mockReset();
   mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+  mockedFindLearnerProfileByIdentity.mockReset();
+  mockedFindLearnerProfileByIdentity.mockResolvedValue(null);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership());
+  mockedListBadgeTemplates.mockReset();
+  mockedListBadgeTemplates.mockResolvedValue([]);
   mockedTouchSession.mockReset();
   mockedTouchSession.mockResolvedValue();
 });
@@ -168,5 +210,98 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/convert', () => {
 
     expect(response.status).toBe(401);
     expect(body.error).toBe('Not authenticated');
+  });
+});
+
+describe('POST /v1/tenants/:tenantId/migrations/ob2/dry-run', () => {
+  it('returns dry-run validation report with diff preview for valid payloads', async () => {
+    const env = createEnv();
+    mockedListBadgeTemplates.mockResolvedValue([
+      sampleTemplate({
+        slug: 'migration-foundations',
+      }),
+    ]);
+    mockedFindLearnerProfileByIdentity.mockResolvedValue(sampleLearnerProfile());
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/ob2/dry-run',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ob2Assertion: {
+            '@context': 'https://w3id.org/openbadges/v2',
+            type: 'Assertion',
+            recipient: {
+              type: 'email',
+              identity: 'learner@example.edu',
+            },
+            badge: {
+              type: 'BadgeClass',
+              id: 'https://issuer.test/badges/24',
+              name: 'Migration Foundations',
+              description: 'New description',
+              criteria: {
+                id: 'https://issuer.test/badges/24/criteria',
+              },
+              image: {
+                id: 'https://issuer.test/badges/24/image',
+              },
+              issuer: {
+                id: 'https://issuer.test/issuers/1',
+                name: 'Issuer Test',
+                url: 'https://issuer.test',
+              },
+            },
+            issuedOn: '2025-10-01T12:00:00Z',
+          },
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('valid');
+
+    const validationReport = body.validationReport as Record<string, unknown>;
+    const diffPreview = validationReport.diffPreview as Record<string, unknown>;
+    const badgeTemplate = diffPreview.badgeTemplate as Record<string, unknown>;
+    const learnerProfile = diffPreview.learnerProfile as Record<string, unknown>;
+    const summary = diffPreview.summary as Record<string, unknown>;
+
+    expect((validationReport.errors as unknown[]).length).toBe(0);
+    expect(badgeTemplate.operation).toBe('update');
+    expect((badgeTemplate.changedFields as unknown[]).length).toBeGreaterThan(0);
+    expect(learnerProfile.operation).toBe('reuse');
+    expect(summary.updates).toBe(1);
+  });
+
+  it('returns invalid status with parser errors for malformed payload', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/ob2/dry-run',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe('invalid');
+
+    const validationReport = body.validationReport as Record<string, unknown>;
+    expect((validationReport.errors as unknown[]).length).toBeGreaterThan(0);
+    expect(validationReport.diffPreview).toBeNull();
   });
 });

@@ -6,6 +6,8 @@
 
 `POST /v1/tenants/:tenantId/migrations/ob2/convert`
 
+`POST /v1/tenants/:tenantId/migrations/ob2/dry-run`
+
 Auth: tenant session with issuer role (`owner`, `admin`, or `issuer`).
 
 ## Request
@@ -33,6 +35,21 @@ The endpoint returns:
 - `warnings`
 
 If the baked PNG only contains an assertion URL, extraction succeeds and `conversion` is `null` until full assertion JSON is provided.
+
+## Dry-run Validation Report
+
+`/dry-run` always responds with a validation report that includes:
+
+- `status`: `valid` or `invalid`
+- `validationReport.errors`: blocking issues
+- `validationReport.warnings`: non-blocking conversion warnings
+- `validationReport.diffPreview`: simulated create/update impact
+
+The diff preview currently models:
+
+- badge template create/update action and changed fields
+- learner profile reuse/create impact
+- assertion issue operation summary (create/update counts)
 
 ## Baked PNG Support
 
