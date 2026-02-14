@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
   parseAdminUpsertTenantSigningRegistrationRequest,
@@ -828,6 +829,37 @@ describe('admin request parsers', () => {
     expect(() => {
       parseAdminUpsertTenantMembershipRoleRequest({
         role: 'superadmin',
+      });
+    }).toThrowError();
+  });
+
+  it('parses audit log list query with defaults and optional action', () => {
+    const withDefaults = parseAdminAuditLogListQuery({
+      tenantId: 'tenant_123',
+    });
+    const withAction = parseAdminAuditLogListQuery({
+      tenantId: 'tenant_123',
+      action: 'membership.role_changed',
+      limit: '25',
+    });
+
+    expect(withDefaults.limit).toBe(100);
+    expect(withDefaults.action).toBeUndefined();
+    expect(withAction.action).toBe('membership.role_changed');
+    expect(withAction.limit).toBe(25);
+  });
+
+  it('rejects invalid audit log list query values', () => {
+    expect(() => {
+      parseAdminAuditLogListQuery({
+        tenantId: '',
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseAdminAuditLogListQuery({
+        tenantId: 'tenant_123',
+        limit: '0',
       });
     }).toThrowError();
   });

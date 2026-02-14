@@ -2,16 +2,20 @@ import { createDidWeb } from '@credtrail/core-domain';
 import {
   createAuditLog,
   deleteLtiIssuerRegistrationByIssuer,
+  listAuditLogs,
   listLtiIssuerRegistrations,
   upsertBadgeTemplateById,
   upsertLtiIssuerRegistration,
   upsertTenant,
   upsertTenantMembershipRole,
   upsertTenantSigningRegistration,
+  type AuditLogRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { Hono } from 'hono';
 import {
+  type AdminAuditLogListQuery,
+  parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertBadgeTemplateByIdRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
@@ -23,6 +27,7 @@ import {
   parseTenantUserPathParams,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import { auditLogAdminPage, type AuditLogAdminPageFilterState } from '../admin/pages';
 import { normalizeLtiIssuer } from '../lti/lti-helpers';
 import {
   ltiIssuerRegistrationAdminPage,
@@ -61,6 +66,25 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       registrations,
       ...(input.submissionError === undefined ? {} : { submissionError: input.submissionError }),
       ...(input.formState === undefined ? {} : { formState: input.formState }),
+    });
+    return c.html(pageHtml, input.status ?? 200);
+  };
+
+  const auditLogAdminPageResponse = (
+    c: AppContext,
+    input: {
+      token: string;
+      filterState: AuditLogAdminPageFilterState;
+      logs: readonly AuditLogRecord[];
+      status?: 200 | 400;
+      submissionError?: string;
+    },
+  ): Response => {
+    const pageHtml = auditLogAdminPage({
+      token: input.token,
+      filterState: input.filterState,
+      logs: input.logs,
+      ...(input.submissionError === undefined ? {} : { submissionError: input.submissionError }),
     });
     return c.html(pageHtml, input.status ?? 200);
   };
@@ -319,6 +343,107 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     return c.json({
       registrations,
+    });
+  });
+
+  app.get('/v1/admin/audit-logs', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    let query: AdminAuditLogListQuery;
+
+    try {
+      query = parseAdminAuditLogListQuery({
+        tenantId: c.req.query('tenantId'),
+        action: c.req.query('action'),
+        limit: c.req.query('limit'),
+      });
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Invalid audit log query parameters',
+        },
+        400,
+      );
+    }
+
+    const logs = await listAuditLogs(resolveDatabase(c.env), query);
+
+    return c.json({
+      tenantId: query.tenantId,
+      action: query.action ?? null,
+      limit: query.limit,
+      logs,
+    });
+  });
+
+  app.get('/admin/audit-logs', async (c) => {
+    const token = c.req.query('token') ?? null;
+    const unauthorizedResponse = requireBootstrapAdminUiToken(c, token);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    if (token === null) {
+      return c.json(
+        {
+          error: 'Unauthorized',
+        },
+        401,
+      );
+    }
+
+    const tenantId = c.req.query('tenantId');
+    const action = c.req.query('action');
+    const limitRaw = c.req.query('limit');
+    const limitParsed = limitRaw === undefined ? undefined : Number(limitRaw);
+    const filterState: AuditLogAdminPageFilterState = {
+      ...(tenantId === undefined ? {} : { tenantId }),
+      ...(action === undefined ? {} : { action }),
+      ...(typeof limitParsed === 'number' && Number.isFinite(limitParsed)
+        ? {
+            limit: Math.trunc(limitParsed),
+          }
+        : {}),
+    };
+    const hasAnyFilter = tenantId !== undefined || action !== undefined || limitRaw !== undefined;
+
+    if (!hasAnyFilter) {
+      return auditLogAdminPageResponse(c, {
+        token,
+        filterState: {},
+        logs: [],
+      });
+    }
+
+    let query: AdminAuditLogListQuery;
+
+    try {
+      query = parseAdminAuditLogListQuery({
+        tenantId,
+        action,
+        limit: limitRaw,
+      });
+    } catch (error) {
+      return auditLogAdminPageResponse(c, {
+        token,
+        filterState,
+        logs: [],
+        status: 400,
+        submissionError: error instanceof Error ? error.message : 'Invalid audit log filters',
+      });
+    }
+
+    const logs = await listAuditLogs(resolveDatabase(c.env), query);
+
+    return auditLogAdminPageResponse(c, {
+      token,
+      filterState,
+      logs,
     });
   });
 

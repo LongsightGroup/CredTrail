@@ -305,6 +305,12 @@ export interface CreateAuditLogInput {
   occurredAt?: string | undefined;
 }
 
+export interface ListAuditLogsInput {
+  tenantId: string;
+  action?: string | undefined;
+  limit?: number | undefined;
+}
+
 export interface MagicLinkTokenRecord {
   id: string;
   tenantId: string;
@@ -2930,6 +2936,58 @@ export const createAuditLog = async (
   }
 
   return mapAuditLogRow(row);
+};
+
+export const listAuditLogs = async (
+  db: SqlDatabase,
+  input: ListAuditLogsInput,
+): Promise<AuditLogRecord[]> => {
+  const queryLimit = Math.max(1, Math.min(input.limit ?? 100, 200));
+  const whereClauses = ['tenant_id = ?'];
+  const queryParams: unknown[] = [input.tenantId];
+
+  if (input.action !== undefined) {
+    whereClauses.push('action = ?');
+    queryParams.push(input.action);
+  }
+
+  const listStatement = (): Promise<SqlQueryResult<AuditLogRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          actor_user_id AS actorUserId,
+          action,
+          target_type AS targetType,
+          target_id AS targetId,
+          metadata_json AS metadataJson,
+          occurred_at AS occurredAt,
+          created_at AS createdAt
+        FROM audit_logs
+        WHERE ${whereClauses.join('\n          AND ')}
+        ORDER BY occurred_at DESC, created_at DESC, id DESC
+        LIMIT ?
+      `,
+      )
+      .bind(...queryParams, queryLimit)
+      .all<AuditLogRow>();
+
+  let result: SqlQueryResult<AuditLogRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingAuditLogsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAuditLogsTable(db);
+    result = await listStatement();
+  }
+
+  return result.results.map((row) => mapAuditLogRow(row));
 };
 
 export const createMagicLinkToken = async (

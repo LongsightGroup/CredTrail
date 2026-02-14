@@ -421,6 +421,38 @@ export const adminDeleteLtiIssuerRegistrationRequestSchema = z.object({
   issuer: z.string().url(),
 });
 
+export const adminAuditLogListQuerySchema = z.object({
+  tenantId: tenantIdSchema,
+  action: z
+    .preprocess((input) => {
+      if (typeof input !== 'string') {
+        return input;
+      }
+
+      const trimmed = input.trim();
+      return trimmed.length === 0 ? undefined : trimmed;
+    }, z.string().min(1).max(200))
+    .optional(),
+  limit: z.preprocess((input) => {
+    if (input === undefined) {
+      return undefined;
+    }
+
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+
+      if (trimmed.length === 0) {
+        return undefined;
+      }
+
+      const parsed = Number(trimmed);
+      return Number.isNaN(parsed) ? input : parsed;
+    }
+
+    return input;
+  }, z.number().int().min(1).max(200).default(100)),
+});
+
 export const magicLinkRequestSchema = z.object({
   tenantId: tenantIdSchema,
   email: z.string().email(),
@@ -668,6 +700,7 @@ export type AdminUpsertLtiIssuerRegistrationRequest = z.infer<
 export type AdminDeleteLtiIssuerRegistrationRequest = z.infer<
   typeof adminDeleteLtiIssuerRegistrationRequestSchema
 >;
+export type AdminAuditLogListQuery = z.infer<typeof adminAuditLogListQuerySchema>;
 
 export const parseQueueJob = (input: unknown): QueueJob => {
   return queueJobSchema.parse(input);
@@ -853,4 +886,8 @@ export const parseAdminDeleteLtiIssuerRegistrationRequest = (
   input: unknown,
 ): AdminDeleteLtiIssuerRegistrationRequest => {
   return adminDeleteLtiIssuerRegistrationRequestSchema.parse(input);
+};
+
+export const parseAdminAuditLogListQuery = (input: unknown): AdminAuditLogListQuery => {
+  return adminAuditLogListQuerySchema.parse(input);
 };
