@@ -473,3 +473,126 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/batch-upload', () => {
     );
   });
 });
+
+describe('POST /v1/tenants/:tenantId/migrations/credly/ingest', () => {
+  it('parses Credly JSON export payloads in dry-run mode', async () => {
+    const env = createEnv();
+    const formData = new FormData();
+    formData.append(
+      'file',
+      new Blob(
+        [
+          JSON.stringify({
+            data: [
+              {
+                id: 'issued_badge_123',
+                issued_to_first_name: 'Ada',
+                issued_to_last_name: 'Lovelace',
+                issued_to_email: 'ada@example.edu',
+                issued_at: '2025-10-01T12:00:00Z',
+                badge_template: {
+                  id: 'template_001',
+                  name: 'Foundations of AI',
+                  description: 'Awarded for completing foundations curriculum',
+                  image_url: 'https://images.credly.example/template_001.png',
+                  global_activity_url: 'https://issuer.example.edu/badges/foundations-ai',
+                },
+                issuer: {
+                  entities: [
+                    {
+                      id: 'issuer_001',
+                      name: 'Credly University',
+                      url: 'https://issuer.example.edu',
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        ],
+        {
+          type: 'application/json',
+        },
+      ),
+      'credly-issued-badges.json',
+    );
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/credly/ingest?dryRun=true',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.source).toBe('credly_export');
+    expect(body.dryRun).toBe(true);
+    expect(body.totalRows).toBe(1);
+    expect(body.validRows).toBe(1);
+    expect(body.invalidRows).toBe(0);
+    expect(body.queuedRows).toBe(0);
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+  });
+
+  it('queues valid rows from Credly CSV exports when dryRun=false', async () => {
+    const env = createEnv();
+    const formData = new FormData();
+    const csv = [
+      'First Name,Last Name,Recipient Email,Badge Template ID,Issued At',
+      'Ada,Lovelace,ada@example.edu,template_001,2025-10-01T12:00:00Z',
+    ].join('\n');
+    formData.append(
+      'file',
+      new Blob([csv], {
+        type: 'text/csv',
+      }),
+      'credly-export.csv',
+    );
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/credly/ingest?dryRun=false',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.source).toBe('credly_export');
+    expect(body.dryRun).toBe(false);
+    expect(body.totalRows).toBe(1);
+    expect(body.validRows).toBe(1);
+    expect(body.invalidRows).toBe(0);
+    expect(body.queuedRows).toBe(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        jobType: 'import_migration_batch',
+      }),
+    );
+    const firstCall = mockedEnqueueJobQueueMessage.mock.calls[0];
+
+    if (firstCall === undefined) {
+      throw new Error('Expected queue enqueue call');
+    }
+
+    expect(firstCall[1].payload).toEqual(
+      expect.objectContaining({
+        source: 'credly_export',
+      }),
+    );
+  });
+});

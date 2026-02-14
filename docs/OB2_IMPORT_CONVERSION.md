@@ -10,6 +10,8 @@
 
 `POST /v1/tenants/:tenantId/migrations/ob2/batch-upload?dryRun=true|false`
 
+`POST /v1/tenants/:tenantId/migrations/credly/ingest?dryRun=true|false`
+
 Auth: tenant session with issuer role (`owner`, `admin`, or `issuer`).
 
 ## Request
@@ -32,6 +34,9 @@ Batch upload endpoint (`/batch-upload`):
 - Query param:
 - `dryRun=true` (default) validates and previews only
 - `dryRun=false` enqueues valid rows as `import_migration_batch` jobs
+
+Credly ingestion endpoint (`/migrations/credly/ingest`) follows the same dry-run and queueing semantics.  
+See `docs/CREDLY_EXPORT_INGESTION.md` for supported Credly JSON/CSV shapes.
 
 ## Response
 

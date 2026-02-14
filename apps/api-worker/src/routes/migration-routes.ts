@@ -25,6 +25,7 @@ import {
   parseMigrationBatchUploadFile,
   type MigrationBatchFileFormat,
 } from '../migrations/batch-upload';
+import { CredlyExportFileParseError, parseCredlyExportFile } from '../migrations/credly-export';
 
 interface RegisterMigrationRoutesInput {
   app: Hono<AppEnv>;
@@ -186,6 +187,7 @@ const runBatchRowValidation = async (input: {
   db: SqlDatabase;
   tenantId: string;
   dryRun: boolean;
+  source: 'file_upload' | 'credly_export';
   fileName: string;
   format: MigrationBatchFileFormat;
   batchId: string;
@@ -257,7 +259,7 @@ const runBatchRowValidation = async (input: {
         tenantId: input.tenantId,
         jobType: 'import_migration_batch',
         payload: {
-          source: 'file_upload',
+          source: input.source,
           batchId: input.batchId,
           rowNumber: row.rowNumber,
           fileName: input.fileName,
@@ -512,6 +514,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       db,
       tenantId: pathParams.tenantId,
       dryRun: query.dryRun,
+      source: 'file_upload',
       fileName: upload.name,
       format: parsedFile.format,
       batchId,
@@ -527,6 +530,117 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         fileName: upload.name,
         format: parsedFile.format,
         dryRun: query.dryRun,
+        totalRows: reports.length,
+        validRows,
+        invalidRows,
+        queuedRows,
+        rows: reports,
+      },
+      200,
+    );
+  });
+
+  app.post('/v1/tenants/:tenantId/migrations/credly/ingest', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    let query;
+
+    try {
+      query = parseMigrationBatchUploadQuery({
+        dryRun: c.req.query('dryRun'),
+      });
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid credly ingest query parameters',
+        },
+        400,
+      );
+    }
+
+    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+
+    if (!contentType.includes('multipart/form-data')) {
+      return c.json(
+        {
+          error: 'Credly ingest requires multipart/form-data with a file field named "file"',
+        },
+        415,
+      );
+    }
+
+    const formData = await c.req.formData();
+    const upload = formData.get('file');
+
+    if (!(upload instanceof File)) {
+      return c.json(
+        {
+          error: 'Credly ingest file is required in form field "file"',
+        },
+        400,
+      );
+    }
+
+    const fileContent = await upload.text();
+
+    if (fileContent.trim().length === 0) {
+      return c.json(
+        {
+          error: 'Uploaded file is empty',
+        },
+        422,
+      );
+    }
+
+    let parsedFile;
+
+    try {
+      parsedFile = parseCredlyExportFile({
+        fileName: upload.name,
+        mimeType: upload.type,
+        content: fileContent,
+      });
+    } catch (error: unknown) {
+      if (error instanceof CredlyExportFileParseError) {
+        return c.json(
+          {
+            error: error.message,
+          },
+          422,
+        );
+      }
+
+      throw error;
+    }
+
+    const batchId = crypto.randomUUID();
+    const db = resolveDatabase(c.env);
+    const { reports, queuedRows } = await runBatchRowValidation({
+      db,
+      tenantId: pathParams.tenantId,
+      dryRun: query.dryRun,
+      source: 'credly_export',
+      fileName: upload.name,
+      format: parsedFile.format,
+      batchId,
+      rows: parsedFile.rows,
+    });
+    const validRows = reports.filter((report) => report.status === 'valid').length;
+    const invalidRows = reports.length - validRows;
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        batchId,
+        fileName: upload.name,
+        format: parsedFile.format,
+        dryRun: query.dryRun,
+        source: 'credly_export',
         totalRows: reports.length,
         validRows,
         invalidRows,
