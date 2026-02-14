@@ -32,6 +32,7 @@ import {
   parseAssertionPathParams,
   parseMagicLinkRequest,
   parseMagicLinkVerifyRequest,
+  parseOb2ImportConversionRequest,
   parseProcessQueueRequest,
   parseQueueJob,
   parseRevokeBadgeRequest,
@@ -228,6 +229,41 @@ describe('process queue request parser', () => {
       parseProcessQueueRequest({
         limit: 0,
       });
+    }).toThrowError();
+  });
+});
+
+describe('OB2 import conversion parser', () => {
+  it('accepts OB2 assertion JSON payload', () => {
+    const request = parseOb2ImportConversionRequest({
+      ob2Assertion: {
+        '@context': 'https://w3id.org/openbadges/v2',
+        type: 'Assertion',
+        recipient: {
+          type: 'email',
+          identity: 'learner@example.edu',
+        },
+        badge: {
+          type: 'BadgeClass',
+          name: 'Intro Badge',
+        },
+      },
+    });
+
+    expect(request.ob2Assertion?.type).toBe('Assertion');
+  });
+
+  it('accepts bakedBadgeImage payloads without assertion JSON', () => {
+    const request = parseOb2ImportConversionRequest({
+      bakedBadgeImage: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+    });
+
+    expect(request.bakedBadgeImage).toContain('iVBOR');
+  });
+
+  it('rejects payloads without an assertion source', () => {
+    expect(() => {
+      parseOb2ImportConversionRequest({});
     }).toThrowError();
   });
 });

@@ -620,6 +620,23 @@ export const processQueueRequestSchema = z.object({
   retryDelaySeconds: z.number().int().min(1).max(3600).optional(),
 });
 
+export const ob2ImportConversionRequestSchema = z
+  .object({
+    ob2Assertion: jsonObjectSchema.optional(),
+    ob2BadgeClass: jsonObjectSchema.optional(),
+    ob2Issuer: jsonObjectSchema.optional(),
+    bakedBadgeImage: z.string().trim().min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.ob2Assertion === undefined && value.bakedBadgeImage === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ob2Assertion'],
+        message: 'Either ob2Assertion or bakedBadgeImage is required',
+      });
+    }
+  });
+
 export const issueBadgeJobPayloadSchema = z.object({
   assertionId: resourceIdSchema,
   badgeTemplateId: resourceIdSchema,
@@ -703,9 +720,11 @@ export type AssertionLifecycleReasonCode = z.infer<typeof assertionLifecycleReas
 export type AssertionLifecycleTransitionSource = z.infer<
   typeof assertionLifecycleTransitionSourceSchema
 >;
+export type RecipientIdentityType = z.infer<typeof recipientIdentityTypeSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
+export type Ob2ImportConversionRequest = z.infer<typeof ob2ImportConversionRequestSchema>;
 export type IssueBadgeQueueJob = z.infer<typeof issueBadgeQueueJobSchema>;
 export type RevokeBadgeQueueJob = z.infer<typeof revokeBadgeQueueJobSchema>;
 export type ManualIssueBadgeRequest = z.infer<typeof manualIssueBadgeRequestSchema>;
@@ -852,6 +871,10 @@ export const parseRevokeBadgeRequest = (input: unknown): RevokeBadgeRequest => {
 
 export const parseProcessQueueRequest = (input: unknown): ProcessQueueRequest => {
   return processQueueRequestSchema.parse(input);
+};
+
+export const parseOb2ImportConversionRequest = (input: unknown): Ob2ImportConversionRequest => {
+  return ob2ImportConversionRequestSchema.parse(input);
 };
 
 export const parseManualIssueBadgeRequest = (input: unknown): ManualIssueBadgeRequest => {

@@ -109,6 +109,7 @@ import { registerCredentialRoutes } from './routes/credential-routes';
 import { registerDidRoutes } from './routes/did-routes';
 import { registerLearnerRoutes } from './routes/learner-routes';
 import { registerLtiRoutes } from './routes/lti-routes';
+import { registerMigrationRoutes } from './routes/migration-routes';
 import { registerOb3Routes } from './routes/ob3-routes';
 import { registerPresentationRoutes } from './routes/presentation-routes';
 import { registerPublicBadgeRoutes } from './routes/public-badge-routes';
@@ -538,6 +539,12 @@ registerLtiRoutes({
   sessionCookieSecure,
   SESSION_TTL_SECONDS,
   SESSION_COOKIE_NAME,
+});
+
+registerMigrationRoutes({
+  app,
+  requireTenantRole,
+  ISSUER_ROLES,
 });
 
 registerAuthRoutes({
