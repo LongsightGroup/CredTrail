@@ -1,0 +1,8 @@
+node_modules
+.git
+.github
+artifacts
+output
+dist
+coverage
+*.log

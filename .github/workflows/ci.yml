@@ -39,3 +39,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Build Docker smoke image
+        run: docker build -f Dockerfile.ci -t credtrail-ci:${{ github.sha }} .
+
+      - name: Run Docker smoke container
+        run: docker run --rm credtrail-ci:${{ github.sha }}
