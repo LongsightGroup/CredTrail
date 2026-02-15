@@ -643,6 +643,123 @@ describe('POST /v1/tenants/:tenantId/migrations/credly/ingest', () => {
   });
 });
 
+describe('POST /v1/tenants/:tenantId/migrations/parchment/ingest', () => {
+  it('parses Parchment bulk-award CSV payloads in dry-run mode', async () => {
+    const env = createEnv();
+    const formData = new FormData();
+    const csv = [
+      'identifier,badge class id,first name,last name,issue date,narrative,evidence url,evidence narrative',
+      'ada@example.edu,badge_class_001,Ada,Lovelace,2025-10-01T12:00:00Z,Completed final capstone,https://evidence.example.edu/ada-capstone,Capstone artifact',
+    ].join('\n');
+    formData.append(
+      'file',
+      new Blob([csv], {
+        type: 'text/csv',
+      }),
+      'parchment-bulk-awards.csv',
+    );
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/parchment/ingest?dryRun=true',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.source).toBe('parchment_export');
+    expect(body.dryRun).toBe(true);
+    expect(body.totalRows).toBe(1);
+    expect(body.validRows).toBe(1);
+    expect(body.invalidRows).toBe(0);
+    expect(body.queuedRows).toBe(0);
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+  });
+
+  it('queues valid rows from Parchment assertion JSON exports when dryRun=false', async () => {
+    const env = createEnv();
+    const formData = new FormData();
+    formData.append(
+      'file',
+      new Blob(
+        [
+          JSON.stringify({
+            result: [
+              {
+                id: 'assertion_123',
+                recipient: {
+                  type: 'email',
+                  identity: 'ada@example.edu',
+                },
+                issuedOn: '2025-10-01T12:00:00Z',
+                badgeclass: {
+                  id: 'badge_class_001',
+                  name: 'AI Foundations',
+                  issuer: {
+                    id: 'issuer_001',
+                    name: 'Example University',
+                    url: 'https://issuer.example.edu',
+                  },
+                },
+              },
+            ],
+          }),
+        ],
+        {
+          type: 'application/json',
+        },
+      ),
+      'parchment-assertions.json',
+    );
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/migrations/parchment/ingest?dryRun=false',
+      {
+        method: 'POST',
+        headers: {
+          cookie: 'credtrail_session=test-session-token',
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.source).toBe('parchment_export');
+    expect(body.dryRun).toBe(false);
+    expect(body.totalRows).toBe(1);
+    expect(body.validRows).toBe(1);
+    expect(body.invalidRows).toBe(0);
+    expect(body.queuedRows).toBe(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        jobType: 'import_migration_batch',
+      }),
+    );
+    const firstCall = mockedEnqueueJobQueueMessage.mock.calls[0];
+
+    if (firstCall === undefined) {
+      throw new Error('Expected queue enqueue call');
+    }
+
+    expect(firstCall[1].payload).toEqual(
+      expect.objectContaining({
+        source: 'parchment_export',
+      }),
+    );
+  });
+});
+
 describe('migration progress dashboard and retry controls', () => {
   it('returns migration batch progress summaries for tenant dashboards', async () => {
     const env = createEnv();

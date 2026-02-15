@@ -649,7 +649,7 @@ export const migrationProgressQuerySchema = z.object({
     }
 
     return input;
-  }, z.enum(['all', 'file_upload', 'credly_export'])),
+  }, z.enum(['all', 'file_upload', 'credly_export', 'parchment_export'])),
   limit: z.preprocess((input) => {
     if (input === undefined) {
       return 50;
@@ -666,7 +666,7 @@ export const migrationProgressQuerySchema = z.object({
 });
 
 export const migrationBatchRetryRequestSchema = z.object({
-  source: z.enum(['file_upload', 'credly_export']).optional(),
+  source: z.enum(['file_upload', 'credly_export', 'parchment_export']).optional(),
   rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
 });
 

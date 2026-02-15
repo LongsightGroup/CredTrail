@@ -4,7 +4,7 @@
 
 ## Endpoints
 
-`GET /v1/tenants/:tenantId/migrations/progress?source=all|file_upload|credly_export&limit=1..200`
+`GET /v1/tenants/:tenantId/migrations/progress?source=all|file_upload|credly_export|parchment_export&limit=1..200`
 
 `POST /v1/tenants/:tenantId/migrations/batches/:batchId/retry`
 
@@ -27,7 +27,7 @@ Auth: tenant session with issuer role (`owner`, `admin`, or `issuer`).
 
 `POST /migrations/batches/:batchId/retry` request body (optional):
 
-- `source`: `file_upload` or `credly_export`
+- `source`: `file_upload`, `credly_export`, or `parchment_export`
 - `rowNumbers`: specific failed row numbers to retry
 
 Retry behavior:

@@ -1056,7 +1056,7 @@ export interface FailJobQueueMessageInput {
   retryDelaySeconds: number;
 }
 
-export type MigrationBatchSource = 'file_upload' | 'credly_export' | 'unknown';
+export type MigrationBatchSource = 'file_upload' | 'credly_export' | 'parchment_export' | 'unknown';
 
 export interface ImportMigrationBatchQueueMessageRecord extends JobQueueMessageRecord {
   source: MigrationBatchSource;
@@ -8746,7 +8746,9 @@ const migrationBatchPayloadFromJson = (payloadJson: string): {
   }
 
   const source =
-    payload.source === 'file_upload' || payload.source === 'credly_export'
+    payload.source === 'file_upload' ||
+    payload.source === 'credly_export' ||
+    payload.source === 'parchment_export'
       ? payload.source
       : 'unknown';
   const rowNumberRaw = payload.rowNumber;

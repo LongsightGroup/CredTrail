@@ -310,6 +310,16 @@ describe('migration progress parser', () => {
     expect(query.limit).toBe(25);
   });
 
+  it('parses parchment export source filters', () => {
+    const query = parseMigrationProgressQuery({
+      source: 'parchment_export',
+      limit: '10',
+    });
+
+    expect(query.source).toBe('parchment_export');
+    expect(query.limit).toBe(10);
+  });
+
   it('rejects invalid source filters', () => {
     expect(() => {
       parseMigrationProgressQuery({
@@ -329,11 +339,11 @@ describe('migration progress parser', () => {
 
   it('parses retry payload row filters', () => {
     const request = parseMigrationBatchRetryRequest({
-      source: 'file_upload',
+      source: 'parchment_export',
       rowNumbers: [1, 2, 3],
     });
 
-    expect(request.source).toBe('file_upload');
+    expect(request.source).toBe('parchment_export');
     expect(request.rowNumbers).toEqual([1, 2, 3]);
   });
 });
