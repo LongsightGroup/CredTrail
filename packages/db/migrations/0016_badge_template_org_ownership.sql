@@ -47,7 +47,7 @@ SELECT
   1,
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP
-FROM tenants;
+FROM tenants
 ON CONFLICT DO NOTHING;
 
 ALTER TABLE badge_templates
@@ -225,5 +225,5 @@ SELECT
   badge_templates.created_at,
   badge_templates.created_at
 FROM badge_templates
-WHERE badge_templates.owner_org_unit_id IS NOT NULL;
+WHERE badge_templates.owner_org_unit_id IS NOT NULL
 ON CONFLICT DO NOTHING;
