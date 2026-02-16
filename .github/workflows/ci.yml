@@ -50,9 +50,11 @@ jobs:
 
           cleanup() {
             docker logs credtrail-ci-app || true
+            docker logs credtrail-ci-worker || true
             docker logs credtrail-ci-postgres || true
             docker logs credtrail-ci-minio || true
             docker stop credtrail-ci-app >/dev/null 2>&1 || true
+            docker stop credtrail-ci-worker >/dev/null 2>&1 || true
             docker stop credtrail-ci-postgres >/dev/null 2>&1 || true
             docker stop credtrail-ci-minio >/dev/null 2>&1 || true
             docker network rm credtrail-ci-net >/dev/null 2>&1 || true
@@ -115,6 +117,7 @@ jobs:
             -e S3_FORCE_PATH_STYLE=true \
             -e AWS_ACCESS_KEY_ID=minioadmin \
             -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            -e JOB_PROCESSOR_TOKEN=ci-job-token \
             credtrail-ci:${{ github.sha }}
 
           discovery_status=""
@@ -167,16 +170,43 @@ jobs:
               \"
             "
 
-          process_response="$(curl -sS -X POST \
-            -H 'content-type: application/json' \
-            -d '{}' \
-            http://127.0.0.1:8787/v1/jobs/process)"
+          docker run -d \
+            --name credtrail-ci-worker \
+            --network credtrail-ci-net \
+            -e APP_ENV=test \
+            -e PLATFORM_DOMAIN=localhost \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e STORAGE_BACKEND=s3 \
+            -e S3_ENDPOINT=http://credtrail-ci-minio:9000 \
+            -e S3_BUCKET=credtrail-badges \
+            -e S3_REGION=us-east-1 \
+            -e S3_FORCE_PATH_STYLE=true \
+            -e AWS_ACCESS_KEY_ID=minioadmin \
+            -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            -e JOB_PROCESSOR_TOKEN=ci-job-token \
+            -e JOB_POLL_INTERVAL_MS=250 \
+            credtrail-ci:${{ github.sha }} \
+            pnpm exec tsx apps/api-worker/src/node-worker.ts
 
-          echo "$process_response"
+          queue_status=""
+          for attempt in $(seq 1 40); do
+            queue_status="$(docker run --rm \
+              --network credtrail-ci-net \
+              -e DATABASE_URL="$DATABASE_URL" \
+              postgres:16-alpine sh -ceu "
+                psql \"\$DATABASE_URL\" -tAc \
+                  \"SELECT status FROM job_queue_messages WHERE id = 'job-ci-smoke-1';\"
+              " | tr -d '[:space:]' || true)"
 
-          node -e '
-            const response = JSON.parse(process.argv[1]);
-            if (response.status !== "ok" || response.processed < 1 || response.succeeded < 1) {
-              process.exit(1);
-            }
-          ' "$process_response"
+            if [ "$queue_status" = "completed" ]; then
+              echo "Queue worker completed smoke job on attempt $attempt."
+              break
+            fi
+
+            if [ "$attempt" = "40" ]; then
+              echo "Queue smoke job did not complete (last status: ${queue_status:-none})."
+              exit 1
+            fi
+
+            sleep 1
+          done

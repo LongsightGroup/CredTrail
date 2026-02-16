@@ -29,6 +29,11 @@ Optional:
 - `AWS_SESSION_TOKEN`
 - `SENTRY_DSN`
 
+Worker notes:
+
+- The worker process runs the same queue-processing route logic in-process.
+- Configure worker containers with the same DB/storage credentials as the API container.
+
 ## Local Validation with Docker Compose
 
 Use the provided compose stack:
@@ -71,7 +76,7 @@ Set `PLATFORM_DOMAIN` to the public hostname used in credential URLs.
 3. Start new app + worker containers with identical env vars.
 4. Confirm:
    - `GET /healthz/dependencies` returns `200`.
-   - queue worker logs show successful `/v1/jobs/process` calls.
+   - queue worker logs show successful `node_queue_worker_tick` events.
 5. Shift traffic to new app container.
 6. Keep previous image tag `<N>` available for rollback.
 
