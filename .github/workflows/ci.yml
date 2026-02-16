@@ -44,4 +44,31 @@ jobs:
         run: docker build -f Dockerfile.ci -t credtrail-ci:${{ github.sha }} .
 
       - name: Run Docker smoke container
-        run: docker run --rm credtrail-ci:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker run -d \
+            --name credtrail-ci-smoke \
+            -p 8787:8787 \
+            credtrail-ci:${{ github.sha }}
+
+          cleanup() {
+            docker logs credtrail-ci-smoke || true
+            docker stop credtrail-ci-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          status=""
+
+          for attempt in $(seq 1 30); do
+            status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/ims/ob/v3p0/discovery || true)"
+
+            if [ "$status" = "200" ]; then
+              echo "Discovery endpoint returned 200 on attempt $attempt."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          echo "Discovery endpoint did not return HTTP 200 (last status: ${status:-none})."
+          exit 1
