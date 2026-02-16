@@ -96,7 +96,7 @@ jobs:
             -e MINIO_ROOT_PASSWORD=minioadmin \
             minio/minio:latest server /data --console-address :9001
 
-          docker run --rm --network credtrail-ci-net minio/mc:latest sh -ceu '
+          docker run --rm --network credtrail-ci-net --entrypoint /bin/sh minio/mc:latest -ceu '
             until mc alias set local http://credtrail-ci-minio:9000 minioadmin minioadmin; do
               sleep 1
             done
