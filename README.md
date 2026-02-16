@@ -1,6 +1,6 @@
 # CredTrail App
 
-Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
+Open-source Open Badges 3.0 platform with Cloudflare SaaS and Docker self-host runtime profiles.
 
 **Standards-compliant verifiable credential issuance and verification for educational achievements.**
 
@@ -10,7 +10,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - **Badge template creation** - Define reusable badge designs with achievement criteria, images, and metadata
 - **Manual badge issuance** - Issue badges to individual learners with signed verifiable credentials
 - **Cryptographic signing** - Ed25519-based credential signing with `did:web` issuer identities
-- **Immutable storage** - Store signed credentials as `.jsonld` files in R2 object storage
+- **Immutable storage** - Store signed credentials as `.jsonld` files in object storage (R2/S3)
 - **Badge revocation** - Revoke credentials with BitstringStatusList status tracking
 - **Email notifications** - Automatic learner notifications on badge issuance
 
@@ -60,7 +60,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - **Monorepo structure** - Turborepo-based workspace with shared packages
 - **CI/CD pipeline** - Automated linting, type checking, and testing
 - **Observability** - Structured JSON logging with Sentry error tracking and Logpush export
-- **Worker architecture** - Cloudflare Workers runtime with edge deployment
+- **Runtime profiles** - Cloudflare Workers (SaaS) and Node + Docker (self-host)
 
 ## App layout
 
@@ -89,6 +89,7 @@ Open-source Open Badges 3.0 platform built on Cloudflare Workers + Hono.
 - Queue messages are stored in Postgres table `job_queue_messages`.
 - Use `POST /v1/jobs/process` to lease and process pending jobs.
 - Hosted deployment can run the same processor via Cloudflare Cron scheduled events.
+- Self-host deployment can run the queue polling worker process in Docker.
 - Jobs: `issue_badge`, `revoke_badge`, `rebuild_verification_cache`, `import_migration_batch`
 
 ## Commands
@@ -99,6 +100,12 @@ Run from the workspace root:
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
+
+## Self-host Docker
+
+- Build image: `docker build -t credtrail-app:local .`
+- Run reference stack: `docker compose -f docker-compose.selfhost.yml up --build`
+- Runbook: `docs/SELF_HOST_DOCKER_RUNBOOK.md`
 
 ## Observability
 

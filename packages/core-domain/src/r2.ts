@@ -55,7 +55,7 @@ const encodePathSegment = (value: string): string => {
   const trimmed = value.trim();
 
   if (trimmed.length === 0) {
-    throw new Error('R2 path segments must not be empty');
+    throw new Error('Object storage path segments must not be empty');
   }
 
   return encodeURIComponent(trimmed);
@@ -100,7 +100,7 @@ export const storeImmutableCredentialObject = async (
   });
 
   if (putResult === null) {
-    throw new Error(`R2 put operation returned null for key "${key}"`);
+    throw new Error(`Object storage put operation returned null for key "${key}"`);
   }
 
   return {

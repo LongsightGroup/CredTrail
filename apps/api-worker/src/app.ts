@@ -1,4 +1,6 @@
 import {
+  logWarn,
+  type ImmutableCredentialStore,
   type JsonObject,
   type ObservabilityContext,
 } from '@credtrail/core-domain';
@@ -146,7 +148,7 @@ import {
 export interface AppBindings {
   APP_ENV: string;
   DATABASE_URL?: string;
-  BADGE_OBJECTS: R2Bucket;
+  BADGE_OBJECTS: ImmutableCredentialStore;
   PLATFORM_DOMAIN: string;
   MARKETING_SITE_ORIGIN?: string;
   SENTRY_DSN?: string;
@@ -192,6 +194,7 @@ const LANDING_STATIC_PATHS = new Set(['/credtrail-logo.png', '/favicon.svg']);
 const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
 const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
 const databasesByUrl = new Map<string, SqlDatabase>();
+const STORAGE_READINESS_PROBE_KEY = '__credtrail__/healthz/dependency-probe.jsonld';
 
 const resolveDatabase = (bindings: AppBindings): SqlDatabase => {
   if (bindings.DATABASE_URL === undefined) {
@@ -413,6 +416,33 @@ registerCommonMiddleware({
   landingAssetPathPrefix: LANDING_ASSET_PATH_PREFIX,
   landingStaticPaths: LANDING_STATIC_PATHS,
   observabilityContext,
+});
+
+app.get('/healthz/dependencies', async (c) => {
+  try {
+    await resolveDatabase(c.env).prepare('SELECT 1 AS ready').first<{ ready: number }>();
+    await c.env.BADGE_OBJECTS.head(STORAGE_READINESS_PROBE_KEY);
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : 'Unknown dependency check failure';
+
+    logWarn(observabilityContext(c.env), 'dependency_healthcheck_failed', {
+      detail,
+    });
+
+    return c.json(
+      {
+        service: API_SERVICE_NAME,
+        status: 'degraded',
+        detail,
+      },
+      503,
+    );
+  }
+
+  return c.json({
+    service: API_SERVICE_NAME,
+    status: 'ok',
+  });
 });
 
 registerAdminRoutes({

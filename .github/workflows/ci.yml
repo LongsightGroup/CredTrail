@@ -40,35 +40,143 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Build Docker smoke image
-        run: docker build -f Dockerfile.ci -t credtrail-ci:${{ github.sha }} .
+      - name: Build Docker image
+        run: docker build -f Dockerfile -t credtrail-ci:${{ github.sha }} .
 
-      - name: Run Docker smoke container
+      - name: Run Docker smoke stack
         run: |
           set -euo pipefail
-          docker run -d \
-            --name credtrail-ci-smoke \
-            -p 8787:8787 \
-            credtrail-ci:${{ github.sha }}
+          docker network create credtrail-ci-net
 
           cleanup() {
-            docker logs credtrail-ci-smoke || true
-            docker stop credtrail-ci-smoke >/dev/null 2>&1 || true
+            docker logs credtrail-ci-app || true
+            docker logs credtrail-ci-postgres || true
+            docker logs credtrail-ci-minio || true
+            docker stop credtrail-ci-app >/dev/null 2>&1 || true
+            docker stop credtrail-ci-postgres >/dev/null 2>&1 || true
+            docker stop credtrail-ci-minio >/dev/null 2>&1 || true
+            docker network rm credtrail-ci-net >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
-          status=""
+          DATABASE_URL="postgresql://credtrail:credtrail@credtrail-ci-postgres:5432/credtrail"
 
-          for attempt in $(seq 1 30); do
-            status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/ims/ob/v3p0/discovery || true)"
+          docker run -d \
+            --name credtrail-ci-postgres \
+            --network credtrail-ci-net \
+            -e POSTGRES_USER=credtrail \
+            -e POSTGRES_PASSWORD=credtrail \
+            -e POSTGRES_DB=credtrail \
+            postgres:16-alpine
 
-            if [ "$status" = "200" ]; then
-              echo "Discovery endpoint returned 200 on attempt $attempt."
-              exit 0
+          docker run --rm --network credtrail-ci-net postgres:16-alpine sh -ceu '
+            for _ in $(seq 1 30); do
+              pg_isready -h credtrail-ci-postgres -U credtrail -d credtrail && exit 0
+              sleep 1
+            done
+            exit 1
+          '
+
+          docker run --rm \
+            --network credtrail-ci-net \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -v "$PWD/packages/db/migrations:/migrations:ro" \
+            postgres:16-alpine sh -ceu '
+              for migration in /migrations/*.sql; do
+                psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration"
+              done
+            '
+
+          docker run -d \
+            --name credtrail-ci-minio \
+            --network credtrail-ci-net \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data --console-address :9001
+
+          docker run --rm --network credtrail-ci-net minio/mc:latest sh -ceu '
+            until mc alias set local http://credtrail-ci-minio:9000 minioadmin minioadmin; do
+              sleep 1
+            done
+            mc mb --ignore-existing local/credtrail-badges
+          '
+
+          docker run -d \
+            --name credtrail-ci-app \
+            --network credtrail-ci-net \
+            -p 8787:8787 \
+            -e APP_ENV=test \
+            -e PLATFORM_DOMAIN=localhost \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e STORAGE_BACKEND=s3 \
+            -e S3_ENDPOINT=http://credtrail-ci-minio:9000 \
+            -e S3_BUCKET=credtrail-badges \
+            -e S3_REGION=us-east-1 \
+            -e S3_FORCE_PATH_STYLE=true \
+            -e AWS_ACCESS_KEY_ID=minioadmin \
+            -e AWS_SECRET_ACCESS_KEY=minioadmin \
+            credtrail-ci:${{ github.sha }}
+
+          discovery_status=""
+          deps_status=""
+
+          for attempt in $(seq 1 40); do
+            discovery_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/ims/ob/v3p0/discovery || true)"
+            deps_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/healthz/dependencies || true)"
+
+            if [ "$discovery_status" = "200" ] && [ "$deps_status" = "200" ]; then
+              echo "App endpoints returned 200 on attempt $attempt."
+              break
+            fi
+
+            if [ "$attempt" = "40" ]; then
+              echo "Endpoint checks failed (discovery=$discovery_status dependencies=$deps_status)."
+              exit 1
             fi
 
             sleep 1
           done
 
-          echo "Discovery endpoint did not return HTTP 200 (last status: ${status:-none})."
-          exit 1
+          docker run --rm \
+            --network credtrail-ci-net \
+            -e DATABASE_URL="$DATABASE_URL" \
+            postgres:16-alpine sh -ceu "
+              psql \"\$DATABASE_URL\" -v ON_ERROR_STOP=1 -c \"
+                INSERT INTO job_queue_messages (
+                  id,
+                  tenant_id,
+                  job_type,
+                  payload_json,
+                  idempotency_key,
+                  available_at,
+                  status,
+                  created_at,
+                  updated_at
+                )
+                VALUES (
+                  'job-ci-smoke-1',
+                  'ci-tenant',
+                  'rebuild_verification_cache',
+                  '{}',
+                  'ci-smoke-key-1',
+                  CURRENT_TIMESTAMP::text,
+                  'pending',
+                  CURRENT_TIMESTAMP::text,
+                  CURRENT_TIMESTAMP::text
+                );
+              \"
+            "
+
+          process_response="$(curl -sS -X POST \
+            -H 'content-type: application/json' \
+            -d '{}' \
+            http://127.0.0.1:8787/v1/jobs/process)"
+
+          echo "$process_response"
+
+          node -e '
+            const response = JSON.parse(process.argv[1]);
+            if (response.status !== "ok" || response.processed < 1 || response.succeeded < 1) {
+              process.exit(1);
+            }
+          ' "$process_response"

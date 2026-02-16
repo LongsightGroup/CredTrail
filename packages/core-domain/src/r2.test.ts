@@ -80,7 +80,7 @@ describe('immutableCredentialObjectKey', () => {
   });
 });
 
-describe('immutable credential R2 adapter', () => {
+describe('immutable credential object store adapter', () => {
   it('stores and retrieves immutable VC objects', async () => {
     const store = createMockStore();
     const stored = await storeImmutableCredentialObject(store, {

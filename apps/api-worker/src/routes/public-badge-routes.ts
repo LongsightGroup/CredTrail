@@ -1,6 +1,7 @@
 import { listPublicBadgeWallEntries, type SqlDatabase } from '@credtrail/db';
 import type { Hono } from 'hono';
 import { parseTenantPathParams } from '@credtrail/validation';
+import type { ImmutableCredentialStore } from '@credtrail/core-domain';
 import type { AppBindings, AppEnv } from '../app';
 
 interface RegisterPublicBadgeRoutesInput<PublicBadgeValue> {
@@ -8,7 +9,7 @@ interface RegisterPublicBadgeRoutesInput<PublicBadgeValue> {
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
   loadPublicBadgeViewModel: (
     db: SqlDatabase,
-    badgeObjects: R2Bucket,
+    badgeObjects: ImmutableCredentialStore,
     badgeIdentifier: string,
   ) => Promise<
     | {

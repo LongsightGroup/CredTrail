@@ -1,4 +1,4 @@
-import { createDidWeb, type JsonObject } from '@credtrail/core-domain';
+import { createDidWeb, type ImmutableCredentialStore, type JsonObject } from '@credtrail/core-domain';
 import { listAssertionStatusListEntries, type SqlDatabase } from '@credtrail/db';
 import type { Hono } from 'hono';
 import { parseCredentialPathParams, parseTenantPathParams } from '@credtrail/validation';
@@ -112,7 +112,7 @@ interface RegisterCredentialRoutesInput<
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
   loadVerificationViewModel: (
     db: SqlDatabase,
-    store: R2Bucket,
+    store: ImmutableCredentialStore,
     credentialId: string,
   ) => Promise<VerificationLookupResult<AssertionValue, CredentialValue>>;
   credentialStatusForAssertion: (

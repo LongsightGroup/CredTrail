@@ -4,6 +4,7 @@ import {
   getImmutableCredentialObject,
   logWarn,
   storeImmutableCredentialObject,
+  type ImmutableCredentialStore,
   type JsonObject,
   type ObservabilityContext,
 } from '@credtrail/core-domain';
@@ -30,7 +31,7 @@ import {
 } from './recipient-identifiers';
 
 interface IssueBadgeBindings {
-  BADGE_OBJECTS: R2Bucket;
+  BADGE_OBJECTS: ImmutableCredentialStore;
   PLATFORM_DOMAIN: string;
   MAILTRAP_API_TOKEN?: string | undefined;
   MAILTRAP_INBOX_ID?: string | undefined;

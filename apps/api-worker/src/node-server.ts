@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server';
 import { app, type AppBindings } from './app';
+import { createS3ImmutableCredentialStore } from './storage/s3-immutable-credential-store';
 
 const optionalEnv = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
@@ -35,19 +36,55 @@ const withOptionalBinding = <K extends keyof AppBindings>(
   } as Pick<AppBindings, K>;
 };
 
-const r2Unavailable = (): never => {
-  throw new Error('BADGE_OBJECTS binding is unavailable in Node server mode');
+const requireEnv = (name: string): string => {
+  const value = optionalEnv(name);
+
+  if (value === undefined) {
+    throw new Error(`${name} is required`);
+  }
+
+  return value;
 };
 
-const badgeObjectsBinding = {
-  head: r2Unavailable,
-  get: r2Unavailable,
-  put: r2Unavailable,
-  delete: r2Unavailable,
-  list: r2Unavailable,
-  createMultipartUpload: r2Unavailable,
-  resumeMultipartUpload: r2Unavailable,
-} as unknown as R2Bucket;
+const parseBooleanEnv = (name: string): boolean | undefined => {
+  const value = optionalEnv(name);
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === 'true' || value === '1') {
+    return true;
+  }
+
+  if (value === 'false' || value === '0') {
+    return false;
+  }
+
+  throw new Error(`${name} must be one of: true, false, 1, 0`);
+};
+
+const storageBackend = (optionalEnv('STORAGE_BACKEND') ?? 's3').toLowerCase();
+
+if (storageBackend !== 's3') {
+  throw new Error(
+    `Unsupported STORAGE_BACKEND "${storageBackend}". Node server currently supports "s3".`,
+  );
+}
+
+const s3Endpoint = optionalEnv('S3_ENDPOINT');
+const s3ForcePathStyle = parseBooleanEnv('S3_FORCE_PATH_STYLE');
+const awsSessionToken = optionalEnv('AWS_SESSION_TOKEN');
+
+const badgeObjectsBinding = createS3ImmutableCredentialStore({
+  bucket: requireEnv('S3_BUCKET'),
+  region: requireEnv('S3_REGION'),
+  accessKeyId: requireEnv('AWS_ACCESS_KEY_ID'),
+  secretAccessKey: requireEnv('AWS_SECRET_ACCESS_KEY'),
+  ...(s3Endpoint === undefined ? {} : { endpoint: s3Endpoint }),
+  ...(s3ForcePathStyle === undefined ? {} : { forcePathStyle: s3ForcePathStyle }),
+  ...(awsSessionToken === undefined ? {} : { sessionToken: awsSessionToken }),
+});
 
 const databaseUrl = optionalEnv('DATABASE_URL');
 const marketingSiteOrigin = optionalEnv('MARKETING_SITE_ORIGIN');

@@ -1,6 +1,7 @@
 import {
   getImmutableCredentialObject,
   splitTenantScopedId,
+  type ImmutableCredentialStore,
   type JsonObject,
 } from '@credtrail/core-domain';
 import {
@@ -69,7 +70,7 @@ export const publicBadgePathForAssertion = (assertion: AssertionRecord): string 
 };
 
 export const loadCredentialForAssertion = async (
-  store: R2Bucket,
+  store: ImmutableCredentialStore,
   assertion: AssertionRecord,
 ): Promise<JsonObject> => {
   const credential = await getImmutableCredentialObject(store, {
@@ -102,7 +103,7 @@ const loadRecipientDisplayNameForAssertion = async (
 
 export const loadVerificationViewModel = async (
   db: SqlDatabase,
-  store: R2Bucket,
+  store: ImmutableCredentialStore,
   credentialId: string,
 ): Promise<VerificationLookupResult> => {
   const tenantScopedCredentialId = parseTenantScopedCredentialId(credentialId);
@@ -135,7 +136,7 @@ export const loadVerificationViewModel = async (
 
 export const loadPublicBadgeViewModel = async (
   db: SqlDatabase,
-  store: R2Bucket,
+  store: ImmutableCredentialStore,
   badgeIdentifier: string,
 ): Promise<PublicBadgeLookupResult> => {
   const trimmedIdentifier = badgeIdentifier.trim();

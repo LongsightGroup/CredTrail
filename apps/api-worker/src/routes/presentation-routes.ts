@@ -1,6 +1,7 @@
 import {
   signCredentialWithEd25519Signature2020,
   type Ed25519PrivateJwk,
+  type ImmutableCredentialStore,
   type JsonObject,
 } from '@credtrail/core-domain';
 import {
@@ -32,7 +33,10 @@ interface RegisterPresentationRoutesInput {
     tenantId: string;
     resourceId: string;
   } | null;
-  loadCredentialForAssertion: (store: R2Bucket, assertion: AssertionRecord) => Promise<JsonObject>;
+  loadCredentialForAssertion: (
+    store: ImmutableCredentialStore,
+    assertion: AssertionRecord,
+  ) => Promise<JsonObject>;
   ed25519PublicJwkFromDidKey: (did: string) => {
     kty: 'OKP';
     crv: 'Ed25519';
