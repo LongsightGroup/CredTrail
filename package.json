@@ -9,9 +9,11 @@
     "lint": "eslint --max-warnings=0 \"apps/**/*.ts\" \"packages/**/*.ts\" \"vitest.config.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "check": "pnpm check:public-docs && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@cloudflare/workers-types": "^4.20260206.0",
     "@eslint/js": "^9.21.0",
     "@types/pg": "^8.16.0",
