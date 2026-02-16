@@ -13,7 +13,7 @@ const getTestDatabaseUrl = (): string => {
 };
 
 describeWithDatabase('postgres adapter integration', () => {
-  it('supports question-mark placeholders and INSERT OR IGNORE semantics', async () => {
+  it('supports question-mark placeholders and ON CONFLICT DO NOTHING semantics', async () => {
     const db = createPostgresDatabase({
       databaseUrl: getTestDatabaseUrl(),
     });
@@ -32,8 +32,9 @@ describeWithDatabase('postgres adapter integration', () => {
     await db
       .prepare(
         `
-          INSERT OR IGNORE INTO test_adapter_users (id, email)
+          INSERT INTO test_adapter_users (id, email)
           VALUES (?, ?)
+          ON CONFLICT DO NOTHING
         `,
       )
       .bind('usr_first', 'student@example.edu')
@@ -42,8 +43,9 @@ describeWithDatabase('postgres adapter integration', () => {
     await db
       .prepare(
         `
-          INSERT OR IGNORE INTO test_adapter_users (id, email)
+          INSERT INTO test_adapter_users (id, email)
           VALUES (?, ?)
+          ON CONFLICT DO NOTHING
         `,
       )
       .bind('usr_duplicate', 'student@example.edu')

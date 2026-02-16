@@ -2618,8 +2618,9 @@ export const upsertUserByEmail = async (db: SqlDatabase, email: string): Promise
   await db
     .prepare(
       `
-      INSERT OR IGNORE INTO users (id, email)
+      INSERT INTO users (id, email)
       VALUES (?, ?)
+      ON CONFLICT DO NOTHING
     `,
     )
     .bind(createdUserId, normalizedEmail)
@@ -5874,7 +5875,7 @@ const ensureInstitutionOrgUnitForTenant = async (
     db
       .prepare(
         `
-        INSERT OR IGNORE INTO tenant_org_units (
+        INSERT INTO tenant_org_units (
           id,
           tenant_id,
           unit_type,
@@ -5887,6 +5888,7 @@ const ensureInstitutionOrgUnitForTenant = async (
           updated_at
         )
         VALUES (?, ?, 'institution', 'institution', ?, NULL, NULL, 1, ?, ?)
+        ON CONFLICT DO NOTHING
       `,
       )
       .bind(institutionId, tenantId, `${tenantId} Institution`, nowIso, nowIso)
@@ -8507,13 +8509,14 @@ const insertAssertionRecipientIdentifiers = async (
       await db
         .prepare(
           `
-          INSERT OR IGNORE INTO recipient_identifiers (
+          INSERT INTO recipient_identifiers (
             assertion_id,
             identifier_type,
             identifier_value,
             created_at
           )
           VALUES (?, ?, ?, ?)
+          ON CONFLICT DO NOTHING
         `,
         )
         .bind(assertionId, entry.identifierType, entry.identifierValue, new Date().toISOString())
@@ -9135,7 +9138,7 @@ export const recordAssertionRevocation = async (
   await db
     .prepare(
       `
-      INSERT OR IGNORE INTO revocations (
+      INSERT INTO revocations (
         id,
         tenant_id,
         assertion_id,
@@ -9146,6 +9149,7 @@ export const recordAssertionRevocation = async (
         created_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT DO NOTHING
     `,
     )
     .bind(

@@ -24,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_tenant_org_units_tenant_parent
   ON tenant_org_units (tenant_id, parent_org_unit_id);
 
 -- Each tenant gets a deterministic default institution org unit for ownership fallback.
-INSERT OR IGNORE INTO tenant_org_units (
+INSERT INTO tenant_org_units (
   id,
   tenant_id,
   unit_type,
@@ -48,6 +48,7 @@ SELECT
   CURRENT_TIMESTAMP,
   CURRENT_TIMESTAMP
 FROM tenants;
+ON CONFLICT DO NOTHING;
 
 ALTER TABLE badge_templates
   ADD COLUMN owner_org_unit_id TEXT;
@@ -67,49 +68,44 @@ WHERE governance_metadata_json IS NULL;
 CREATE INDEX IF NOT EXISTS idx_badge_templates_tenant_owner_org_unit
   ON badge_templates (tenant_id, owner_org_unit_id);
 
-CREATE TRIGGER IF NOT EXISTS trg_badge_templates_validate_owner_insert
+CREATE OR REPLACE FUNCTION trg_badge_templates_validate_owner()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.owner_org_unit_id IS NULL THEN
+    RAISE EXCEPTION 'badge_templates.owner_org_unit_id is required';
+  END IF;
+
+  IF NEW.governance_metadata_json IS NULL THEN
+    RAISE EXCEPTION 'badge_templates.governance_metadata_json is required';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM tenant_org_units
+    WHERE tenant_id = NEW.tenant_id
+      AND id = NEW.owner_org_unit_id
+  ) THEN
+    RAISE EXCEPTION
+      'badge_templates.owner_org_unit_id must reference a tenant org unit from the same tenant';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_badge_templates_validate_owner_insert ON badge_templates;
+CREATE TRIGGER trg_badge_templates_validate_owner_insert
 BEFORE INSERT ON badge_templates
 FOR EACH ROW
-BEGIN
-  SELECT RAISE(ABORT, 'badge_templates.owner_org_unit_id is required')
-  WHERE NEW.owner_org_unit_id IS NULL;
+EXECUTE FUNCTION trg_badge_templates_validate_owner();
 
-  SELECT RAISE(ABORT, 'badge_templates.governance_metadata_json is required')
-  WHERE NEW.governance_metadata_json IS NULL;
-
-  SELECT RAISE(
-    ABORT,
-    'badge_templates.owner_org_unit_id must reference a tenant org unit from the same tenant'
-  )
-  WHERE NOT EXISTS (
-    SELECT 1
-    FROM tenant_org_units
-    WHERE tenant_id = NEW.tenant_id
-      AND id = NEW.owner_org_unit_id
-  );
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_badge_templates_validate_owner_update
+DROP TRIGGER IF EXISTS trg_badge_templates_validate_owner_update ON badge_templates;
+CREATE TRIGGER trg_badge_templates_validate_owner_update
 BEFORE UPDATE OF tenant_id, owner_org_unit_id, governance_metadata_json ON badge_templates
 FOR EACH ROW
-BEGIN
-  SELECT RAISE(ABORT, 'badge_templates.owner_org_unit_id is required')
-  WHERE NEW.owner_org_unit_id IS NULL;
-
-  SELECT RAISE(ABORT, 'badge_templates.governance_metadata_json is required')
-  WHERE NEW.governance_metadata_json IS NULL;
-
-  SELECT RAISE(
-    ABORT,
-    'badge_templates.owner_org_unit_id must reference a tenant org unit from the same tenant'
-  )
-  WHERE NOT EXISTS (
-    SELECT 1
-    FROM tenant_org_units
-    WHERE tenant_id = NEW.tenant_id
-      AND id = NEW.owner_org_unit_id
-  );
-END;
+EXECUTE FUNCTION trg_badge_templates_validate_owner();
 
 CREATE TABLE IF NOT EXISTS badge_template_ownership_events (
   id TEXT PRIMARY KEY,
@@ -144,50 +140,66 @@ CREATE INDEX IF NOT EXISTS idx_badge_template_ownership_events_template
 CREATE INDEX IF NOT EXISTS idx_badge_template_ownership_events_to_org
   ON badge_template_ownership_events (tenant_id, to_org_unit_id, transferred_at DESC);
 
-CREATE TRIGGER IF NOT EXISTS trg_badge_template_ownership_events_validate_insert
-BEFORE INSERT ON badge_template_ownership_events
-FOR EACH ROW
+CREATE OR REPLACE FUNCTION trg_badge_template_ownership_events_validate_insert()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  SELECT RAISE(
-    ABORT,
-    'badge_template_ownership_events.to_org_unit_id must reference a tenant org unit from the same tenant'
-  )
-  WHERE NOT EXISTS (
+  IF NOT EXISTS (
     SELECT 1
     FROM tenant_org_units
     WHERE tenant_id = NEW.tenant_id
       AND id = NEW.to_org_unit_id
-  );
+  ) THEN
+    RAISE EXCEPTION
+      'badge_template_ownership_events.to_org_unit_id must reference a tenant org unit from the same tenant';
+  END IF;
 
-  SELECT RAISE(
-    ABORT,
-    'badge_template_ownership_events.from_org_unit_id must reference a tenant org unit from the same tenant'
-  )
-  WHERE NEW.from_org_unit_id IS NOT NULL
+  IF NEW.from_org_unit_id IS NOT NULL
     AND NOT EXISTS (
       SELECT 1
       FROM tenant_org_units
       WHERE tenant_id = NEW.tenant_id
         AND id = NEW.from_org_unit_id
-    );
-END;
+    )
+  THEN
+    RAISE EXCEPTION
+      'badge_template_ownership_events.from_org_unit_id must reference a tenant org unit from the same tenant';
+  END IF;
 
-CREATE TRIGGER IF NOT EXISTS trg_badge_template_ownership_events_immutable_update
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_badge_template_ownership_events_validate_insert ON badge_template_ownership_events;
+CREATE TRIGGER trg_badge_template_ownership_events_validate_insert
+BEFORE INSERT ON badge_template_ownership_events
+FOR EACH ROW
+EXECUTE FUNCTION trg_badge_template_ownership_events_validate_insert();
+
+CREATE OR REPLACE FUNCTION trg_badge_template_ownership_events_immutable()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'badge_template_ownership_events is immutable';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_badge_template_ownership_events_immutable_update ON badge_template_ownership_events;
+CREATE TRIGGER trg_badge_template_ownership_events_immutable_update
 BEFORE UPDATE ON badge_template_ownership_events
 FOR EACH ROW
-BEGIN
-  SELECT RAISE(ABORT, 'badge_template_ownership_events is immutable');
-END;
+EXECUTE FUNCTION trg_badge_template_ownership_events_immutable();
 
-CREATE TRIGGER IF NOT EXISTS trg_badge_template_ownership_events_immutable_delete
+DROP TRIGGER IF EXISTS trg_badge_template_ownership_events_immutable_delete ON badge_template_ownership_events;
+CREATE TRIGGER trg_badge_template_ownership_events_immutable_delete
 BEFORE DELETE ON badge_template_ownership_events
 FOR EACH ROW
-BEGIN
-  SELECT RAISE(ABORT, 'badge_template_ownership_events is immutable');
-END;
+EXECUTE FUNCTION trg_badge_template_ownership_events_immutable();
 
 -- Backfill initial immutable assignment events for existing templates.
-INSERT OR IGNORE INTO badge_template_ownership_events (
+INSERT INTO badge_template_ownership_events (
   id,
   tenant_id,
   badge_template_id,
@@ -214,3 +226,4 @@ SELECT
   badge_templates.created_at
 FROM badge_templates
 WHERE badge_templates.owner_org_unit_id IS NOT NULL;
+ON CONFLICT DO NOTHING;

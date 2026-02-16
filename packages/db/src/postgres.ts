@@ -7,7 +7,6 @@ import type {
   SqlRunResult,
 } from './index';
 
-const INSERT_OR_IGNORE_PATTERN = /^\s*INSERT\s+OR\s+IGNORE\s+INTO\s+/i;
 const UNQUOTED_ALIAS_PATTERN = /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -52,12 +51,6 @@ const remapRowAliases = (
 
 const normalizeSqlForPostgres = (sql: string): string => {
   let normalizedSql = sql.trim();
-
-  if (INSERT_OR_IGNORE_PATTERN.test(normalizedSql)) {
-    normalizedSql = normalizedSql.replace(INSERT_OR_IGNORE_PATTERN, 'INSERT INTO ');
-    normalizedSql = normalizedSql.replace(/;\s*$/, '');
-    normalizedSql = `${normalizedSql} ON CONFLICT DO NOTHING`;
-  }
 
   let placeholderIndex = 0;
   normalizedSql = normalizedSql.replace(/\?/g, () => {
