@@ -7,6 +7,16 @@ import type {
   SqlRunResult,
 } from './index';
 
+type PostgresDriver = 'auto' | 'neon' | 'pg';
+
+interface QueryExecutor {
+  query(sql: string, params: readonly unknown[]): Promise<readonly unknown[]>;
+}
+
+type PgPoolLike = import('pg').Pool;
+
+const pgPoolsByConnectionString = new Map<string, Promise<PgPoolLike>>();
+
 const UNQUOTED_ALIAS_PATTERN = /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -61,14 +71,70 @@ const normalizeSqlForPostgres = (sql: string): string => {
   return normalizedSql;
 };
 
+const isNeonDatabaseUrl = (databaseUrl: string): boolean => {
+  try {
+    const parsed = new URL(databaseUrl);
+    return parsed.hostname.endsWith('.neon.tech');
+  } catch {
+    return false;
+  }
+};
+
+const resolvePostgresDriver = (
+  databaseUrl: string,
+  configuredDriver: PostgresDriver,
+): Exclude<PostgresDriver, 'auto'> => {
+  if (configuredDriver === 'neon' || configuredDriver === 'pg') {
+    return configuredDriver;
+  }
+
+  return isNeonDatabaseUrl(databaseUrl) ? 'neon' : 'pg';
+};
+
+const createNeonQueryExecutor = (databaseUrl: string): QueryExecutor => {
+  const queryFn = neon(databaseUrl);
+
+  return {
+    query: (sql, params) => {
+      return queryFn.query(sql, [...params]);
+    },
+  };
+};
+
+const loadPgPool = async (databaseUrl: string): Promise<PgPoolLike> => {
+  const existingPool = pgPoolsByConnectionString.get(databaseUrl);
+
+  if (existingPool !== undefined) {
+    return existingPool;
+  }
+
+  const poolPromise: Promise<PgPoolLike> = import('pg').then((pgModule: typeof import('pg')) => {
+    return new pgModule.Pool({
+      connectionString: databaseUrl,
+    });
+  });
+  pgPoolsByConnectionString.set(databaseUrl, poolPromise);
+  return poolPromise;
+};
+
+const createPgQueryExecutor = (databaseUrl: string): QueryExecutor => {
+  return {
+    async query(sql, params) {
+      const pool = await loadPgPool(databaseUrl);
+      const result = await pool.query(sql, [...params]);
+      return result.rows as readonly unknown[];
+    },
+  };
+};
+
 class PostgresPreparedStatement implements SqlPreparedStatement {
-  private readonly queryFn: NeonQueryFunction<false, false>;
+  private readonly queryExecutor: QueryExecutor;
   private readonly sql: string;
   private readonly aliasMap: Map<string, string>;
   private params: readonly unknown[] = [];
 
-  constructor(queryFn: NeonQueryFunction<false, false>, sql: string) {
-    this.queryFn = queryFn;
+  constructor(queryExecutor: QueryExecutor, sql: string) {
+    this.queryExecutor = queryExecutor;
     this.sql = sql;
     this.aliasMap = collectAliasMap(sql);
   }
@@ -112,7 +178,7 @@ class PostgresPreparedStatement implements SqlPreparedStatement {
 
   private async executeQuery<T>(): Promise<T[]> {
     const sql = normalizeSqlForPostgres(this.sql);
-    const rows = await this.queryFn.query(sql, [...this.params]);
+    const rows = await this.queryExecutor.query(sql, this.params);
 
     if (this.aliasMap.size === 0) {
       return rows as T[];
@@ -129,19 +195,20 @@ class PostgresPreparedStatement implements SqlPreparedStatement {
 }
 
 class PostgresDatabase implements SqlDatabase {
-  private readonly queryFn: NeonQueryFunction<false, false>;
+  private readonly queryExecutor: QueryExecutor;
 
-  constructor(queryFn: NeonQueryFunction<false, false>) {
-    this.queryFn = queryFn;
+  constructor(queryExecutor: QueryExecutor) {
+    this.queryExecutor = queryExecutor;
   }
 
   prepare(sql: string): SqlPreparedStatement {
-    return new PostgresPreparedStatement(this.queryFn, sql);
+    return new PostgresPreparedStatement(this.queryExecutor, sql);
   }
 }
 
 export interface CreatePostgresDatabaseOptions {
   databaseUrl: string;
+  driver?: PostgresDriver;
 }
 
 export const createPostgresDatabase = (options: CreatePostgresDatabaseOptions): SqlDatabase => {
@@ -151,8 +218,11 @@ export const createPostgresDatabase = (options: CreatePostgresDatabaseOptions): 
     throw new Error('databaseUrl is required');
   }
 
-  const queryFn = neon(trimmedUrl);
-  return new PostgresDatabase(queryFn);
+  const driver = resolvePostgresDriver(trimmedUrl, options.driver ?? 'auto');
+  const queryExecutor =
+    driver === 'neon' ? createNeonQueryExecutor(trimmedUrl) : createPgQueryExecutor(trimmedUrl);
+
+  return new PostgresDatabase(queryExecutor);
 };
 
 export const splitSqlStatements = (sql: string): string[] => {
@@ -165,7 +235,7 @@ export const splitSqlStatements = (sql: string): string[] => {
 };
 
 export const executePostgresSql = async (
-  queryFn: NeonQueryFunction<false, false>,
+  queryFn: Pick<NeonQueryFunction<false, false>, 'query'>,
   sql: string,
 ): Promise<void> => {
   const statements = splitSqlStatements(sql);

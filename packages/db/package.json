@@ -8,6 +8,7 @@
     "./postgres": "./src/postgres.ts"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.2"
+    "@neondatabase/serverless": "^1.0.2",
+    "pg": "^8.13.3"
   }
 }
