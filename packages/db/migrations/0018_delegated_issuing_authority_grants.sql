@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS delegated_issuing_authority_grants (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK (starts_at < ends_at),
+  UNIQUE (tenant_id, id),
   FOREIGN KEY (tenant_id, delegate_user_id)
     REFERENCES memberships (tenant_id, user_id) ON DELETE CASCADE,
   FOREIGN KEY (delegated_by_user_id)

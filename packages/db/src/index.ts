@@ -1942,6 +1942,7 @@ const ensureDelegatedIssuingAuthorityTables = async (db: SqlDatabase): Promise<v
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CHECK (starts_at < ends_at),
+        UNIQUE (tenant_id, id),
         FOREIGN KEY (tenant_id, delegate_user_id) REFERENCES memberships (tenant_id, user_id) ON DELETE CASCADE,
         FOREIGN KEY (delegated_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
         FOREIGN KEY (tenant_id, org_unit_id) REFERENCES tenant_org_units (tenant_id, id) ON DELETE CASCADE,
