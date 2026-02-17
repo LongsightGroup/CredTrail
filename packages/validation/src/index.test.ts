@@ -18,6 +18,8 @@ import {
   parseDecideBadgeIssuanceRuleVersionRequest,
   parseEvaluateBadgeIssuanceRuleRequest,
   parseBadgeIssuanceRulePathParams,
+  parseBadgeIssuanceRuleAuditLogQuery,
+  parseBadgeIssuanceRuleVersionDiffQuery,
   parseBadgeIssuanceRuleVersionPathParams,
   parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
@@ -716,6 +718,18 @@ describe('badge issuance rule parsers', () => {
 
     expect(rulePathParams.ruleId).toBe('brl_123');
     expect(versionPathParams.versionId).toBe('brv_123');
+  });
+
+  it('parses badge rule diff and audit-log query parameters', () => {
+    const diffQuery = parseBadgeIssuanceRuleVersionDiffQuery({
+      baseVersionId: 'brv_122',
+    });
+    const auditLogQuery = parseBadgeIssuanceRuleAuditLogQuery({
+      limit: '150',
+    });
+
+    expect(diffQuery.baseVersionId).toBe('brv_122');
+    expect(auditLogQuery.limit).toBe(150);
   });
 
   it('rejects grade threshold conditions without a score boundary', () => {

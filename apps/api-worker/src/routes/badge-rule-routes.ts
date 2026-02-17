@@ -9,6 +9,7 @@ import {
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
   findTenantCanvasGradebookIntegration,
+  listAuditLogs,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersionApprovalEvents,
   listBadgeIssuanceRuleVersionApprovalSteps,
@@ -22,8 +23,10 @@ import {
 } from '@credtrail/db';
 import type { Hono } from 'hono';
 import {
+  parseBadgeIssuanceRuleAuditLogQuery,
   parseBadgeIssuanceRuleDefinition,
   parseBadgeIssuanceRulePathParams,
+  parseBadgeIssuanceRuleVersionDiffQuery,
   parseBadgeIssuanceRuleVersionPathParams,
   parseCreateBadgeIssuanceRuleRequest,
   parseCreateBadgeIssuanceRuleVersionRequest,
@@ -107,6 +110,105 @@ const roleSatisfiesMinimumRole = (
   requiredRole: TenantMembershipRole,
 ): boolean => {
   return TENANT_ROLE_RANK[actorRole] >= TENANT_ROLE_RANK[requiredRole];
+};
+
+interface RuleDefinitionDiffChange {
+  path: string;
+  changeType: 'added' | 'removed' | 'changed';
+  before: unknown;
+  after: unknown;
+}
+
+const isJsonRecord = (value: unknown): value is Record<string, unknown> => {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+};
+
+const areJsonValuesEqual = (left: unknown, right: unknown): boolean => {
+  return JSON.stringify(left) === JSON.stringify(right);
+};
+
+const collectRuleDefinitionDiff = (
+  baseValue: unknown,
+  compareValue: unknown,
+  path: string,
+  changes: RuleDefinitionDiffChange[],
+): void => {
+  if (areJsonValuesEqual(baseValue, compareValue)) {
+    return;
+  }
+
+  if (Array.isArray(baseValue) && Array.isArray(compareValue)) {
+    const maxLength = Math.max(baseValue.length, compareValue.length);
+
+    for (let index = 0; index < maxLength; index += 1) {
+      const childPath = `${path}[${String(index)}]`;
+
+      if (!(index in baseValue)) {
+        changes.push({
+          path: childPath,
+          changeType: 'added',
+          before: null,
+          after: compareValue[index],
+        });
+        continue;
+      }
+
+      if (!(index in compareValue)) {
+        changes.push({
+          path: childPath,
+          changeType: 'removed',
+          before: baseValue[index],
+          after: null,
+        });
+        continue;
+      }
+
+      collectRuleDefinitionDiff(baseValue[index], compareValue[index], childPath, changes);
+    }
+
+    return;
+  }
+
+  if (isJsonRecord(baseValue) && isJsonRecord(compareValue)) {
+    const keySet = new Set<string>([...Object.keys(baseValue), ...Object.keys(compareValue)]);
+
+    for (const key of keySet) {
+      const childPath = path.length === 0 ? key : `${path}.${key}`;
+      const baseHasKey = Object.prototype.hasOwnProperty.call(baseValue, key);
+      const compareHasKey = Object.prototype.hasOwnProperty.call(compareValue, key);
+
+      if (!baseHasKey) {
+        changes.push({
+          path: childPath,
+          changeType: 'added',
+          before: null,
+          after: compareValue[key],
+        });
+        continue;
+      }
+
+      if (!compareHasKey) {
+        changes.push({
+          path: childPath,
+          changeType: 'removed',
+          before: baseValue[key],
+          after: null,
+        });
+        continue;
+      }
+
+      collectRuleDefinitionDiff(baseValue[key], compareValue[key], childPath, changes);
+    }
+
+    return;
+  }
+
+  changes.push({
+    path: path.length === 0 ? '$' : path,
+    changeType: 'changed',
+    before: baseValue,
+    after: compareValue,
+  });
 };
 
 const resolveRuleDefinition = (
@@ -410,6 +512,157 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       tenantId: pathParams.tenantId,
       rule,
       versions,
+    });
+  });
+
+  app.get('/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/diff', async (c) => {
+    const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseBadgeIssuanceRuleVersionDiffQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid badge rule version diff query',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const selectedVersion = await findBadgeIssuanceRuleVersionById(db, {
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+      versionId: pathParams.versionId,
+    });
+
+    if (selectedVersion === null) {
+      return c.json(
+        {
+          error: 'Badge rule version not found',
+        },
+        404,
+      );
+    }
+
+    const versions = await listBadgeIssuanceRuleVersions(db, {
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+    });
+    const baseVersion =
+      query.baseVersionId === undefined
+        ? versions
+            .filter((candidate) => candidate.versionNumber < selectedVersion.versionNumber)
+            .sort((left, right) => right.versionNumber - left.versionNumber)[0]
+        : versions.find((candidate) => candidate.id === query.baseVersionId);
+
+    if (baseVersion === undefined) {
+      return c.json(
+        {
+          error:
+            query.baseVersionId === undefined
+              ? 'No base version found. Specify baseVersionId to compare against.'
+              : 'Base badge rule version not found',
+        },
+        404,
+      );
+    }
+
+    const baseDefinition = resolveRuleDefinition(baseVersion.ruleJson);
+    const selectedDefinition = resolveRuleDefinition(selectedVersion.ruleJson);
+    const changes: RuleDefinitionDiffChange[] = [];
+
+    collectRuleDefinitionDiff(baseDefinition, selectedDefinition, 'conditions', changes);
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+      selectedVersion: {
+        id: selectedVersion.id,
+        versionNumber: selectedVersion.versionNumber,
+        status: selectedVersion.status,
+      },
+      baseVersion: {
+        id: baseVersion.id,
+        versionNumber: baseVersion.versionNumber,
+        status: baseVersion.status,
+      },
+      diff: {
+        changed: changes.length > 0,
+        changeCount: changes.length,
+        changes,
+      },
+    });
+  });
+
+  app.get('/v1/tenants/:tenantId/badge-rules/:ruleId/audit-log', async (c) => {
+    const pathParams = parseBadgeIssuanceRulePathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseBadgeIssuanceRuleAuditLogQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid badge rule audit log query',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const rule = await findBadgeIssuanceRuleById(db, pathParams.tenantId, pathParams.ruleId);
+
+    if (rule === null) {
+      return c.json(
+        {
+          error: 'Badge rule not found',
+        },
+        404,
+      );
+    }
+
+    const versions = await listBadgeIssuanceRuleVersions(db, {
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+    });
+    const versionIds = new Set(versions.map((version) => version.id));
+    const requestedLimit = query.limit ?? 100;
+    const logs = await listAuditLogs(db, {
+      tenantId: pathParams.tenantId,
+      limit: Math.min(500, requestedLimit * 5),
+    });
+    const filteredLogs = logs
+      .filter((log) => {
+        if (log.targetType === 'badge_rule') {
+          return log.targetId === pathParams.ruleId;
+        }
+
+        if (log.targetType === 'badge_rule_version') {
+          return versionIds.has(log.targetId);
+        }
+
+        return false;
+      })
+      .slice(0, requestedLimit);
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+      logs: filteredLogs,
     });
   });
 

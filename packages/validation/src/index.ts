@@ -574,6 +574,14 @@ export const badgeIssuanceRuleVersionPathParamsSchema = badgeIssuanceRulePathPar
   versionId: resourceIdSchema,
 });
 
+export const badgeIssuanceRuleVersionDiffQuerySchema = z.object({
+  baseVersionId: resourceIdSchema.optional(),
+});
+
+export const badgeIssuanceRuleAuditLogQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
 const badgeIssuanceRuleApprovalChainStepSchema = z.object({
   requiredRole: tenantMembershipRoleSchema,
   label: z.string().trim().min(1).max(120).optional(),
@@ -1019,6 +1027,10 @@ export type BadgeIssuanceRulePathParams = z.infer<typeof badgeIssuanceRulePathPa
 export type BadgeIssuanceRuleVersionPathParams = z.infer<
   typeof badgeIssuanceRuleVersionPathParamsSchema
 >;
+export type BadgeIssuanceRuleVersionDiffQuery = z.infer<
+  typeof badgeIssuanceRuleVersionDiffQuerySchema
+>;
+export type BadgeIssuanceRuleAuditLogQuery = z.infer<typeof badgeIssuanceRuleAuditLogQuerySchema>;
 export type BadgeTemplateListQuery = z.infer<typeof badgeTemplateListQuerySchema>;
 export type TenantOrgUnitListQuery = z.infer<typeof tenantOrgUnitListQuerySchema>;
 export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
@@ -1335,6 +1347,16 @@ export const parseCreateBadgeIssuanceRuleRequest = (
   input: unknown,
 ): CreateBadgeIssuanceRuleRequest => {
   return createBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleVersionDiffQuery = (
+  input: unknown,
+): BadgeIssuanceRuleVersionDiffQuery => {
+  return badgeIssuanceRuleVersionDiffQuerySchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleAuditLogQuery = (input: unknown): BadgeIssuanceRuleAuditLogQuery => {
+  return badgeIssuanceRuleAuditLogQuerySchema.parse(input);
 };
 
 export const parseCreateBadgeIssuanceRuleVersionRequest = (

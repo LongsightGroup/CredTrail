@@ -27,6 +27,7 @@ vi.mock('@credtrail/db', async () => {
     createBadgeIssuanceRuleEvaluation: vi.fn(),
     findTenantCanvasGradebookIntegration: vi.fn(),
     updateTenantCanvasGradebookIntegrationTokens: vi.fn(),
+    listAuditLogs: vi.fn(),
     listIssuedBadgeTemplateIdsForRecipient: vi.fn(),
     findActiveSessionByHash: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -58,6 +59,7 @@ import {
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
   findTenantMembership,
+  listAuditLogs,
   listBadgeIssuanceRuleVersionApprovalEvents,
   listBadgeIssuanceRuleVersionApprovalSteps,
   listBadgeIssuanceRuleVersions,
@@ -97,6 +99,7 @@ const mockedListBadgeIssuanceRuleVersionApprovalSteps = vi.mocked(
 const mockedListBadgeIssuanceRuleVersionApprovalEvents = vi.mocked(
   listBadgeIssuanceRuleVersionApprovalEvents,
 );
+const mockedListAuditLogs = vi.mocked(listAuditLogs);
 const mockedCreateBadgeIssuanceRuleEvaluation = vi.mocked(createBadgeIssuanceRuleEvaluation);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -292,6 +295,8 @@ beforeEach(() => {
   mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([]);
   mockedListBadgeIssuanceRuleVersionApprovalEvents.mockReset();
   mockedListBadgeIssuanceRuleVersionApprovalEvents.mockResolvedValue([]);
+  mockedListAuditLogs.mockReset();
+  mockedListAuditLogs.mockResolvedValue([]);
   mockedCreateBadgeIssuanceRuleEvaluation.mockReset();
   mockedIssueBadgeForTenant.mockReset();
 });
@@ -457,6 +462,112 @@ describe('badge rule routes', () => {
     expect(body.approval.currentStep?.stepNumber).toBe(2);
     expect(body.approval.steps).toHaveLength(2);
     expect(body.approval.events).toHaveLength(2);
+  });
+
+  it('returns a structured diff between rule versions', async () => {
+    const env = createEnv();
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(
+      sampleVersion({
+        id: 'brv_124',
+        versionNumber: 3,
+        ruleJson: JSON.stringify({
+          conditions: {
+            type: 'grade_threshold',
+            courseId: 'course_101',
+            minScore: 85,
+          },
+        }),
+      }),
+    );
+    mockedListBadgeIssuanceRuleVersions.mockResolvedValue([
+      sampleVersion({
+        id: 'brv_124',
+        versionNumber: 3,
+        ruleJson: JSON.stringify({
+          conditions: {
+            type: 'grade_threshold',
+            courseId: 'course_101',
+            minScore: 85,
+          },
+        }),
+      }),
+      sampleVersion({
+        id: 'brv_123',
+        versionNumber: 2,
+        ruleJson: JSON.stringify({
+          conditions: {
+            type: 'grade_threshold',
+            courseId: 'course_101',
+            minScore: 80,
+          },
+        }),
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_124/diff',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<{
+      diff: {
+        changed: boolean;
+        changeCount: number;
+      };
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.diff.changed).toBe(true);
+    expect(body.diff.changeCount).toBeGreaterThan(0);
+  });
+
+  it('returns badge-rule scoped audit log entries', async () => {
+    const env = createEnv();
+    mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
+    mockedListBadgeIssuanceRuleVersions.mockResolvedValue([
+      sampleVersion({
+        id: 'brv_123',
+      }),
+    ]);
+    mockedListAuditLogs.mockResolvedValue([
+      sampleAuditLogRecord({
+        targetType: 'badge_rule',
+        targetId: 'brl_123',
+      }),
+      sampleAuditLogRecord({
+        id: 'audit_124',
+        targetType: 'badge_rule_version',
+        targetId: 'brv_123',
+      }),
+      sampleAuditLogRecord({
+        id: 'audit_125',
+        targetType: 'badge_template',
+        targetId: 'badge_template_cs101',
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-rules/brl_123/audit-log?limit=10',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<{
+      logs: AuditLogRecord[];
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.logs).toHaveLength(2);
+    expect(body.logs.every((entry) => entry.targetType !== 'badge_template')).toBe(true);
   });
 
   it('evaluates active rules and issues badges when matched', async () => {
