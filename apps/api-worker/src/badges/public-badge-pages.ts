@@ -120,13 +120,63 @@ export const createPublicBadgePageRenderers = (
     const credentialPdfDownloadPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/download.pdf`;
     const credentialPdfDownloadUrl = new URL(credentialPdfDownloadPath, requestUrl).toString();
     const assertionValidationTargetUrl = ob3JsonUrl;
-    const badgeClassValidationTargetUrl = achievementDetails.badgeClassUri ?? publicBadgeUrl;
+    const badgeClassValidationTargetUrl =
+      achievementDetails.badgeClassUri !== null && isWebUrl(achievementDetails.badgeClassUri)
+        ? achievementDetails.badgeClassUri
+        : null;
     const issuerValidationTargetUrl =
-      issuerUrl ??
-      (issuerIdentifier !== null && isWebUrl(issuerIdentifier) ? issuerIdentifier : publicBadgeUrl);
+      issuerUrl !== null
+        ? issuerUrl
+        : issuerIdentifier !== null && isWebUrl(issuerIdentifier)
+          ? issuerIdentifier
+          : null;
     const assertionValidatorUrl = imsOb2ValidatorUrl(assertionValidationTargetUrl);
-    const badgeClassValidatorUrl = imsOb2ValidatorUrl(badgeClassValidationTargetUrl);
-    const issuerValidatorUrl = imsOb2ValidatorUrl(issuerValidationTargetUrl);
+    const badgeClassValidatorUrl =
+      badgeClassValidationTargetUrl === null ? null : imsOb2ValidatorUrl(badgeClassValidationTargetUrl);
+    const issuerValidatorUrl =
+      issuerValidationTargetUrl === null ? null : imsOb2ValidatorUrl(issuerValidationTargetUrl);
+    const validatorLinks = [
+      `<a
+        class="public-badge__button"
+        href="${escapeHtml(assertionValidatorUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Validate Assertion (IMS)
+      </a>`,
+      ...(badgeClassValidatorUrl === null
+        ? []
+        : [
+            `<a
+              class="public-badge__button"
+              href="${escapeHtml(badgeClassValidatorUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Validate Badge Class (IMS)
+            </a>`,
+          ]),
+      ...(issuerValidatorUrl === null
+        ? []
+        : [
+            `<a
+              class="public-badge__button"
+              href="${escapeHtml(issuerValidatorUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Validate Issuer (IMS)
+            </a>`,
+          ]),
+    ].join('');
+    const badgeClassValidationTechnicalDetail =
+      badgeClassValidatorUrl === null
+        ? '<span>Not available (badge class URI is not a web URL).</span>'
+        : `<a href="${escapeHtml(badgeClassValidatorUrl)}">${escapeHtml(badgeClassValidatorUrl)}</a>`;
+    const issuerValidationTechnicalDetail =
+      issuerValidatorUrl === null
+        ? '<span>Not available (issuer URL is not published).</span>'
+        : `<a href="${escapeHtml(issuerValidatorUrl)}">${escapeHtml(issuerValidatorUrl)}</a>`;
     const qrCodeImageUrl = new URL('https://api.qrserver.com/v1/create-qr-code/');
     qrCodeImageUrl.searchParams.set('size', '220x220');
     qrCodeImageUrl.searchParams.set('format', 'svg');
@@ -570,34 +620,9 @@ export const createPublicBadgePageRenderers = (
             </a>
           </div>
           <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
-          <div class="public-badge__validator-links">
-            <a
-              class="public-badge__button"
-              href="${escapeHtml(assertionValidatorUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Validate Assertion (IMS)
-            </a>
-            <a
-              class="public-badge__button"
-              href="${escapeHtml(badgeClassValidatorUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Validate Badge Class (IMS)
-            </a>
-            <a
-              class="public-badge__button"
-              href="${escapeHtml(issuerValidatorUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Validate Issuer (IMS)
-            </a>
-          </div>
+          <div class="public-badge__validator-links">${validatorLinks}</div>
           <p class="public-badge__validator-note">
-            Opens IMS Global OB2 validator with pre-filled URLs for assertion, badge class, and issuer checks.
+            IMS validator expects JSON/image targets. Validate using the Open Badges 3.0 JSON URL, not this HTML page URL.
           </p>
           <figure class="public-badge__qr">
             <img
@@ -636,9 +661,9 @@ export const createPublicBadgePageRenderers = (
             <dt>IMS assertion validation</dt>
             <dd><a href="${escapeHtml(assertionValidatorUrl)}">${escapeHtml(assertionValidatorUrl)}</a></dd>
             <dt>IMS badge class validation</dt>
-            <dd><a href="${escapeHtml(badgeClassValidatorUrl)}">${escapeHtml(badgeClassValidatorUrl)}</a></dd>
+            <dd>${badgeClassValidationTechnicalDetail}</dd>
             <dt>IMS issuer validation</dt>
-            <dd><a href="${escapeHtml(issuerValidatorUrl)}">${escapeHtml(issuerValidatorUrl)}</a></dd>
+            <dd>${issuerValidationTechnicalDetail}</dd>
           </dl>
         </details>
   
