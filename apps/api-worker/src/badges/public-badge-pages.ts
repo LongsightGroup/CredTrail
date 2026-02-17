@@ -124,12 +124,9 @@ export const createPublicBadgePageRenderers = (
       achievementDetails.badgeClassUri !== null && isWebUrl(achievementDetails.badgeClassUri)
         ? achievementDetails.badgeClassUri
         : null;
-    const issuerValidationTargetUrl =
-      issuerUrl !== null
-        ? issuerUrl
-        : issuerIdentifier !== null && isWebUrl(issuerIdentifier)
-          ? issuerIdentifier
-          : null;
+    const issuerValidationTargetUrlFromIdentifier =
+      issuerIdentifier !== null && isWebUrl(issuerIdentifier) ? issuerIdentifier : null;
+    const issuerValidationTargetUrl = issuerUrl ?? issuerValidationTargetUrlFromIdentifier;
     const assertionValidatorUrl = imsOb2ValidatorUrl(assertionValidationTargetUrl);
     const badgeClassValidatorUrl =
       badgeClassValidationTargetUrl === null ? null : imsOb2ValidatorUrl(badgeClassValidationTargetUrl);
