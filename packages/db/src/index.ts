@@ -378,6 +378,42 @@ export interface UpsertTenantSsoSamlConfigurationInput {
   enforced?: boolean | undefined;
 }
 
+export interface TenantCanvasGradebookIntegrationRecord {
+  tenantId: string;
+  apiBaseUrl: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  accessTokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  connectedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTenantCanvasGradebookIntegrationInput {
+  tenantId: string;
+  apiBaseUrl: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+}
+
+export interface UpdateTenantCanvasGradebookIntegrationTokensInput {
+  tenantId: string;
+  accessToken: string;
+  refreshToken?: string | undefined;
+  accessTokenExpiresAt?: string | undefined;
+  refreshTokenExpiresAt?: string | undefined;
+  connectedAt?: string | undefined;
+}
+
 export interface DedicatedDbProvisioningRequestStatusInput {
   status: 'pending' | 'provisioned' | 'failed' | 'canceled';
 }
@@ -1278,6 +1314,23 @@ interface TenantSsoSamlConfigurationRow {
   updatedAt: string;
 }
 
+interface TenantCanvasGradebookIntegrationRow {
+  tenantId: string;
+  apiBaseUrl: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  accessTokenExpiresAt: string | null;
+  refreshTokenExpiresAt: string | null;
+  connectedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface DedicatedDbProvisioningRequestRow {
   id: string;
   tenantId: string;
@@ -1443,6 +1496,19 @@ const isMissingTenantSsoSamlConfigurationsTableError = (error: unknown): boolean
       error.message.includes('relation') ||
       error.message.includes('does not exist')) &&
     error.message.includes('tenant_sso_saml_configurations')
+  );
+};
+
+const isMissingTenantCanvasGradebookIntegrationsTableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    (error.message.includes('no such table') ||
+      error.message.includes('relation') ||
+      error.message.includes('does not exist')) &&
+    error.message.includes('tenant_canvas_gradebook_integrations')
   );
 };
 
@@ -1749,6 +1815,43 @@ const ensureTenantSsoSamlConfigurationsTable = async (db: SqlDatabase): Promise<
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
       )
+    `,
+    )
+    .run();
+};
+
+const ensureTenantCanvasGradebookIntegrationsTable = async (
+  db: SqlDatabase,
+): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS tenant_canvas_gradebook_integrations (
+        tenant_id TEXT PRIMARY KEY,
+        api_base_url TEXT NOT NULL,
+        authorization_endpoint TEXT NOT NULL,
+        token_endpoint TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_secret TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        access_token TEXT,
+        refresh_token TEXT,
+        access_token_expires_at TEXT,
+        refresh_token_expires_at TEXT,
+        connected_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_canvas_gradebook_connected_at
+        ON tenant_canvas_gradebook_integrations (connected_at DESC)
     `,
     )
     .run();
@@ -4920,6 +5023,27 @@ const mapTenantSsoSamlConfigurationRow = (
   };
 };
 
+const mapTenantCanvasGradebookIntegrationRow = (
+  row: TenantCanvasGradebookIntegrationRow,
+): TenantCanvasGradebookIntegrationRecord => {
+  return {
+    tenantId: row.tenantId,
+    apiBaseUrl: row.apiBaseUrl,
+    authorizationEndpoint: row.authorizationEndpoint,
+    tokenEndpoint: row.tokenEndpoint,
+    clientId: row.clientId,
+    clientSecret: row.clientSecret,
+    scope: row.scope,
+    accessToken: row.accessToken,
+    refreshToken: row.refreshToken,
+    accessTokenExpiresAt: row.accessTokenExpiresAt,
+    refreshTokenExpiresAt: row.refreshTokenExpiresAt,
+    connectedAt: row.connectedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
 const mapDedicatedDbProvisioningRequestRow = (
   row: DedicatedDbProvisioningRequestRow,
 ): DedicatedDbProvisioningRequestRecord => {
@@ -5336,6 +5460,175 @@ export const deleteTenantSsoSamlConfiguration = async (
   }
 
   return (result.meta.rowsWritten ?? 0) > 0;
+};
+
+export const findTenantCanvasGradebookIntegration = async (
+  db: SqlDatabase,
+  tenantId: string,
+): Promise<TenantCanvasGradebookIntegrationRecord | null> => {
+  const lookupStatement = (): Promise<TenantCanvasGradebookIntegrationRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          tenant_id AS tenantId,
+          api_base_url AS apiBaseUrl,
+          authorization_endpoint AS authorizationEndpoint,
+          token_endpoint AS tokenEndpoint,
+          client_id AS clientId,
+          client_secret AS clientSecret,
+          scope,
+          access_token AS accessToken,
+          refresh_token AS refreshToken,
+          access_token_expires_at AS accessTokenExpiresAt,
+          refresh_token_expires_at AS refreshTokenExpiresAt,
+          connected_at AS connectedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM tenant_canvas_gradebook_integrations
+        WHERE tenant_id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(tenantId)
+      .first<TenantCanvasGradebookIntegrationRow>();
+
+  let row: TenantCanvasGradebookIntegrationRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantCanvasGradebookIntegrationsTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantCanvasGradebookIntegrationsTable(db);
+    row = await lookupStatement();
+  }
+
+  return row === null ? null : mapTenantCanvasGradebookIntegrationRow(row);
+};
+
+export const upsertTenantCanvasGradebookIntegration = async (
+  db: SqlDatabase,
+  input: UpsertTenantCanvasGradebookIntegrationInput,
+): Promise<TenantCanvasGradebookIntegrationRecord> => {
+  const nowIso = new Date().toISOString();
+  const upsertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO tenant_canvas_gradebook_integrations (
+          tenant_id,
+          api_base_url,
+          authorization_endpoint,
+          token_endpoint,
+          client_id,
+          client_secret,
+          scope,
+          access_token,
+          refresh_token,
+          access_token_expires_at,
+          refresh_token_expires_at,
+          connected_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, ?)
+        ON CONFLICT (tenant_id)
+        DO UPDATE SET
+          api_base_url = excluded.api_base_url,
+          authorization_endpoint = excluded.authorization_endpoint,
+          token_endpoint = excluded.token_endpoint,
+          client_id = excluded.client_id,
+          client_secret = excluded.client_secret,
+          scope = excluded.scope,
+          updated_at = excluded.updated_at
+      `,
+      )
+      .bind(
+        input.tenantId,
+        input.apiBaseUrl,
+        input.authorizationEndpoint,
+        input.tokenEndpoint,
+        input.clientId,
+        input.clientSecret,
+        input.scope,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    await upsertStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantCanvasGradebookIntegrationsTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantCanvasGradebookIntegrationsTable(db);
+    await upsertStatement();
+  }
+
+  const integration = await findTenantCanvasGradebookIntegration(db, input.tenantId);
+
+  if (integration === null) {
+    throw new Error(`Unable to upsert Canvas integration for tenant "${input.tenantId}"`);
+  }
+
+  return integration;
+};
+
+export const updateTenantCanvasGradebookIntegrationTokens = async (
+  db: SqlDatabase,
+  input: UpdateTenantCanvasGradebookIntegrationTokensInput,
+): Promise<TenantCanvasGradebookIntegrationRecord | null> => {
+  const nowIso = new Date().toISOString();
+  const connectedAt = input.connectedAt ?? nowIso;
+  const updateStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE tenant_canvas_gradebook_integrations
+        SET
+          access_token = ?,
+          refresh_token = COALESCE(?, refresh_token),
+          access_token_expires_at = ?,
+          refresh_token_expires_at = ?,
+          connected_at = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+      `,
+      )
+      .bind(
+        input.accessToken,
+        input.refreshToken ?? null,
+        input.accessTokenExpiresAt ?? null,
+        input.refreshTokenExpiresAt ?? null,
+        connectedAt,
+        nowIso,
+        input.tenantId,
+      )
+      .run();
+
+  let updated: SqlRunResult;
+
+  try {
+    updated = await updateStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantCanvasGradebookIntegrationsTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantCanvasGradebookIntegrationsTable(db);
+    updated = await updateStatement();
+  }
+
+  if ((updated.meta.rowsWritten ?? 0) === 0) {
+    return null;
+  }
+
+  return findTenantCanvasGradebookIntegration(db, input.tenantId);
 };
 
 export const createDedicatedDbProvisioningRequest = async (

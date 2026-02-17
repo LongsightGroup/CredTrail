@@ -424,6 +424,31 @@ export const upsertTenantSsoSamlConfigurationRequestSchema = z.object({
   enforced: z.boolean().optional(),
 });
 
+export const upsertTenantCanvasGradebookIntegrationRequestSchema = z.object({
+  apiBaseUrl: z.string().url().max(2048),
+  authorizationEndpoint: z.string().url().max(2048),
+  tokenEndpoint: z.string().url().max(2048),
+  clientId: z.string().trim().min(1).max(512),
+  clientSecret: z.string().trim().min(1).max(2048),
+  scope: z.string().trim().min(1).max(2048).optional(),
+});
+
+export const adminCanvasOAuthAuthorizeUrlRequestSchema = z.object({
+  redirectUri: z.string().url().max(2048).optional(),
+});
+
+export const adminCanvasOAuthExchangeRequestSchema = z.object({
+  code: z.string().trim().min(1).max(4096),
+  state: z.string().trim().min(20).max(4096),
+  redirectUri: z.string().url().max(2048).optional(),
+});
+
+export const tenantCanvasGradebookSnapshotQuerySchema = z.object({
+  courseId: z.string().trim().min(1).max(255).optional(),
+  learnerId: z.string().trim().min(1).max(255).optional(),
+  assignmentId: z.string().trim().min(1).max(255).optional(),
+});
+
 export const createDedicatedDbProvisioningRequestSchema = z.object({
   targetRegion: z
     .string()
@@ -820,6 +845,16 @@ export type RevokeTenantApiKeyRequest = z.infer<typeof revokeTenantApiKeyRequest
 export type UpsertTenantSsoSamlConfigurationRequest = z.infer<
   typeof upsertTenantSsoSamlConfigurationRequestSchema
 >;
+export type UpsertTenantCanvasGradebookIntegrationRequest = z.infer<
+  typeof upsertTenantCanvasGradebookIntegrationRequestSchema
+>;
+export type AdminCanvasOAuthAuthorizeUrlRequest = z.infer<
+  typeof adminCanvasOAuthAuthorizeUrlRequestSchema
+>;
+export type AdminCanvasOAuthExchangeRequest = z.infer<typeof adminCanvasOAuthExchangeRequestSchema>;
+export type TenantCanvasGradebookSnapshotQuery = z.infer<
+  typeof tenantCanvasGradebookSnapshotQuerySchema
+>;
 export type CreateDedicatedDbProvisioningRequest = z.infer<
   typeof createDedicatedDbProvisioningRequestSchema
 >;
@@ -1049,6 +1084,30 @@ export const parseUpsertTenantSsoSamlConfigurationRequest = (
   input: unknown,
 ): UpsertTenantSsoSamlConfigurationRequest => {
   return upsertTenantSsoSamlConfigurationRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantCanvasGradebookIntegrationRequest = (
+  input: unknown,
+): UpsertTenantCanvasGradebookIntegrationRequest => {
+  return upsertTenantCanvasGradebookIntegrationRequestSchema.parse(input);
+};
+
+export const parseAdminCanvasOAuthAuthorizeUrlRequest = (
+  input: unknown,
+): AdminCanvasOAuthAuthorizeUrlRequest => {
+  return adminCanvasOAuthAuthorizeUrlRequestSchema.parse(input);
+};
+
+export const parseAdminCanvasOAuthExchangeRequest = (
+  input: unknown,
+): AdminCanvasOAuthExchangeRequest => {
+  return adminCanvasOAuthExchangeRequestSchema.parse(input);
+};
+
+export const parseTenantCanvasGradebookSnapshotQuery = (
+  input: unknown,
+): TenantCanvasGradebookSnapshotQuery => {
+  return tenantCanvasGradebookSnapshotQuerySchema.parse(input);
 };
 
 export const parseCreateDedicatedDbProvisioningRequest = (

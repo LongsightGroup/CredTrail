@@ -165,6 +165,7 @@ export interface AppBindings {
   BOOTSTRAP_ADMIN_TOKEN?: string;
   LTI_ISSUER_REGISTRY_JSON?: string;
   LTI_STATE_SIGNING_SECRET?: string;
+  CANVAS_OAUTH_STATE_SIGNING_SECRET?: string;
   OB3_DISCOVERY_TITLE?: string;
   OB3_TERMS_OF_SERVICE_URL?: string;
   OB3_PRIVACY_POLICY_URL?: string;

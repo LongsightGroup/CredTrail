@@ -9,6 +9,10 @@ import {
   parseTenantApiKeyPathParams,
   parseTenantDedicatedDbProvisioningRequestPathParams,
   parseUpsertTenantSsoSamlConfigurationRequest,
+  parseUpsertTenantCanvasGradebookIntegrationRequest,
+  parseAdminCanvasOAuthAuthorizeUrlRequest,
+  parseAdminCanvasOAuthExchangeRequest,
+  parseTenantCanvasGradebookSnapshotQuery,
   parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
@@ -546,6 +550,54 @@ describe('admin LTI issuer registration parsers', () => {
         tenantId: 'tenant_123',
         authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
         clientId: 'canvas-client-123',
+      });
+    }).toThrowError();
+  });
+});
+
+describe('canvas gradebook integration parsers', () => {
+  it('accepts valid Canvas integration payloads', () => {
+    const request = parseUpsertTenantCanvasGradebookIntegrationRequest({
+      apiBaseUrl: 'https://canvas.example.edu',
+      authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
+      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+      clientId: 'canvas-client-id',
+      clientSecret: 'canvas-client-secret',
+      scope: 'url:GET|/api/v1/courses',
+    });
+
+    expect(request.apiBaseUrl).toBe('https://canvas.example.edu');
+    expect(request.clientId).toBe('canvas-client-id');
+  });
+
+  it('accepts valid OAuth authorize/exchange payloads and snapshot query', () => {
+    const authorize = parseAdminCanvasOAuthAuthorizeUrlRequest({
+      redirectUri: 'https://credtrail.example.edu/callback',
+    });
+    const exchange = parseAdminCanvasOAuthExchangeRequest({
+      code: 'oauth-code-123',
+      state: 'abcdefghijklmnopqrstuvwxyz123456',
+      redirectUri: 'https://credtrail.example.edu/callback',
+    });
+    const snapshotQuery = parseTenantCanvasGradebookSnapshotQuery({
+      courseId: 'course_123',
+      learnerId: 'learner_456',
+      assignmentId: 'assignment_789',
+    });
+
+    expect(authorize.redirectUri).toBe('https://credtrail.example.edu/callback');
+    expect(exchange.code).toBe('oauth-code-123');
+    expect(snapshotQuery.assignmentId).toBe('assignment_789');
+  });
+
+  it('rejects invalid Canvas integration URLs', () => {
+    expect(() => {
+      parseUpsertTenantCanvasGradebookIntegrationRequest({
+        apiBaseUrl: 'not-a-url',
+        authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
+        tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+        clientId: 'canvas-client-id',
+        clientSecret: 'canvas-client-secret',
       });
     }).toThrowError();
   });

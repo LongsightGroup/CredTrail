@@ -3,11 +3,14 @@ import {
   createDedicatedDbProvisioningRequest,
   createAuditLog,
   deleteLtiIssuerRegistrationByIssuer,
+  findTenantCanvasGradebookIntegration,
   listAuditLogs,
   listDedicatedDbProvisioningRequests,
   listLtiIssuerRegistrations,
   resolveDedicatedDbProvisioningRequest,
+  updateTenantCanvasGradebookIntegrationTokens,
   upsertBadgeTemplateById,
+  upsertTenantCanvasGradebookIntegration,
   upsertLtiIssuerRegistration,
   upsertTenant,
   upsertTenantMembershipRole,
@@ -18,10 +21,13 @@ import {
 import type { Hono } from 'hono';
 import {
   type AdminAuditLogListQuery,
+  parseAdminCanvasOAuthAuthorizeUrlRequest,
+  parseAdminCanvasOAuthExchangeRequest,
   parseCreateDedicatedDbProvisioningRequest,
   parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertBadgeTemplateByIdRequest,
+  parseUpsertTenantCanvasGradebookIntegrationRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
   parseAdminUpsertTenantMembershipRoleRequest,
   parseAdminUpsertTenantRequest,
@@ -29,11 +35,20 @@ import {
   parseResolveDedicatedDbProvisioningRequest,
   parseBadgeTemplatePathParams,
   parseTenantDedicatedDbProvisioningRequestPathParams,
+  parseTenantCanvasGradebookSnapshotQuery,
   parseTenantPathParams,
   parseTenantUserPathParams,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import { auditLogAdminPage, type AuditLogAdminPageFilterState } from '../admin/pages';
+import { createGradebookProvider } from '../lms/gradebook-provider';
+import {
+  canvasOAuthStateSigningSecret,
+  exchangeCanvasAuthorizationCode,
+  refreshCanvasAccessToken,
+  signCanvasOAuthStatePayload,
+  validateCanvasOAuthStateToken,
+} from '../lms/canvas-oauth';
 import { normalizeLtiIssuer } from '../lti/lti-helpers';
 import {
   ltiIssuerRegistrationAdminPage,
@@ -93,6 +108,53 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       ...(input.submissionError === undefined ? {} : { submissionError: input.submissionError }),
     });
     return c.html(pageHtml, input.status ?? 200);
+  };
+
+  const addSecondsToIso = (fromIso: string, seconds: number): string => {
+    const fromMs = Date.parse(fromIso);
+
+    if (!Number.isFinite(fromMs)) {
+      throw new Error('Invalid timestamp');
+    }
+
+    return new Date(fromMs + seconds * 1000).toISOString();
+  };
+
+  const generateNonce = (): string => {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    let raw = '';
+
+    for (const byte of bytes) {
+      raw += String.fromCharCode(byte);
+    }
+
+    return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  };
+
+  const canvasIntegrationApiResponse = (
+    integration: Awaited<ReturnType<typeof findTenantCanvasGradebookIntegration>>,
+  ): Record<string, unknown> | null => {
+    if (integration === null) {
+      return null;
+    }
+
+    return {
+      tenantId: integration.tenantId,
+      apiBaseUrl: integration.apiBaseUrl,
+      authorizationEndpoint: integration.authorizationEndpoint,
+      tokenEndpoint: integration.tokenEndpoint,
+      clientId: integration.clientId,
+      scope: integration.scope,
+      hasClientSecret: integration.clientSecret.length > 0,
+      hasAccessToken: integration.accessToken !== null,
+      hasRefreshToken: integration.refreshToken !== null,
+      accessTokenExpiresAt: integration.accessTokenExpiresAt,
+      refreshTokenExpiresAt: integration.refreshTokenExpiresAt,
+      connectedAt: integration.connectedAt,
+      createdAt: integration.createdAt,
+      updatedAt: integration.updatedAt,
+    };
   };
 
   app.put('/v1/admin/tenants/:tenantId', async (c) => {
@@ -336,6 +398,473 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       },
       201,
     );
+  });
+
+  app.get('/v1/admin/tenants/:tenantId/lms/canvas/config', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    const pathParams = parseTenantPathParams(c.req.param());
+    const integration = await findTenantCanvasGradebookIntegration(
+      resolveDatabase(c.env),
+      pathParams.tenantId,
+    );
+
+    if (integration === null) {
+      return c.json(
+        {
+          error: 'Canvas gradebook integration not found',
+        },
+        404,
+      );
+    }
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      integration: canvasIntegrationApiResponse(integration),
+    });
+  });
+
+  app.put('/v1/admin/tenants/:tenantId/lms/canvas/config', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request;
+
+    try {
+      request = parseUpsertTenantCanvasGradebookIntegrationRequest(await c.req.json<unknown>());
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Invalid Canvas integration payload',
+        },
+        400,
+      );
+    }
+
+    const integration = await upsertTenantCanvasGradebookIntegration(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      apiBaseUrl: request.apiBaseUrl,
+      authorizationEndpoint: request.authorizationEndpoint,
+      tokenEndpoint: request.tokenEndpoint,
+      clientId: request.clientId,
+      clientSecret: request.clientSecret,
+      scope:
+        request.scope ??
+        'url:GET|/api/v1/courses url:GET|/api/v1/courses/:course_id/enrollments url:GET|/api/v1/courses/:course_id/assignments',
+    });
+
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      action: 'tenant.canvas_gradebook_integration_upserted',
+      targetType: 'tenant_canvas_gradebook_integration',
+      targetId: pathParams.tenantId,
+      metadata: {
+        apiBaseUrl: integration.apiBaseUrl,
+        authorizationEndpoint: integration.authorizationEndpoint,
+        tokenEndpoint: integration.tokenEndpoint,
+        clientId: integration.clientId,
+        scope: integration.scope,
+        hasAccessToken: integration.accessToken !== null,
+        hasRefreshToken: integration.refreshToken !== null,
+      },
+    });
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        integration: canvasIntegrationApiResponse(integration),
+      },
+      201,
+    );
+  });
+
+  app.post('/v1/admin/tenants/:tenantId/lms/canvas/oauth/authorize-url', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    const pathParams = parseTenantPathParams(c.req.param());
+    const integration = await findTenantCanvasGradebookIntegration(
+      resolveDatabase(c.env),
+      pathParams.tenantId,
+    );
+
+    if (integration === null) {
+      return c.json(
+        {
+          error: 'Canvas gradebook integration not found',
+        },
+        404,
+      );
+    }
+
+    const requestPayload = await c.req.json<unknown>().catch(() => ({}));
+    let request;
+
+    try {
+      request = parseAdminCanvasOAuthAuthorizeUrlRequest(requestPayload);
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Invalid OAuth authorize payload',
+        },
+        400,
+      );
+    }
+
+    const defaultRedirectUri = new URL(
+      `/v1/admin/tenants/${encodeURIComponent(pathParams.tenantId)}/lms/canvas/oauth/exchange`,
+      c.req.url,
+    ).toString();
+    const redirectUri = request.redirectUri ?? defaultRedirectUri;
+    const nowIso = new Date().toISOString();
+    const expiresAt = addSecondsToIso(nowIso, 10 * 60);
+    const stateToken = await signCanvasOAuthStatePayload(
+      {
+        tenantId: pathParams.tenantId,
+        nonce: generateNonce(),
+        issuedAt: nowIso,
+        expiresAt,
+      },
+      canvasOAuthStateSigningSecret(c.env),
+    );
+
+    const authorizationUrl = new URL(integration.authorizationEndpoint);
+    authorizationUrl.searchParams.set('response_type', 'code');
+    authorizationUrl.searchParams.set('client_id', integration.clientId);
+    authorizationUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizationUrl.searchParams.set('scope', integration.scope);
+    authorizationUrl.searchParams.set('state', stateToken);
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      authorizationUrl: authorizationUrl.toString(),
+      state: stateToken,
+      redirectUri,
+      expiresAt,
+    });
+  });
+
+  app.post('/v1/admin/tenants/:tenantId/lms/canvas/oauth/exchange', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request;
+
+    try {
+      request = parseAdminCanvasOAuthExchangeRequest(await c.req.json<unknown>());
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Invalid OAuth exchange payload',
+        },
+        400,
+      );
+    }
+
+    const integration = await findTenantCanvasGradebookIntegration(
+      resolveDatabase(c.env),
+      pathParams.tenantId,
+    );
+
+    if (integration === null) {
+      return c.json(
+        {
+          error: 'Canvas gradebook integration not found',
+        },
+        404,
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    const stateValidation = await validateCanvasOAuthStateToken(
+      request.state,
+      canvasOAuthStateSigningSecret(c.env),
+      nowIso,
+    );
+
+    if (stateValidation.status !== 'ok' || stateValidation.payload.tenantId !== pathParams.tenantId) {
+      return c.json(
+        {
+          error:
+            stateValidation.status === 'ok'
+              ? 'OAuth state token does not match tenant'
+              : stateValidation.reason,
+        },
+        400,
+      );
+    }
+
+    const defaultRedirectUri = new URL(
+      `/v1/admin/tenants/${encodeURIComponent(pathParams.tenantId)}/lms/canvas/oauth/exchange`,
+      c.req.url,
+    ).toString();
+    const redirectUri = request.redirectUri ?? defaultRedirectUri;
+
+    let tokenResponse;
+
+    try {
+      tokenResponse = await exchangeCanvasAuthorizationCode({
+        tokenEndpoint: integration.tokenEndpoint,
+        clientId: integration.clientId,
+        clientSecret: integration.clientSecret,
+        code: request.code,
+        redirectUri,
+      });
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Canvas OAuth token exchange failed',
+        },
+        502,
+      );
+    }
+
+    const accessTokenExpiresAt =
+      tokenResponse.expiresInSeconds === undefined
+        ? undefined
+        : addSecondsToIso(nowIso, tokenResponse.expiresInSeconds);
+    const refreshTokenExpiresAt =
+      tokenResponse.refreshTokenExpiresInSeconds === undefined
+        ? undefined
+        : addSecondsToIso(nowIso, tokenResponse.refreshTokenExpiresInSeconds);
+    const updatedIntegration = await updateTenantCanvasGradebookIntegrationTokens(
+      resolveDatabase(c.env),
+      {
+        tenantId: pathParams.tenantId,
+        accessToken: tokenResponse.accessToken,
+        refreshToken: tokenResponse.refreshToken,
+        accessTokenExpiresAt,
+        refreshTokenExpiresAt,
+      },
+    );
+
+    if (updatedIntegration === null) {
+      return c.json(
+        {
+          error: 'Canvas gradebook integration not found',
+        },
+        404,
+      );
+    }
+
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      action: 'tenant.canvas_gradebook_oauth_connected',
+      targetType: 'tenant_canvas_gradebook_integration',
+      targetId: pathParams.tenantId,
+      metadata: {
+        scope: tokenResponse.scope ?? updatedIntegration.scope,
+        accessTokenExpiresAt: updatedIntegration.accessTokenExpiresAt,
+        refreshTokenExpiresAt: updatedIntegration.refreshTokenExpiresAt,
+        connectedAt: updatedIntegration.connectedAt,
+      },
+    });
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      status: 'connected',
+      integration: canvasIntegrationApiResponse(updatedIntegration),
+    });
+  });
+
+  app.get('/v1/admin/tenants/:tenantId/lms/canvas/gradebook/snapshot', async (c) => {
+    const unauthorizedResponse = requireBootstrapAdmin(c);
+
+    if (unauthorizedResponse !== null) {
+      return unauthorizedResponse;
+    }
+
+    const pathParams = parseTenantPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseTenantCanvasGradebookSnapshotQuery({
+        courseId: c.req.query('courseId'),
+        learnerId: c.req.query('learnerId'),
+        assignmentId: c.req.query('assignmentId'),
+      });
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Invalid gradebook snapshot query',
+        },
+        400,
+      );
+    }
+
+    if (query.assignmentId !== undefined && query.courseId === undefined) {
+      return c.json(
+        {
+          error: 'assignmentId requires courseId',
+        },
+        400,
+      );
+    }
+
+    const db = resolveDatabase(c.env);
+    const integration = await findTenantCanvasGradebookIntegration(db, pathParams.tenantId);
+
+    if (integration === null) {
+      return c.json(
+        {
+          error: 'Canvas gradebook integration not found',
+        },
+        404,
+      );
+    }
+
+    let accessToken = integration.accessToken;
+    const nowIso = new Date().toISOString();
+    const accessTokenExpired =
+      integration.accessTokenExpiresAt !== null &&
+      Number.isFinite(Date.parse(integration.accessTokenExpiresAt)) &&
+      Date.parse(integration.accessTokenExpiresAt) <= Date.parse(nowIso);
+
+    if ((accessToken === null || accessTokenExpired) && integration.refreshToken !== null) {
+      try {
+        const refreshed = await refreshCanvasAccessToken({
+          tokenEndpoint: integration.tokenEndpoint,
+          clientId: integration.clientId,
+          clientSecret: integration.clientSecret,
+          refreshToken: integration.refreshToken,
+        });
+        const updatedIntegration = await updateTenantCanvasGradebookIntegrationTokens(db, {
+          tenantId: integration.tenantId,
+          accessToken: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken,
+          accessTokenExpiresAt:
+            refreshed.expiresInSeconds === undefined
+              ? undefined
+              : addSecondsToIso(nowIso, refreshed.expiresInSeconds),
+          refreshTokenExpiresAt:
+            refreshed.refreshTokenExpiresInSeconds === undefined
+              ? undefined
+              : addSecondsToIso(nowIso, refreshed.refreshTokenExpiresInSeconds),
+        });
+
+        if (updatedIntegration === null) {
+          return c.json(
+            {
+              error: 'Canvas gradebook integration not found',
+            },
+            404,
+          );
+        }
+
+        accessToken = updatedIntegration.accessToken;
+      } catch (error) {
+        return c.json(
+          {
+            error: error instanceof Error ? error.message : 'Canvas access token refresh failed',
+          },
+          502,
+        );
+      }
+    }
+
+    if (accessToken === null) {
+      return c.json(
+        {
+          error: 'Canvas integration is not connected. Complete OAuth exchange first.',
+        },
+        409,
+      );
+    }
+
+    const gradebookProvider = createGradebookProvider({
+      config: {
+        kind: 'canvas',
+        apiBaseUrl: integration.apiBaseUrl,
+        accessToken,
+      },
+    });
+    const courses = await gradebookProvider.listCourses();
+
+    if (query.courseId === undefined) {
+      return c.json({
+        tenantId: pathParams.tenantId,
+        provider: 'canvas',
+        generatedAt: nowIso,
+        courses,
+      });
+    }
+
+    const assignments = await gradebookProvider.listAssignments({
+      courseId: query.courseId,
+    });
+    const learnerFilter = query.learnerId === undefined ? {} : { learnerId: query.learnerId };
+    const assignmentFilter = query.assignmentId === undefined ? {} : { assignmentId: query.assignmentId };
+
+    const enrollments = await gradebookProvider.listEnrollments({
+      courseId: query.courseId,
+      ...learnerFilter,
+    });
+    const grades = await gradebookProvider.listGrades({
+      courseId: query.courseId,
+      ...learnerFilter,
+    });
+    const completions = await gradebookProvider.listCompletions({
+      courseId: query.courseId,
+      ...learnerFilter,
+    });
+    const submissions = await gradebookProvider.listSubmissions({
+      courseId: query.courseId,
+      ...assignmentFilter,
+      ...learnerFilter,
+    });
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      provider: 'canvas',
+      generatedAt: nowIso,
+      courses,
+      assignments,
+      enrollments,
+      grades,
+      completions,
+      submissions,
+      badgeCriteriaFacts: {
+        courseCompletionFacts: completions.map((completion) => ({
+          courseId: completion.courseId,
+          learnerId: completion.learnerId,
+          completed: completion.completed,
+          completionPercent: completion.completionPercent,
+          sourceState: completion.sourceState,
+        })),
+        courseGradeFacts: grades.map((grade) => ({
+          courseId: grade.courseId,
+          learnerId: grade.learnerId,
+          finalScore: grade.finalScore,
+          currentScore: grade.currentScore,
+          finalGrade: grade.finalGrade,
+          currentGrade: grade.currentGrade,
+        })),
+        assignmentSubmissionFacts: submissions.map((submission) => ({
+          courseId: submission.courseId,
+          assignmentId: submission.assignmentId,
+          learnerId: submission.learnerId,
+          score: submission.score,
+          workflowState: submission.workflowState,
+          submittedAt: submission.submittedAt,
+          gradedAt: submission.gradedAt,
+        })),
+      },
+    });
   });
 
   app.get('/v1/admin/lti/issuer-registrations', async (c) => {
