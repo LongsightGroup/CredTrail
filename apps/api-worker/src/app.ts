@@ -107,6 +107,7 @@ import { registerAdminRoutes } from './routes/admin-routes';
 import { registerAssertionRoutes } from './routes/assertion-routes';
 import { registerAuthRoutes } from './routes/auth-routes';
 import { registerBadgeTemplateRoutes } from './routes/badge-template-routes';
+import { registerBadgeRuleRoutes } from './routes/badge-rule-routes';
 import { registerCredentialRoutes } from './routes/credential-routes';
 import { registerDidRoutes } from './routes/did-routes';
 import { registerLearnerRoutes } from './routes/learner-routes';
@@ -620,6 +621,17 @@ const issueBadgeForTenant = createIssueBadgeForTenant<AppContext, AppBindings>({
   observabilityContext,
   publicBadgePathForAssertion,
   HttpErrorResponseClass: HttpErrorResponse,
+});
+
+registerBadgeRuleRoutes({
+  app,
+  resolveDatabase,
+  requireTenantRole,
+  issueBadgeForTenant: (c, tenantId, request, issuedByUserId) => {
+    return issueBadgeForTenant(c, tenantId, request, issuedByUserId);
+  },
+  ISSUER_ROLES,
+  ADMIN_ROLES,
 });
 
 registerAssertionRoutes({

@@ -414,6 +414,138 @@ export interface UpdateTenantCanvasGradebookIntegrationTokensInput {
   connectedAt?: string | undefined;
 }
 
+export type BadgeIssuanceRuleLmsProviderKind =
+  | 'canvas'
+  | 'moodle'
+  | 'blackboard_ultra'
+  | 'd2l_brightspace'
+  | 'sakai';
+
+export type BadgeIssuanceRuleVersionStatus =
+  | 'draft'
+  | 'pending_approval'
+  | 'approved'
+  | 'active'
+  | 'rejected'
+  | 'deprecated';
+
+export interface BadgeIssuanceRuleRecord {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  badgeTemplateId: string;
+  lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
+  activeVersionId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BadgeIssuanceRuleVersionRecord {
+  id: string;
+  tenantId: string;
+  ruleId: string;
+  versionNumber: number;
+  status: BadgeIssuanceRuleVersionStatus;
+  ruleJson: string;
+  changeSummary: string | null;
+  createdByUserId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  activatedByUserId: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BadgeIssuanceRuleEvaluationRecord {
+  id: string;
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+  learnerId: string;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  matched: boolean;
+  issuanceStatus: string | null;
+  assertionId: string | null;
+  evaluationJson: string;
+  evaluatedAt: string;
+  createdAt: string;
+}
+
+export interface CreateBadgeIssuanceRuleInput {
+  tenantId: string;
+  name: string;
+  description?: string | undefined;
+  badgeTemplateId: string;
+  lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
+  ruleJson: string;
+  changeSummary?: string | undefined;
+  createdByUserId?: string | undefined;
+}
+
+export interface CreateBadgeIssuanceRuleVersionInput {
+  tenantId: string;
+  ruleId: string;
+  ruleJson: string;
+  changeSummary?: string | undefined;
+  createdByUserId?: string | undefined;
+}
+
+export interface ListBadgeIssuanceRulesInput {
+  tenantId: string;
+}
+
+export interface ListBadgeIssuanceRuleVersionsInput {
+  tenantId: string;
+  ruleId: string;
+}
+
+export interface SubmitBadgeIssuanceRuleVersionForApprovalInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+}
+
+export interface DecideBadgeIssuanceRuleVersionInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+  decision: 'approved' | 'rejected';
+  actorUserId: string;
+  occurredAt?: string | undefined;
+}
+
+export interface ActivateBadgeIssuanceRuleVersionInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+  actorUserId: string;
+  activatedAt?: string | undefined;
+}
+
+export interface CreateBadgeIssuanceRuleEvaluationInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+  learnerId: string;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  matched: boolean;
+  issuanceStatus?: string | undefined;
+  assertionId?: string | undefined;
+  evaluationJson: string;
+  evaluatedAt?: string | undefined;
+}
+
+export interface ListIssuedBadgeTemplateIdsForRecipientInput {
+  tenantId: string;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+}
+
 export interface DedicatedDbProvisioningRequestStatusInput {
   status: 'pending' | 'provisioned' | 'failed' | 'canceled';
 }
@@ -1191,6 +1323,60 @@ interface BadgeTemplateOwnershipEventRow {
   createdAt: string;
 }
 
+interface BadgeIssuanceRuleRow {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  badgeTemplateId: string;
+  lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
+  activeVersionId: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BadgeIssuanceRuleVersionRow {
+  id: string;
+  tenantId: string;
+  ruleId: string;
+  versionNumber: number;
+  status: BadgeIssuanceRuleVersionStatus;
+  ruleJson: string;
+  changeSummary: string | null;
+  createdByUserId: string | null;
+  approvedByUserId: string | null;
+  approvedAt: string | null;
+  activatedByUserId: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BadgeIssuanceRuleEvaluationRow {
+  id: string;
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+  learnerId: string;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  matched: number | boolean;
+  issuanceStatus: string | null;
+  assertionId: string | null;
+  evaluationJson: string;
+  evaluatedAt: string;
+  createdAt: string;
+}
+
+interface BadgeIssuanceRuleVersionNumberRow {
+  maxVersionNumber: number | string | null;
+}
+
+interface BadgeTemplateIdRow {
+  badgeTemplateId: string;
+}
+
 interface TenantRow {
   id: string;
   slug: string;
@@ -1509,6 +1695,27 @@ const isMissingTenantCanvasGradebookIntegrationsTableError = (error: unknown): b
       error.message.includes('relation') ||
       error.message.includes('does not exist')) &&
     error.message.includes('tenant_canvas_gradebook_integrations')
+  );
+};
+
+const isMissingBadgeIssuanceRulesTablesError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const tableMissing =
+    error.message.includes('badge_issuance_rules') ||
+    error.message.includes('badge_issuance_rule_versions') ||
+    error.message.includes('badge_issuance_rule_evaluations');
+
+  if (!tableMissing) {
+    return false;
+  }
+
+  return (
+    error.message.includes('no such table') ||
+    error.message.includes('relation') ||
+    error.message.includes('does not exist')
   );
 };
 
@@ -1852,6 +2059,121 @@ const ensureTenantCanvasGradebookIntegrationsTable = async (
       `
       CREATE INDEX IF NOT EXISTS idx_canvas_gradebook_connected_at
         ON tenant_canvas_gradebook_integrations (connected_at DESC)
+    `,
+    )
+    .run();
+};
+
+const ensureBadgeIssuanceRulesTables = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS badge_issuance_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        badge_template_id TEXT NOT NULL,
+        lms_provider_kind TEXT NOT NULL,
+        active_version_id TEXT,
+        created_by_user_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id, badge_template_id) REFERENCES badge_templates (tenant_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_issuance_rules_tenant
+        ON badge_issuance_rules (tenant_id, created_at DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS badge_issuance_rule_versions (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        rule_id TEXT NOT NULL,
+        version_number INTEGER NOT NULL CHECK (version_number > 0),
+        status TEXT NOT NULL CHECK (status IN ('draft', 'pending_approval', 'approved', 'active', 'rejected', 'deprecated')),
+        rule_json TEXT NOT NULL,
+        change_summary TEXT,
+        created_by_user_id TEXT,
+        approved_by_user_id TEXT,
+        approved_at TEXT,
+        activated_by_user_id TEXT,
+        activated_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (rule_id, version_number),
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (rule_id) REFERENCES badge_issuance_rules (id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+        FOREIGN KEY (approved_by_user_id) REFERENCES users (id) ON DELETE SET NULL,
+        FOREIGN KEY (activated_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_issuance_rule_versions_rule
+        ON badge_issuance_rule_versions (rule_id, version_number DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_issuance_rule_versions_status
+        ON badge_issuance_rule_versions (tenant_id, status, created_at DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS badge_issuance_rule_evaluations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        rule_id TEXT NOT NULL,
+        version_id TEXT NOT NULL,
+        learner_id TEXT NOT NULL,
+        recipient_identity TEXT NOT NULL,
+        recipient_identity_type TEXT NOT NULL CHECK (recipient_identity_type IN ('email', 'email_sha256', 'did', 'url')),
+        matched INTEGER NOT NULL CHECK (matched IN (0, 1)),
+        issuance_status TEXT,
+        assertion_id TEXT,
+        evaluation_json TEXT NOT NULL,
+        evaluated_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (rule_id) REFERENCES badge_issuance_rules (id) ON DELETE CASCADE,
+        FOREIGN KEY (version_id) REFERENCES badge_issuance_rule_versions (id) ON DELETE CASCADE,
+        FOREIGN KEY (assertion_id) REFERENCES assertions (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_issuance_rule_evaluations_rule
+        ON badge_issuance_rule_evaluations (tenant_id, rule_id, learner_id, evaluated_at DESC)
     `,
     )
     .run();
@@ -2663,6 +2985,15 @@ const ASSERTION_LIFECYCLE_ALLOWED_TRANSITIONS: Record<
   expired: new Set<AssertionLifecycleState>(['active', 'revoked']),
   revoked: new Set<AssertionLifecycleState>(),
 };
+
+const BADGE_ISSUANCE_RULE_VERSION_STATUSES = new Set<BadgeIssuanceRuleVersionStatus>([
+  'draft',
+  'pending_approval',
+  'approved',
+  'active',
+  'rejected',
+  'deprecated',
+]);
 
 const assertionLifecycleStateFromRecords = (input: {
   assertion: AssertionRecord;
@@ -5044,6 +5375,62 @@ const mapTenantCanvasGradebookIntegrationRow = (
   };
 };
 
+const mapBadgeIssuanceRuleRow = (row: BadgeIssuanceRuleRow): BadgeIssuanceRuleRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    name: row.name,
+    description: row.description,
+    badgeTemplateId: row.badgeTemplateId,
+    lmsProviderKind: row.lmsProviderKind,
+    activeVersionId: row.activeVersionId,
+    createdByUserId: row.createdByUserId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapBadgeIssuanceRuleVersionRow = (
+  row: BadgeIssuanceRuleVersionRow,
+): BadgeIssuanceRuleVersionRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    ruleId: row.ruleId,
+    versionNumber: row.versionNumber,
+    status: row.status,
+    ruleJson: row.ruleJson,
+    changeSummary: row.changeSummary,
+    createdByUserId: row.createdByUserId,
+    approvedByUserId: row.approvedByUserId,
+    approvedAt: row.approvedAt,
+    activatedByUserId: row.activatedByUserId,
+    activatedAt: row.activatedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapBadgeIssuanceRuleEvaluationRow = (
+  row: BadgeIssuanceRuleEvaluationRow,
+): BadgeIssuanceRuleEvaluationRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    ruleId: row.ruleId,
+    versionId: row.versionId,
+    learnerId: row.learnerId,
+    recipientIdentity: row.recipientIdentity,
+    recipientIdentityType: row.recipientIdentityType,
+    matched: row.matched === 1 || row.matched === true,
+    issuanceStatus: row.issuanceStatus,
+    assertionId: row.assertionId,
+    evaluationJson: row.evaluationJson,
+    evaluatedAt: row.evaluatedAt,
+    createdAt: row.createdAt,
+  };
+};
+
 const mapDedicatedDbProvisioningRequestRow = (
   row: DedicatedDbProvisioningRequestRow,
 ): DedicatedDbProvisioningRequestRecord => {
@@ -5629,6 +6016,760 @@ export const updateTenantCanvasGradebookIntegrationTokens = async (
   }
 
   return findTenantCanvasGradebookIntegration(db, input.tenantId);
+};
+
+export interface CreateBadgeIssuanceRuleResult {
+  rule: BadgeIssuanceRuleRecord;
+  version: BadgeIssuanceRuleVersionRecord;
+}
+
+export const findBadgeIssuanceRuleById = async (
+  db: SqlDatabase,
+  tenantId: string,
+  ruleId: string,
+): Promise<BadgeIssuanceRuleRecord | null> => {
+  const lookupStatement = (): Promise<BadgeIssuanceRuleRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          name,
+          description,
+          badge_template_id AS badgeTemplateId,
+          lms_provider_kind AS lmsProviderKind,
+          active_version_id AS activeVersionId,
+          created_by_user_id AS createdByUserId,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM badge_issuance_rules
+        WHERE tenant_id = ?
+          AND id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(tenantId, ruleId)
+      .first<BadgeIssuanceRuleRow>();
+
+  let row: BadgeIssuanceRuleRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    row = await lookupStatement();
+  }
+
+  return row === null ? null : mapBadgeIssuanceRuleRow(row);
+};
+
+export const listBadgeIssuanceRules = async (
+  db: SqlDatabase,
+  input: ListBadgeIssuanceRulesInput,
+): Promise<BadgeIssuanceRuleRecord[]> => {
+  const listStatement = (): Promise<SqlQueryResult<BadgeIssuanceRuleRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          name,
+          description,
+          badge_template_id AS badgeTemplateId,
+          lms_provider_kind AS lmsProviderKind,
+          active_version_id AS activeVersionId,
+          created_by_user_id AS createdByUserId,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM badge_issuance_rules
+        WHERE tenant_id = ?
+        ORDER BY created_at DESC, id DESC
+      `,
+      )
+      .bind(input.tenantId)
+      .all<BadgeIssuanceRuleRow>();
+
+  let result: SqlQueryResult<BadgeIssuanceRuleRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    result = await listStatement();
+  }
+
+  return result.results.map((row) => mapBadgeIssuanceRuleRow(row));
+};
+
+export const listBadgeIssuanceRuleVersions = async (
+  db: SqlDatabase,
+  input: ListBadgeIssuanceRuleVersionsInput,
+): Promise<BadgeIssuanceRuleVersionRecord[]> => {
+  const listStatement = (): Promise<SqlQueryResult<BadgeIssuanceRuleVersionRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          rule_id AS ruleId,
+          version_number AS versionNumber,
+          status,
+          rule_json AS ruleJson,
+          change_summary AS changeSummary,
+          created_by_user_id AS createdByUserId,
+          approved_by_user_id AS approvedByUserId,
+          approved_at AS approvedAt,
+          activated_by_user_id AS activatedByUserId,
+          activated_at AS activatedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM badge_issuance_rule_versions
+        WHERE tenant_id = ?
+          AND rule_id = ?
+        ORDER BY version_number DESC
+      `,
+      )
+      .bind(input.tenantId, input.ruleId)
+      .all<BadgeIssuanceRuleVersionRow>();
+
+  let result: SqlQueryResult<BadgeIssuanceRuleVersionRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    result = await listStatement();
+  }
+
+  return result.results
+    .map((row) => mapBadgeIssuanceRuleVersionRow(row))
+    .filter((version) => BADGE_ISSUANCE_RULE_VERSION_STATUSES.has(version.status));
+};
+
+export const findBadgeIssuanceRuleVersionById = async (
+  db: SqlDatabase,
+  input: {
+    tenantId: string;
+    ruleId: string;
+    versionId: string;
+  },
+): Promise<BadgeIssuanceRuleVersionRecord | null> => {
+  const lookupStatement = (): Promise<BadgeIssuanceRuleVersionRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          rule_id AS ruleId,
+          version_number AS versionNumber,
+          status,
+          rule_json AS ruleJson,
+          change_summary AS changeSummary,
+          created_by_user_id AS createdByUserId,
+          approved_by_user_id AS approvedByUserId,
+          approved_at AS approvedAt,
+          activated_by_user_id AS activatedByUserId,
+          activated_at AS activatedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM badge_issuance_rule_versions
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(input.tenantId, input.ruleId, input.versionId)
+      .first<BadgeIssuanceRuleVersionRow>();
+
+  let row: BadgeIssuanceRuleVersionRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    row = await lookupStatement();
+  }
+
+  if (row === null) {
+    return null;
+  }
+
+  const version = mapBadgeIssuanceRuleVersionRow(row);
+  return BADGE_ISSUANCE_RULE_VERSION_STATUSES.has(version.status) ? version : null;
+};
+
+export const findActiveBadgeIssuanceRuleVersion = async (
+  db: SqlDatabase,
+  input: {
+    tenantId: string;
+    ruleId: string;
+  },
+): Promise<BadgeIssuanceRuleVersionRecord | null> => {
+  const lookupStatement = (): Promise<BadgeIssuanceRuleVersionRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          versions.id,
+          versions.tenant_id AS tenantId,
+          versions.rule_id AS ruleId,
+          versions.version_number AS versionNumber,
+          versions.status,
+          versions.rule_json AS ruleJson,
+          versions.change_summary AS changeSummary,
+          versions.created_by_user_id AS createdByUserId,
+          versions.approved_by_user_id AS approvedByUserId,
+          versions.approved_at AS approvedAt,
+          versions.activated_by_user_id AS activatedByUserId,
+          versions.activated_at AS activatedAt,
+          versions.created_at AS createdAt,
+          versions.updated_at AS updatedAt
+        FROM badge_issuance_rules AS rules
+        INNER JOIN badge_issuance_rule_versions AS versions
+          ON versions.id = rules.active_version_id
+          AND versions.rule_id = rules.id
+          AND versions.tenant_id = rules.tenant_id
+        WHERE rules.tenant_id = ?
+          AND rules.id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(input.tenantId, input.ruleId)
+      .first<BadgeIssuanceRuleVersionRow>();
+
+  let row: BadgeIssuanceRuleVersionRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    row = await lookupStatement();
+  }
+
+  if (row === null) {
+    return null;
+  }
+
+  const version = mapBadgeIssuanceRuleVersionRow(row);
+  return BADGE_ISSUANCE_RULE_VERSION_STATUSES.has(version.status) ? version : null;
+};
+
+export const createBadgeIssuanceRule = async (
+  db: SqlDatabase,
+  input: CreateBadgeIssuanceRuleInput,
+): Promise<CreateBadgeIssuanceRuleResult> => {
+  const nowIso = new Date().toISOString();
+  const ruleId = createPrefixedId('brl');
+  const versionId = createPrefixedId('brv');
+  const insertRuleStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO badge_issuance_rules (
+          id,
+          tenant_id,
+          name,
+          description,
+          badge_template_id,
+          lms_provider_kind,
+          active_version_id,
+          created_by_user_id,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+      `,
+      )
+      .bind(
+        ruleId,
+        input.tenantId,
+        input.name,
+        input.description ?? null,
+        input.badgeTemplateId,
+        input.lmsProviderKind,
+        input.createdByUserId ?? null,
+        nowIso,
+        nowIso,
+      )
+      .run();
+  const insertVersionStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO badge_issuance_rule_versions (
+          id,
+          tenant_id,
+          rule_id,
+          version_number,
+          status,
+          rule_json,
+          change_summary,
+          created_by_user_id,
+          approved_by_user_id,
+          approved_at,
+          activated_by_user_id,
+          activated_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, 1, 'draft', ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
+      `,
+      )
+      .bind(
+        versionId,
+        input.tenantId,
+        ruleId,
+        input.ruleJson,
+        input.changeSummary ?? null,
+        input.createdByUserId ?? null,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    await insertRuleStatement();
+    await insertVersionStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    await insertRuleStatement();
+    await insertVersionStatement();
+  }
+
+  const rule = await findBadgeIssuanceRuleById(db, input.tenantId, ruleId);
+  const version = await findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId,
+    versionId,
+  });
+
+  if (rule === null || version === null) {
+    throw new Error(`Unable to create badge issuance rule "${ruleId}"`);
+  }
+
+  return {
+    rule,
+    version,
+  };
+};
+
+export const createBadgeIssuanceRuleVersion = async (
+  db: SqlDatabase,
+  input: CreateBadgeIssuanceRuleVersionInput,
+): Promise<BadgeIssuanceRuleVersionRecord> => {
+  const nowIso = new Date().toISOString();
+  const versionId = createPrefixedId('brv');
+  const nextVersionStatement = (): Promise<BadgeIssuanceRuleVersionNumberRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT MAX(version_number) AS maxVersionNumber
+        FROM badge_issuance_rule_versions
+        WHERE tenant_id = ?
+          AND rule_id = ?
+      `,
+      )
+      .bind(input.tenantId, input.ruleId)
+      .first<BadgeIssuanceRuleVersionNumberRow>();
+  const insertStatement = (versionNumber: number): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO badge_issuance_rule_versions (
+          id,
+          tenant_id,
+          rule_id,
+          version_number,
+          status,
+          rule_json,
+          change_summary,
+          created_by_user_id,
+          approved_by_user_id,
+          approved_at,
+          activated_by_user_id,
+          activated_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?)
+      `,
+      )
+      .bind(
+        versionId,
+        input.tenantId,
+        input.ruleId,
+        versionNumber,
+        input.ruleJson,
+        input.changeSummary ?? null,
+        input.createdByUserId ?? null,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  let maxRow: BadgeIssuanceRuleVersionNumberRow | null;
+
+  try {
+    maxRow = await nextVersionStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    maxRow = await nextVersionStatement();
+  }
+
+  const currentMax =
+    maxRow?.maxVersionNumber === null || maxRow?.maxVersionNumber === undefined
+      ? 0
+      : Number(maxRow.maxVersionNumber);
+  const nextVersionNumber = Number.isFinite(currentMax) ? Math.floor(currentMax) + 1 : 1;
+  await insertStatement(nextVersionNumber);
+
+  const version = await findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId,
+  });
+
+  if (version === null) {
+    throw new Error(
+      `Unable to create badge issuance rule version for rule "${input.ruleId}" in tenant "${input.tenantId}"`,
+    );
+  }
+
+  return version;
+};
+
+export const submitBadgeIssuanceRuleVersionForApproval = async (
+  db: SqlDatabase,
+  input: SubmitBadgeIssuanceRuleVersionForApprovalInput,
+): Promise<BadgeIssuanceRuleVersionRecord | null> => {
+  const nowIso = new Date().toISOString();
+  const submitStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = 'pending_approval',
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(nowIso, input.tenantId, input.ruleId, input.versionId)
+      .run();
+
+  let updated: SqlRunResult;
+
+  try {
+    updated = await submitStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    updated = await submitStatement();
+  }
+
+  if ((updated.meta.rowsWritten ?? 0) === 0) {
+    return null;
+  }
+
+  return findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+};
+
+export const decideBadgeIssuanceRuleVersion = async (
+  db: SqlDatabase,
+  input: DecideBadgeIssuanceRuleVersionInput,
+): Promise<BadgeIssuanceRuleVersionRecord | null> => {
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  const isApproved = input.decision === 'approved';
+  const decisionStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = ?,
+          approved_by_user_id = ?,
+          approved_at = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(
+        isApproved ? 'approved' : 'rejected',
+        isApproved ? input.actorUserId : null,
+        isApproved ? occurredAt : null,
+        occurredAt,
+        input.tenantId,
+        input.ruleId,
+        input.versionId,
+      )
+      .run();
+
+  let updated: SqlRunResult;
+
+  try {
+    updated = await decisionStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    updated = await decisionStatement();
+  }
+
+  if ((updated.meta.rowsWritten ?? 0) === 0) {
+    return null;
+  }
+
+  return findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+};
+
+export const activateBadgeIssuanceRuleVersion = async (
+  db: SqlDatabase,
+  input: ActivateBadgeIssuanceRuleVersionInput,
+): Promise<BadgeIssuanceRuleVersionRecord | null> => {
+  const activatedAt = input.activatedAt ?? new Date().toISOString();
+  const deprecateExistingStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = 'deprecated',
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND status = 'active'
+          AND id <> ?
+      `,
+      )
+      .bind(activatedAt, input.tenantId, input.ruleId, input.versionId)
+      .run();
+  const activateStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = 'active',
+          activated_by_user_id = ?,
+          activated_at = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(
+        input.actorUserId,
+        activatedAt,
+        activatedAt,
+        input.tenantId,
+        input.ruleId,
+        input.versionId,
+      )
+      .run();
+  const updateRuleActiveVersionStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rules
+        SET
+          active_version_id = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(input.versionId, activatedAt, input.tenantId, input.ruleId)
+      .run();
+
+  let activated: SqlRunResult;
+
+  try {
+    await deprecateExistingStatement();
+    activated = await activateStatement();
+    await updateRuleActiveVersionStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    await deprecateExistingStatement();
+    activated = await activateStatement();
+    await updateRuleActiveVersionStatement();
+  }
+
+  if ((activated.meta.rowsWritten ?? 0) === 0) {
+    return null;
+  }
+
+  return findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+};
+
+export const createBadgeIssuanceRuleEvaluation = async (
+  db: SqlDatabase,
+  input: CreateBadgeIssuanceRuleEvaluationInput,
+): Promise<BadgeIssuanceRuleEvaluationRecord> => {
+  const evaluationId = createPrefixedId('bre');
+  const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO badge_issuance_rule_evaluations (
+          id,
+          tenant_id,
+          rule_id,
+          version_id,
+          learner_id,
+          recipient_identity,
+          recipient_identity_type,
+          matched,
+          issuance_status,
+          assertion_id,
+          evaluation_json,
+          evaluated_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        evaluationId,
+        input.tenantId,
+        input.ruleId,
+        input.versionId,
+        input.learnerId,
+        input.recipientIdentity,
+        input.recipientIdentityType,
+        input.matched ? 1 : 0,
+        input.issuanceStatus ?? null,
+        input.assertionId ?? null,
+        input.evaluationJson,
+        evaluatedAt,
+        evaluatedAt,
+      )
+      .run();
+  const lookupStatement = (): Promise<BadgeIssuanceRuleEvaluationRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          rule_id AS ruleId,
+          version_id AS versionId,
+          learner_id AS learnerId,
+          recipient_identity AS recipientIdentity,
+          recipient_identity_type AS recipientIdentityType,
+          matched,
+          issuance_status AS issuanceStatus,
+          assertion_id AS assertionId,
+          evaluation_json AS evaluationJson,
+          evaluated_at AS evaluatedAt,
+          created_at AS createdAt
+        FROM badge_issuance_rule_evaluations
+        WHERE id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(evaluationId)
+      .first<BadgeIssuanceRuleEvaluationRow>();
+
+  try {
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    await insertStatement();
+  }
+
+  const row = await lookupStatement();
+
+  if (row === null) {
+    throw new Error(`Unable to load badge issuance rule evaluation "${evaluationId}" after insert`);
+  }
+
+  return mapBadgeIssuanceRuleEvaluationRow(row);
+};
+
+export const listIssuedBadgeTemplateIdsForRecipient = async (
+  db: SqlDatabase,
+  input: ListIssuedBadgeTemplateIdsForRecipientInput,
+): Promise<string[]> => {
+  const result = await db
+    .prepare(
+      `
+      SELECT DISTINCT badge_template_id AS badgeTemplateId
+      FROM assertions
+      WHERE tenant_id = ?
+        AND recipient_identity = ?
+        AND recipient_identity_type = ?
+        AND revoked_at IS NULL
+      ORDER BY badge_template_id ASC
+    `,
+    )
+    .bind(input.tenantId, input.recipientIdentity, input.recipientIdentityType)
+    .all<BadgeTemplateIdRow>();
+
+  return result.results.map((row) => row.badgeTemplateId);
 };
 
 export const createDedicatedDbProvisioningRequest = async (

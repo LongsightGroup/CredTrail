@@ -449,6 +449,189 @@ export const tenantCanvasGradebookSnapshotQuerySchema = z.object({
   assignmentId: z.string().trim().min(1).max(255).optional(),
 });
 
+export const badgeIssuanceRuleLmsProviderKindSchema = z.enum([
+  'canvas',
+  'moodle',
+  'blackboard_ultra',
+  'd2l_brightspace',
+  'sakai',
+]);
+
+const badgeIssuanceRuleGradeThresholdConditionSchema = z
+  .object({
+    type: z.literal('grade_threshold'),
+    courseId: z.string().trim().min(1).max(255),
+    scoreField: z.enum(['final_score', 'current_score']).optional(),
+    minScore: z.number().finite().min(0).max(100).optional(),
+    maxScore: z.number().finite().min(0).max(100).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.minScore === undefined && value.maxScore === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'grade_threshold must include minScore or maxScore',
+      });
+    }
+  });
+
+const badgeIssuanceRuleCourseCompletionConditionSchema = z.object({
+  type: z.literal('course_completion'),
+  courseId: z.string().trim().min(1).max(255),
+  requireCompleted: z.boolean().optional(),
+  minCompletionPercent: z.number().finite().min(0).max(100).optional(),
+});
+
+const badgeIssuanceRuleProgramCompletionConditionSchema = z
+  .object({
+    type: z.literal('program_completion'),
+    courseIds: z.array(z.string().trim().min(1).max(255)).min(1).max(200),
+    minimumCompleted: z.number().int().min(1).max(200).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.minimumCompleted !== undefined && value.minimumCompleted > value.courseIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'minimumCompleted must be less than or equal to the number of courseIds',
+      });
+    }
+  });
+
+const badgeIssuanceRuleAssignmentSubmissionConditionSchema = z.object({
+  type: z.literal('assignment_submission'),
+  courseId: z.string().trim().min(1).max(255),
+  assignmentId: z.string().trim().min(1).max(255),
+  minScore: z.number().finite().min(0).max(100).optional(),
+  requireSubmitted: z.boolean().optional(),
+  workflowStates: z.array(z.string().trim().min(1).max(64)).min(1).max(20).optional(),
+});
+
+const badgeIssuanceRuleTimeWindowConditionSchema = z
+  .object({
+    type: z.literal('time_window'),
+    notBefore: isoTimestampSchema.optional(),
+    notAfter: isoTimestampSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.notBefore === undefined && value.notAfter === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'time_window must include notBefore or notAfter',
+      });
+    }
+  });
+
+const badgeIssuanceRulePrerequisiteBadgeConditionSchema = z.object({
+  type: z.literal('prerequisite_badge'),
+  badgeTemplateId: resourceIdSchema,
+});
+
+export type BadgeIssuanceRuleCondition =
+  | {
+      all: BadgeIssuanceRuleCondition[];
+    }
+  | {
+      any: BadgeIssuanceRuleCondition[];
+    }
+  | {
+      not: BadgeIssuanceRuleCondition;
+    }
+  | z.infer<typeof badgeIssuanceRuleGradeThresholdConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleCourseCompletionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleProgramCompletionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleAssignmentSubmissionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleTimeWindowConditionSchema>
+  | z.infer<typeof badgeIssuanceRulePrerequisiteBadgeConditionSchema>;
+
+export const badgeIssuanceRuleConditionSchema: z.ZodType<BadgeIssuanceRuleCondition> = z.lazy(() =>
+  z.union([
+    z.object({
+      all: z.array(badgeIssuanceRuleConditionSchema).min(1).max(50),
+    }),
+    z.object({
+      any: z.array(badgeIssuanceRuleConditionSchema).min(1).max(50),
+    }),
+    z.object({
+      not: badgeIssuanceRuleConditionSchema,
+    }),
+    badgeIssuanceRuleGradeThresholdConditionSchema,
+    badgeIssuanceRuleCourseCompletionConditionSchema,
+    badgeIssuanceRuleProgramCompletionConditionSchema,
+    badgeIssuanceRuleAssignmentSubmissionConditionSchema,
+    badgeIssuanceRuleTimeWindowConditionSchema,
+    badgeIssuanceRulePrerequisiteBadgeConditionSchema,
+  ]),
+);
+
+export const badgeIssuanceRuleDefinitionSchema = z.object({
+  conditions: badgeIssuanceRuleConditionSchema,
+});
+
+export const badgeIssuanceRulePathParamsSchema = tenantPathParamsSchema.extend({
+  ruleId: resourceIdSchema,
+});
+
+export const badgeIssuanceRuleVersionPathParamsSchema = badgeIssuanceRulePathParamsSchema.extend({
+  versionId: resourceIdSchema,
+});
+
+export const createBadgeIssuanceRuleRequestSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000).optional(),
+  badgeTemplateId: resourceIdSchema,
+  lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema,
+  definition: badgeIssuanceRuleDefinitionSchema,
+  changeSummary: z.string().trim().min(1).max(1000).optional(),
+});
+
+export const createBadgeIssuanceRuleVersionRequestSchema = z.object({
+  definition: badgeIssuanceRuleDefinitionSchema,
+  changeSummary: z.string().trim().min(1).max(1000).optional(),
+});
+
+export const decideBadgeIssuanceRuleVersionRequestSchema = z.object({
+  decision: z.enum(['approved', 'rejected']),
+});
+
+const badgeIssuanceRuleFactGradeSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  currentScore: z.number().finite().nullable().optional(),
+  finalScore: z.number().finite().nullable().optional(),
+});
+
+const badgeIssuanceRuleFactCompletionSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  completed: z.boolean(),
+  completionPercent: z.number().finite().nullable().optional(),
+});
+
+const badgeIssuanceRuleFactSubmissionSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  assignmentId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  score: z.number().finite().nullable().optional(),
+  workflowState: z.string().trim().min(1).max(64).nullable().optional(),
+  submittedAt: isoTimestampSchema.nullable().optional(),
+});
+
+export const badgeIssuanceRuleFactsSchema = z.object({
+  nowIso: isoTimestampSchema.optional(),
+  grades: z.array(badgeIssuanceRuleFactGradeSchema).optional(),
+  completions: z.array(badgeIssuanceRuleFactCompletionSchema).optional(),
+  submissions: z.array(badgeIssuanceRuleFactSubmissionSchema).optional(),
+  earnedBadgeTemplateIds: z.array(resourceIdSchema).optional(),
+});
+
+export const evaluateBadgeIssuanceRuleRequestSchema = z.object({
+  learnerId: z.string().trim().min(1).max(255),
+  recipientIdentity: z.string().trim().min(1).max(512),
+  recipientIdentityType: recipientIdentityTypeSchema,
+  versionId: resourceIdSchema.optional(),
+  dryRun: z.boolean().optional(),
+  facts: badgeIssuanceRuleFactsSchema.optional(),
+});
+
 export const createDedicatedDbProvisioningRequestSchema = z.object({
   targetRegion: z
     .string()
@@ -819,6 +1002,10 @@ export type TenantApiKeyPathParams = z.infer<typeof tenantApiKeyPathParamsSchema
 export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
   typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
 >;
+export type BadgeIssuanceRulePathParams = z.infer<typeof badgeIssuanceRulePathParamsSchema>;
+export type BadgeIssuanceRuleVersionPathParams = z.infer<
+  typeof badgeIssuanceRuleVersionPathParamsSchema
+>;
 export type BadgeTemplateListQuery = z.infer<typeof badgeTemplateListQuerySchema>;
 export type TenantOrgUnitListQuery = z.infer<typeof tenantOrgUnitListQuerySchema>;
 export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
@@ -855,6 +1042,17 @@ export type AdminCanvasOAuthExchangeRequest = z.infer<typeof adminCanvasOAuthExc
 export type TenantCanvasGradebookSnapshotQuery = z.infer<
   typeof tenantCanvasGradebookSnapshotQuerySchema
 >;
+export type BadgeIssuanceRuleLmsProviderKind = z.infer<typeof badgeIssuanceRuleLmsProviderKindSchema>;
+export type BadgeIssuanceRuleDefinition = z.infer<typeof badgeIssuanceRuleDefinitionSchema>;
+export type CreateBadgeIssuanceRuleRequest = z.infer<typeof createBadgeIssuanceRuleRequestSchema>;
+export type CreateBadgeIssuanceRuleVersionRequest = z.infer<
+  typeof createBadgeIssuanceRuleVersionRequestSchema
+>;
+export type DecideBadgeIssuanceRuleVersionRequest = z.infer<
+  typeof decideBadgeIssuanceRuleVersionRequestSchema
+>;
+export type BadgeIssuanceRuleFacts = z.infer<typeof badgeIssuanceRuleFactsSchema>;
+export type EvaluateBadgeIssuanceRuleRequest = z.infer<typeof evaluateBadgeIssuanceRuleRequestSchema>;
 export type CreateDedicatedDbProvisioningRequest = z.infer<
   typeof createDedicatedDbProvisioningRequestSchema
 >;
@@ -1022,6 +1220,16 @@ export const parseTenantDedicatedDbProvisioningRequestPathParams = (
   return tenantDedicatedDbProvisioningRequestPathParamsSchema.parse(input);
 };
 
+export const parseBadgeIssuanceRulePathParams = (input: unknown): BadgeIssuanceRulePathParams => {
+  return badgeIssuanceRulePathParamsSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleVersionPathParams = (
+  input: unknown,
+): BadgeIssuanceRuleVersionPathParams => {
+  return badgeIssuanceRuleVersionPathParamsSchema.parse(input);
+};
+
 export const parseBadgeTemplateListQuery = (input: unknown): BadgeTemplateListQuery => {
   return badgeTemplateListQuerySchema.parse(input);
 };
@@ -1108,6 +1316,34 @@ export const parseTenantCanvasGradebookSnapshotQuery = (
   input: unknown,
 ): TenantCanvasGradebookSnapshotQuery => {
   return tenantCanvasGradebookSnapshotQuerySchema.parse(input);
+};
+
+export const parseCreateBadgeIssuanceRuleRequest = (
+  input: unknown,
+): CreateBadgeIssuanceRuleRequest => {
+  return createBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parseCreateBadgeIssuanceRuleVersionRequest = (
+  input: unknown,
+): CreateBadgeIssuanceRuleVersionRequest => {
+  return createBadgeIssuanceRuleVersionRequestSchema.parse(input);
+};
+
+export const parseDecideBadgeIssuanceRuleVersionRequest = (
+  input: unknown,
+): DecideBadgeIssuanceRuleVersionRequest => {
+  return decideBadgeIssuanceRuleVersionRequestSchema.parse(input);
+};
+
+export const parseEvaluateBadgeIssuanceRuleRequest = (
+  input: unknown,
+): EvaluateBadgeIssuanceRuleRequest => {
+  return evaluateBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleDefinition = (input: unknown): BadgeIssuanceRuleDefinition => {
+  return badgeIssuanceRuleDefinitionSchema.parse(input);
 };
 
 export const parseCreateDedicatedDbProvisioningRequest = (

@@ -13,6 +13,12 @@ import {
   parseAdminCanvasOAuthAuthorizeUrlRequest,
   parseAdminCanvasOAuthExchangeRequest,
   parseTenantCanvasGradebookSnapshotQuery,
+  parseCreateBadgeIssuanceRuleRequest,
+  parseCreateBadgeIssuanceRuleVersionRequest,
+  parseDecideBadgeIssuanceRuleVersionRequest,
+  parseEvaluateBadgeIssuanceRuleRequest,
+  parseBadgeIssuanceRulePathParams,
+  parseBadgeIssuanceRuleVersionPathParams,
   parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
@@ -598,6 +604,125 @@ describe('canvas gradebook integration parsers', () => {
         tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
         clientId: 'canvas-client-id',
         clientSecret: 'canvas-client-secret',
+      });
+    }).toThrowError();
+  });
+});
+
+describe('badge issuance rule parsers', () => {
+  it('accepts valid create/version/evaluate payloads', () => {
+    const createRequest = parseCreateBadgeIssuanceRuleRequest({
+      name: 'CS101 Excellence Rule',
+      description: 'Award badge for high performers',
+      badgeTemplateId: 'badge_template_cs101',
+      lmsProviderKind: 'canvas',
+      definition: {
+        conditions: {
+          all: [
+            {
+              type: 'course_completion',
+              courseId: 'course_101',
+              requireCompleted: true,
+            },
+            {
+              type: 'grade_threshold',
+              courseId: 'course_101',
+              scoreField: 'final_score',
+              minScore: 80,
+            },
+            {
+              any: [
+                {
+                  type: 'assignment_submission',
+                  courseId: 'course_101',
+                  assignmentId: 'assignment_1',
+                  minScore: 75,
+                },
+                {
+                  type: 'prerequisite_badge',
+                  badgeTemplateId: 'badge_template_foundations',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      changeSummary: 'Initial draft',
+    });
+    const versionRequest = parseCreateBadgeIssuanceRuleVersionRequest({
+      definition: {
+        conditions: {
+          type: 'time_window',
+          notBefore: '2026-01-01T00:00:00.000Z',
+        },
+      },
+      changeSummary: 'Limit issuance to spring term',
+    });
+    const decisionRequest = parseDecideBadgeIssuanceRuleVersionRequest({
+      decision: 'approved',
+    });
+    const evaluateRequest = parseEvaluateBadgeIssuanceRuleRequest({
+      learnerId: 'learner_123',
+      recipientIdentity: 'learner@example.edu',
+      recipientIdentityType: 'email',
+      dryRun: true,
+      facts: {
+        nowIso: '2026-02-17T00:00:00.000Z',
+        grades: [
+          {
+            courseId: 'course_101',
+            learnerId: 'learner_123',
+            finalScore: 92,
+          },
+        ],
+      },
+    });
+
+    expect(createRequest.lmsProviderKind).toBe('canvas');
+    expect(versionRequest.changeSummary).toContain('spring');
+    expect(decisionRequest.decision).toBe('approved');
+    expect(evaluateRequest.dryRun).toBe(true);
+  });
+
+  it('parses rule and rule-version path params', () => {
+    const rulePathParams = parseBadgeIssuanceRulePathParams({
+      tenantId: 'tenant_123',
+      ruleId: 'brl_123',
+    });
+    const versionPathParams = parseBadgeIssuanceRuleVersionPathParams({
+      tenantId: 'tenant_123',
+      ruleId: 'brl_123',
+      versionId: 'brv_123',
+    });
+
+    expect(rulePathParams.ruleId).toBe('brl_123');
+    expect(versionPathParams.versionId).toBe('brv_123');
+  });
+
+  it('rejects grade threshold conditions without a score boundary', () => {
+    expect(() => {
+      parseCreateBadgeIssuanceRuleRequest({
+        name: 'Invalid',
+        badgeTemplateId: 'badge_template_cs101',
+        lmsProviderKind: 'canvas',
+        definition: {
+          conditions: {
+            type: 'grade_threshold',
+            courseId: 'course_101',
+          },
+        },
+      });
+    }).toThrowError();
+  });
+
+  it('rejects invalid time window condition payloads', () => {
+    expect(() => {
+      parseCreateBadgeIssuanceRuleVersionRequest({
+        definition: {
+          conditions: {
+            type: 'time_window',
+          },
+        },
       });
     }).toThrowError();
   });
