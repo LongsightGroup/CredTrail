@@ -574,22 +574,35 @@ export const badgeIssuanceRuleVersionPathParamsSchema = badgeIssuanceRulePathPar
   versionId: resourceIdSchema,
 });
 
+const badgeIssuanceRuleApprovalChainStepSchema = z.object({
+  requiredRole: tenantMembershipRoleSchema,
+  label: z.string().trim().min(1).max(120).optional(),
+});
+
+const badgeIssuanceRuleApprovalChainSchema = z
+  .array(badgeIssuanceRuleApprovalChainStepSchema)
+  .min(1)
+  .max(10);
+
 export const createBadgeIssuanceRuleRequestSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().min(1).max(2000).optional(),
   badgeTemplateId: resourceIdSchema,
   lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema,
   definition: badgeIssuanceRuleDefinitionSchema,
+  approvalChain: badgeIssuanceRuleApprovalChainSchema.optional(),
   changeSummary: z.string().trim().min(1).max(1000).optional(),
 });
 
 export const createBadgeIssuanceRuleVersionRequestSchema = z.object({
   definition: badgeIssuanceRuleDefinitionSchema,
+  approvalChain: badgeIssuanceRuleApprovalChainSchema.optional(),
   changeSummary: z.string().trim().min(1).max(1000).optional(),
 });
 
 export const decideBadgeIssuanceRuleVersionRequestSchema = z.object({
   decision: z.enum(['approved', 'rejected']),
+  comment: z.string().trim().min(1).max(2000).optional(),
 });
 
 const badgeIssuanceRuleFactGradeSchema = z.object({

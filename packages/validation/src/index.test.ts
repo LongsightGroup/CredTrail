@@ -647,6 +647,16 @@ describe('badge issuance rule parsers', () => {
           ],
         },
       },
+      approvalChain: [
+        {
+          requiredRole: 'issuer',
+          label: 'Department approval',
+        },
+        {
+          requiredRole: 'admin',
+          label: 'Registrar approval',
+        },
+      ],
       changeSummary: 'Initial draft',
     });
     const versionRequest = parseCreateBadgeIssuanceRuleVersionRequest({
@@ -656,10 +666,16 @@ describe('badge issuance rule parsers', () => {
           notBefore: '2026-01-01T00:00:00.000Z',
         },
       },
+      approvalChain: [
+        {
+          requiredRole: 'admin',
+        },
+      ],
       changeSummary: 'Limit issuance to spring term',
     });
     const decisionRequest = parseDecideBadgeIssuanceRuleVersionRequest({
       decision: 'approved',
+      comment: 'Meets institutional governance requirements',
     });
     const evaluateRequest = parseEvaluateBadgeIssuanceRuleRequest({
       learnerId: 'learner_123',
@@ -679,8 +695,11 @@ describe('badge issuance rule parsers', () => {
     });
 
     expect(createRequest.lmsProviderKind).toBe('canvas');
+    expect(createRequest.approvalChain?.[0]?.requiredRole).toBe('issuer');
     expect(versionRequest.changeSummary).toContain('spring');
+    expect(versionRequest.approvalChain).toHaveLength(1);
     expect(decisionRequest.decision).toBe('approved');
+    expect(decisionRequest.comment).toContain('governance');
     expect(evaluateRequest.dryRun).toBe(true);
   });
 

@@ -10,6 +10,8 @@ import {
   findBadgeIssuanceRuleVersionById,
   findTenantCanvasGradebookIntegration,
   listBadgeIssuanceRules,
+  listBadgeIssuanceRuleVersionApprovalEvents,
+  listBadgeIssuanceRuleVersionApprovalSteps,
   listBadgeIssuanceRuleVersions,
   listIssuedBadgeTemplateIdsForRecipient,
   submitBadgeIssuanceRuleVersionForApproval,
@@ -75,6 +77,7 @@ interface RegisterBadgeRuleRoutesInput {
   ) => Promise<DirectIssueBadgeResult>;
   ISSUER_ROLES: readonly TenantMembershipRole[];
   ADMIN_ROLES: readonly TenantMembershipRole[];
+  TENANT_MEMBER_ROLES: readonly TenantMembershipRole[];
 }
 
 const isAccessTokenExpired = (accessTokenExpiresAt: string | null, nowIso: string): boolean => {
@@ -90,6 +93,20 @@ const isAccessTokenExpired = (accessTokenExpiresAt: string | null, nowIso: strin
   }
 
   return nowMs >= expiryMs;
+};
+
+const TENANT_ROLE_RANK: Record<TenantMembershipRole, number> = {
+  viewer: 0,
+  issuer: 1,
+  admin: 2,
+  owner: 3,
+};
+
+const roleSatisfiesMinimumRole = (
+  actorRole: TenantMembershipRole,
+  requiredRole: TenantMembershipRole,
+): boolean => {
+  return TENANT_ROLE_RANK[actorRole] >= TENANT_ROLE_RANK[requiredRole];
 };
 
 const resolveRuleDefinition = (
@@ -281,6 +298,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     issueBadgeForTenant,
     ISSUER_ROLES,
     ADMIN_ROLES,
+    TENANT_MEMBER_ROLES,
   } = input;
 
   app.get('/v1/tenants/:tenantId/badge-rules', async (c) => {
@@ -331,6 +349,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       badgeTemplateId: request.badgeTemplateId,
       lmsProviderKind: request.lmsProviderKind,
       ruleJson: definitionJson,
+      approvalChain: request.approvalChain,
       changeSummary: request.changeSummary,
       createdByUserId: session.userId,
     });
@@ -435,6 +454,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       tenantId: pathParams.tenantId,
       ruleId: pathParams.ruleId,
       ruleJson: JSON.stringify(request.definition),
+      approvalChain: request.approvalChain,
       changeSummary: request.changeSummary,
       createdByUserId: session.userId,
     });
@@ -502,6 +522,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         tenantId: pathParams.tenantId,
         ruleId: pathParams.ruleId,
         versionId: pathParams.versionId,
+        actorUserId: session.userId,
+        actorRole: membershipRole,
       });
 
       if (updatedVersion === null) {
@@ -550,7 +572,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       );
     }
 
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
     if (roleCheck instanceof Response) {
       return roleCheck;
@@ -581,20 +603,47 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       );
     }
 
+    const approvalSteps = await listBadgeIssuanceRuleVersionApprovalSteps(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      ruleId: pathParams.ruleId,
+      versionId: pathParams.versionId,
+    });
+    const currentApprovalStep = approvalSteps.find((step) => step.status === 'pending');
+
+    if (currentApprovalStep === undefined) {
+      return c.json(
+        {
+          error: 'No pending approval step exists for this rule version',
+        },
+        409,
+      );
+    }
+
+    if (!roleSatisfiesMinimumRole(membershipRole, currentApprovalStep.requiredRole)) {
+      return c.json(
+        {
+          error: `Current approval step requires role ${currentApprovalStep.requiredRole}`,
+        },
+        403,
+      );
+    }
+
     const decidedVersion = await decideBadgeIssuanceRuleVersion(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       ruleId: pathParams.ruleId,
       versionId: pathParams.versionId,
       decision: request.decision,
       actorUserId: session.userId,
+      actorRole: membershipRole,
+      comment: request.comment,
     });
 
     if (decidedVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version not found',
+          error: 'Badge rule version is no longer pending approval',
         },
-        404,
+        409,
       );
     }
 
@@ -608,7 +657,10 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         role: membershipRole,
         ruleId: pathParams.ruleId,
         versionNumber: decidedVersion.versionNumber,
+        stepNumber: currentApprovalStep.stepNumber,
+        requiredRole: currentApprovalStep.requiredRole,
         decision: request.decision,
+        comment: request.comment ?? null,
         status: decidedVersion.status,
       },
     });
@@ -619,6 +671,58 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       version: decidedVersion,
     });
   });
+
+  app.get(
+    '/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/approval-history',
+    async (c) => {
+      const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
+      const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+      if (roleCheck instanceof Response) {
+        return roleCheck;
+      }
+
+      const version = await findBadgeIssuanceRuleVersionById(resolveDatabase(c.env), {
+        tenantId: pathParams.tenantId,
+        ruleId: pathParams.ruleId,
+        versionId: pathParams.versionId,
+      });
+
+      if (version === null) {
+        return c.json(
+          {
+            error: 'Badge rule version not found',
+          },
+          404,
+        );
+      }
+
+      const [steps, events] = await Promise.all([
+        listBadgeIssuanceRuleVersionApprovalSteps(resolveDatabase(c.env), {
+          tenantId: pathParams.tenantId,
+          ruleId: pathParams.ruleId,
+          versionId: pathParams.versionId,
+        }),
+        listBadgeIssuanceRuleVersionApprovalEvents(resolveDatabase(c.env), {
+          tenantId: pathParams.tenantId,
+          ruleId: pathParams.ruleId,
+          versionId: pathParams.versionId,
+        }),
+      ]);
+      const currentStep = steps.find((step) => step.status === 'pending') ?? null;
+
+      return c.json({
+        tenantId: pathParams.tenantId,
+        ruleId: pathParams.ruleId,
+        version,
+        approval: {
+          currentStep,
+          steps,
+          events,
+        },
+      });
+    },
+  );
 
   app.post('/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/activate', async (c) => {
     const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());

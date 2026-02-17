@@ -22,6 +22,8 @@ vi.mock('@credtrail/db', async () => {
     findActiveBadgeIssuanceRuleVersion: vi.fn(),
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
+    listBadgeIssuanceRuleVersionApprovalSteps: vi.fn(),
+    listBadgeIssuanceRuleVersionApprovalEvents: vi.fn(),
     createBadgeIssuanceRuleEvaluation: vi.fn(),
     findTenantCanvasGradebookIntegration: vi.fn(),
     updateTenantCanvasGradebookIntegrationTokens: vi.fn(),
@@ -56,12 +58,16 @@ import {
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
   findTenantMembership,
+  listBadgeIssuanceRuleVersionApprovalEvents,
+  listBadgeIssuanceRuleVersionApprovalSteps,
   listBadgeIssuanceRuleVersions,
   listBadgeIssuanceRules,
   submitBadgeIssuanceRuleVersionForApproval,
   touchSession,
   type AuditLogRecord,
   type BadgeIssuanceRuleEvaluationRecord,
+  type BadgeIssuanceRuleApprovalEventRecord,
+  type BadgeIssuanceRuleApprovalStepRecord,
   type BadgeIssuanceRuleRecord,
   type BadgeIssuanceRuleVersionRecord,
   type SessionRecord,
@@ -85,6 +91,12 @@ const mockedFindBadgeIssuanceRuleVersionById = vi.mocked(findBadgeIssuanceRuleVe
 const mockedFindActiveBadgeIssuanceRuleVersion = vi.mocked(findActiveBadgeIssuanceRuleVersion);
 const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
 const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
+const mockedListBadgeIssuanceRuleVersionApprovalSteps = vi.mocked(
+  listBadgeIssuanceRuleVersionApprovalSteps,
+);
+const mockedListBadgeIssuanceRuleVersionApprovalEvents = vi.mocked(
+  listBadgeIssuanceRuleVersionApprovalEvents,
+);
 const mockedCreateBadgeIssuanceRuleEvaluation = vi.mocked(createBadgeIssuanceRuleEvaluation);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -213,6 +225,44 @@ const sampleEvaluationRecord = (
   };
 };
 
+const sampleApprovalStep = (
+  overrides?: Partial<BadgeIssuanceRuleApprovalStepRecord>,
+): BadgeIssuanceRuleApprovalStepRecord => {
+  return {
+    id: 'bras_123',
+    tenantId: 'tenant_123',
+    versionId: 'brv_123',
+    stepNumber: 1,
+    requiredRole: 'admin',
+    label: 'Registrar approval',
+    status: 'pending',
+    decidedByUserId: null,
+    decidedAt: null,
+    decisionComment: null,
+    createdAt: '2026-02-17T00:00:00.000Z',
+    updatedAt: '2026-02-17T00:00:00.000Z',
+    ...overrides,
+  };
+};
+
+const sampleApprovalEvent = (
+  overrides?: Partial<BadgeIssuanceRuleApprovalEventRecord>,
+): BadgeIssuanceRuleApprovalEventRecord => {
+  return {
+    id: 'brae_123',
+    tenantId: 'tenant_123',
+    versionId: 'brv_123',
+    stepNumber: 1,
+    action: 'submitted',
+    actorUserId: 'usr_123',
+    actorRole: 'issuer',
+    comment: null,
+    occurredAt: '2026-02-17T00:00:00.000Z',
+    createdAt: '2026-02-17T00:00:00.000Z',
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -238,6 +288,10 @@ beforeEach(() => {
   mockedListBadgeIssuanceRules.mockResolvedValue([]);
   mockedListBadgeIssuanceRuleVersions.mockReset();
   mockedListBadgeIssuanceRuleVersions.mockResolvedValue([]);
+  mockedListBadgeIssuanceRuleVersionApprovalSteps.mockReset();
+  mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([]);
+  mockedListBadgeIssuanceRuleVersionApprovalEvents.mockReset();
+  mockedListBadgeIssuanceRuleVersionApprovalEvents.mockResolvedValue([]);
   mockedCreateBadgeIssuanceRuleEvaluation.mockReset();
   mockedIssueBadgeForTenant.mockReset();
 });
@@ -306,6 +360,103 @@ describe('badge rule routes', () => {
     expect(response.status).toBe(200);
     expect(body.version.status).toBe('pending_approval');
     expect(mockedSubmitBadgeIssuanceRuleVersionForApproval).toHaveBeenCalledTimes(1);
+    expect(mockedSubmitBadgeIssuanceRuleVersionForApproval).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        ruleId: 'brl_123',
+        versionId: 'brv_123',
+        actorUserId: 'usr_123',
+        actorRole: 'admin',
+      }),
+    );
+  });
+
+  it('rejects approval decisions when the current step requires a higher role', async () => {
+    const env = createEnv();
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: 'pending_approval' }));
+    mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([
+      sampleApprovalStep({
+        requiredRole: 'owner',
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/decision',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          decision: 'approved',
+          comment: 'Looks good',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{ error: string }>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain('requires role owner');
+    expect(mockedDecideBadgeIssuanceRuleVersion).not.toHaveBeenCalled();
+  });
+
+  it('returns approval history for a badge rule version', async () => {
+    const env = createEnv();
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: 'pending_approval' }));
+    mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([
+      sampleApprovalStep({
+        stepNumber: 1,
+        requiredRole: 'issuer',
+        status: 'approved',
+        decidedByUserId: 'usr_123',
+        decidedAt: '2026-02-17T00:00:00.000Z',
+      }),
+      sampleApprovalStep({
+        id: 'bras_456',
+        stepNumber: 2,
+        requiredRole: 'admin',
+        status: 'pending',
+      }),
+    ]);
+    mockedListBadgeIssuanceRuleVersionApprovalEvents.mockResolvedValue([
+      sampleApprovalEvent({
+        action: 'submitted',
+      }),
+      sampleApprovalEvent({
+        id: 'brae_456',
+        action: 'approved',
+        actorRole: 'issuer',
+        comment: 'Department sign-off complete',
+      }),
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/approval-history',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<{
+      approval: {
+        currentStep: {
+          stepNumber: number;
+        } | null;
+        steps: unknown[];
+        events: unknown[];
+      };
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.approval.currentStep?.stepNumber).toBe(2);
+    expect(body.approval.steps).toHaveLength(2);
+    expect(body.approval.events).toHaveLength(2);
   });
 
   it('evaluates active rules and issues badges when matched', async () => {

@@ -632,6 +632,7 @@ registerBadgeRuleRoutes({
   },
   ISSUER_ROLES,
   ADMIN_ROLES,
+  TENANT_MEMBER_ROLES,
 });
 
 registerAssertionRoutes({

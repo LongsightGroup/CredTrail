@@ -429,6 +429,14 @@ export type BadgeIssuanceRuleVersionStatus =
   | 'rejected'
   | 'deprecated';
 
+export type BadgeIssuanceRuleApprovalStepStatus =
+  | 'queued'
+  | 'pending'
+  | 'approved'
+  | 'rejected';
+
+export type BadgeIssuanceRuleApprovalEventAction = 'submitted' | 'approved' | 'rejected';
+
 export interface BadgeIssuanceRuleRecord {
   id: string;
   tenantId: string;
@@ -459,6 +467,39 @@ export interface BadgeIssuanceRuleVersionRecord {
   updatedAt: string;
 }
 
+export interface BadgeIssuanceRuleApprovalChainStepInput {
+  requiredRole: TenantMembershipRole;
+  label?: string | undefined;
+}
+
+export interface BadgeIssuanceRuleApprovalStepRecord {
+  id: string;
+  tenantId: string;
+  versionId: string;
+  stepNumber: number;
+  requiredRole: TenantMembershipRole;
+  label: string | null;
+  status: BadgeIssuanceRuleApprovalStepStatus;
+  decidedByUserId: string | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BadgeIssuanceRuleApprovalEventRecord {
+  id: string;
+  tenantId: string;
+  versionId: string;
+  stepNumber: number | null;
+  action: BadgeIssuanceRuleApprovalEventAction;
+  actorUserId: string | null;
+  actorRole: TenantMembershipRole | null;
+  comment: string | null;
+  occurredAt: string;
+  createdAt: string;
+}
+
 export interface BadgeIssuanceRuleEvaluationRecord {
   id: string;
   tenantId: string;
@@ -482,6 +523,7 @@ export interface CreateBadgeIssuanceRuleInput {
   badgeTemplateId: string;
   lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
   ruleJson: string;
+  approvalChain?: BadgeIssuanceRuleApprovalChainStepInput[] | undefined;
   changeSummary?: string | undefined;
   createdByUserId?: string | undefined;
 }
@@ -490,6 +532,7 @@ export interface CreateBadgeIssuanceRuleVersionInput {
   tenantId: string;
   ruleId: string;
   ruleJson: string;
+  approvalChain?: BadgeIssuanceRuleApprovalChainStepInput[] | undefined;
   changeSummary?: string | undefined;
   createdByUserId?: string | undefined;
 }
@@ -507,6 +550,10 @@ export interface SubmitBadgeIssuanceRuleVersionForApprovalInput {
   tenantId: string;
   ruleId: string;
   versionId: string;
+  actorUserId?: string | undefined;
+  actorRole?: TenantMembershipRole | undefined;
+  comment?: string | undefined;
+  occurredAt?: string | undefined;
 }
 
 export interface DecideBadgeIssuanceRuleVersionInput {
@@ -515,7 +562,21 @@ export interface DecideBadgeIssuanceRuleVersionInput {
   versionId: string;
   decision: 'approved' | 'rejected';
   actorUserId: string;
+  actorRole: TenantMembershipRole;
+  comment?: string | undefined;
   occurredAt?: string | undefined;
+}
+
+export interface ListBadgeIssuanceRuleVersionApprovalStepsInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
+}
+
+export interface ListBadgeIssuanceRuleVersionApprovalEventsInput {
+  tenantId: string;
+  ruleId: string;
+  versionId: string;
 }
 
 export interface ActivateBadgeIssuanceRuleVersionInput {
@@ -1353,6 +1414,34 @@ interface BadgeIssuanceRuleVersionRow {
   updatedAt: string;
 }
 
+interface BadgeIssuanceRuleApprovalStepRow {
+  id: string;
+  tenantId: string;
+  versionId: string;
+  stepNumber: number;
+  requiredRole: TenantMembershipRole;
+  label: string | null;
+  status: BadgeIssuanceRuleApprovalStepStatus;
+  decidedByUserId: string | null;
+  decidedAt: string | null;
+  decisionComment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface BadgeIssuanceRuleApprovalEventRow {
+  id: string;
+  tenantId: string;
+  versionId: string;
+  stepNumber: number | null;
+  action: BadgeIssuanceRuleApprovalEventAction;
+  actorUserId: string | null;
+  actorRole: TenantMembershipRole | null;
+  comment: string | null;
+  occurredAt: string;
+  createdAt: string;
+}
+
 interface BadgeIssuanceRuleEvaluationRow {
   id: string;
   tenantId: string;
@@ -1706,7 +1795,9 @@ const isMissingBadgeIssuanceRulesTablesError = (error: unknown): boolean => {
   const tableMissing =
     error.message.includes('badge_issuance_rules') ||
     error.message.includes('badge_issuance_rule_versions') ||
-    error.message.includes('badge_issuance_rule_evaluations');
+    error.message.includes('badge_issuance_rule_evaluations') ||
+    error.message.includes('badge_issuance_rule_approval_steps') ||
+    error.message.includes('badge_issuance_rule_approval_events');
 
   if (!tableMissing) {
     return false;
@@ -2139,6 +2230,71 @@ const ensureBadgeIssuanceRulesTables = async (db: SqlDatabase): Promise<void> =>
       `
       CREATE INDEX IF NOT EXISTS idx_badge_issuance_rule_versions_status
         ON badge_issuance_rule_versions (tenant_id, status, created_at DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS badge_issuance_rule_approval_steps (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        version_id TEXT NOT NULL,
+        step_number INTEGER NOT NULL CHECK (step_number > 0),
+        required_role TEXT NOT NULL CHECK (required_role IN ('owner', 'admin', 'issuer', 'viewer')),
+        label TEXT,
+        status TEXT NOT NULL CHECK (status IN ('queued', 'pending', 'approved', 'rejected')),
+        decided_by_user_id TEXT,
+        decided_at TEXT,
+        decision_comment TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (version_id, step_number),
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (version_id) REFERENCES badge_issuance_rule_versions (id) ON DELETE CASCADE,
+        FOREIGN KEY (decided_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_rule_approval_steps_version
+        ON badge_issuance_rule_approval_steps (version_id, step_number ASC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS badge_issuance_rule_approval_events (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        version_id TEXT NOT NULL,
+        step_number INTEGER,
+        action TEXT NOT NULL CHECK (action IN ('submitted', 'approved', 'rejected')),
+        actor_user_id TEXT,
+        actor_role TEXT CHECK (actor_role IN ('owner', 'admin', 'issuer', 'viewer')),
+        comment TEXT,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (version_id) REFERENCES badge_issuance_rule_versions (id) ON DELETE CASCADE,
+        FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_badge_rule_approval_events_version
+        ON badge_issuance_rule_approval_events (version_id, occurred_at ASC, created_at ASC)
     `,
     )
     .run();
@@ -2994,6 +3150,33 @@ const BADGE_ISSUANCE_RULE_VERSION_STATUSES = new Set<BadgeIssuanceRuleVersionSta
   'rejected',
   'deprecated',
 ]);
+
+const BADGE_ISSUANCE_RULE_APPROVAL_STEP_STATUSES = new Set<BadgeIssuanceRuleApprovalStepStatus>([
+  'queued',
+  'pending',
+  'approved',
+  'rejected',
+]);
+
+const BADGE_ISSUANCE_RULE_APPROVAL_EVENT_ACTIONS = new Set<BadgeIssuanceRuleApprovalEventAction>([
+  'submitted',
+  'approved',
+  'rejected',
+]);
+
+const TENANT_ROLE_RANK: Record<TenantMembershipRole, number> = {
+  viewer: 0,
+  issuer: 1,
+  admin: 2,
+  owner: 3,
+};
+
+const roleSatisfiesMinimumRole = (
+  actorRole: TenantMembershipRole,
+  requiredRole: TenantMembershipRole,
+): boolean => {
+  return TENANT_ROLE_RANK[actorRole] >= TENANT_ROLE_RANK[requiredRole];
+};
 
 const assertionLifecycleStateFromRecords = (input: {
   assertion: AssertionRecord;
@@ -5411,6 +5594,42 @@ const mapBadgeIssuanceRuleVersionRow = (
   };
 };
 
+const mapBadgeIssuanceRuleApprovalStepRow = (
+  row: BadgeIssuanceRuleApprovalStepRow,
+): BadgeIssuanceRuleApprovalStepRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    versionId: row.versionId,
+    stepNumber: row.stepNumber,
+    requiredRole: row.requiredRole,
+    label: row.label,
+    status: row.status,
+    decidedByUserId: row.decidedByUserId,
+    decidedAt: row.decidedAt,
+    decisionComment: row.decisionComment,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapBadgeIssuanceRuleApprovalEventRow = (
+  row: BadgeIssuanceRuleApprovalEventRow,
+): BadgeIssuanceRuleApprovalEventRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    versionId: row.versionId,
+    stepNumber: row.stepNumber,
+    action: row.action,
+    actorUserId: row.actorUserId,
+    actorRole: row.actorRole,
+    comment: row.comment,
+    occurredAt: row.occurredAt,
+    createdAt: row.createdAt,
+  };
+};
+
 const mapBadgeIssuanceRuleEvaluationRow = (
   row: BadgeIssuanceRuleEvaluationRow,
 ): BadgeIssuanceRuleEvaluationRecord => {
@@ -6161,6 +6380,108 @@ export const listBadgeIssuanceRuleVersions = async (
     .filter((version) => BADGE_ISSUANCE_RULE_VERSION_STATUSES.has(version.status));
 };
 
+export const listBadgeIssuanceRuleVersionApprovalSteps = async (
+  db: SqlDatabase,
+  input: ListBadgeIssuanceRuleVersionApprovalStepsInput,
+): Promise<BadgeIssuanceRuleApprovalStepRecord[]> => {
+  const listStatement = (): Promise<SqlQueryResult<BadgeIssuanceRuleApprovalStepRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          steps.id,
+          steps.tenant_id AS tenantId,
+          steps.version_id AS versionId,
+          steps.step_number AS stepNumber,
+          steps.required_role AS requiredRole,
+          steps.label,
+          steps.status,
+          steps.decided_by_user_id AS decidedByUserId,
+          steps.decided_at AS decidedAt,
+          steps.decision_comment AS decisionComment,
+          steps.created_at AS createdAt,
+          steps.updated_at AS updatedAt
+        FROM badge_issuance_rule_approval_steps AS steps
+        INNER JOIN badge_issuance_rule_versions AS versions
+          ON versions.id = steps.version_id
+          AND versions.tenant_id = steps.tenant_id
+        WHERE steps.tenant_id = ?
+          AND versions.rule_id = ?
+          AND steps.version_id = ?
+        ORDER BY steps.step_number ASC
+      `,
+      )
+      .bind(input.tenantId, input.ruleId, input.versionId)
+      .all<BadgeIssuanceRuleApprovalStepRow>();
+
+  let result: SqlQueryResult<BadgeIssuanceRuleApprovalStepRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    result = await listStatement();
+  }
+
+  return result.results
+    .map((row) => mapBadgeIssuanceRuleApprovalStepRow(row))
+    .filter((step) => BADGE_ISSUANCE_RULE_APPROVAL_STEP_STATUSES.has(step.status));
+};
+
+export const listBadgeIssuanceRuleVersionApprovalEvents = async (
+  db: SqlDatabase,
+  input: ListBadgeIssuanceRuleVersionApprovalEventsInput,
+): Promise<BadgeIssuanceRuleApprovalEventRecord[]> => {
+  const listStatement = (): Promise<SqlQueryResult<BadgeIssuanceRuleApprovalEventRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          events.id,
+          events.tenant_id AS tenantId,
+          events.version_id AS versionId,
+          events.step_number AS stepNumber,
+          events.action,
+          events.actor_user_id AS actorUserId,
+          events.actor_role AS actorRole,
+          events.comment,
+          events.occurred_at AS occurredAt,
+          events.created_at AS createdAt
+        FROM badge_issuance_rule_approval_events AS events
+        INNER JOIN badge_issuance_rule_versions AS versions
+          ON versions.id = events.version_id
+          AND versions.tenant_id = events.tenant_id
+        WHERE events.tenant_id = ?
+          AND versions.rule_id = ?
+          AND events.version_id = ?
+        ORDER BY events.occurred_at ASC, events.created_at ASC
+      `,
+      )
+      .bind(input.tenantId, input.ruleId, input.versionId)
+      .all<BadgeIssuanceRuleApprovalEventRow>();
+
+  let result: SqlQueryResult<BadgeIssuanceRuleApprovalEventRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    result = await listStatement();
+  }
+
+  return result.results
+    .map((row) => mapBadgeIssuanceRuleApprovalEventRow(row))
+    .filter((event) => BADGE_ISSUANCE_RULE_APPROVAL_EVENT_ACTIONS.has(event.action));
+};
+
 export const findBadgeIssuanceRuleVersionById = async (
   db: SqlDatabase,
   input: {
@@ -6279,6 +6600,172 @@ export const findActiveBadgeIssuanceRuleVersion = async (
   return BADGE_ISSUANCE_RULE_VERSION_STATUSES.has(version.status) ? version : null;
 };
 
+const DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN: readonly BadgeIssuanceRuleApprovalChainStepInput[] =
+  [
+    {
+      requiredRole: 'admin',
+      label: 'Administrative approval',
+    },
+  ] as const;
+
+const normalizeBadgeIssuanceRuleApprovalChain = (
+  chain: readonly BadgeIssuanceRuleApprovalChainStepInput[] | undefined,
+): BadgeIssuanceRuleApprovalChainStepInput[] => {
+  const normalizedChain = chain === undefined ? [...DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN] : [...chain];
+
+  if (normalizedChain.length === 0) {
+    throw new Error('Badge issuance rule approval chain must include at least one step');
+  }
+
+  for (const step of normalizedChain) {
+    if (!(step.requiredRole in TENANT_ROLE_RANK)) {
+      throw new Error(`Unsupported tenant role in approval chain: ${step.requiredRole}`);
+    }
+  }
+
+  return normalizedChain;
+};
+
+const insertBadgeIssuanceRuleApprovalSteps = async (
+  db: SqlDatabase,
+  input: {
+    tenantId: string;
+    versionId: string;
+    approvalChain: readonly BadgeIssuanceRuleApprovalChainStepInput[];
+    createdAt: string;
+  },
+): Promise<void> => {
+  const insertSteps = async (): Promise<void> => {
+    for (const [index, step] of input.approvalChain.entries()) {
+      await db
+        .prepare(
+          `
+          INSERT INTO badge_issuance_rule_approval_steps (
+            id,
+            tenant_id,
+            version_id,
+            step_number,
+            required_role,
+            label,
+            status,
+            decided_by_user_id,
+            decided_at,
+            decision_comment,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, ?)
+        `,
+        )
+        .bind(
+          createPrefixedId('bras'),
+          input.tenantId,
+          input.versionId,
+          index + 1,
+          step.requiredRole,
+          step.label ?? null,
+          input.createdAt,
+          input.createdAt,
+        )
+        .run();
+    }
+  };
+
+  try {
+    await insertSteps();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    await insertSteps();
+  }
+};
+
+const insertBadgeIssuanceRuleApprovalEvent = async (
+  db: SqlDatabase,
+  input: {
+    tenantId: string;
+    versionId: string;
+    stepNumber: number | null;
+    action: BadgeIssuanceRuleApprovalEventAction;
+    actorUserId: string | null;
+    actorRole: TenantMembershipRole | null;
+    comment: string | null;
+    occurredAt: string;
+  },
+): Promise<void> => {
+  const insertEventStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO badge_issuance_rule_approval_events (
+          id,
+          tenant_id,
+          version_id,
+          step_number,
+          action,
+          actor_user_id,
+          actor_role,
+          comment,
+          occurred_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        createPrefixedId('brae'),
+        input.tenantId,
+        input.versionId,
+        input.stepNumber,
+        input.action,
+        input.actorUserId,
+        input.actorRole,
+        input.comment,
+        input.occurredAt,
+        input.occurredAt,
+      )
+      .run();
+
+  try {
+    await insertEventStatement();
+  } catch (error: unknown) {
+    if (!isMissingBadgeIssuanceRulesTablesError(error)) {
+      throw error;
+    }
+
+    await ensureBadgeIssuanceRulesTables(db);
+    await insertEventStatement();
+  }
+};
+
+const ensureBadgeIssuanceRuleApprovalStepsInitialized = async (
+  db: SqlDatabase,
+  input: {
+    tenantId: string;
+    ruleId: string;
+    versionId: string;
+  },
+): Promise<BadgeIssuanceRuleApprovalStepRecord[]> => {
+  const existingSteps = await listBadgeIssuanceRuleVersionApprovalSteps(db, input);
+
+  if (existingSteps.length > 0) {
+    return existingSteps;
+  }
+
+  const nowIso = new Date().toISOString();
+  await insertBadgeIssuanceRuleApprovalSteps(db, {
+    tenantId: input.tenantId,
+    versionId: input.versionId,
+    approvalChain: DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN,
+    createdAt: nowIso,
+  });
+
+  return listBadgeIssuanceRuleVersionApprovalSteps(db, input);
+};
+
 export const createBadgeIssuanceRule = async (
   db: SqlDatabase,
   input: CreateBadgeIssuanceRuleInput,
@@ -6286,6 +6773,7 @@ export const createBadgeIssuanceRule = async (
   const nowIso = new Date().toISOString();
   const ruleId = createPrefixedId('brl');
   const versionId = createPrefixedId('brv');
+  const approvalChain = normalizeBadgeIssuanceRuleApprovalChain(input.approvalChain);
   const insertRuleStatement = (): Promise<SqlRunResult> =>
     db
       .prepare(
@@ -6365,6 +6853,13 @@ export const createBadgeIssuanceRule = async (
     await insertVersionStatement();
   }
 
+  await insertBadgeIssuanceRuleApprovalSteps(db, {
+    tenantId: input.tenantId,
+    versionId,
+    approvalChain,
+    createdAt: nowIso,
+  });
+
   const rule = await findBadgeIssuanceRuleById(db, input.tenantId, ruleId);
   const version = await findBadgeIssuanceRuleVersionById(db, {
     tenantId: input.tenantId,
@@ -6388,6 +6883,7 @@ export const createBadgeIssuanceRuleVersion = async (
 ): Promise<BadgeIssuanceRuleVersionRecord> => {
   const nowIso = new Date().toISOString();
   const versionId = createPrefixedId('brv');
+  const approvalChain = normalizeBadgeIssuanceRuleApprovalChain(input.approvalChain);
   const nextVersionStatement = (): Promise<BadgeIssuanceRuleVersionNumberRow | null> =>
     db
       .prepare(
@@ -6455,6 +6951,12 @@ export const createBadgeIssuanceRuleVersion = async (
       : Number(maxRow.maxVersionNumber);
   const nextVersionNumber = Number.isFinite(currentMax) ? Math.floor(currentMax) + 1 : 1;
   await insertStatement(nextVersionNumber);
+  await insertBadgeIssuanceRuleApprovalSteps(db, {
+    tenantId: input.tenantId,
+    versionId,
+    approvalChain,
+    createdAt: nowIso,
+  });
 
   const version = await findBadgeIssuanceRuleVersionById(db, {
     tenantId: input.tenantId,
@@ -6475,39 +6977,107 @@ export const submitBadgeIssuanceRuleVersionForApproval = async (
   db: SqlDatabase,
   input: SubmitBadgeIssuanceRuleVersionForApprovalInput,
 ): Promise<BadgeIssuanceRuleVersionRecord | null> => {
-  const nowIso = new Date().toISOString();
-  const submitStatement = (): Promise<SqlRunResult> =>
+  const occurredAt = input.occurredAt ?? new Date().toISOString();
+  const version = await findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+
+  if (version === null) {
+    return null;
+  }
+
+  if (version.status !== 'draft' && version.status !== 'rejected') {
+    return null;
+  }
+
+  const approvalSteps = await ensureBadgeIssuanceRuleApprovalStepsInitialized(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+  const firstStep = approvalSteps[0];
+
+  if (firstStep === undefined) {
+    return null;
+  }
+
+  const resetApprovalStepsStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_approval_steps
+        SET
+          status = 'queued',
+          decided_by_user_id = NULL,
+          decided_at = NULL,
+          decision_comment = NULL,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND version_id = ?
+      `,
+      )
+      .bind(occurredAt, input.tenantId, input.versionId)
+      .run();
+  const activateFirstApprovalStepStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_approval_steps
+        SET
+          status = 'pending',
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND version_id = ?
+          AND step_number = ?
+      `,
+      )
+      .bind(occurredAt, input.tenantId, input.versionId, firstStep.stepNumber)
+      .run();
+  const submitVersionStatement = (): Promise<SqlRunResult> =>
     db
       .prepare(
         `
         UPDATE badge_issuance_rule_versions
         SET
           status = 'pending_approval',
+          approved_by_user_id = NULL,
+          approved_at = NULL,
           updated_at = ?
         WHERE tenant_id = ?
           AND rule_id = ?
           AND id = ?
       `,
       )
-      .bind(nowIso, input.tenantId, input.ruleId, input.versionId)
+      .bind(occurredAt, input.tenantId, input.ruleId, input.versionId)
       .run();
 
-  let updated: SqlRunResult;
-
   try {
-    updated = await submitStatement();
+    await resetApprovalStepsStatement();
+    await activateFirstApprovalStepStatement();
+    await submitVersionStatement();
   } catch (error: unknown) {
     if (!isMissingBadgeIssuanceRulesTablesError(error)) {
       throw error;
     }
 
     await ensureBadgeIssuanceRulesTables(db);
-    updated = await submitStatement();
+    await resetApprovalStepsStatement();
+    await activateFirstApprovalStepStatement();
+    await submitVersionStatement();
   }
 
-  if ((updated.meta.rowsWritten ?? 0) === 0) {
-    return null;
-  }
+  await insertBadgeIssuanceRuleApprovalEvent(db, {
+    tenantId: input.tenantId,
+    versionId: input.versionId,
+    stepNumber: firstStep.stepNumber,
+    action: 'submitted',
+    actorUserId: input.actorUserId ?? null,
+    actorRole: input.actorRole ?? null,
+    comment: input.comment ?? null,
+    occurredAt,
+  });
 
   return findBadgeIssuanceRuleVersionById(db, {
     tenantId: input.tenantId,
@@ -6521,14 +7091,98 @@ export const decideBadgeIssuanceRuleVersion = async (
   input: DecideBadgeIssuanceRuleVersionInput,
 ): Promise<BadgeIssuanceRuleVersionRecord | null> => {
   const occurredAt = input.occurredAt ?? new Date().toISOString();
-  const isApproved = input.decision === 'approved';
-  const decisionStatement = (): Promise<SqlRunResult> =>
+  const currentVersion = await findBadgeIssuanceRuleVersionById(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+
+  if (currentVersion?.status !== 'pending_approval') {
+    return null;
+  }
+
+  const steps = await ensureBadgeIssuanceRuleApprovalStepsInitialized(db, {
+    tenantId: input.tenantId,
+    ruleId: input.ruleId,
+    versionId: input.versionId,
+  });
+  const currentStep = steps.find((step) => step.status === 'pending');
+
+  if (currentStep === undefined) {
+    return null;
+  }
+
+  if (!roleSatisfiesMinimumRole(input.actorRole, currentStep.requiredRole)) {
+    throw new Error(
+      `Role ${input.actorRole} does not satisfy required approval role ${currentStep.requiredRole}`,
+    );
+  }
+
+  const nextStep = steps.find((step) => step.stepNumber > currentStep.stepNumber);
+  const markCurrentStepStatement = (status: 'approved' | 'rejected'): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_approval_steps
+        SET
+          status = ?,
+          decided_by_user_id = ?,
+          decided_at = ?,
+          decision_comment = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND version_id = ?
+          AND step_number = ?
+      `,
+      )
+      .bind(
+        status,
+        input.actorUserId,
+        occurredAt,
+        input.comment ?? null,
+        occurredAt,
+        input.tenantId,
+        input.versionId,
+        currentStep.stepNumber,
+      )
+      .run();
+  const markNextStepPendingStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_approval_steps
+        SET
+          status = 'pending',
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND version_id = ?
+          AND step_number = ?
+      `,
+      )
+      .bind(occurredAt, input.tenantId, input.versionId, nextStep?.stepNumber ?? null)
+      .run();
+  const updateVersionPendingStatement = (): Promise<SqlRunResult> =>
     db
       .prepare(
         `
         UPDATE badge_issuance_rule_versions
         SET
-          status = ?,
+          status = 'pending_approval',
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(occurredAt, input.tenantId, input.ruleId, input.versionId)
+      .run();
+  const updateVersionApprovedStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = 'approved',
           approved_by_user_id = ?,
           approved_at = ?,
           updated_at = ?
@@ -6538,32 +7192,77 @@ export const decideBadgeIssuanceRuleVersion = async (
       `,
       )
       .bind(
-        isApproved ? 'approved' : 'rejected',
-        isApproved ? input.actorUserId : null,
-        isApproved ? occurredAt : null,
+        input.actorUserId,
+        occurredAt,
         occurredAt,
         input.tenantId,
         input.ruleId,
         input.versionId,
       )
       .run();
-
-  let updated: SqlRunResult;
+  const updateVersionRejectedStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE badge_issuance_rule_versions
+        SET
+          status = 'rejected',
+          approved_by_user_id = NULL,
+          approved_at = NULL,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND rule_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(occurredAt, input.tenantId, input.ruleId, input.versionId)
+      .run();
 
   try {
-    updated = await decisionStatement();
+    if (input.decision === 'rejected') {
+      await markCurrentStepStatement('rejected');
+      await updateVersionRejectedStatement();
+    } else {
+      await markCurrentStepStatement('approved');
+
+      if (nextStep === undefined) {
+        await updateVersionApprovedStatement();
+      } else {
+        await markNextStepPendingStatement();
+        await updateVersionPendingStatement();
+      }
+    }
   } catch (error: unknown) {
     if (!isMissingBadgeIssuanceRulesTablesError(error)) {
       throw error;
     }
 
     await ensureBadgeIssuanceRulesTables(db);
-    updated = await decisionStatement();
+    if (input.decision === 'rejected') {
+      await markCurrentStepStatement('rejected');
+      await updateVersionRejectedStatement();
+    } else {
+      await markCurrentStepStatement('approved');
+
+      if (nextStep === undefined) {
+        await updateVersionApprovedStatement();
+      } else {
+        await markNextStepPendingStatement();
+        await updateVersionPendingStatement();
+      }
+    }
   }
 
-  if ((updated.meta.rowsWritten ?? 0) === 0) {
-    return null;
-  }
+  await insertBadgeIssuanceRuleApprovalEvent(db, {
+    tenantId: input.tenantId,
+    versionId: input.versionId,
+    stepNumber: currentStep.stepNumber,
+    action: input.decision,
+    actorUserId: input.actorUserId,
+    actorRole: input.actorRole,
+    comment: input.comment ?? null,
+    occurredAt,
+  });
 
   return findBadgeIssuanceRuleVersionById(db, {
     tenantId: input.tenantId,
