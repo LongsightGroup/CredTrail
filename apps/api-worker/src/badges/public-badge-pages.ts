@@ -82,9 +82,12 @@ export const createPublicBadgePageRenderers = (
   const publicBadgeNotFoundPage = (): string => {
     return renderPageShell(
       'Badge not found',
-      `<section style="display:grid;gap:1rem;max-width:40rem;">
-        <h1 style="margin:0;">Badge not found</h1>
-        <p style="margin:0;">The shared badge URL is invalid or the credential does not exist.</p>
+      `<section style="display:grid;gap:1rem;max-width:42rem;">
+        <article style="display:grid;gap:0.8rem;padding:1.25rem;border:1px solid rgba(0,39,76,0.18);border-radius:1rem;background:linear-gradient(155deg,rgba(255,255,255,0.96),rgba(248,252,255,0.93));box-shadow:0 16px 30px rgba(0,39,76,0.14);">
+          <p style="margin:0;font-size:0.8rem;letter-spacing:0.11em;text-transform:uppercase;color:#0a4c8f;font-weight:700;">Public Badge Lookup</p>
+          <h1 style="margin:0;">Badge not found</h1>
+          <p style="margin:0;color:#395877;">The shared badge URL is invalid or the credential does not exist.</p>
+        </article>
       </section>`,
     );
   };
@@ -204,18 +207,51 @@ export const createPublicBadgePageRenderers = (
     return renderPageShell(
       `${badgeName} | CredTrail`,
       `<style>
+        :root {
+          --pb-blue: #00274c;
+          --pb-blue-mid: #0a4c8f;
+          --pb-maize: #ffcb05;
+          --pb-ink: #122c46;
+          --pb-ink-soft: #3a5879;
+        }
+
         .public-badge {
           display: grid;
-          gap: 1.2rem;
-          color: #0f172a;
+          gap: 1rem;
+          color: var(--pb-ink);
         }
   
         .public-badge__card {
-          background: #ffffff;
-          border: 1px solid #d6dfeb;
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(165deg, rgba(255, 255, 255, 0.94), rgba(248, 252, 255, 0.9));
+          border: 1px solid rgba(0, 39, 76, 0.12);
           border-radius: 1rem;
-          box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
+          box-shadow: 0 18px 34px rgba(0, 26, 51, 0.11);
           padding: 1.25rem;
+          animation: public-badge-enter 420ms ease-out both;
+        }
+
+        .public-badge__card::after {
+          content: '';
+          position: absolute;
+          inset: auto -16% -70% auto;
+          width: 14rem;
+          height: 14rem;
+          background: radial-gradient(circle, rgba(255, 203, 5, 0.12), transparent 70%);
+          pointer-events: none;
+        }
+
+        .public-badge__card:nth-child(2) {
+          animation-delay: 45ms;
+        }
+
+        .public-badge__card:nth-child(3) {
+          animation-delay: 95ms;
+        }
+
+        .public-badge__card:nth-child(4) {
+          animation-delay: 140ms;
         }
   
         .public-badge__stack-sm {
@@ -228,21 +264,22 @@ export const createPublicBadgePageRenderers = (
           justify-content: space-between;
           gap: 1rem;
           align-items: center;
-          color: #f8fafc;
-          font-weight: 600;
+          color: #f6fbff;
+          font-weight: 700;
+          letter-spacing: 0.015em;
         }
   
         .public-badge__status--verified {
-          background: linear-gradient(135deg, #166534 0%, #14532d 65%);
+          background: linear-gradient(120deg, #0f7f4f 0%, #005b4f 64%, #003d5c 100%);
         }
   
         .public-badge__status--revoked {
-          background: linear-gradient(135deg, #b42318 0%, #8f1c13 65%);
+          background: linear-gradient(120deg, #bd2f1b 0%, #8f1c13 64%, #5b1212 100%);
         }
   
         .public-badge__status-note {
           margin: 0;
-          color: #7f1d1d;
+          color: #8e1f14;
           font-size: 0.95rem;
         }
   
@@ -255,9 +292,9 @@ export const createPublicBadgePageRenderers = (
           display: block;
           width: 100%;
           max-width: 420px;
-          border: 1px solid #d6dfeb;
+          border: 1px solid rgba(0, 39, 76, 0.14);
           border-radius: 1rem;
-          box-shadow: 0 14px 28px rgba(20, 83, 45, 0.18);
+          box-shadow: 0 16px 30px rgba(0, 39, 76, 0.19);
         }
   
         .public-badge__hero-meta {
@@ -268,9 +305,9 @@ export const createPublicBadgePageRenderers = (
         .public-badge__eyebrow {
           margin: 0;
           text-transform: uppercase;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.11em;
           font-size: 0.8rem;
-          color: #166534;
+          color: var(--pb-blue-mid);
           font-weight: 700;
         }
   
@@ -284,7 +321,7 @@ export const createPublicBadgePageRenderers = (
         .public-badge__issued-at,
         .public-badge__recipient-meta {
           margin: 0;
-          color: #334155;
+          color: var(--pb-ink-soft);
         }
   
         .public-badge__recipient-name {
@@ -303,9 +340,9 @@ export const createPublicBadgePageRenderers = (
           width: 3rem;
           height: 3rem;
           border-radius: 999px;
-          border: 1px solid #d6dfeb;
+          border: 2px solid rgba(0, 39, 76, 0.12);
           object-fit: cover;
-          background: #f8fafc;
+          background: #f8fcff;
         }
   
         .public-badge__section-title {
@@ -315,7 +352,7 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__achievement-copy {
           margin: 0;
-          color: #334155;
+          color: var(--pb-ink-soft);
         }
   
         .public-badge__actions {
@@ -326,29 +363,38 @@ export const createPublicBadgePageRenderers = (
         }
   
         .public-badge__button {
-          border: 1px solid #166534;
+          border: 1px solid rgba(0, 39, 76, 0.25);
           border-radius: 0.75rem;
           padding: 0.48rem 0.86rem;
           text-decoration: none;
           font-weight: 600;
-          color: #166534;
-          background: #f8fafc;
+          color: var(--pb-blue);
+          background: linear-gradient(180deg, #ffffff, #f1f8ff);
           cursor: pointer;
+          transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+        }
+
+        .public-badge__button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 14px rgba(0, 39, 76, 0.15);
+          border-color: rgba(0, 39, 76, 0.4);
         }
   
         .public-badge__button--primary {
-          background: #166534;
-          color: #f8fafc;
+          border-color: transparent;
+          background: linear-gradient(115deg, var(--pb-blue) 0%, #0b5aa9 76%);
+          color: #f8fbff;
         }
   
         .public-badge__button--accent {
-          border-color: #fbbf24;
-          background: #fffbeb;
+          border-color: rgba(194, 139, 0, 0.48);
+          background: linear-gradient(180deg, #fff7cf, #ffe37d);
+          color: #533a00;
         }
   
         .public-badge__copy-status {
           margin: 0;
-          color: #334155;
+          color: var(--pb-ink-soft);
           font-size: 0.92rem;
         }
   
@@ -360,7 +406,7 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__validator-note {
           margin: 0;
-          color: #475569;
+          color: #516c8e;
           font-size: 0.92rem;
         }
   
@@ -375,12 +421,12 @@ export const createPublicBadgePageRenderers = (
           width: 11rem;
           height: 11rem;
           border-radius: 0.9rem;
-          border: 1px solid #d6dfeb;
+          border: 1px solid rgba(0, 39, 76, 0.16);
           background: #ffffff;
         }
   
         .public-badge__qr-caption {
-          color: #475569;
+          color: #516c8e;
           font-size: 0.9rem;
         }
   
@@ -397,7 +443,7 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__evidence-description {
           margin: 0.2rem 0 0 0;
-          color: #3d4b66;
+          color: #445f82;
         }
   
         .public-badge__technical summary {
@@ -414,17 +460,45 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__technical-grid dt {
           font-weight: 600;
+          color: #0f3156;
         }
   
         .public-badge__technical-grid dd {
           margin: 0;
           overflow-wrap: anywhere;
         }
+
+        @keyframes public-badge-enter {
+          from {
+            opacity: 0;
+            transform: translateY(7px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
   
         @media (min-width: 760px) {
           .public-badge__hero {
             grid-template-columns: minmax(260px, 340px) 1fr;
             align-items: start;
+          }
+        }
+
+        @media (max-width: 759px) {
+          .public-badge__status {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .public-badge__card {
+            animation: none;
+          }
+          .public-badge__button {
+            transition: none;
           }
         }
       </style>
@@ -666,17 +740,33 @@ export const createPublicBadgePageRenderers = (
         .badge-wall {
           display: grid;
           gap: 1rem;
-          color: #0f172a;
+          color: #0f2848;
+        }
+
+        .badge-wall__hero {
+          border: 1px solid rgba(0, 39, 76, 0.16);
+          border-radius: 1rem;
+          padding: 1rem;
+          background:
+            radial-gradient(circle at 88% 8%, rgba(255, 203, 5, 0.24), transparent 42%),
+            linear-gradient(140deg, rgba(0, 39, 76, 0.95) 0%, rgba(12, 83, 158, 0.9) 100%);
+          color: #f6fbff;
+          box-shadow: 0 22px 32px rgba(0, 39, 76, 0.2);
+        }
+
+        .badge-wall__hero h1 {
+          color: #f6fbff;
         }
   
         .badge-wall__lead {
           margin: 0;
-          color: #475569;
+          color: rgba(246, 251, 255, 0.88);
         }
   
         .badge-wall__count {
           margin: 0;
           font-weight: 600;
+          color: #fdf2b1;
         }
   
         .badge-wall__list {
@@ -688,13 +778,18 @@ export const createPublicBadgePageRenderers = (
         }
   
         .badge-wall__item {
-          border: 1px solid #d6dfeb;
+          border: 1px solid rgba(0, 39, 76, 0.14);
           border-radius: 0.9rem;
-          background: #ffffff;
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+          background: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 255, 0.93));
+          box-shadow: 0 12px 24px rgba(0, 39, 76, 0.12);
           padding: 0.9rem;
           display: grid;
           gap: 0.65rem;
+          animation: badge-wall-item-enter 420ms ease-out both;
+        }
+
+        .badge-wall__item:nth-child(2n) {
+          animation-delay: 60ms;
         }
   
         .badge-wall__recipient {
@@ -707,9 +802,9 @@ export const createPublicBadgePageRenderers = (
           width: 2.7rem;
           height: 2.7rem;
           border-radius: 999px;
-          border: 1px solid #d6dfeb;
+          border: 2px solid rgba(0, 39, 76, 0.14);
           object-fit: cover;
-          background: #f8fafc;
+          background: #f4f9ff;
         }
   
         .badge-wall__stack {
@@ -724,12 +819,12 @@ export const createPublicBadgePageRenderers = (
   
         .badge-wall__badge-title {
           margin: 0;
-          color: #334155;
+          color: #325374;
         }
   
         .badge-wall__meta {
           margin: 0;
-          color: #475569;
+          color: #496a8e;
           font-size: 0.92rem;
         }
   
@@ -740,13 +835,32 @@ export const createPublicBadgePageRenderers = (
   
         .badge-wall__empty {
           margin: 0;
-          color: #475569;
+          color: #496a8e;
+        }
+
+        @keyframes badge-wall-item-enter {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .badge-wall__item {
+            animation: none;
+          }
         }
       </style>
       <section class="badge-wall">
-        <h1 style="margin:0;">${escapeHtml(title)}</h1>
-        <p class="badge-wall__lead">${escapeHtml(subtitle)}</p>
-        <p class="badge-wall__count">${escapeHtml(String(entries.length))} issued badges</p>
+        <header class="badge-wall__hero">
+          <h1 style="margin:0;">${escapeHtml(title)}</h1>
+          <p class="badge-wall__lead">${escapeHtml(subtitle)}</p>
+          <p class="badge-wall__count">${escapeHtml(String(entries.length))} issued badges</p>
+        </header>
         ${listMarkup}
       </section>`,
     );
