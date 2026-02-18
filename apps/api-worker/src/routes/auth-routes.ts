@@ -16,6 +16,7 @@ import type { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { SendMagicLinkEmailNotificationInput } from '../notifications/send-magic-link-email';
 
 interface RegisterAuthRoutesInput {
   app: Hono<AppEnv>;
@@ -28,6 +29,7 @@ interface RegisterAuthRoutesInput {
   MAGIC_LINK_TTL_SECONDS: number;
   SESSION_TTL_SECONDS: number;
   SESSION_COOKIE_NAME: string;
+  sendMagicLinkEmailNotification: (input: SendMagicLinkEmailNotificationInput) => Promise<void>;
 }
 
 export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
@@ -42,7 +44,43 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     MAGIC_LINK_TTL_SECONDS,
     SESSION_TTL_SECONDS,
     SESSION_COOKIE_NAME,
+    sendMagicLinkEmailNotification,
   } = input;
+
+  const consumeMagicLinkToken = async (
+    c: AppContext,
+    rawToken: string,
+  ): Promise<
+    | {
+        sessionToken: string;
+        session: SessionRecord;
+      }
+    | null
+  > => {
+    const nowIso = new Date().toISOString();
+    const magicTokenHash = await sha256Hex(rawToken);
+    const token = await findMagicLinkTokenByHash(resolveDatabase(c.env), magicTokenHash);
+
+    if (token === null || !isMagicLinkTokenValid(token, nowIso)) {
+      return null;
+    }
+
+    await markMagicLinkTokenUsed(resolveDatabase(c.env), token.id, nowIso);
+
+    const sessionToken = generateOpaqueToken();
+    const sessionTokenHash = await sha256Hex(sessionToken);
+    const session = await createSession(resolveDatabase(c.env), {
+      tenantId: token.tenantId,
+      userId: token.userId,
+      sessionTokenHash,
+      expiresAt: addSecondsToIso(nowIso, SESSION_TTL_SECONDS),
+    });
+
+    return {
+      sessionToken,
+      session,
+    };
+  };
 
   app.get('/', (c) => {
     return c.html(
@@ -88,15 +126,39 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       magicTokenHash,
       expiresAt,
     });
+    const tenantAdminPath = `/tenants/${encodeURIComponent(request.tenantId)}/admin`;
+    const verifyUrl = new URL('/auth/magic-link/verify', c.req.url);
+    verifyUrl.searchParams.set('token', magicLinkToken);
+    verifyUrl.searchParams.set('next', tenantAdminPath);
+    let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
+
+    try {
+      await sendMagicLinkEmailNotification({
+        mailtrapApiToken: c.env.MAILTRAP_API_TOKEN,
+        mailtrapInboxId: c.env.MAILTRAP_INBOX_ID,
+        mailtrapApiBaseUrl: c.env.MAILTRAP_API_BASE_URL,
+        mailtrapFromEmail: c.env.MAILTRAP_FROM_EMAIL,
+        mailtrapFromName: c.env.MAILTRAP_FROM_NAME,
+        recipientEmail: request.email,
+        tenantId: request.tenantId,
+        magicLinkUrl: verifyUrl.toString(),
+        expiresAtIso: expiresAt,
+      });
+      deliveryStatus = 'sent';
+    } catch {
+      deliveryStatus = 'failed';
+    }
 
     if (c.env.APP_ENV === 'development') {
       return c.json(
         {
           status: 'sent',
+          deliveryStatus,
           tenantId: request.tenantId,
           email: request.email,
           expiresAt,
           magicLinkToken,
+          magicLinkUrl: verifyUrl.toString(),
         },
         202,
       );
@@ -105,6 +167,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     return c.json(
       {
         status: 'sent',
+        deliveryStatus,
         tenantId: request.tenantId,
         email: request.email,
         expiresAt,
@@ -116,11 +179,9 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   app.post('/v1/auth/magic-link/verify', async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseMagicLinkVerifyRequest(payload);
-    const nowIso = new Date().toISOString();
-    const magicTokenHash = await sha256Hex(request.token);
-    const token = await findMagicLinkTokenByHash(resolveDatabase(c.env), magicTokenHash);
+    const consumed = await consumeMagicLinkToken(c, request.token);
 
-    if (token === null || !isMagicLinkTokenValid(token, nowIso)) {
+    if (consumed === null) {
       return c.json(
         {
           error: 'Invalid or expired magic link token',
@@ -129,18 +190,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       );
     }
 
-    await markMagicLinkTokenUsed(resolveDatabase(c.env), token.id, nowIso);
-
-    const sessionToken = generateOpaqueToken();
-    const sessionTokenHash = await sha256Hex(sessionToken);
-    const session = await createSession(resolveDatabase(c.env), {
-      tenantId: token.tenantId,
-      userId: token.userId,
-      sessionTokenHash,
-      expiresAt: addSecondsToIso(nowIso, SESSION_TTL_SECONDS),
-    });
-
-    setCookie(c, SESSION_COOKIE_NAME, sessionToken, {
+    setCookie(c, SESSION_COOKIE_NAME, consumed.sessionToken, {
       httpOnly: true,
       secure: sessionCookieSecure(c.env.APP_ENV),
       sameSite: 'Lax',
@@ -150,10 +200,50 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
 
     return c.json({
       status: 'authenticated',
-      tenantId: session.tenantId,
-      userId: session.userId,
-      expiresAt: session.expiresAt,
+      tenantId: consumed.session.tenantId,
+      userId: consumed.session.userId,
+      expiresAt: consumed.session.expiresAt,
     });
+  });
+
+  app.get('/auth/magic-link/verify', async (c) => {
+    const tokenRaw = c.req.query('token');
+
+    if (tokenRaw === undefined || tokenRaw.trim().length === 0) {
+      return c.html(
+        renderPageShell(
+          'Invalid Magic Link',
+          '<h1>Invalid magic link</h1><p>Missing token. Request a new sign-in link.</p>',
+        ),
+        400,
+      );
+    }
+
+    const consumed = await consumeMagicLinkToken(c, tokenRaw.trim());
+
+    if (consumed === null) {
+      return c.html(
+        renderPageShell(
+          'Expired Magic Link',
+          '<h1>Magic link expired</h1><p>The link is invalid or expired. Request a new sign-in link.</p>',
+        ),
+        400,
+      );
+    }
+
+    setCookie(c, SESSION_COOKIE_NAME, consumed.sessionToken, {
+      httpOnly: true,
+      secure: sessionCookieSecure(c.env.APP_ENV),
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: SESSION_TTL_SECONDS,
+    });
+
+    const nextPathRaw = c.req.query('next');
+    const fallbackPath = `/tenants/${encodeURIComponent(consumed.session.tenantId)}/admin`;
+    const nextPath = nextPathRaw?.startsWith('/') === true ? nextPathRaw : fallbackPath;
+
+    return c.redirect(nextPath, 302);
   });
 
   app.get('/v1/auth/session', async (c) => {

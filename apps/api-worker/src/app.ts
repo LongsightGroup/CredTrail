@@ -103,6 +103,7 @@ import {
   sendIssuanceEmailNotification,
   type SendIssuanceEmailNotificationInput,
 } from './notifications/send-issuance-email';
+import { sendMagicLinkEmailNotification } from './notifications/send-magic-link-email';
 import { registerAdminRoutes } from './routes/admin-routes';
 import { registerAssertionRoutes } from './routes/assertion-routes';
 import { registerAuthRoutes } from './routes/auth-routes';
@@ -591,6 +592,7 @@ registerAuthRoutes({
   MAGIC_LINK_TTL_SECONDS,
   SESSION_TTL_SECONDS,
   SESSION_COOKIE_NAME,
+  sendMagicLinkEmailNotification,
 });
 
 registerTenantGovernanceRoutes({
