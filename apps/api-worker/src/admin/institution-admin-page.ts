@@ -333,7 +333,7 @@ export const institutionAdminDashboardPage = (input: {
         font-size: 0.9rem;
         color: #183a61;
       }
-      .ct-admin__form input,
+      .ct-admin__form input:not([type='checkbox']),
       .ct-admin__form select {
         width: 100%;
         max-width: 100%;
@@ -343,6 +343,18 @@ export const institutionAdminDashboardPage = (input: {
         border-radius: 0.65rem;
         padding: 0.52rem 0.62rem;
         font-size: 0.94rem;
+      }
+      .ct-admin__checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-size: 0.92rem;
+      }
+      .ct-admin__checkbox-row input[type='checkbox'] {
+        width: 1rem;
+        height: 1rem;
+        margin: 0;
+        accent-color: #0a4c8f;
       }
       .ct-admin__form button {
         justify-self: start;
@@ -640,11 +652,11 @@ export const institutionAdminDashboardPage = (input: {
                 Final score for provided facts
                 <input name="finalScore" type="number" min="0" max="100" step="0.01" required value="92" />
               </label>
-              <label>
+              <label class="ct-admin__checkbox-row">
                 <input name="completed" type="checkbox" checked />
                 Learner completed course
               </label>
-              <label>
+              <label class="ct-admin__checkbox-row">
                 <input name="dryRun" type="checkbox" checked />
                 Dry run (don’t issue badge)
               </label>
