@@ -295,6 +295,10 @@ export const institutionAdminDashboardPage = (input: {
       .ct-admin__layout {
         display: grid;
         gap: 1rem;
+        min-width: 0;
+      }
+      .ct-admin__layout > * {
+        min-width: 0;
       }
       .ct-admin__panel {
         display: grid;
@@ -303,6 +307,7 @@ export const institutionAdminDashboardPage = (input: {
         border: 1px solid rgba(0, 39, 76, 0.14);
         border-radius: 1rem;
         padding: 1rem;
+        min-width: 0;
       }
       .ct-admin__panel h2 {
         margin: 0;
@@ -315,10 +320,12 @@ export const institutionAdminDashboardPage = (input: {
       .ct-admin__grid {
         display: grid;
         gap: 1rem;
+        min-width: 0;
       }
       .ct-admin__form {
         display: grid;
         gap: 0.65rem;
+        min-width: 0;
       }
       .ct-admin__form label {
         display: grid;
@@ -328,6 +335,10 @@ export const institutionAdminDashboardPage = (input: {
       }
       .ct-admin__form input,
       .ct-admin__form select {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
         border: 1px solid rgba(0, 39, 76, 0.26);
         border-radius: 0.65rem;
         padding: 0.52rem 0.62rem;
@@ -467,7 +478,7 @@ export const institutionAdminDashboardPage = (input: {
       }
       @media (min-width: 980px) {
         .ct-admin__layout {
-          grid-template-columns: 360px 1fr;
+          grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
           align-items: start;
         }
       }
