@@ -174,7 +174,7 @@ export const registerTenantGovernanceRoutes = (
       institutionAdminDashboardPage({
         tenant,
         userId: session.userId,
-        userEmail: currentUser?.email,
+        ...(currentUser?.email === undefined ? {} : { userEmail: currentUser.email }),
         membershipRole,
         badgeTemplates,
         orgUnits,
