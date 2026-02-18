@@ -8,6 +8,7 @@ vi.mock('@credtrail/db', async () => {
     findActiveSessionByHash: vi.fn(),
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
+    findUserById: vi.fn(),
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
     listBadgeTemplates: vi.fn(),
@@ -27,6 +28,7 @@ import {
   findActiveSessionByHash,
   findTenantById,
   findTenantMembership,
+  findUserById,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
@@ -49,6 +51,7 @@ const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
+const mockedFindUserById = vi.mocked(findUserById);
 const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
 const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
@@ -114,6 +117,11 @@ beforeEach(() => {
     isActive: true,
     createdAt: '2026-02-18T12:00:00.000Z',
     updatedAt: '2026-02-18T12:00:00.000Z',
+  });
+  mockedFindUserById.mockReset();
+  mockedFindUserById.mockResolvedValue({
+    id: 'usr_admin',
+    email: 'admin@tenant-123.edu',
   });
   mockedListBadgeTemplates.mockReset();
   mockedListBadgeTemplates.mockResolvedValue([
@@ -286,10 +294,14 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('/v1/tenants/tenant_123/api-keys/tak_active/revoke');
     expect(body).toContain('Active API Keys (1)');
     expect(body).toContain('Revoked keys: 1');
+    expect(body).toContain('User: admin@tenant-123.edu');
+    expect(body).toContain('title="User ID: usr_admin"');
+    expect(body).toContain('color: #f5fbff;');
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       includeArchived: false,
     });
+    expect(mockedFindUserById).toHaveBeenCalledWith(fakeDb, 'usr_admin');
     expect(mockedListBadgeIssuanceRules).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
     });

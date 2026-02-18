@@ -6,6 +6,7 @@ import {
   deleteTenantSsoSamlConfiguration,
   findDelegatedIssuingAuthorityGrantById,
   findTenantById,
+  findUserById,
   findTenantSsoSamlConfiguration,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
@@ -137,7 +138,8 @@ export const registerTenantGovernanceRoutes = (
       );
     }
 
-    const [badgeTemplates, orgUnits, apiKeys, badgeRules] = await Promise.all([
+    const [currentUser, badgeTemplates, orgUnits, apiKeys, badgeRules] = await Promise.all([
+      findUserById(db, session.userId),
       listBadgeTemplates(db, {
         tenantId: pathParams.tenantId,
         includeArchived: false,
@@ -172,6 +174,7 @@ export const registerTenantGovernanceRoutes = (
       institutionAdminDashboardPage({
         tenant,
         userId: session.userId,
+        userEmail: currentUser?.email,
         membershipRole,
         badgeTemplates,
         orgUnits,

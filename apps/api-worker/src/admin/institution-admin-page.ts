@@ -30,6 +30,7 @@ const formatScopesSummary = (scopesJson: string): string => {
 export const institutionAdminDashboardPage = (input: {
   tenant: TenantRecord;
   userId: string;
+  userEmail?: string;
   membershipRole: TenantMembershipRole;
   badgeTemplates: readonly BadgeTemplateRecord[];
   orgUnits: readonly TenantOrgUnitRecord[];
@@ -214,6 +215,7 @@ export const institutionAdminDashboardPage = (input: {
   const activeApiKeyCount = String(input.activeApiKeys.length);
   const revokedApiKeyCount = String(input.revokedApiKeyCount);
   const ruleCount = String(input.badgeRules.length);
+  const userLabel = input.userEmail ?? input.userId;
   const orgUnitParentOptions = input.orgUnits
     .filter((orgUnit) => orgUnit.isActive)
     .map((orgUnit) => {
@@ -272,6 +274,8 @@ export const institutionAdminDashboardPage = (input: {
       .ct-admin__hero h1 {
         margin: 0;
         font-size: clamp(1.4rem, 3vw, 2rem);
+        color: #f5fbff;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
       }
       .ct-admin__meta-grid {
         display: flex;
@@ -382,6 +386,9 @@ export const institutionAdminDashboardPage = (input: {
       }
       .ct-admin__table-wrap {
         overflow: auto;
+        border: 1px solid rgba(0, 39, 76, 0.14);
+        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.82);
       }
       .ct-admin__table {
         width: 100%;
@@ -397,6 +404,8 @@ export const institutionAdminDashboardPage = (input: {
       }
       .ct-admin__empty {
         color: #537194;
+        text-align: center;
+        padding: 0.8rem 0.55rem;
       }
       .ct-admin__meta {
         color: #4e6c8f;
@@ -448,6 +457,14 @@ export const institutionAdminDashboardPage = (input: {
         font-size: 0.72rem;
         color: #537194;
       }
+      .ct-admin__panel--table {
+        padding: 0.9rem;
+      }
+      .ct-admin__panel--table > h2,
+      .ct-admin__panel--table > p,
+      .ct-admin__panel--table > .ct-admin__status {
+        padding-inline: 0.1rem;
+      }
       @media (min-width: 980px) {
         .ct-admin__layout {
           grid-template-columns: 360px 1fr;
@@ -463,7 +480,9 @@ export const institutionAdminDashboardPage = (input: {
           <span class="ct-admin__pill">Tenant: ${escapeHtml(input.tenant.id)}</span>
           <span class="ct-admin__pill">Plan: ${escapeHtml(input.tenant.planTier)}</span>
           <span class="ct-admin__pill">Role: ${escapeHtml(input.membershipRole)}</span>
-          <span class="ct-admin__pill">User: ${escapeHtml(input.userId)}</span>
+          <span class="ct-admin__pill" title="User ID: ${escapeHtml(input.userId)}">User: ${escapeHtml(
+            userLabel,
+          )}</span>
         </div>
       </header>
       <section class="ct-admin__layout">
@@ -624,7 +643,7 @@ export const institutionAdminDashboardPage = (input: {
           </article>
         </div>
         <div class="ct-admin__grid">
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-admin__panel--table">
             <h2>Badge Rules (${ruleCount})</h2>
             <p>Lifecycle actions operate on each rule’s latest version.</p>
             <div class="ct-admin__table-wrap">
@@ -648,7 +667,7 @@ export const institutionAdminDashboardPage = (input: {
             </div>
             <p id="rule-action-status" class="ct-admin__status"></p>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-admin__panel--table">
             <h2>Badge Templates (${badgeTemplateCount})</h2>
             <div class="ct-admin__table-wrap">
               <table class="ct-admin__table">
@@ -667,7 +686,7 @@ export const institutionAdminDashboardPage = (input: {
               </table>
             </div>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-admin__panel--table">
             <h2>Org Units (${orgUnitCount})</h2>
             <div class="ct-admin__table-wrap">
               <table class="ct-admin__table">
@@ -685,7 +704,7 @@ export const institutionAdminDashboardPage = (input: {
               </table>
             </div>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-admin__panel--table">
             <h2>Active API Keys (${activeApiKeyCount})</h2>
             <p>Revoked keys: ${revokedApiKeyCount}</p>
             <div class="ct-admin__table-wrap">
