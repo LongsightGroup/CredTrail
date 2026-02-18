@@ -7,6 +7,8 @@ import {
   findDelegatedIssuingAuthorityGrantById,
   findTenantById,
   findTenantSsoSamlConfiguration,
+  listBadgeIssuanceRules,
+  listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
   listTenantApiKeys,
   listDelegatedIssuingAuthorityGrantEvents,
@@ -125,7 +127,7 @@ export const registerTenantGovernanceRoutes = (
       );
     }
 
-    const [badgeTemplates, orgUnits, apiKeys] = await Promise.all([
+    const [badgeTemplates, orgUnits, apiKeys, badgeRules] = await Promise.all([
       listBadgeTemplates(db, {
         tenantId: pathParams.tenantId,
         includeArchived: false,
@@ -138,7 +140,19 @@ export const registerTenantGovernanceRoutes = (
         tenantId: pathParams.tenantId,
         includeRevoked: true,
       }),
+      listBadgeIssuanceRules(db, {
+        tenantId: pathParams.tenantId,
+      }),
     ]);
+    const badgeRuleVersionLists = await Promise.all(
+      badgeRules.map(async (rule) =>
+        listBadgeIssuanceRuleVersions(db, {
+          tenantId: pathParams.tenantId,
+          ruleId: rule.id,
+        }),
+      ),
+    );
+    const badgeRuleVersions = badgeRuleVersionLists.flat();
     const activeApiKeys = apiKeys.filter((apiKey) => apiKey.revokedAt === null);
     const revokedApiKeyCount = apiKeys.length - activeApiKeys.length;
 
@@ -153,6 +167,8 @@ export const registerTenantGovernanceRoutes = (
         orgUnits,
         activeApiKeys,
         revokedApiKeyCount,
+        badgeRules,
+        badgeRuleVersions,
       }),
     );
   });

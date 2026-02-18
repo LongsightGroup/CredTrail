@@ -8,6 +8,8 @@ vi.mock('@credtrail/db', async () => {
     findActiveSessionByHash: vi.fn(),
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
+    listBadgeIssuanceRules: vi.fn(),
+    listBadgeIssuanceRuleVersions: vi.fn(),
     listBadgeTemplates: vi.fn(),
     listTenantApiKeys: vi.fn(),
     listTenantOrgUnits: vi.fn(),
@@ -25,6 +27,8 @@ import {
   findActiveSessionByHash,
   findTenantById,
   findTenantMembership,
+  listBadgeIssuanceRules,
+  listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
   listTenantApiKeys,
   listTenantOrgUnits,
@@ -45,6 +49,8 @@ const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
+const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
+const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
@@ -123,6 +129,40 @@ beforeEach(() => {
       ownerOrgUnitId: 'tenant_123:org:institution',
       governanceMetadataJson: null,
       isArchived: false,
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:00:00.000Z',
+    },
+  ]);
+  mockedListBadgeIssuanceRules.mockReset();
+  mockedListBadgeIssuanceRules.mockResolvedValue([
+    {
+      id: 'brl_123',
+      tenantId: 'tenant_123',
+      name: 'CS101 Excellence Rule',
+      description: 'Issue badge for CS101 completion and grade threshold.',
+      badgeTemplateId: 'badge_template_001',
+      lmsProviderKind: 'canvas',
+      activeVersionId: 'brv_123',
+      createdByUserId: 'usr_admin',
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:00:00.000Z',
+    },
+  ]);
+  mockedListBadgeIssuanceRuleVersions.mockReset();
+  mockedListBadgeIssuanceRuleVersions.mockResolvedValue([
+    {
+      id: 'brv_123',
+      tenantId: 'tenant_123',
+      ruleId: 'brl_123',
+      versionNumber: 1,
+      status: 'draft',
+      ruleJson: '{"conditions":{"type":"grade_threshold","courseId":"CS101","minScore":80}}',
+      changeSummary: 'Initial draft',
+      createdByUserId: 'usr_admin',
+      approvedByUserId: null,
+      approvedAt: null,
+      activatedByUserId: null,
+      activatedAt: null,
       createdAt: '2026-02-18T12:00:00.000Z',
       updatedAt: '2026-02-18T12:00:00.000Z',
     },
@@ -229,17 +269,32 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Manual Issue Badge');
     expect(body).toContain('Create Tenant API Key');
     expect(body).toContain('Create Org Unit');
+    expect(body).toContain('Create Badge Rule');
+    expect(body).toContain('Evaluate Rule');
+    expect(body).toContain('Badge Rules (1)');
+    expect(body).toContain('CS101 Excellence Rule');
     expect(body).toContain('TypeScript Foundations');
     expect(body).toContain('/showcase/tenant_123?badgeTemplateId=badge_template_001');
     expect(body).toContain('/v1/tenants/tenant_123/assertions/manual-issue');
     expect(body).toContain('/v1/tenants/tenant_123/api-keys');
     expect(body).toContain('/v1/tenants/tenant_123/org-units');
+    expect(body).toContain('/v1/tenants/tenant_123/badge-rules');
+    expect(body).toContain(
+      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/submit-approval',
+    );
     expect(body).toContain('/v1/tenants/tenant_123/api-keys/tak_active/revoke');
     expect(body).toContain('Active API Keys (1)');
     expect(body).toContain('Revoked keys: 1');
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       includeArchived: false,
+    });
+    expect(mockedListBadgeIssuanceRules).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+    });
+    expect(mockedListBadgeIssuanceRuleVersions).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      ruleId: 'brl_123',
     });
   });
 });
