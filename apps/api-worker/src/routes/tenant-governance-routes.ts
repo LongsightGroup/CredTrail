@@ -7,6 +7,7 @@ import {
   findDelegatedIssuingAuthorityGrantById,
   findTenantById,
   findTenantSsoSamlConfiguration,
+  listBadgeTemplates,
   listTenantApiKeys,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
@@ -40,6 +41,7 @@ import {
   parseUpsertTenantMembershipOrgUnitScopeRequest,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import { institutionAdminDashboardPage } from '../admin/institution-admin-page';
 
 interface RegisterTenantGovernanceRoutesInput {
   app: Hono<AppEnv>;
@@ -101,6 +103,59 @@ export const registerTenantGovernanceRoutes = (
 
     return null;
   };
+
+  app.get('/tenants/:tenantId/admin', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const tenant = await findTenantById(db, pathParams.tenantId);
+
+    if (tenant === null) {
+      return c.json(
+        {
+          error: 'Tenant not found',
+        },
+        404,
+      );
+    }
+
+    const [badgeTemplates, orgUnits, apiKeys] = await Promise.all([
+      listBadgeTemplates(db, {
+        tenantId: pathParams.tenantId,
+        includeArchived: false,
+      }),
+      listTenantOrgUnits(db, {
+        tenantId: pathParams.tenantId,
+        includeInactive: true,
+      }),
+      listTenantApiKeys(db, {
+        tenantId: pathParams.tenantId,
+        includeRevoked: true,
+      }),
+    ]);
+    const activeApiKeys = apiKeys.filter((apiKey) => apiKey.revokedAt === null);
+    const revokedApiKeyCount = apiKeys.length - activeApiKeys.length;
+
+    c.header('Cache-Control', 'no-store');
+
+    return c.html(
+      institutionAdminDashboardPage({
+        tenant,
+        userId: session.userId,
+        membershipRole,
+        badgeTemplates,
+        orgUnits,
+        activeApiKeys,
+        revokedApiKeyCount,
+      }),
+    );
+  });
 
   app.get('/v1/tenants/:tenantId/sso/saml', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
