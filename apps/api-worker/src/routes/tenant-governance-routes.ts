@@ -111,6 +111,16 @@ export const registerTenantGovernanceRoutes = (
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
     if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        const loginUrl = new URL('/login', c.req.url);
+        loginUrl.searchParams.set('tenantId', pathParams.tenantId);
+        loginUrl.searchParams.set(
+          'next',
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
+        );
+        return c.redirect(`${loginUrl.pathname}${loginUrl.search}`, 302);
+      }
+
       return roleCheck;
     }
 

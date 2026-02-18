@@ -135,6 +135,23 @@ beforeEach(() => {
 });
 
 describe('magic-link auth routes', () => {
+  it('renders login page with magic-link form', async () => {
+    const response = await app.request(
+      '/login?tenantId=sakai&next=%2Ftenants%2Fsakai%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(body).toContain('Sign in with magic link');
+    expect(body).toContain('id="magic-link-login-form"');
+    expect(body).toContain('name="tenantId"');
+    expect(body).toContain('value="sakai"');
+    expect(body).toContain('/v1/auth/magic-link/request');
+  });
+
   it('returns token + url in development mode for magic-link request', async () => {
     const response = await app.request(
       '/v1/auth/magic-link/request',

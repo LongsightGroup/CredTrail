@@ -216,13 +216,14 @@ beforeEach(() => {
 });
 
 describe('GET /tenants/:tenantId/admin', () => {
-  it('returns 401 when no session cookie is present', async () => {
+  it('redirects to login when no session cookie is present', async () => {
     const env = createEnv();
     const response = await app.request('/tenants/tenant_123/admin', undefined, env);
-    const body = await response.json<ErrorResponse>();
 
-    expect(response.status).toBe(401);
-    expect(body.error).toBe('Not authenticated');
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    );
   });
 
   it('returns 403 when membership role is below admin', async () => {
