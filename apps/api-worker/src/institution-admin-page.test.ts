@@ -228,10 +228,13 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Institution Admin');
     expect(body).toContain('Manual Issue Badge');
     expect(body).toContain('Create Tenant API Key');
+    expect(body).toContain('Create Org Unit');
     expect(body).toContain('TypeScript Foundations');
     expect(body).toContain('/showcase/tenant_123?badgeTemplateId=badge_template_001');
     expect(body).toContain('/v1/tenants/tenant_123/assertions/manual-issue');
     expect(body).toContain('/v1/tenants/tenant_123/api-keys');
+    expect(body).toContain('/v1/tenants/tenant_123/org-units');
+    expect(body).toContain('/v1/tenants/tenant_123/api-keys/tak_active/revoke');
     expect(body).toContain('Active API Keys (1)');
     expect(body).toContain('Revoked keys: 1');
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {

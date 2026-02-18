@@ -78,14 +78,28 @@ export const institutionAdminDashboardPage = (input: {
 
   const apiKeyRows =
     input.activeApiKeys.length === 0
-      ? `<tr><td colspan="4" class="ct-admin__empty">No active API keys found.</td></tr>`
+      ? `<tr><td colspan="5" class="ct-admin__empty">No active API keys found.</td></tr>`
       : input.activeApiKeys
           .map((apiKey) => {
+            const revokeApiKeyPath = `/v1/tenants/${encodeURIComponent(
+              input.tenant.id,
+            )}/api-keys/${encodeURIComponent(apiKey.id)}/revoke`;
+
             return `<tr>
               <td>${escapeHtml(apiKey.label)}</td>
               <td>${escapeHtml(apiKey.keyPrefix)}</td>
               <td>${escapeHtml(formatScopesSummary(apiKey.scopesJson))}</td>
               <td>${escapeHtml(apiKey.expiresAt === null ? 'Never' : formatIsoTimestamp(apiKey.expiresAt))}</td>
+              <td>
+                <button
+                  type="button"
+                  class="ct-admin__button ct-admin__button--danger"
+                  data-revoke-api-key-path="${escapeHtml(revokeApiKeyPath)}"
+                  data-api-key-label="${escapeHtml(apiKey.label)}"
+                >
+                  Revoke
+                </button>
+              </td>
             </tr>`;
           })
           .join('\n');
@@ -93,10 +107,19 @@ export const institutionAdminDashboardPage = (input: {
   const tenantAdminPath = `/tenants/${encodeURIComponent(input.tenant.id)}/admin`;
   const manualIssueApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/assertions/manual-issue`;
   const createApiKeyPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/api-keys`;
+  const createOrgUnitPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/org-units`;
   const badgeTemplateCount = String(input.badgeTemplates.length);
   const orgUnitCount = String(input.orgUnits.length);
   const activeApiKeyCount = String(input.activeApiKeys.length);
   const revokedApiKeyCount = String(input.revokedApiKeyCount);
+  const orgUnitParentOptions = input.orgUnits
+    .filter((orgUnit) => orgUnit.isActive)
+    .map((orgUnit) => {
+      return `<option value="${escapeHtml(orgUnit.id)}" data-unit-type="${escapeHtml(
+        orgUnit.unitType,
+      )}">${escapeHtml(`${orgUnit.displayName} (${orgUnit.unitType})`)}</option>`;
+    })
+    .join('\n');
   const templateOptions = input.badgeTemplates
     .map((template, index) => {
       return `<option value="${escapeHtml(template.id)}"${index === 0 ? ' selected' : ''}>${escapeHtml(
@@ -192,10 +215,32 @@ export const institutionAdminDashboardPage = (input: {
         background: linear-gradient(115deg, #00274c 0%, #0a4c8f 78%);
         cursor: pointer;
       }
+      .ct-admin__button {
+        border: none;
+        border-radius: 0.6rem;
+        padding: 0.45rem 0.72rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #f7fbff;
+        background: linear-gradient(115deg, #00274c 0%, #0a4c8f 78%);
+        cursor: pointer;
+      }
+      .ct-admin__button:disabled {
+        opacity: 0.66;
+        cursor: progress;
+      }
+      .ct-admin__button--danger {
+        background: linear-gradient(115deg, #81160b 0%, #b3261a 78%);
+      }
       .ct-admin__status {
         margin: 0;
         font-size: 0.88rem;
         color: #355577;
+      }
+      .ct-admin__hint {
+        margin: 0;
+        font-size: 0.8rem;
+        color: #537194;
       }
       .ct-admin__secret {
         margin: 0;
@@ -302,6 +347,39 @@ export const institutionAdminDashboardPage = (input: {
             <p id="api-key-status" class="ct-admin__status"></p>
             <pre id="api-key-secret" class="ct-admin__secret" hidden></pre>
           </article>
+          <article class="ct-admin__panel">
+            <h2>Create Org Unit</h2>
+            <p>Add college/department/program hierarchy from this page.</p>
+            <p class="ct-admin__hint">Hierarchy: college → institution, department → college, program → department.</p>
+            <form id="org-unit-form" class="ct-admin__form">
+              <label>
+                Unit type
+                <select name="unitType" required>
+                  <option value="college">College</option>
+                  <option value="department">Department</option>
+                  <option value="program">Program</option>
+                  <option value="institution">Institution</option>
+                </select>
+              </label>
+              <label>
+                Slug
+                <input name="slug" type="text" required placeholder="engineering-college" />
+              </label>
+              <label>
+                Display name
+                <input name="displayName" type="text" required placeholder="College of Engineering" />
+              </label>
+              <label>
+                Parent org unit
+                <select name="parentOrgUnitId">
+                  <option value="">None</option>
+                  ${orgUnitParentOptions}
+                </select>
+              </label>
+              <button type="submit">Create org unit</button>
+            </form>
+            <p id="org-unit-status" class="ct-admin__status"></p>
+          </article>
         </div>
         <div class="ct-admin__grid">
           <article class="ct-admin__panel">
@@ -352,6 +430,7 @@ export const institutionAdminDashboardPage = (input: {
                     <th>Prefix</th>
                     <th>Scopes</th>
                     <th>Expires</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -359,146 +438,320 @@ export const institutionAdminDashboardPage = (input: {
                 </tbody>
               </table>
             </div>
+            <p id="api-key-revoke-status" class="ct-admin__status"></p>
           </article>
         </div>
       </section>
       <script>
         (() => {
-          const tenantId = ${JSON.stringify(input.tenant.id)};
           const tenantAdminPath = ${JSON.stringify(tenantAdminPath)};
           const manualIssueApiPath = ${JSON.stringify(manualIssueApiPath)};
           const createApiKeyPath = ${JSON.stringify(createApiKeyPath)};
+          const createOrgUnitPath = ${JSON.stringify(createOrgUnitPath)};
           const manualIssueForm = document.getElementById('manual-issue-form');
           const manualIssueStatus = document.getElementById('manual-issue-status');
           const apiKeyForm = document.getElementById('api-key-form');
           const apiKeyStatus = document.getElementById('api-key-status');
           const apiKeySecret = document.getElementById('api-key-secret');
-
-          if (!(manualIssueForm instanceof HTMLFormElement) || !(manualIssueStatus instanceof HTMLElement)) {
-            return;
-          }
-
-          if (!(apiKeyForm instanceof HTMLFormElement) || !(apiKeyStatus instanceof HTMLElement) || !(apiKeySecret instanceof HTMLElement)) {
-            return;
-          }
+          const orgUnitForm = document.getElementById('org-unit-form');
+          const orgUnitStatus = document.getElementById('org-unit-status');
+          const apiKeyRevokeStatus = document.getElementById('api-key-revoke-status');
 
           const setStatus = (el, text, isError) => {
             el.textContent = text;
             el.style.color = isError ? '#8b1f12' : '#235079';
           };
 
-          manualIssueForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            setStatus(manualIssueStatus, 'Issuing badge...', false);
-            const data = new FormData(manualIssueForm);
-            const recipientIdentityRaw = data.get('recipientIdentity');
-            const badgeTemplateIdRaw = data.get('badgeTemplateId');
-            const recipientIdentity =
-              typeof recipientIdentityRaw === 'string' ? recipientIdentityRaw.trim().toLowerCase() : '';
-            const badgeTemplateId = typeof badgeTemplateIdRaw === 'string' ? badgeTemplateIdRaw.trim() : '';
+          if (manualIssueForm instanceof HTMLFormElement && manualIssueStatus instanceof HTMLElement) {
+            manualIssueForm.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              setStatus(manualIssueStatus, 'Issuing badge...', false);
+              const data = new FormData(manualIssueForm);
+              const recipientIdentityRaw = data.get('recipientIdentity');
+              const badgeTemplateIdRaw = data.get('badgeTemplateId');
+              const recipientIdentity =
+                typeof recipientIdentityRaw === 'string' ? recipientIdentityRaw.trim().toLowerCase() : '';
+              const badgeTemplateId =
+                typeof badgeTemplateIdRaw === 'string' ? badgeTemplateIdRaw.trim() : '';
 
-            if (recipientIdentity.length === 0 || badgeTemplateId.length === 0) {
-              setStatus(manualIssueStatus, 'Recipient email and badge template are required.', true);
-              return;
-            }
-
-            try {
-              const response = await fetch(manualIssueApiPath, {
-                method: 'POST',
-                headers: {
-                  'content-type': 'application/json',
-                },
-                body: JSON.stringify({
-                  badgeTemplateId,
-                  recipientIdentity,
-                  recipientIdentityType: 'email',
-                  recipientIdentifiers: [
-                    {
-                      identifierType: 'emailAddress',
-                      identifier: recipientIdentity,
-                    },
-                  ],
-                }),
-              });
-
-              const payload = await response.json();
-
-              if (!response.ok) {
-                const detail = payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
-                setStatus(manualIssueStatus, detail, true);
+              if (recipientIdentity.length === 0 || badgeTemplateId.length === 0) {
+                setStatus(manualIssueStatus, 'Recipient email and badge template are required.', true);
                 return;
               }
 
-              const assertionId =
-                payload && typeof payload.assertionId === 'string' ? payload.assertionId : null;
-              const link = assertionId === null ? '' : ' Open /badges/' + assertionId + ' (redirects to canonical URL).';
-              setStatus(manualIssueStatus, 'Badge issued for ' + recipientIdentity + '.' + link, false);
-              setTimeout(() => {
-                window.location.assign(tenantAdminPath);
-              }, 900);
-            } catch {
-              setStatus(manualIssueStatus, 'Unable to issue badge from this browser session.', true);
-            }
-          });
+              try {
+                const response = await fetch(manualIssueApiPath, {
+                  method: 'POST',
+                  headers: {
+                    'content-type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    badgeTemplateId,
+                    recipientIdentity,
+                    recipientIdentityType: 'email',
+                    recipientIdentifiers: [
+                      {
+                        identifierType: 'emailAddress',
+                        identifier: recipientIdentity,
+                      },
+                    ],
+                  }),
+                });
 
-          apiKeyForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            setStatus(apiKeyStatus, 'Creating API key...', false);
-            apiKeySecret.hidden = true;
-            apiKeySecret.textContent = '';
+                const payload = await response.json();
 
-            const data = new FormData(apiKeyForm);
-            const labelRaw = data.get('label');
-            const scopesRaw = data.get('scopes');
-            const label = typeof labelRaw === 'string' ? labelRaw.trim() : '';
-            const scopeList =
-              typeof scopesRaw !== 'string'
-                ? []
-                : scopesRaw
-                    .split(',')
-                    .map((entry) => entry.trim())
-                    .filter((entry) => entry.length > 0);
+                if (!response.ok) {
+                  const detail =
+                    payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
+                  setStatus(manualIssueStatus, detail, true);
+                  return;
+                }
 
-            if (label.length === 0) {
-              setStatus(apiKeyStatus, 'Label is required.', true);
-              return;
-            }
+                const assertionId =
+                  payload && typeof payload.assertionId === 'string' ? payload.assertionId : null;
+                const link =
+                  assertionId === null
+                    ? ''
+                    : ' Open /badges/' + assertionId + ' (redirects to canonical URL).';
+                setStatus(manualIssueStatus, 'Badge issued for ' + recipientIdentity + '.' + link, false);
+                setTimeout(() => {
+                  window.location.assign(tenantAdminPath);
+                }, 900);
+              } catch {
+                setStatus(manualIssueStatus, 'Unable to issue badge from this browser session.', true);
+              }
+            });
+          }
 
-            try {
-              const response = await fetch(createApiKeyPath, {
-                method: 'POST',
-                headers: {
-                  'content-type': 'application/json',
-                },
-                body: JSON.stringify({
-                  label,
-                  scopes: scopeList,
-                }),
-              });
-              const payload = await response.json();
+          if (
+            apiKeyForm instanceof HTMLFormElement &&
+            apiKeyStatus instanceof HTMLElement &&
+            apiKeySecret instanceof HTMLElement
+          ) {
+            apiKeyForm.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              setStatus(apiKeyStatus, 'Creating API key...', false);
+              apiKeySecret.hidden = true;
+              apiKeySecret.textContent = '';
 
-              if (!response.ok) {
-                const detail = payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
-                setStatus(apiKeyStatus, detail, true);
+              const data = new FormData(apiKeyForm);
+              const labelRaw = data.get('label');
+              const scopesRaw = data.get('scopes');
+              const label = typeof labelRaw === 'string' ? labelRaw.trim() : '';
+              const scopeList =
+                typeof scopesRaw !== 'string'
+                  ? []
+                  : scopesRaw
+                      .split(',')
+                      .map((entry) => entry.trim())
+                      .filter((entry) => entry.length > 0);
+
+              if (label.length === 0) {
+                setStatus(apiKeyStatus, 'Label is required.', true);
                 return;
               }
 
-              const apiKey = payload && typeof payload.apiKey === 'string' ? payload.apiKey : null;
+              try {
+                const response = await fetch(createApiKeyPath, {
+                  method: 'POST',
+                  headers: {
+                    'content-type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    label,
+                    scopes: scopeList,
+                  }),
+                });
+                const payload = await response.json();
 
-              if (apiKey !== null) {
-                apiKeySecret.hidden = false;
-                apiKeySecret.textContent =
-                  'Store this now. It is shown once:\\n\\n' + apiKey;
+                if (!response.ok) {
+                  const detail =
+                    payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
+                  setStatus(apiKeyStatus, detail, true);
+                  return;
+                }
+
+                const apiKey = payload && typeof payload.apiKey === 'string' ? payload.apiKey : null;
+
+                if (apiKey !== null) {
+                  apiKeySecret.hidden = false;
+                  apiKeySecret.textContent = 'Store this now. It is shown once:\\n\\n' + apiKey;
+                }
+
+                setStatus(apiKeyStatus, 'API key created.', false);
+                setTimeout(() => {
+                  window.location.assign(tenantAdminPath);
+                }, 900);
+              } catch {
+                setStatus(apiKeyStatus, 'Unable to create API key from this browser session.', true);
+              }
+            });
+          }
+
+          if (orgUnitForm instanceof HTMLFormElement && orgUnitStatus instanceof HTMLElement) {
+            const unitTypeInput = orgUnitForm.elements.namedItem('unitType');
+            const parentOrgUnitInput = orgUnitForm.elements.namedItem('parentOrgUnitId');
+            const requiredParentTypeByUnitType = {
+              institution: null,
+              college: 'institution',
+              department: 'college',
+              program: 'department',
+            };
+
+            const syncParentOptions = () => {
+              if (!(unitTypeInput instanceof HTMLSelectElement)) {
+                return;
               }
 
-              setStatus(apiKeyStatus, 'API key created.', false);
-              setTimeout(() => {
-                window.location.assign(tenantAdminPath);
-              }, 900);
-            } catch {
-              setStatus(apiKeyStatus, 'Unable to create API key from this browser session.', true);
+              if (!(parentOrgUnitInput instanceof HTMLSelectElement)) {
+                return;
+              }
+
+              const unitType = unitTypeInput.value;
+              const requiredParentType = requiredParentTypeByUnitType[unitType];
+
+              Array.from(parentOrgUnitInput.options).forEach((option) => {
+                if (option.value.length === 0) {
+                  option.hidden = false;
+                  option.disabled = false;
+                  option.textContent = requiredParentType === null ? 'None' : 'Select parent';
+                  return;
+                }
+
+                const parentType = option.dataset.unitType ?? null;
+                const matches = requiredParentType === null || parentType === requiredParentType;
+                option.hidden = !matches;
+                option.disabled = !matches;
+              });
+
+              const selected = parentOrgUnitInput.selectedOptions.item(0);
+
+              if (selected !== null && selected.value.length > 0 && (selected.hidden || selected.disabled)) {
+                parentOrgUnitInput.value = '';
+              }
+            };
+
+            syncParentOptions();
+
+            if (unitTypeInput instanceof HTMLSelectElement) {
+              unitTypeInput.addEventListener('change', syncParentOptions);
             }
-          });
+
+            orgUnitForm.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              setStatus(orgUnitStatus, 'Creating org unit...', false);
+              const data = new FormData(orgUnitForm);
+              const unitTypeRaw = data.get('unitType');
+              const slugRaw = data.get('slug');
+              const displayNameRaw = data.get('displayName');
+              const parentOrgUnitIdRaw = data.get('parentOrgUnitId');
+              const unitType = typeof unitTypeRaw === 'string' ? unitTypeRaw.trim() : '';
+              const slug = typeof slugRaw === 'string' ? slugRaw.trim() : '';
+              const displayName = typeof displayNameRaw === 'string' ? displayNameRaw.trim() : '';
+              const parentOrgUnitId =
+                typeof parentOrgUnitIdRaw === 'string' ? parentOrgUnitIdRaw.trim() : '';
+
+              if (unitType.length === 0 || slug.length === 0 || displayName.length === 0) {
+                setStatus(orgUnitStatus, 'Unit type, slug, and display name are required.', true);
+                return;
+              }
+
+              const requiredParentType = requiredParentTypeByUnitType[unitType] ?? null;
+
+              if (requiredParentType !== null && parentOrgUnitId.length === 0) {
+                setStatus(orgUnitStatus, 'Selected unit type requires a parent org unit.', true);
+                return;
+              }
+
+              try {
+                const response = await fetch(createOrgUnitPath, {
+                  method: 'POST',
+                  headers: {
+                    'content-type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    unitType,
+                    slug,
+                    displayName,
+                    ...(parentOrgUnitId.length > 0 ? { parentOrgUnitId } : {}),
+                  }),
+                });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                  const detail =
+                    payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
+                  setStatus(orgUnitStatus, detail, true);
+                  return;
+                }
+
+                setStatus(orgUnitStatus, 'Org unit created.', false);
+                setTimeout(() => {
+                  window.location.assign(tenantAdminPath);
+                }, 900);
+              } catch {
+                setStatus(orgUnitStatus, 'Unable to create org unit from this browser session.', true);
+              }
+            });
+          }
+
+          if (apiKeyRevokeStatus instanceof HTMLElement) {
+            document
+              .querySelectorAll('button[data-revoke-api-key-path]')
+              .forEach((candidate) => {
+                if (!(candidate instanceof HTMLButtonElement)) {
+                  return;
+                }
+
+                candidate.addEventListener('click', async () => {
+                  const revokePath = candidate.dataset.revokeApiKeyPath;
+                  const label = candidate.dataset.apiKeyLabel ?? 'API key';
+
+                  if (typeof revokePath !== 'string' || revokePath.length === 0) {
+                    setStatus(apiKeyRevokeStatus, 'Missing revoke path for selected key.', true);
+                    return;
+                  }
+
+                  if (!window.confirm('Revoke key "' + label + '"? This action cannot be undone.')) {
+                    return;
+                  }
+
+                  candidate.disabled = true;
+                  setStatus(apiKeyRevokeStatus, 'Revoking API key...', false);
+
+                  try {
+                    const response = await fetch(revokePath, {
+                      method: 'POST',
+                      headers: {
+                        'content-type': 'application/json',
+                      },
+                      body: JSON.stringify({}),
+                    });
+                    const payload = await response.json();
+
+                    if (!response.ok) {
+                      const detail =
+                        payload && typeof payload.error === 'string' ? payload.error : 'Request failed';
+                      setStatus(apiKeyRevokeStatus, detail, true);
+                      candidate.disabled = false;
+                      return;
+                    }
+
+                    setStatus(apiKeyRevokeStatus, 'API key revoked.', false);
+                    setTimeout(() => {
+                      window.location.assign(tenantAdminPath);
+                    }, 700);
+                  } catch {
+                    setStatus(
+                      apiKeyRevokeStatus,
+                      'Unable to revoke API key from this browser session.',
+                      true,
+                    );
+                    candidate.disabled = false;
+                  }
+                });
+              });
+          }
         })();
       </script>
     </section>`,
