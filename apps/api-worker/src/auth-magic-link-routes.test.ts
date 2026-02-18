@@ -145,7 +145,7 @@ describe('magic-link auth routes', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
-    expect(body).toContain('Sign in with magic link');
+    expect(body).toContain('Sign in to your CredTrail tenant');
     expect(body).toContain('id="magic-link-login-form"');
     expect(body).toContain('name="tenantId"');
     expect(body).toContain('value="sakai"');
