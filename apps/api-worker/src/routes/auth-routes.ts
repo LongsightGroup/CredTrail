@@ -285,7 +285,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
                 </label>
                 <label class="ct-login__field">
                   <span>Email</span>
-                  <input name="email" type="email" required placeholder="you@umich.edu" />
+                  <input name="email" type="email" required placeholder="name@institution.edu" />
                 </label>
                 <input name="next" type="hidden" value="${escapeHtml(nextPath)}" />
                 <button type="submit" class="ct-login__submit">Send magic link</button>
