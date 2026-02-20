@@ -10,6 +10,7 @@ vi.mock('@credtrail/db', async () => {
     ensureTenantMembership: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findUserById: vi.fn(),
+    listBadgeTemplates: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
     upsertTenantMembershipRole: vi.fn(),
@@ -28,6 +29,7 @@ import {
   createSession,
   ensureTenantMembership,
   findLearnerProfileByIdentity,
+  listBadgeTemplates,
   listLtiIssuerRegistrations,
   resolveLearnerProfileForIdentity,
   upsertTenantMembershipRole,
@@ -50,6 +52,7 @@ const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedCreateSession = vi.mocked(createSession);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
+const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
 const mockedUpsertTenantMembershipRole = vi.mocked(upsertTenantMembershipRole);
@@ -138,6 +141,42 @@ const sampleSession = (overrides?: { tenantId?: string; userId?: string }): Sess
   };
 };
 
+const sampleBadgeTemplate = (overrides?: {
+  id?: string;
+  title?: string;
+  description?: string | null;
+}): {
+  id: string;
+  tenantId: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  criteriaUri: string | null;
+  imageUri: string | null;
+  createdByUserId: string | null;
+  ownerOrgUnitId: string;
+  governanceMetadataJson: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+} => {
+  return {
+    id: overrides?.id ?? 'badge_template_001',
+    tenantId: 'tenant_123',
+    slug: 'typescript-foundations',
+    title: overrides?.title ?? 'TypeScript Foundations',
+    description: overrides?.description ?? 'Awarded for completing TypeScript fundamentals.',
+    criteriaUri: 'https://example.edu/criteria',
+    imageUri: 'https://example.edu/image.png',
+    createdByUserId: 'usr_123',
+    ownerOrgUnitId: 'tenant_123:org:institution',
+    governanceMetadataJson: null,
+    isArchived: false,
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+  };
+};
+
 const bytesToBase64UrlForTest = (bytes: Uint8Array): string => {
   let raw = '';
 
@@ -161,6 +200,14 @@ const compactJwsForTest = (input: {
   return `${headerSegment}.${payloadSegment}.signature`;
 };
 
+const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unknown> => {
+  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const decoded = atob(padded);
+
+  return JSON.parse(decoded) as Record<string, unknown>;
+};
+
 describe('LTI 1.3 core launch flow', () => {
   const issuer = 'https://canvas.example.edu';
   const authorizationEndpoint = 'https://canvas.example.edu/api/lti/authorize_redirect';
@@ -175,6 +222,8 @@ describe('LTI 1.3 core launch flow', () => {
     mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
     mockedListLtiIssuerRegistrations.mockReset();
     mockedListLtiIssuerRegistrations.mockResolvedValue([]);
+    mockedListBadgeTemplates.mockReset();
+    mockedListBadgeTemplates.mockResolvedValue([sampleBadgeTemplate()]);
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockReset();
@@ -385,7 +434,6 @@ describe('LTI 1.3 core launch flow', () => {
       env,
     );
     const body = await response.text();
-
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
@@ -491,6 +539,151 @@ describe('LTI 1.3 core launch flow', () => {
       }),
     );
     expect(mockedUpsertTenantMembershipRole).not.toHaveBeenCalled();
+  });
+
+  it('accepts instructor deep linking launch and renders badge template placement forms', async () => {
+    const env = createLtiEnv();
+    const deepLinkReturnUrl = 'https://canvas.example.edu/api/lti/deep_link_return';
+    const loginResponse = await app.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        'opaque-login-hint',
+      )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+        deploymentId,
+      )}`,
+      undefined,
+      env,
+    );
+    const loginLocation = loginResponse.headers.get('location');
+    const loginUrl = new URL(loginLocation ?? '');
+    const state = loginUrl.searchParams.get('state') ?? '';
+    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: 'RS256',
+        typ: 'JWT',
+      },
+      payload: {
+        iss: issuer,
+        sub: 'user-999',
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiDeepLinkingRequest',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
+        'https://purl.imsglobal.org/spec/lti/claim/roles': [
+          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        ],
+        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+          deep_link_return_url: deepLinkReturnUrl,
+          accept_types: ['ltiResourceLink'],
+          data: 'opaque-deep-link-state',
+        },
+      },
+    });
+
+    const response = await app.request(
+      '/v1/lti/launch',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state,
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
+    expect(body).toContain('Select badge template placement');
+    expect(body).toContain(deepLinkReturnUrl);
+    expect(body).toContain('name="JWT"');
+    expect(body).toContain('TypeScript Foundations');
+    expect(body).toContain('badgeTemplateId=badge_template_001');
+    const jwtMatch = /name="JWT" value="([^"]+)"/.exec(body);
+    expect(jwtMatch).not.toBeNull();
+    const jwtValue = jwtMatch?.[1] ?? '';
+    const jwtSegments = jwtValue.split('.');
+    expect(jwtSegments).toHaveLength(3);
+    const header = parseBase64UrlJsonSegmentForTest(jwtSegments[0] ?? '');
+    const payload = parseBase64UrlJsonSegmentForTest(jwtSegments[1] ?? '');
+    expect(header.alg).toBe('none');
+    expect(payload['https://purl.imsglobal.org/spec/lti/claim/message_type']).toBe(
+      'LtiDeepLinkingResponse',
+    );
+    expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
+      tenantId,
+      includeArchived: false,
+    });
+  });
+
+  it('rejects deep linking launch for learner role', async () => {
+    const env = createLtiEnv();
+    const loginResponse = await app.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        'opaque-login-hint',
+      )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
+      undefined,
+      env,
+    );
+    const loginLocation = loginResponse.headers.get('location');
+    const loginUrl = new URL(loginLocation ?? '');
+    const state = loginUrl.searchParams.get('state') ?? '';
+    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: 'RS256',
+      },
+      payload: {
+        iss: issuer,
+        sub: 'user-learner-deep-link',
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiDeepLinkingRequest',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
+        'https://purl.imsglobal.org/spec/lti/claim/roles': [
+          'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+        ],
+        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+          deep_link_return_url: 'https://canvas.example.edu/api/lti/deep_link_return',
+          accept_types: ['ltiResourceLink'],
+        },
+      },
+    });
+
+    const response = await app.request(
+      '/v1/lti/launch',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state,
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain('requires instructor role');
+    expect(mockedListBadgeTemplates).not.toHaveBeenCalled();
   });
 
   it('rejects launch when unsigned-id-token mode is disabled for issuer config', async () => {

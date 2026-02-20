@@ -8,6 +8,11 @@ export const LTI_CLAIM_ROLES = 'https://purl.imsglobal.org/spec/lti/claim/roles'
 export const LTI_CLAIM_RESOURCE_LINK = 'https://purl.imsglobal.org/spec/lti/claim/resource_link';
 export const LTI_CLAIM_CONTEXT = 'https://purl.imsglobal.org/spec/lti/claim/context';
 export const LTI_CLAIM_LIS = 'https://purl.imsglobal.org/spec/lti/claim/lis';
+export const LTI_CLAIM_DEEP_LINKING_SETTINGS =
+  'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings';
+export const LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS =
+  'https://purl.imsglobal.org/spec/lti-dl/claim/content_items';
+export const LTI_CLAIM_DEEP_LINKING_DATA = 'https://purl.imsglobal.org/spec/lti-dl/claim/data';
 
 export const LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST = 'LtiResourceLinkRequest';
 export const LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST = 'LtiDeepLinkingRequest';

@@ -3,17 +3,24 @@ import {
   addLearnerIdentityAlias,
   ensureTenantMembership,
   findLearnerProfileByIdentity,
+  listBadgeTemplates,
   resolveLearnerProfileForIdentity,
   upsertUserByEmail,
   type SqlDatabase,
   type TenantMembershipRole,
 } from '@credtrail/db';
 import {
+  LTI_CLAIM_VERSION,
+  LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS,
+  LTI_CLAIM_DEEP_LINKING_DATA,
+  LTI_CLAIM_DEEP_LINKING_SETTINGS,
   LTI_CLAIM_DEPLOYMENT_ID,
   LTI_CLAIM_MESSAGE_TYPE,
   LTI_CLAIM_RESOURCE_LINK,
   LTI_CLAIM_TARGET_LINK_URI,
+  LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST,
   LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST,
+  LTI_VERSION_1P3P0,
   parseLtiLaunchClaims,
   parseLtiOidcLoginInitiationRequest,
   resolveLtiRoleKind,
@@ -49,9 +56,9 @@ import {
   type LtiStatePayload,
   type LtiStateValidationResult,
 } from '../lti/lti-helpers';
-import { ltiLaunchResultPage } from '../lti/pages';
+import { ltiDeepLinkSelectionPage, ltiLaunchResultPage } from '../lti/pages';
 import { parseCompactJwsHeaderObject, parseCompactJwsPayloadObject } from '../ob3/oauth-utils';
-import { asNonEmptyString } from '../utils/value-parsers';
+import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
 
 interface RegisterLtiRoutesInput {
   app: Hono<AppEnv>;
@@ -95,6 +102,101 @@ interface RegisterLtiRoutesInput {
   SESSION_TTL_SECONDS: number;
   SESSION_COOKIE_NAME: string;
 }
+
+interface LtiDeepLinkingSettings {
+  deepLinkReturnUrl: string;
+  data?: string;
+  acceptTypes?: string[];
+}
+
+const base64UrlEncodeBytes = (bytes: Uint8Array): string => {
+  let raw = '';
+
+  for (const byte of bytes) {
+    raw += String.fromCharCode(byte);
+  }
+
+  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
+
+const base64UrlEncodeJson = (value: Record<string, unknown>): string => {
+  return base64UrlEncodeBytes(new TextEncoder().encode(JSON.stringify(value)));
+};
+
+const unsignedCompactJwt = (payload: Record<string, unknown>): string => {
+  const header = base64UrlEncodeJson({
+    alg: 'none',
+    typ: 'JWT',
+  });
+  const encodedPayload = base64UrlEncodeJson(payload);
+
+  return `${header}.${encodedPayload}.`;
+};
+
+const parseDeepLinkingSettings = (claimValue: unknown): LtiDeepLinkingSettings | null => {
+  const settings = asJsonObject(claimValue);
+
+  if (settings === null) {
+    return null;
+  }
+
+  const deepLinkReturnUrl = asNonEmptyString(settings.deep_link_return_url);
+
+  if (deepLinkReturnUrl === null) {
+    return null;
+  }
+
+  let parsedDeepLinkReturnUrl: URL;
+
+  try {
+    parsedDeepLinkReturnUrl = new URL(deepLinkReturnUrl);
+  } catch {
+    return null;
+  }
+
+  if (
+    parsedDeepLinkReturnUrl.protocol !== 'https:' &&
+    parsedDeepLinkReturnUrl.protocol !== 'http:'
+  ) {
+    return null;
+  }
+
+  let data: string | undefined;
+
+  if (settings.data !== undefined) {
+    const parsedData = asNonEmptyString(settings.data);
+
+    if (parsedData === null) {
+      return null;
+    }
+
+    data = parsedData;
+  }
+
+  let acceptTypes: string[] | undefined;
+
+  if (settings.accept_types !== undefined) {
+    if (!Array.isArray(settings.accept_types)) {
+      return null;
+    }
+
+    const normalizedAcceptTypes = settings.accept_types
+      .map((entry) => asNonEmptyString(entry))
+      .filter((entry): entry is string => entry !== null);
+
+    if (normalizedAcceptTypes.length !== settings.accept_types.length) {
+      return null;
+    }
+
+    acceptTypes = normalizedAcceptTypes;
+  }
+
+  return {
+    deepLinkReturnUrl: parsedDeepLinkReturnUrl.toString(),
+    ...(data === undefined ? {} : { data }),
+    ...(acceptTypes === undefined ? {} : { acceptTypes }),
+  };
+};
 
 export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
   const {
@@ -399,15 +501,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       );
     }
 
-    if (launchClaims[LTI_CLAIM_MESSAGE_TYPE] !== LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST) {
-      return c.json(
-        {
-          error: `Unsupported LTI message_type: ${launchClaims[LTI_CLAIM_MESSAGE_TYPE]}`,
-        },
-        400,
-      );
-    }
-
+    const messageType = launchClaims[LTI_CLAIM_MESSAGE_TYPE];
     const targetLinkUriClaim = launchClaims[LTI_CLAIM_TARGET_LINK_URI];
     const normalizedStateTargetLinkUri = normalizeAbsoluteUrlForComparison(
       validatedState.payload.targetLinkUri,
@@ -428,18 +522,61 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       );
     }
 
-    const resourceLinkClaim = launchClaims[LTI_CLAIM_RESOURCE_LINK];
+    const resolvedTargetLinkUri = targetLinkUriClaim ?? validatedState.payload.targetLinkUri;
+    const roleKind = resolveLtiRoleKind(launchClaims);
+    let deepLinkingSettings: LtiDeepLinkingSettings | null = null;
 
-    if (resourceLinkClaim === undefined || asNonEmptyString(resourceLinkClaim.id) === null) {
+    if (messageType === LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST) {
+      const resourceLinkClaim = launchClaims[LTI_CLAIM_RESOURCE_LINK];
+
+      if (resourceLinkClaim === undefined || asNonEmptyString(resourceLinkClaim.id) === null) {
+        return c.json(
+          {
+            error: 'id_token for LtiResourceLinkRequest must include resource_link.id',
+          },
+          400,
+        );
+      }
+    } else if (messageType === LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST) {
+      if (roleKind !== 'instructor') {
+        return c.json(
+          {
+            error: 'LtiDeepLinkingRequest requires instructor role',
+          },
+          403,
+        );
+      }
+
+      deepLinkingSettings = parseDeepLinkingSettings(launchClaims[LTI_CLAIM_DEEP_LINKING_SETTINGS]);
+
+      if (deepLinkingSettings === null) {
+        return c.json(
+          {
+            error: 'id_token for LtiDeepLinkingRequest must include deep_linking_settings.deep_link_return_url',
+          },
+          400,
+        );
+      }
+
+      if (
+        deepLinkingSettings.acceptTypes !== undefined &&
+        !deepLinkingSettings.acceptTypes.includes('ltiResourceLink')
+      ) {
+        return c.json(
+          {
+            error: 'deep_linking_settings.accept_types must include ltiResourceLink',
+          },
+          400,
+        );
+      }
+    } else {
       return c.json(
         {
-          error: 'id_token for LtiResourceLinkRequest must include resource_link.id',
+          error: `Unsupported LTI message_type: ${messageType}`,
         },
         400,
       );
     }
-
-    const roleKind = resolveLtiRoleKind(launchClaims);
     const db = resolveDatabase(c.env);
     const tenantId = issuerEntry.tenantId;
     const federatedSubject = ltiFederatedSubjectIdentity(launchClaims.iss, launchClaims.sub);
@@ -571,6 +708,68 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     const dashboardPath = ltiLearnerDashboardPath(session.tenantId);
     c.header('Cache-Control', 'no-store');
 
+    if (messageType === LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST && deepLinkingSettings !== null) {
+      const badgeTemplates = await listBadgeTemplates(db, {
+        tenantId,
+        includeArchived: false,
+      });
+      const responseTokenIssuedAtEpoch = Math.floor(Date.parse(nowIso) / 1000);
+      const deepLinkOptions = badgeTemplates.map((badgeTemplate) => {
+        const launchUrl = new URL(resolvedTargetLinkUri);
+        launchUrl.searchParams.set('badgeTemplateId', badgeTemplate.id);
+        const responsePayload: Record<string, unknown> = {
+          iss: new URL(c.req.url).origin,
+          aud: validatedState.payload.clientId,
+          iat: responseTokenIssuedAtEpoch,
+          exp: responseTokenIssuedAtEpoch + 300,
+          nonce: validatedState.payload.nonce,
+          [LTI_CLAIM_DEPLOYMENT_ID]: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
+          [LTI_CLAIM_MESSAGE_TYPE]: 'LtiDeepLinkingResponse',
+          [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
+          [LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS]: [
+            {
+              type: 'ltiResourceLink',
+              title: badgeTemplate.title,
+              text:
+                badgeTemplate.description ??
+                `CredTrail badge template ${badgeTemplate.title} (${badgeTemplate.id})`,
+              url: launchUrl.toString(),
+              custom: {
+                badgeTemplateId: badgeTemplate.id,
+              },
+            },
+          ],
+          ...(deepLinkingSettings.data === undefined
+            ? {}
+            : {
+                [LTI_CLAIM_DEEP_LINKING_DATA]: deepLinkingSettings.data,
+              }),
+        };
+
+        return {
+          badgeTemplateId: badgeTemplate.id,
+          title: badgeTemplate.title,
+          description: badgeTemplate.description,
+          launchUrl: launchUrl.toString(),
+          deepLinkResponseJwt: unsignedCompactJwt(responsePayload),
+        };
+      });
+
+      return c.html(
+        ltiDeepLinkSelectionPage({
+          tenantId: session.tenantId,
+          userId: session.userId,
+          membershipRole: linkedMembershipRole,
+          issuer: launchClaims.iss,
+          deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
+          deepLinkReturnUrl: deepLinkingSettings.deepLinkReturnUrl,
+          targetLinkUri: resolvedTargetLinkUri,
+          isUnsignedResponseJwt: true,
+          options: deepLinkOptions,
+        }),
+      );
+    }
+
     return c.html(
       ltiLaunchResultPage({
         roleKind,
@@ -581,9 +780,8 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         issuer: launchClaims.iss,
         deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
         subjectId: launchClaims.sub,
-        targetLinkUri:
-          launchClaims[LTI_CLAIM_TARGET_LINK_URI] ?? validatedState.payload.targetLinkUri,
-        messageType: launchClaims[LTI_CLAIM_MESSAGE_TYPE],
+        targetLinkUri: resolvedTargetLinkUri,
+        messageType,
         dashboardPath,
       }),
     );
