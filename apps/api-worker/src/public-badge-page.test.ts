@@ -177,7 +177,13 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/download');
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/download.pdf');
     expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/jsonld');
+    expect(body).toContain('/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
     expect(body).toContain('Download PDF');
+    expect(body).toContain('Download .jsonld VC');
+    expect(body).toContain('OpenID4VCI Offer');
+    expect(body).toContain('Open in Wallet App');
+    expect(body).toContain('openid-credential-offer:');
+    expect(body).toContain('credential_offer_uri=');
     expect(body).toContain('Add to LinkedIn Profile');
     expect(body).toContain('linkedin.com/profile/add');
     expect(body).toContain('startTask=CERTIFICATION_NAME');
@@ -196,7 +202,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('Validate Issuer (IMS)');
     expect(body).toContain('openbadgesvalidator.imsglobal.org/?url=');
     expect(body).toContain('api.qrserver.com/v1/create-qr-code');
-    expect(body).toContain('QR code for this badge URL');
+    expect(body).toContain('QR code for OpenID4VCI credential offer endpoint');
     expect(body).toContain('Open Badges 3.0 JSON');
     expect(body).toContain(
       '<link rel="alternate" type="application/ld+json" href="/credentials/v1/tenant_123%3Aassertion_456/jsonld"',
@@ -296,6 +302,71 @@ describe('GET /badges/:badgeIdentifier', () => {
 
     expect(response.status).toBe(308);
     expect(response.headers.get('location')).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+  });
+
+  it('returns OpenID4VCI credential offer payload for canonical public badge identifier', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      credentialSubject: {
+        achievement: {
+          name: 'TypeScript Foundations',
+        },
+      },
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const response = await app.request(
+      '/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      undefined,
+      env,
+    );
+    const body = await response.json<{
+      credential_issuer: string;
+      credential_configuration_ids: string[];
+      x_credtrail: {
+        public_badge_url: string;
+        verification_url: string;
+        credential_jsonld_url: string;
+        credential_download_url: string;
+      };
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.credential_issuer).toBe('http://localhost');
+    expect(body.credential_configuration_ids).toContain('OpenBadgeCredential');
+    expect(body.x_credtrail.public_badge_url).toBe(
+      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+    );
+    expect(body.x_credtrail.verification_url).toBe(
+      'http://localhost/credentials/v1/tenant_123%3Aassertion_456',
+    );
+    expect(body.x_credtrail.credential_jsonld_url).toBe(
+      'http://localhost/credentials/v1/tenant_123%3Aassertion_456/jsonld',
+    );
+    expect(body.x_credtrail.credential_download_url).toBe(
+      'http://localhost/credentials/v1/tenant_123%3Aassertion_456/download',
+    );
+  });
+
+  it('redirects legacy tenant-scoped offer URL to canonical offer URL', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(null);
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const response = await app.request('/credentials/v1/offers/tenant_123%3Aassertion_456', undefined, env);
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe(
+      '/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+    );
   });
 
   it('renders revoked state for revoked credentials', async () => {

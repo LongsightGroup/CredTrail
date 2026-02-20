@@ -119,6 +119,11 @@ export const createPublicBadgePageRenderers = (
     const credentialDownloadUrl = new URL(credentialDownloadPath, requestUrl).toString();
     const credentialPdfDownloadPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/download.pdf`;
     const credentialPdfDownloadUrl = new URL(credentialPdfDownloadPath, requestUrl).toString();
+    const walletOfferBadgeIdentifier = model.assertion.publicId ?? model.assertion.id;
+    const walletOfferPath = `/credentials/v1/offers/${encodeURIComponent(walletOfferBadgeIdentifier)}`;
+    const walletOfferUrl = new URL(walletOfferPath, requestUrl).toString();
+    const walletDeepLinkUrl = new URL('openid-credential-offer://');
+    walletDeepLinkUrl.searchParams.set('credential_offer_uri', walletOfferUrl);
     const assertionValidationTargetUrl = ob3JsonUrl;
     const badgeClassValidationTargetUrl =
       achievementDetails.badgeClassUri !== null && isWebUrl(achievementDetails.badgeClassUri)
@@ -178,7 +183,7 @@ export const createPublicBadgePageRenderers = (
     qrCodeImageUrl.searchParams.set('size', '220x220');
     qrCodeImageUrl.searchParams.set('format', 'svg');
     qrCodeImageUrl.searchParams.set('margin', '0');
-    qrCodeImageUrl.searchParams.set('data', publicBadgeUrl);
+    qrCodeImageUrl.searchParams.set('data', walletOfferUrl);
     const linkedInAddProfileUrl = linkedInAddToProfileUrl({
       badgeName,
       issuerName,
@@ -597,8 +602,10 @@ export const createPublicBadgePageRenderers = (
               Copy URL
             </button>
             <a class="public-badge__button" href="${escapeHtml(ob3JsonPath)}">Open Badges 3.0 JSON</a>
-            <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download VC</a>
+            <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download .jsonld VC</a>
             <a class="public-badge__button" href="${escapeHtml(credentialPdfDownloadPath)}">Download PDF</a>
+            <a class="public-badge__button" href="${escapeHtml(walletOfferPath)}">OpenID4VCI Offer</a>
+            <a class="public-badge__button" href="${escapeHtml(walletDeepLinkUrl.toString())}">Open in Wallet App</a>
             <a
               class="public-badge__button public-badge__button--accent"
               href="${escapeHtml(linkedInAddProfileUrl)}"
@@ -625,10 +632,12 @@ export const createPublicBadgePageRenderers = (
             <img
               class="public-badge__qr-image"
               src="${escapeHtml(qrCodeImageUrl.toString())}"
-              alt="QR code for this badge URL"
+              alt="QR code for OpenID4VCI credential offer endpoint"
               loading="lazy"
             />
-            <figcaption class="public-badge__qr-caption">Scan to open the public badge URL.</figcaption>
+            <figcaption class="public-badge__qr-caption">
+              Scan to open the OpenID4VCI credential offer endpoint.
+            </figcaption>
           </figure>
         </section>
   
@@ -653,6 +662,8 @@ export const createPublicBadgePageRenderers = (
             <dd><a href="${escapeHtml(ob3JsonPath)}">${escapeHtml(ob3JsonUrl)}</a></dd>
             <dt>Credential download</dt>
             <dd><a href="${escapeHtml(credentialDownloadPath)}">${escapeHtml(credentialDownloadUrl)}</a></dd>
+            <dt>OpenID4VCI offer</dt>
+            <dd><a href="${escapeHtml(walletOfferPath)}">${escapeHtml(walletOfferUrl)}</a></dd>
             <dt>Credential PDF download</dt>
             <dd><a href="${escapeHtml(credentialPdfDownloadPath)}">${escapeHtml(credentialPdfDownloadUrl)}</a></dd>
             <dt>IMS assertion validation</dt>

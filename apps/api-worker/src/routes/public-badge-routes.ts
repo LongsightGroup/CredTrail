@@ -26,6 +26,10 @@ interface RegisterPublicBadgeRoutesInput<PublicBadgeValue> {
   >;
   publicBadgeNotFoundPage: () => string;
   publicBadgePage: (requestUrl: string, value: PublicBadgeValue) => string;
+  walletCredentialOfferPayload: (
+    requestUrl: string,
+    value: PublicBadgeValue,
+  ) => Record<string, unknown>;
   tenantBadgeWallPage: (
     requestUrl: string,
     tenantId: string,
@@ -46,6 +50,7 @@ export const registerPublicBadgeRoutes = <PublicBadgeValue>(
     loadPublicBadgeViewModel,
     publicBadgeNotFoundPage,
     publicBadgePage,
+    walletCredentialOfferPayload,
     tenantBadgeWallPage,
     asNonEmptyString,
     SAKAI_SHOWCASE_TENANT_ID,
@@ -81,6 +86,42 @@ export const registerPublicBadgeRoutes = <PublicBadgeValue>(
     }
 
     return c.html(publicBadgePage(c.req.url, result.value));
+  });
+
+  app.get('/credentials/v1/offers/:badgeIdentifier', async (c) => {
+    const badgeIdentifier = c.req.param('badgeIdentifier');
+    const result = await loadPublicBadgeViewModel(
+      resolveDatabase(c.env),
+      c.env.BADGE_OBJECTS,
+      badgeIdentifier,
+    );
+
+    c.header('Cache-Control', 'no-store');
+
+    if (result.status === 'not_found') {
+      return c.json(
+        {
+          error: 'Badge not found',
+        },
+        404,
+      );
+    }
+
+    if (result.status === 'redirect') {
+      if (result.canonicalPath.startsWith('/badges/')) {
+        const canonicalBadgeIdentifier = result.canonicalPath.slice('/badges/'.length);
+        return c.redirect(`/credentials/v1/offers/${canonicalBadgeIdentifier}`, 308);
+      }
+
+      return c.json(
+        {
+          error: 'Badge not found',
+        },
+        404,
+      );
+    }
+
+    return c.json(walletCredentialOfferPayload(c.req.url, result.value));
   });
 
   app.get('/showcase/:tenantId', async (c) => {

@@ -56,6 +56,7 @@ import {
   loadVerificationViewModel,
   parseTenantScopedCredentialId,
   publicBadgePathForAssertion,
+  type VerificationViewModel,
 } from './badges/public-badge-model';
 import {
   VC_DATA_MODEL_CONTEXT_URL,
@@ -413,6 +414,39 @@ const learnerDashboardPage = createLearnerDashboardPage({
   formatIsoTimestamp,
 });
 
+const walletCredentialOfferPayload = (
+  requestUrl: string,
+  model: VerificationViewModel,
+): Record<string, unknown> => {
+  const assertion = model.assertion;
+  const requestBaseUrl = new URL(requestUrl);
+  const credentialPath = `/credentials/v1/${encodeURIComponent(assertion.id)}`;
+  const publicBadgePath = `/badges/${encodeURIComponent(assertion.publicId ?? assertion.id)}`;
+
+  return {
+    credential_issuer: requestBaseUrl.origin,
+    credential_configuration_ids: ['OpenBadgeCredential'],
+    grants: {
+      'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
+        'pre-authorized_code': `public-badge:${assertion.publicId ?? assertion.id}`,
+        tx_code_required: false,
+      },
+    },
+    credentials: [
+      {
+        format: 'ldp_vc',
+        types: ['VerifiableCredential', 'OpenBadgeCredential'],
+      },
+    ],
+    x_credtrail: {
+      public_badge_url: new URL(publicBadgePath, requestBaseUrl).toString(),
+      verification_url: new URL(credentialPath, requestBaseUrl).toString(),
+      credential_jsonld_url: new URL(`${credentialPath}/jsonld`, requestBaseUrl).toString(),
+      credential_download_url: new URL(`${credentialPath}/download`, requestBaseUrl).toString(),
+    },
+  };
+};
+
 
 registerCommonMiddleware({
   app,
@@ -535,6 +569,7 @@ registerPublicBadgeRoutes({
   loadPublicBadgeViewModel,
   publicBadgeNotFoundPage,
   publicBadgePage,
+  walletCredentialOfferPayload,
   tenantBadgeWallPage,
   asNonEmptyString,
   SAKAI_SHOWCASE_TENANT_ID,
