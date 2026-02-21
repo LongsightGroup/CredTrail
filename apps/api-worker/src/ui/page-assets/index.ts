@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import type { AppEnv } from '../../app';
 import { AUTH_LOGIN_CSS } from './content/auth-login-css';
 import { AUTH_LOGIN_JS } from './content/auth-login-js';
+import { FOUNDATION_CSS } from './content/foundation-css';
 import { INSTITUTION_ADMIN_CSS } from './content/institution-admin-css';
 import { INSTITUTION_ADMIN_JS } from './content/institution-admin-js';
 import { LTI_PAGES_CSS } from './content/lti-pages-css';
@@ -19,6 +20,12 @@ const PAGE_ASSET_BASE_PATH = '/assets/ui';
 const PAGE_ASSET_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 
 const PAGE_ASSET_SOURCES = {
+  foundationCss: {
+    kind: 'style',
+    stem: 'foundation',
+    body: FOUNDATION_CSS,
+    contentType: 'text/css; charset=utf-8',
+  },
   authLoginCss: {
     kind: 'style',
     stem: 'auth-login',

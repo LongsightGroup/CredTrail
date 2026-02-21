@@ -1,14 +1,14 @@
 export const LTI_PAGES_CSS = `
 .lti-launch {
   display: grid;
-  gap: 1rem;
+  gap: var(--ct-space-4);
   max-width: 58rem;
 }
 
 .lti-launch__hero {
-  border: 1px solid rgba(0, 39, 76, 0.16);
-  border-radius: 1rem;
-  padding: 1rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-lg);
+  padding: var(--ct-space-4);
   background:
     radial-gradient(circle at 90% 12%, rgba(255, 203, 5, 0.24), transparent 43%),
     linear-gradient(135deg, rgba(0, 39, 76, 0.95), rgba(12, 83, 158, 0.88));
@@ -26,11 +26,11 @@ export const LTI_PAGES_CSS = `
 }
 
 .lti-launch__card {
-  border: 1px solid rgba(0, 39, 76, 0.14);
-  border-radius: 1rem;
-  padding: 1rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-lg);
+  padding: var(--ct-space-4);
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(247, 251, 255, 0.94));
-  box-shadow: 0 14px 25px rgba(0, 39, 76, 0.12);
+  box-shadow: var(--ct-shadow-soft);
 }
 
 .lti-launch__card--stack {
@@ -41,6 +41,10 @@ export const LTI_PAGES_CSS = `
 .lti-launch__hint {
   margin: 0;
   color: #3f5f83;
+}
+
+.lti-launch__link-row {
+  margin: 0;
 }
 
 .lti-launch__details {
@@ -63,14 +67,14 @@ export const LTI_PAGES_CSS = `
 
 .lti-deep-link {
   display: grid;
-  gap: 1rem;
+  gap: var(--ct-space-4);
   max-width: 64rem;
 }
 
 .lti-deep-link__hero {
-  border: 1px solid rgba(0, 39, 76, 0.16);
-  border-radius: 1rem;
-  padding: 1rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-lg);
+  padding: var(--ct-space-4);
   background:
     radial-gradient(circle at 88% 14%, rgba(255, 203, 5, 0.26), transparent 42%),
     linear-gradient(135deg, rgba(0, 39, 76, 0.95), rgba(12, 83, 158, 0.88));
@@ -104,23 +108,23 @@ export const LTI_PAGES_CSS = `
 }
 
 .lti-deep-link__details-card {
-  border: 1px solid rgba(0, 39, 76, 0.14);
-  border-radius: 0.9rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-md);
   padding: 0.9rem;
   background: rgba(255, 255, 255, 0.94);
 }
 
 .lti-deep-link__options {
   display: grid;
-  gap: 0.85rem;
+  gap: var(--ct-space-3);
 }
 
 .lti-deep-link__option {
-  border: 1px solid rgba(0, 39, 76, 0.14);
-  border-radius: 0.9rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-md);
   padding: 0.9rem;
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(247, 251, 255, 0.94));
-  box-shadow: 0 12px 22px rgba(0, 39, 76, 0.1);
+  box-shadow: var(--ct-shadow-soft);
   display: grid;
   gap: 0.4rem;
 }
@@ -143,11 +147,15 @@ export const LTI_PAGES_CSS = `
 
 .lti-deep-link__form button {
   border: none;
-  border-radius: 0.7rem;
+  border-radius: var(--ct-radius-md);
   padding: 0.5rem 0.9rem;
   font-weight: 700;
   color: #f7fbff;
-  background: linear-gradient(115deg, #00274c 0%, #0a4c8f 78%);
+  background: linear-gradient(
+    115deg,
+    var(--ct-color-primary-900) 0%,
+    var(--ct-color-primary-700) 78%
+  );
   cursor: pointer;
 }
 
@@ -167,7 +175,7 @@ export const LTI_PAGES_CSS = `
 
 .lti-registration {
   display: grid;
-  gap: 1rem;
+  gap: var(--ct-space-4);
   max-width: 64rem;
 }
 

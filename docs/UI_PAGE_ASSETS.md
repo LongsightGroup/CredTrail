@@ -37,6 +37,15 @@ Example pages using this pattern:
 - Institution admin dashboard page
 - LTI launch/deep-link/issuer pages
 
+Shared foundation asset:
+
+- `foundationCss` provides design tokens, Shoelace theme variable mapping, and layout utility classes:
+  - `.ct-stack`
+  - `.ct-cluster`
+  - `.ct-grid`
+  - `.ct-grid--sidebar`
+  - `.ct-card`
+
 ## Inline CSS/JS Policy
 
 Avoid large inline `<style>` and `<script>` blocks.
@@ -51,6 +60,12 @@ Not allowed inline content:
 - Full page stylesheets
 - Large behavior scripts
 - Reused styles/scripts duplicated across routes
+
+Token/layout guidance:
+
+- Prefer semantic page classes for page personality.
+- Prefer foundation tokens/utilities for spacing, radius, elevation, and layout primitives.
+- Avoid introducing Tailwind-like utility sprawl; keep utilities few and predictable.
 
 ## Ownership
 

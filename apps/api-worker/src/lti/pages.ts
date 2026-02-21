@@ -24,7 +24,7 @@ const ltiRoleLabel = (roleKind: LtiRoleKind): string => {
   return 'Unknown role';
 };
 
-const LTI_PAGE_HEAD_TAGS = renderPageAssetTags(['ltiPagesCss']);
+const LTI_PAGE_HEAD_TAGS = renderPageAssetTags(['foundationCss', 'ltiPagesCss']);
 
 export const ltiLaunchResultPage = (input: {
   roleKind: LtiRoleKind;
@@ -70,7 +70,7 @@ export const ltiLaunchResultPage = (input: {
       </article>
       <article class="lti-launch__card lti-launch__card--stack">
         <p class="lti-launch__hint">LTI identity is linked and this browser is now signed into CredTrail.</p>
-        <p style="margin:0;">
+        <p class="lti-launch__link-row">
           <a href="${escapeHtml(input.dashboardPath)}">Open learner dashboard</a>
         </p>
       </article>

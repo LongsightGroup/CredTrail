@@ -273,11 +273,11 @@ export const institutionAdminDashboardPage = (input: {
 
   return renderPageShell(
     `Institution Admin · ${input.tenant.displayName}`,
-    `<section class="ct-admin">
-      <header class="ct-admin__hero">
+    `<section class="ct-admin ct-stack">
+      <header class="ct-admin__hero ct-stack">
         <h1>Institution Admin</h1>
         <p>Browser-first control surface for tenant operations and badge issuance.</p>
-        <div class="ct-admin__meta-grid">
+        <div class="ct-admin__meta-grid ct-cluster">
           <span class="ct-admin__pill">Tenant: ${escapeHtml(input.tenant.id)}</span>
           <span class="ct-admin__pill">Plan: ${escapeHtml(input.tenant.planTier)}</span>
           <span class="ct-admin__pill">Role: ${escapeHtml(input.membershipRole)}</span>
@@ -286,12 +286,12 @@ export const institutionAdminDashboardPage = (input: {
           )}</span>
         </div>
       </header>
-      <section class="ct-admin__layout">
-        <div class="ct-admin__grid">
-          <article class="ct-admin__panel">
+      <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+        <div class="ct-admin__grid ct-stack">
+          <article class="ct-admin__panel ct-stack">
             <h2>Manual Issue Badge</h2>
             <p>Issue a badge now from this page without curl.</p>
-            <form id="manual-issue-form" class="ct-admin__form">
+            <form id="manual-issue-form" class="ct-admin__form ct-stack">
               <label>
                 Badge template
                 <select name="badgeTemplateId" required>
@@ -306,10 +306,10 @@ export const institutionAdminDashboardPage = (input: {
             </form>
             <p id="manual-issue-status" class="ct-admin__status"></p>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-stack">
             <h2>Create Tenant API Key</h2>
             <p>Create a scoped key and reveal the secret once.</p>
-            <form id="api-key-form" class="ct-admin__form">
+            <form id="api-key-form" class="ct-admin__form ct-stack">
               <label>
                 Label
                 <input name="label" type="text" required value="Institution integration key" />
@@ -323,11 +323,11 @@ export const institutionAdminDashboardPage = (input: {
             <p id="api-key-status" class="ct-admin__status"></p>
             <pre id="api-key-secret" class="ct-admin__secret" hidden></pre>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-stack">
             <h2>Create Org Unit</h2>
             <p>Add college/department/program hierarchy from this page.</p>
             <p class="ct-admin__hint">Hierarchy: college → institution, department → college, program → department.</p>
-            <form id="org-unit-form" class="ct-admin__form">
+            <form id="org-unit-form" class="ct-admin__form ct-stack">
               <label>
                 Unit type
                 <select name="unitType" required>
@@ -356,10 +356,10 @@ export const institutionAdminDashboardPage = (input: {
             </form>
             <p id="org-unit-status" class="ct-admin__status"></p>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-stack">
             <h2>Create Badge Rule</h2>
             <p>Create a first draft rule with approval chain metadata.</p>
-            <form id="rule-create-form" class="ct-admin__form">
+            <form id="rule-create-form" class="ct-admin__form ct-stack">
               <label>
                 Rule name
                 <input name="name" type="text" required placeholder="CS101 Excellence Rule" />
@@ -404,10 +404,10 @@ export const institutionAdminDashboardPage = (input: {
             </form>
             <p id="rule-create-status" class="ct-admin__status"></p>
           </article>
-          <article class="ct-admin__panel">
+          <article class="ct-admin__panel ct-stack">
             <h2>Evaluate Rule</h2>
             <p>Run rule evaluation (dry run by default) and optionally issue now.</p>
-            <form id="rule-evaluate-form" class="ct-admin__form">
+            <form id="rule-evaluate-form" class="ct-admin__form ct-stack">
               <label>
                 Rule
                 <select name="ruleId" required>
@@ -430,11 +430,11 @@ export const institutionAdminDashboardPage = (input: {
                 Final score for provided facts
                 <input name="finalScore" type="number" min="0" max="100" step="0.01" required value="92" />
               </label>
-              <label class="ct-admin__checkbox-row">
+              <label class="ct-admin__checkbox-row ct-checkbox-row">
                 <input name="completed" type="checkbox" checked />
                 Learner completed course
               </label>
-              <label class="ct-admin__checkbox-row">
+              <label class="ct-admin__checkbox-row ct-checkbox-row">
                 <input name="dryRun" type="checkbox" checked />
                 Dry run (don’t issue badge)
               </label>
@@ -443,8 +443,8 @@ export const institutionAdminDashboardPage = (input: {
             <p id="rule-evaluate-status" class="ct-admin__status"></p>
           </article>
         </div>
-        <div class="ct-admin__grid">
-          <article class="ct-admin__panel ct-admin__panel--table">
+        <div class="ct-admin__grid ct-stack">
+          <article class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Badge Rules (${ruleCount})</h2>
             <p>Lifecycle actions operate on each rule’s latest version.</p>
             <div class="ct-admin__table-wrap">
@@ -468,7 +468,7 @@ export const institutionAdminDashboardPage = (input: {
             </div>
             <p id="rule-action-status" class="ct-admin__status"></p>
           </article>
-          <article class="ct-admin__panel ct-admin__panel--table">
+          <article class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Badge Templates (${badgeTemplateCount})</h2>
             <div class="ct-admin__table-wrap">
               <table class="ct-admin__table">
@@ -487,7 +487,7 @@ export const institutionAdminDashboardPage = (input: {
               </table>
             </div>
           </article>
-          <article class="ct-admin__panel ct-admin__panel--table">
+          <article class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Org Units (${orgUnitCount})</h2>
             <div class="ct-admin__table-wrap">
               <table class="ct-admin__table">
@@ -505,7 +505,7 @@ export const institutionAdminDashboardPage = (input: {
               </table>
             </div>
           </article>
-          <article class="ct-admin__panel ct-admin__panel--table">
+          <article class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Active API Keys (${activeApiKeyCount})</h2>
             <p>Revoked keys: ${revokedApiKeyCount}</p>
             <div class="ct-admin__table-wrap">
@@ -529,7 +529,7 @@ export const institutionAdminDashboardPage = (input: {
         </div>
       </section>
       <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-      </section>`,
-    renderPageAssetTags(['institutionAdminCss', 'institutionAdminJs']),
+    </section>`,
+    renderPageAssetTags(['foundationCss', 'institutionAdminCss', 'institutionAdminJs']),
   );
 };

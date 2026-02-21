@@ -8,29 +8,29 @@ export const magicLinkLoginPage = (input: {
 }): string => {
   return renderPageShell(
     'Sign In · CredTrail',
-    `<section class="ct-login">
-      <div class="ct-login__card">
-        <aside class="ct-login__hero">
+    `<section class="ct-login ct-stack">
+      <div class="ct-login__card ct-grid">
+        <aside class="ct-login__hero ct-stack">
           <p class="ct-login__eyebrow">Institution Access</p>
           <h1 class="ct-login__title">Sign in to your CredTrail tenant</h1>
           <p class="ct-login__lede">
             We send a one-click secure magic link to your email. No password, no copy/paste token flow.
           </p>
-          <div class="ct-login__chips">
+          <div class="ct-login__chips ct-cluster">
             <span class="ct-login__chip">Magic Link</span>
             <span class="ct-login__chip">Tenant-Scoped</span>
             <span class="ct-login__chip">Session Secured</span>
           </div>
         </aside>
-        <div class="ct-login__form-wrap">
+        <div class="ct-login__form-wrap ct-stack">
           <h2 class="ct-login__form-title">Request sign-in link</h2>
           <p class="ct-login__form-text">Enter your tenant ID and institution email.</p>
-          <form id="magic-link-login-form" class="ct-login__form">
-            <label class="ct-login__field">
+          <form id="magic-link-login-form" class="ct-login__form ct-stack">
+            <label class="ct-login__field ct-stack">
               <span>Tenant ID</span>
               <input name="tenantId" type="text" required value="${escapeHtml(input.tenantId)}" placeholder="sakai" />
             </label>
-            <label class="ct-login__field">
+            <label class="ct-login__field ct-stack">
               <span>Email</span>
               <input name="email" type="email" required placeholder="name@institution.edu" />
             </label>
@@ -42,6 +42,6 @@ export const magicLinkLoginPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['authLoginCss', 'authLoginJs']),
+    renderPageAssetTags(['foundationCss', 'authLoginCss', 'authLoginJs']),
   );
 };

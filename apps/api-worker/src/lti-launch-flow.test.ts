@@ -442,6 +442,7 @@ describe('LTI 1.3 core launch flow', () => {
     expect(body).toContain('issuer');
     expect(body).toContain('LtiResourceLinkRequest');
     expect(body).toContain('/tenants/tenant_123/learner/dashboard');
+    expect(body).toContain('/assets/ui/foundation.');
     expect(body).toContain('/assets/ui/lti-pages.');
     expect(body).not.toContain('.lti-launch__hero {');
     expect(mockedResolveLearnerProfileForIdentity).toHaveBeenCalledWith(fakeDb, {
@@ -611,6 +612,7 @@ describe('LTI 1.3 core launch flow', () => {
     expect(body).toContain('name="JWT"');
     expect(body).toContain('TypeScript Foundations');
     expect(body).toContain('badgeTemplateId=badge_template_001');
+    expect(body).toContain('/assets/ui/foundation.');
     expect(body).toContain('/assets/ui/lti-pages.');
     const jwtMatch = /name="JWT" value="([^"]+)"/.exec(body);
     expect(jwtMatch).not.toBeNull();

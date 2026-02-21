@@ -20,6 +20,7 @@ describe('GET /assets/ui/:assetFilename', () => {
   it('serves registered page assets with immutable caching headers', async () => {
     const env = createEnv();
     const assetKeys: readonly PageAssetKey[] = [
+      'foundationCss',
       'authLoginCss',
       'authLoginJs',
       'institutionAdminCss',

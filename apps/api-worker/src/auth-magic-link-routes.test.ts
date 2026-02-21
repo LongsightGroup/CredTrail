@@ -159,6 +159,7 @@ describe('magic-link auth routes', () => {
     expect(body).toContain('id="magic-link-login-form"');
     expect(body).toContain('name="tenantId"');
     expect(body).toContain('value="sakai"');
+    expect(body).toContain('/assets/ui/foundation.');
     expect(body).not.toContain('.ct-login__hero {');
     expect(stylesheetPath).not.toBeNull();
     expect(scriptPath).not.toBeNull();
