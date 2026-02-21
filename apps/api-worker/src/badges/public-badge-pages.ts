@@ -339,14 +339,51 @@ export const createPublicBadgePageRenderers = (
           display: grid;
           gap: 1.1rem;
         }
+
+        .public-badge__hero-image-frame {
+          position: relative;
+          width: 100%;
+          max-width: 420px;
+        }
+
+        .public-badge__hero-image-frame::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 1rem;
+          border: 1px solid rgba(0, 39, 76, 0.14);
+          box-shadow: 0 16px 30px rgba(0, 39, 76, 0.19);
+          pointer-events: none;
+        }
   
         .public-badge__hero-image {
           display: block;
           width: 100%;
-          max-width: 420px;
-          border: 1px solid rgba(0, 39, 76, 0.14);
           border-radius: 1rem;
-          box-shadow: 0 16px 30px rgba(0, 39, 76, 0.19);
+          aspect-ratio: 21 / 16;
+          object-fit: cover;
+          background: #f4f9ff;
+        }
+
+        .public-badge__hero-image-fallback {
+          position: absolute;
+          inset: 0;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          border-radius: 1rem;
+          background:
+            radial-gradient(circle at 88% 12%, rgba(255, 203, 5, 0.24), transparent 45%),
+            linear-gradient(130deg, #0c3f6f, #0a4c8f 55%, #0f6fb0);
+          color: #f6fbff;
+          font-size: clamp(2rem, 5vw, 3.5rem);
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+        }
+
+        .public-badge__hero-image-frame[data-fallback='true'] .public-badge__hero-image-fallback {
+          display: flex;
         }
   
         .public-badge__hero-meta {
@@ -407,13 +444,35 @@ export const createPublicBadgePageRenderers = (
           color: var(--pb-ink-soft);
         }
   
+        .public-badge__action-group {
+          display: grid;
+          gap: 0.5rem;
+        }
+
+        .public-badge__action-label {
+          margin: 0;
+          font-size: 0.84rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #426388;
+          font-weight: 700;
+        }
+
         .public-badge__actions {
           display: flex;
           flex-wrap: wrap;
           gap: 0.6rem;
           align-items: center;
         }
-  
+
+        .public-badge__actions--primary .public-badge__button {
+          font-weight: 700;
+        }
+
+        .public-badge__actions--secondary {
+          margin-top: 0.55rem;
+        }
+
         .public-badge__button {
           border: 1px solid rgba(0, 39, 76, 0.25);
           border-radius: 0.75rem;
@@ -437,6 +496,10 @@ export const createPublicBadgePageRenderers = (
           background: linear-gradient(115deg, var(--pb-blue) 0%, #0b5aa9 76%);
           color: #f8fbff;
         }
+
+        .public-badge__button--wallet {
+          box-shadow: 0 10px 18px rgba(0, 39, 76, 0.24);
+        }
   
         .public-badge__button--accent {
           border-color: rgba(194, 139, 0, 0.48);
@@ -449,11 +512,24 @@ export const createPublicBadgePageRenderers = (
           color: var(--pb-ink-soft);
           font-size: 0.92rem;
         }
+
+        .public-badge__actions-details {
+          border: 1px dashed rgba(0, 39, 76, 0.18);
+          border-radius: 0.8rem;
+          padding: 0.62rem 0.7rem;
+          background: rgba(241, 248, 255, 0.7);
+        }
+
+        .public-badge__actions-details summary {
+          cursor: pointer;
+          font-weight: 700;
+          color: #123a60;
+        }
   
         .public-badge__validator-links {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.6rem;
+          margin-top: 0.6rem;
+          display: grid;
+          gap: 0.55rem;
         }
   
         .public-badge__validator-note {
@@ -470,8 +546,8 @@ export const createPublicBadgePageRenderers = (
         }
   
         .public-badge__qr-image {
-          width: 11rem;
-          height: 11rem;
+          width: 13rem;
+          height: 13rem;
           border-radius: 0.9rem;
           border: 1px solid rgba(0, 39, 76, 0.16);
           background: #ffffff;
@@ -592,42 +668,60 @@ export const createPublicBadgePageRenderers = (
   
         <section class="public-badge__card public-badge__stack-sm">
           <h2 class="public-badge__section-title">Share and verify</h2>
-          <div class="public-badge__actions">
-            <button
-              id="copy-badge-url-button"
-              class="public-badge__button public-badge__button--primary"
-              type="button"
-              data-copy-value="${escapeHtml(publicBadgeUrl)}"
-            >
-              Copy URL
-            </button>
-            <a class="public-badge__button" href="${escapeHtml(ob3JsonPath)}">Open Badges 3.0 JSON</a>
-            <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download .jsonld VC</a>
-            <a class="public-badge__button" href="${escapeHtml(credentialPdfDownloadPath)}">Download PDF</a>
-            <a class="public-badge__button" href="${escapeHtml(walletOfferPath)}">OpenID4VCI Offer</a>
-            <a class="public-badge__button" href="${escapeHtml(walletDeepLinkUrl.toString())}">Open in Wallet App</a>
-            <a
-              class="public-badge__button public-badge__button--accent"
-              href="${escapeHtml(linkedInAddProfileUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Add to LinkedIn Profile
-            </a>
-            <a
-              class="public-badge__button"
-              href="${escapeHtml(linkedInShareUrl.toString())}"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Share on LinkedIn Feed
-            </a>
+          <div class="public-badge__action-group">
+            <p class="public-badge__action-label">Primary actions</p>
+            <div class="public-badge__actions public-badge__actions--primary">
+              <a
+                class="public-badge__button public-badge__button--primary public-badge__button--wallet"
+                href="${escapeHtml(walletDeepLinkUrl.toString())}"
+              >
+                Open in Wallet App
+              </a>
+              <a class="public-badge__button public-badge__button--primary" href="${escapeHtml(ob3JsonPath)}">
+                Open Badges 3.0 JSON
+              </a>
+              <button
+                id="copy-badge-url-button"
+                class="public-badge__button"
+                type="button"
+                data-copy-value="${escapeHtml(publicBadgeUrl)}"
+              >
+                Copy URL
+              </button>
+            </div>
           </div>
+          <details class="public-badge__actions-details">
+            <summary>More share/download options</summary>
+            <div class="public-badge__actions public-badge__actions--secondary">
+              <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download .jsonld VC</a>
+              <a class="public-badge__button" href="${escapeHtml(credentialPdfDownloadPath)}">Download PDF</a>
+              <a class="public-badge__button" href="${escapeHtml(walletOfferPath)}">OpenID4VCI Offer</a>
+              <a
+                class="public-badge__button public-badge__button--accent"
+                href="${escapeHtml(linkedInAddProfileUrl)}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Add to LinkedIn Profile
+              </a>
+              <a
+                class="public-badge__button"
+                href="${escapeHtml(linkedInShareUrl.toString())}"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Share on LinkedIn Feed
+              </a>
+            </div>
+          </details>
           <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
-          <div class="public-badge__validator-links">${validatorLinks}</div>
-          <p class="public-badge__validator-note">
-            IMS validator expects JSON/image targets. Validate using the Open Badges 3.0 JSON URL, not this HTML page URL.
-          </p>
+          <details class="public-badge__actions-details">
+            <summary>Validate with IMS tools</summary>
+            <div class="public-badge__validator-links">${validatorLinks}</div>
+            <p class="public-badge__validator-note">
+              IMS validator expects JSON/image targets. Validate using the Open Badges 3.0 JSON URL, not this HTML page URL.
+            </p>
+          </details>
           <figure class="public-badge__qr">
             <img
               class="public-badge__qr-image"
@@ -636,7 +730,7 @@ export const createPublicBadgePageRenderers = (
               loading="lazy"
             />
             <figcaption class="public-badge__qr-caption">
-              Scan to open the OpenID4VCI credential offer endpoint.
+              Scan to claim this credential in a compatible wallet.
             </figcaption>
           </figure>
         </section>
@@ -745,20 +839,40 @@ export const createPublicBadgePageRenderers = (
                       alt="${escapeHtml(`${recipientLabel} GitHub avatar`)}"
                       loading="lazy"
                     />`;
+              const badgeInitial = entry.badgeTitle.trim().slice(0, 1).toUpperCase() || 'B';
+              const badgeImageMarkup =
+                entry.badgeImageUri === null
+                  ? `<span class="badge-wall__badge-image badge-wall__badge-image--placeholder" aria-hidden="true">${escapeHtml(
+                      badgeInitial,
+                    )}</span>`
+                  : `<img
+                      class="badge-wall__badge-image"
+                      src="${escapeHtml(entry.badgeImageUri)}"
+                      alt="${escapeHtml(`${entry.badgeTitle} image`)}"
+                      loading="lazy"
+                    />`;
   
               return `<li class="badge-wall__item">
-                <div class="badge-wall__recipient">
-                  ${avatarMarkup}
-                  <div class="badge-wall__stack">
-                    <p class="badge-wall__name">${escapeHtml(recipientLabel)}</p>
-                    <p class="badge-wall__badge-title">${escapeHtml(entry.badgeTitle)}</p>
-                    <p class="badge-wall__meta">${escapeHtml(statusLabel)} · Issued ${escapeHtml(issuedAt)}</p>
-                    ${revokedLine}
+                <div class="badge-wall__summary">
+                  ${badgeImageMarkup}
+                  <div class="badge-wall__recipient">
+                    ${avatarMarkup}
+                    <div class="badge-wall__stack">
+                      <p class="badge-wall__name">${escapeHtml(recipientLabel)}</p>
+                      <p class="badge-wall__badge-title">${escapeHtml(entry.badgeTitle)}</p>
+                      <p class="badge-wall__meta">${escapeHtml(statusLabel)} · Issued ${escapeHtml(issuedAt)}</p>
+                      ${revokedLine}
+                    </div>
                   </div>
                 </div>
-                <p class="badge-wall__url">
-                  <a href="${escapeHtml(badgePath)}">${escapeHtml(badgeUrl)}</a>
-                </p>
+                <div class="badge-wall__actions">
+                  <a class="badge-wall__button badge-wall__button--primary" href="${escapeHtml(badgePath)}">View badge</a>
+                  <button class="badge-wall__button" type="button" data-copy-value="${escapeHtml(
+                    badgeUrl,
+                  )}">Copy link</button>
+                </div>
+                <p class="badge-wall__url" title="${escapeHtml(badgeUrl)}">${escapeHtml(badgeUrl)}</p>
+                <p class="badge-wall__copy-status" aria-live="polite"></p>
               </li>`;
             })
             .join('');
@@ -830,6 +944,35 @@ export const createPublicBadgePageRenderers = (
           gap: 0.75rem;
           align-items: center;
         }
+
+        .badge-wall__summary {
+          display: grid;
+          gap: 0.8rem;
+          grid-template-columns: auto 1fr;
+          align-items: center;
+        }
+
+        .badge-wall__badge-image {
+          width: 3.4rem;
+          height: 3.4rem;
+          border-radius: 0.6rem;
+          border: 1px solid rgba(0, 39, 76, 0.18);
+          object-fit: cover;
+          background: #f4f9ff;
+        }
+
+        .badge-wall__badge-image--placeholder {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #f6fbff;
+          font-weight: 700;
+          font-size: 1.3rem;
+          text-transform: uppercase;
+          background:
+            radial-gradient(circle at 82% 10%, rgba(255, 203, 5, 0.24), transparent 42%),
+            linear-gradient(130deg, #0c3f6f, #0a4c8f 55%, #0f6fb0);
+        }
   
         .badge-wall__avatar {
           width: 2.7rem;
@@ -863,7 +1006,40 @@ export const createPublicBadgePageRenderers = (
   
         .badge-wall__url {
           margin: 0;
+          font-size: 0.83rem;
+          color: #4e6f92;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           overflow-wrap: anywhere;
+        }
+
+        .badge-wall__actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+
+        .badge-wall__button {
+          border: 1px solid rgba(0, 39, 76, 0.22);
+          border-radius: 0.66rem;
+          padding: 0.42rem 0.74rem;
+          font-size: 0.84rem;
+          font-weight: 700;
+          color: #0a3a65;
+          background: linear-gradient(180deg, #ffffff, #eef5ff);
+          cursor: pointer;
+          text-decoration: none;
+        }
+
+        .badge-wall__button--primary {
+          border-color: transparent;
+          color: #f8fbff;
+          background: linear-gradient(115deg, #00274c 0%, #0a4c8f 78%);
+        }
+
+        .badge-wall__copy-status {
+          margin: 0;
+          font-size: 0.82rem;
+          color: #4e6f92;
         }
   
         .badge-wall__empty {
@@ -887,6 +1063,13 @@ export const createPublicBadgePageRenderers = (
             animation: none;
           }
         }
+
+        @media (max-width: 640px) {
+          .badge-wall__summary {
+            grid-template-columns: 1fr;
+            align-items: start;
+          }
+        }
       </style>
       <section class="badge-wall">
         <header class="badge-wall__hero">
@@ -895,6 +1078,33 @@ export const createPublicBadgePageRenderers = (
           <p class="badge-wall__count">${escapeHtml(String(entries.length))} issued badges</p>
         </header>
         ${listMarkup}
+        <script>
+          (() => {
+            const copyButtons = document.querySelectorAll('.badge-wall__button[data-copy-value]');
+
+            for (const button of copyButtons) {
+              if (!(button instanceof HTMLButtonElement)) {
+                continue;
+              }
+
+              const copyValue = button.dataset.copyValue;
+              const status = button.closest('.badge-wall__item')?.querySelector('.badge-wall__copy-status');
+
+              if (typeof copyValue !== 'string' || copyValue.length === 0 || !(status instanceof HTMLElement)) {
+                continue;
+              }
+
+              button.addEventListener('click', async () => {
+                try {
+                  await navigator.clipboard.writeText(copyValue);
+                  status.textContent = 'Copied link';
+                } catch {
+                  status.textContent = 'Unable to copy automatically';
+                }
+              });
+            }
+          })();
+        </script>
       </section>`,
     );
   };

@@ -139,12 +139,18 @@ export const evidenceDetailsFromCredential = (credential: JsonObject): EvidenceD
 
 export const badgeHeroImageMarkup = (badgeName: string, imageUri: string | null): string => {
   if (imageUri !== null) {
-    return `<img
-      class="public-badge__hero-image"
-      src="${escapeHtml(imageUri)}"
-      alt="${escapeHtml(`${badgeName} image`)}"
-      loading="lazy"
-    />`;
+    const initials = badgeInitialsFromName(badgeName);
+
+    return `<div class="public-badge__hero-image-frame">
+      <img
+        class="public-badge__hero-image"
+        src="${escapeHtml(imageUri)}"
+        alt="${escapeHtml(`${badgeName} image`)}"
+        loading="lazy"
+        onerror="this.hidden=true;this.parentElement?.setAttribute('data-fallback','true')"
+      />
+      <span class="public-badge__hero-image-fallback" aria-hidden="true">${escapeHtml(initials)}</span>
+    </div>`;
   }
 
   const initials = badgeInitialsFromName(badgeName);

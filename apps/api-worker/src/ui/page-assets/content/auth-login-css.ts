@@ -40,6 +40,7 @@ export const AUTH_LOGIN_CSS = `
   margin: 0;
   font-size: clamp(1.35rem, 2.3vw, 1.9rem);
   line-height: 1.15;
+  color: #f3f9ff;
 }
 
 .ct-login__lede {
@@ -77,6 +78,16 @@ export const AUTH_LOGIN_CSS = `
 .ct-login__form-text {
   margin: 0;
   color: var(--ct-color-ink-soft);
+}
+
+.ct-login__context {
+  margin: 0;
+  border: 1px solid rgba(10, 76, 143, 0.2);
+  border-radius: var(--ct-radius-md);
+  padding: 0.62rem 0.72rem;
+  background: linear-gradient(180deg, #eef6ff, #e8f2ff);
+  color: var(--ct-color-ink);
+  font-size: 0.9rem;
 }
 
 .ct-login__form {
@@ -141,6 +152,10 @@ export const AUTH_LOGIN_CSS = `
   min-height: 1.2rem;
 }
 
+.ct-login__status[hidden] {
+  display: none;
+}
+
 .ct-login__status[data-tone='error'] {
   border-color: rgba(139, 31, 18, 0.22);
   background: #fff2f0;
@@ -160,6 +175,17 @@ export const AUTH_LOGIN_CSS = `
 }
 
 .ct-login__dev a {
+  font-weight: 700;
+}
+
+.ct-login__help,
+.ct-login__back {
+  margin: 0;
+  color: var(--ct-color-ink-soft);
+  font-size: 0.87rem;
+}
+
+.ct-login__back a {
   font-weight: 700;
 }
 

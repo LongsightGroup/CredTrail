@@ -97,11 +97,13 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   app.get('/login', (c) => {
     const tenantId = (c.req.query('tenantId') ?? '').trim();
     const nextPath = (c.req.query('next') ?? '').trim();
+    const reason = (c.req.query('reason') ?? '').trim();
 
     return c.html(
       magicLinkLoginPage({
         tenantId,
         nextPath,
+        ...(reason.length === 0 ? {} : { reason }),
       }),
     );
   });

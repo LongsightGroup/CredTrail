@@ -43,10 +43,6 @@ import { createPostgresDatabase } from '@credtrail/db/postgres';
 
 import { app } from './index';
 
-interface ErrorResponse {
-  error: string;
-}
-
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -230,11 +226,11 @@ describe('GET /tenants/:tenantId/admin', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe(
-      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin&reason=auth_required',
     );
   });
 
-  it('returns 403 when membership role is below admin', async () => {
+  it('returns 403 page when membership role is below admin', async () => {
     const env = createEnv();
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
     mockedTouchSession.mockResolvedValue();
@@ -249,10 +245,12 @@ describe('GET /tenants/:tenantId/admin', () => {
       },
       env,
     );
-    const body = await response.json<ErrorResponse>();
+    const body = await response.text();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe('Insufficient role for requested action');
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(body).toContain('Admin role required');
+    expect(body).toContain('institution admin access');
   });
 
   it('renders institution admin dashboard for admin membership', async () => {

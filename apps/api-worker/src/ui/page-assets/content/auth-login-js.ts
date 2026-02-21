@@ -9,6 +9,7 @@ export const AUTH_LOGIN_JS = `
   }
 
   const setStatus = (text, isError) => {
+    statusEl.hidden = false;
     statusEl.textContent = text;
     statusEl.dataset.tone = isError ? 'error' : 'success';
   };

@@ -5,7 +5,35 @@ import { escapeHtml } from '../utils/display-format';
 export const magicLinkLoginPage = (input: {
   tenantId: string;
   nextPath: string;
+  reason?: string;
 }): string => {
+  const adminPathMatch = /^\/tenants\/([^/]+)\/admin(?:$|[/?#])/.exec(input.nextPath);
+  let adminTenantLabel = input.tenantId.trim();
+
+  if (adminPathMatch?.[1] !== undefined) {
+    try {
+      adminTenantLabel = decodeURIComponent(adminPathMatch[1]);
+    } catch {
+      adminTenantLabel = adminPathMatch[1];
+    }
+  }
+
+  const accessContextNotice =
+    adminPathMatch === null
+      ? ''
+      : `<p class="ct-login__context">
+          ${input.reason === 'auth_required' ? 'Sign in required.' : 'Continue sign-in.'}
+          You are accessing <strong>${escapeHtml(adminTenantLabel)}</strong> institution admin.
+        </p>`;
+  const tenantLinkHref =
+    input.tenantId.trim().length === 0
+      ? '/'
+      : `/showcase/${encodeURIComponent(input.tenantId.trim())}`;
+  const tenantLinkLabel =
+    input.tenantId.trim().length === 0
+      ? 'Back to home'
+      : `View ${escapeHtml(input.tenantId.trim())} badge showcase`;
+
   return renderPageShell(
     'Sign In · CredTrail',
     `<section class="ct-login ct-stack">
@@ -25,6 +53,7 @@ export const magicLinkLoginPage = (input: {
         <div class="ct-login__form-wrap ct-stack">
           <h2 class="ct-login__form-title">Request sign-in link</h2>
           <p class="ct-login__form-text">Enter your tenant ID and institution email.</p>
+          ${accessContextNotice}
           <form id="magic-link-login-form" class="ct-login__form ct-stack">
             <label class="ct-login__field ct-stack">
               <span>Tenant ID</span>
@@ -37,8 +66,13 @@ export const magicLinkLoginPage = (input: {
             <input name="next" type="hidden" value="${escapeHtml(input.nextPath)}" />
             <button type="submit" class="ct-login__submit">Send magic link</button>
           </form>
-          <p id="magic-link-login-status" class="ct-login__status"></p>
+          <p class="ct-login__help">Magic links expire in 10 minutes and are sent by CredTrail email.</p>
+          <p class="ct-login__help">Use your institution-admin email address for tenant access.</p>
+          <p id="magic-link-login-status" class="ct-login__status" hidden></p>
           <p id="magic-link-dev-link" class="ct-login__dev"></p>
+          <p class="ct-login__back">
+            <a href="${tenantLinkHref}">${tenantLinkLabel}</a>
+          </p>
         </div>
       </div>
     </section>`,

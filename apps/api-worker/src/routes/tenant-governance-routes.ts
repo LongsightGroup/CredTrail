@@ -43,6 +43,7 @@ import {
   parseTenantUserPathParams,
   parseUpsertTenantMembershipOrgUnitScopeRequest,
 } from '@credtrail/validation';
+import { renderPageShell } from '@credtrail/ui-components';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import { institutionAdminDashboardPage } from '../admin/institution-admin-page';
 
@@ -119,7 +120,34 @@ export const registerTenantGovernanceRoutes = (
           'next',
           `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
         );
+        loginUrl.searchParams.set('reason', 'auth_required');
         return c.redirect(`${loginUrl.pathname}${loginUrl.search}`, 302);
+      }
+
+      if (roleCheck.status === 403) {
+        c.header('Cache-Control', 'no-store');
+        return c.html(
+          renderPageShell(
+            'Admin access required',
+            `<section style="display:grid;gap:0.9rem;max-width:44rem;">
+              <article style="display:grid;gap:0.6rem;padding:1.15rem;border:1px solid rgba(0,39,76,0.17);border-radius:1rem;background:linear-gradient(165deg,rgba(255,255,255,0.96),rgba(248,252,255,0.93));box-shadow:0 14px 24px rgba(0,39,76,0.14);">
+                <p style="margin:0;font-size:0.78rem;letter-spacing:0.1em;text-transform:uppercase;color:#0a4c8f;font-weight:700;">Institution Admin</p>
+                <h1 style="margin:0;">Admin role required</h1>
+                <p style="margin:0;color:#355577;">
+                  Your current tenant membership role does not allow institution admin access for
+                  <strong>${pathParams.tenantId}</strong>.
+                </p>
+                <p style="margin:0;color:#355577;">
+                  Ask an existing tenant admin/owner to grant your account an admin role, then retry.
+                </p>
+                <p style="margin:0;">
+                  <a href="/showcase/${encodeURIComponent(pathParams.tenantId)}">View public badge showcase</a>
+                </p>
+              </article>
+            </section>`,
+          ),
+          403,
+        );
       }
 
       return roleCheck;
