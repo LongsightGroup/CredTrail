@@ -135,13 +135,23 @@ beforeEach(() => {
 });
 
 describe('magic-link auth routes', () => {
-  it('renders login page with magic-link form', async () => {
+  it('renders login page with magic-link form and linked page assets', async () => {
+    const env = createEnv('production');
     const response = await app.request(
       '/login?tenantId=sakai&next=%2Ftenants%2Fsakai%2Fadmin',
       undefined,
-      createEnv('production'),
+      env,
     );
     const body = await response.text();
+    const stylesheetMatch = /<link rel="stylesheet" href="([^"]*\/assets\/ui\/auth-login\.[^"]+\.css)"/.exec(
+      body,
+    );
+    const scriptMatch = /<script defer src="([^"]*\/assets\/ui\/auth-login\.[^"]+\.js)"><\/script>/.exec(
+      body,
+    );
+    const stylesheetPath =
+      stylesheetMatch?.[1] ?? null;
+    const scriptPath = scriptMatch?.[1] ?? null;
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
@@ -149,7 +159,19 @@ describe('magic-link auth routes', () => {
     expect(body).toContain('id="magic-link-login-form"');
     expect(body).toContain('name="tenantId"');
     expect(body).toContain('value="sakai"');
-    expect(body).toContain('/v1/auth/magic-link/request');
+    expect(body).not.toContain('.ct-login__hero {');
+    expect(stylesheetPath).not.toBeNull();
+    expect(scriptPath).not.toBeNull();
+
+    const stylesheetResponse = await app.request(stylesheetPath ?? '', undefined, env);
+    const scriptResponse = await app.request(scriptPath ?? '', undefined, env);
+
+    expect(stylesheetResponse.status).toBe(200);
+    expect(stylesheetResponse.headers.get('content-type')).toContain('text/css');
+    expect(stylesheetResponse.headers.get('cache-control')).toContain('immutable');
+    expect(scriptResponse.status).toBe(200);
+    expect(scriptResponse.headers.get('content-type')).toContain('text/javascript');
+    expect(scriptResponse.headers.get('cache-control')).toContain('immutable');
   });
 
   it('returns token + url in development mode for magic-link request', async () => {

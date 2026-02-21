@@ -65,6 +65,7 @@ import {
 import { createCredentialProofVerificationHelpers } from './credentials/proof-verification';
 import { registerCommonMiddleware } from './http/common-middleware';
 import { createLoadJsonObjectFromUrl } from './http/json-object-loader';
+import { registerPageAssetRoutes } from './ui/page-assets';
 import {
   createSignCredentialForDid,
 } from './signing/credential-signer';
@@ -453,6 +454,10 @@ registerCommonMiddleware({
   landingAssetPathPrefix: LANDING_ASSET_PATH_PREFIX,
   landingStaticPaths: LANDING_STATIC_PATHS,
   observabilityContext,
+});
+
+registerPageAssetRoutes({
+  app,
 });
 
 app.get('/healthz/dependencies', async (c) => {

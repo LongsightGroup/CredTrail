@@ -296,7 +296,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Revoked keys: 1');
     expect(body).toContain('User: admin@tenant-123.edu');
     expect(body).toContain('title="User ID: usr_admin"');
-    expect(body).toContain('color: #f5fbff;');
+    expect(body).toContain('/assets/ui/institution-admin.');
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       includeArchived: false,
