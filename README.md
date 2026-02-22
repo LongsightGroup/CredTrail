@@ -100,6 +100,8 @@ Run from the workspace root:
 - `pnpm lint`
 - `pnpm typecheck`
 - `pnpm test`
+- `pnpm test:e2e`
+- `pnpm test:e2e:canvas-real` (requires real Canvas env vars; see `docs/CANVAS_REAL_INSTANCE_E2E.md`)
 
 ## Self-host Docker
 
