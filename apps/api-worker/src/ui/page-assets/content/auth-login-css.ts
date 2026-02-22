@@ -64,19 +64,23 @@ export const AUTH_LOGIN_CSS = `
 }
 
 .ct-login__form-wrap {
-  --ct-stack-gap: 0.9rem;
+  --ct-stack-gap: 0.68rem;
   padding: var(--ct-space-5);
   background: linear-gradient(160deg, var(--ct-surface-base) 0%, var(--ct-surface-soft) 100%);
+  align-content: start;
 }
 
 .ct-login__form-title {
   margin: 0;
-  font-size: 1.06rem;
+  font-size: 1rem;
+  line-height: 1.2;
   color: var(--ct-color-ink);
 }
 
 .ct-login__form-text {
   margin: 0;
+  font-size: 0.93rem;
+  line-height: 1.4;
   color: var(--ct-color-ink-soft);
 }
 
@@ -91,7 +95,7 @@ export const AUTH_LOGIN_CSS = `
 }
 
 .ct-login__form {
-  --ct-stack-gap: 0.72rem;
+  --ct-stack-gap: 0.56rem;
 }
 
 .ct-login__field {
@@ -170,7 +174,7 @@ export const AUTH_LOGIN_CSS = `
 
 .ct-login__dev {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   color: var(--ct-color-ink-soft);
 }
 
@@ -178,11 +182,19 @@ export const AUTH_LOGIN_CSS = `
   font-weight: 700;
 }
 
-.ct-login__help,
+.ct-login__help {
+  margin: 0;
+  color: var(--ct-color-ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.34;
+}
+
 .ct-login__back {
   margin: 0;
   color: var(--ct-color-ink-soft);
-  font-size: 0.87rem;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  padding-top: 0.1rem;
 }
 
 .ct-login__back a {
