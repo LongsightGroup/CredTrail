@@ -6,6 +6,7 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     findAssertionById: vi.fn(),
+    resolveAssertionLifecycleState: vi.fn(),
     findUserById: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
   };
@@ -30,6 +31,7 @@ vi.mock('@credtrail/db/postgres', () => {
 import { type JsonObject, getImmutableCredentialObject } from '@credtrail/core-domain';
 import {
   findAssertionById,
+  resolveAssertionLifecycleState,
   listLtiIssuerRegistrations,
   type AssertionRecord,
   type LtiIssuerRegistrationRecord,
@@ -44,6 +46,7 @@ interface ErrorResponse {
 }
 
 const mockedFindAssertionById = vi.mocked(findAssertionById);
+const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -110,6 +113,15 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindAssertionById.mockReset();
+  mockedResolveAssertionLifecycleState.mockReset();
+  mockedResolveAssertionLifecycleState.mockResolvedValue({
+    state: 'active',
+    source: 'default_active',
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    revokedAt: null,
+  });
   mockedGetImmutableCredentialObject.mockReset();
   mockedListLtiIssuerRegistrations.mockReset();
   mockedListLtiIssuerRegistrations.mockResolvedValue([]);
@@ -143,7 +155,39 @@ describe('GET /credentials/v1/:credentialId/download', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('application/ld+json');
     expect(response.headers.get('content-disposition')).toContain('attachment; filename=');
+    expect(response.headers.get('x-credtrail-credential-state')).toBe('active');
     expect(body).toContain('"OpenBadgeCredential"');
+  });
+
+  it('returns suspended lifecycle headers for suspended credentials', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential'],
+    };
+
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedResolveAssertionLifecycleState.mockResolvedValue({
+      state: 'suspended',
+      source: 'lifecycle_event',
+      reasonCode: 'administrative_hold',
+      reason: 'Suspended by institutional authority',
+      transitionedAt: '2026-02-12T02:30:00.000Z',
+      revokedAt: null,
+    });
+
+    const response = await app.request(
+      '/credentials/v1/tenant_123%3Aassertion_456/download',
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-credtrail-credential-state')).toBe('suspended');
+    expect(response.headers.get('x-credtrail-credential-reason')).toBe(
+      'Suspended by institutional authority',
+    );
   });
 
   it('keeps credential downloads available after LMS issuer migration', async () => {
@@ -285,6 +329,7 @@ describe('GET /credentials/v1/:credentialId/download.pdf', () => {
     expect(response.headers.get('content-type')).toContain('application/pdf');
     expect(response.headers.get('content-disposition')).toContain('attachment; filename=');
     expect(response.headers.get('content-disposition')).toContain('.pdf');
+    expect(response.headers.get('x-credtrail-credential-state')).toBe('active');
     expect(bodyText).toBe('%PDF-');
   });
 
@@ -346,6 +391,7 @@ describe('GET /credentials/v1/:credentialId/jsonld', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('content-type')).toContain('application/ld+json');
     expect(response.headers.get('content-disposition')).toBeNull();
+    expect(response.headers.get('x-credtrail-credential-state')).toBe('active');
     expect(body).toContain('"OpenBadgeCredential"');
   });
 

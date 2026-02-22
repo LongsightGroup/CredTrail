@@ -107,8 +107,12 @@ export const createPublicBadgePageRenderers = (
     const evidenceDetails = evidenceDetailsFromCredential(model.credential);
     const achievementImage = badgeHeroImageMarkup(badgeName, achievementDetails.imageUri);
     const credentialUri = asString(model.credential.id) ?? model.assertion.id;
-    const isRevoked = model.assertion.revokedAt !== null;
-    const verificationLabel = isRevoked ? 'Revoked' : 'Verified';
+    const lifecycleState = model.lifecycle.state;
+    const verificationLabel =
+      lifecycleState === 'active'
+        ? 'Verified'
+        : lifecycleState.slice(0, 1).toUpperCase() + lifecycleState.slice(1);
+    const verificationStatusClass = lifecycleState === 'active' ? 'verified' : lifecycleState;
     const publicBadgePath = publicBadgePathForAssertion(model.assertion);
     const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
     const verificationApiPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}`;
@@ -219,12 +223,33 @@ export const createPublicBadgePageRenderers = (
               ${escapeHtml(achievementDetails.criteriaUri)}
             </a>
           </p>`;
-    const revokedDetails =
-      model.assertion.revokedAt === null
-        ? ''
-        : `<p class="public-badge__status-note">Revoked at ${escapeHtml(
-            formatIsoTimestamp(model.assertion.revokedAt),
-          )} UTC</p>`;
+    const lifecycleDetails = (() => {
+      if (lifecycleState === 'active') {
+        return '';
+      }
+
+      if (lifecycleState === 'revoked' && model.lifecycle.revokedAt !== null) {
+        return `<p class="public-badge__status-note public-badge__status-note--revoked">Revoked at ${escapeHtml(
+          formatIsoTimestamp(model.lifecycle.revokedAt),
+        )} UTC</p>`;
+      }
+
+      const transitionedAt =
+        model.lifecycle.transitionedAt === null
+          ? ''
+          : ` since ${escapeHtml(formatIsoTimestamp(model.lifecycle.transitionedAt))} UTC`;
+      const reasonLine =
+        model.lifecycle.reason === null
+          ? ''
+          : `<p class="public-badge__status-note public-badge__status-note--${escapeHtml(
+              lifecycleState,
+            )}">${escapeHtml(model.lifecycle.reason)}</p>`;
+      const stateLabel = verificationLabel;
+
+      return `<p class="public-badge__status-note public-badge__status-note--${escapeHtml(
+        lifecycleState,
+      )}">${escapeHtml(stateLabel)}${transitionedAt}</p>${reasonLine}`;
+    })();
     const achievementDescriptionSection =
       achievementDetails.description === null
         ? '<p class="public-badge__achievement-copy">No additional description provided.</p>'
@@ -328,11 +353,31 @@ export const createPublicBadgePageRenderers = (
         .public-badge__status--revoked {
           background: linear-gradient(120deg, #bd2f1b 0%, #8f1c13 64%, #5b1212 100%);
         }
-  
+
+        .public-badge__status--suspended {
+          background: linear-gradient(120deg, #a66a00 0%, #7f4b00 64%, #5b3300 100%);
+        }
+
+        .public-badge__status--expired {
+          background: linear-gradient(120deg, #4b5d75 0%, #36475d 64%, #233246 100%);
+        }
+
         .public-badge__status-note {
           margin: 0;
-          color: #8e1f14;
+          color: #294661;
           font-size: 0.95rem;
+        }
+
+        .public-badge__status-note--revoked {
+          color: #8e1f14;
+        }
+
+        .public-badge__status-note--suspended {
+          color: #8c4f00;
+        }
+
+        .public-badge__status-note--expired {
+          color: #4b5d75;
         }
   
         .public-badge__hero {
@@ -680,7 +725,7 @@ export const createPublicBadgePageRenderers = (
       </style>
       <article class="public-badge">
         <section class="public-badge__card public-badge__status public-badge__status--${
-          isRevoked ? 'revoked' : 'verified'
+          verificationStatusClass
         }">
           <span>${escapeHtml(verificationLabel)}</span>
           <span>${escapeHtml(issuedAt)}</span>
@@ -693,7 +738,7 @@ export const createPublicBadgePageRenderers = (
             <h1 class="public-badge__title">${escapeHtml(badgeName)}</h1>
             <p class="public-badge__issuer">Issued by ${issuerLine}</p>
             <p class="public-badge__issued-at">Issued ${escapeHtml(issuedAt)}</p>
-            ${revokedDetails}
+            ${lifecycleDetails}
           </div>
         </section>
   

@@ -471,8 +471,15 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     font: regularFont,
   });
 
+  const normalizedStatus = input.status.toLowerCase();
   const statusColor =
-    input.status.toLowerCase() === 'revoked' ? rgb(0.66, 0.14, 0.09) : rgb(0.1, 0.41, 0.24);
+    normalizedStatus === 'revoked'
+      ? rgb(0.66, 0.14, 0.09)
+      : normalizedStatus === 'suspended'
+        ? rgb(0.64, 0.4, 0.0)
+        : normalizedStatus === 'expired'
+          ? rgb(0.29, 0.36, 0.46)
+          : rgb(0.1, 0.41, 0.24);
   page.drawRectangle({
     x: 446,
     y: 618,

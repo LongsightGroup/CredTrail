@@ -8,7 +8,9 @@ import {
   findAssertionById,
   findAssertionByPublicId,
   findLearnerProfileById,
+  resolveAssertionLifecycleState,
   type AssertionRecord,
+  type ResolveAssertionLifecycleStateResult,
   type SqlDatabase,
 } from '@credtrail/db';
 
@@ -16,6 +18,7 @@ export interface VerificationViewModel {
   assertion: AssertionRecord;
   credential: JsonObject;
   recipientDisplayName: string | null;
+  lifecycle: ResolveAssertionLifecycleStateResult;
 }
 
 export type VerificationLookupResult =
@@ -123,6 +126,16 @@ export const loadVerificationViewModel = async (
   }
 
   const credential = await loadCredentialForAssertion(store, assertion);
+  const lifecycle =
+    (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
+    {
+      state: assertion.revokedAt === null ? 'active' : 'revoked',
+      source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
+      reasonCode: null,
+      reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
+      transitionedAt: assertion.revokedAt,
+      revokedAt: assertion.revokedAt,
+    };
 
   return {
     status: 'ok',
@@ -130,6 +143,7 @@ export const loadVerificationViewModel = async (
       assertion,
       credential,
       recipientDisplayName: null,
+      lifecycle,
     },
   };
 };
@@ -155,6 +169,17 @@ export const loadPublicBadgeViewModel = async (
       db,
       assertionByPublicId,
     );
+    const lifecycle =
+      (await resolveAssertionLifecycleState(db, assertionByPublicId.tenantId, assertionByPublicId.id)) ??
+      {
+        state: assertionByPublicId.revokedAt === null ? 'active' : 'revoked',
+        source: assertionByPublicId.revokedAt === null ? 'default_active' : 'assertion_revocation',
+        reasonCode: null,
+        reason:
+          assertionByPublicId.revokedAt === null ? null : 'credential has been revoked by issuer',
+        transitionedAt: assertionByPublicId.revokedAt,
+        revokedAt: assertionByPublicId.revokedAt,
+      };
 
     return {
       status: 'ok',
@@ -162,6 +187,7 @@ export const loadPublicBadgeViewModel = async (
         assertion: assertionByPublicId,
         credential,
         recipientDisplayName,
+        lifecycle,
       },
     };
   }
@@ -189,6 +215,16 @@ export const loadPublicBadgeViewModel = async (
   if (publicBadgePermalinkSegment(assertion) === trimmedIdentifier) {
     const credential = await loadCredentialForAssertion(store, assertion);
     const recipientDisplayName = await loadRecipientDisplayNameForAssertion(db, assertion);
+    const lifecycle =
+      (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
+      {
+        state: assertion.revokedAt === null ? 'active' : 'revoked',
+        source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
+        reasonCode: null,
+        reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
+        transitionedAt: assertion.revokedAt,
+        revokedAt: assertion.revokedAt,
+      };
 
     return {
       status: 'ok',
@@ -196,6 +232,7 @@ export const loadPublicBadgeViewModel = async (
         assertion,
         credential,
         recipientDisplayName,
+        lifecycle,
       },
     };
   }

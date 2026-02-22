@@ -6,6 +6,7 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     findAssertionById: vi.fn(),
+    resolveAssertionLifecycleState: vi.fn(),
     findTenantSigningRegistrationByDid: vi.fn(),
     listAssertionStatusListEntries: vi.fn(),
   };
@@ -38,6 +39,7 @@ import {
 } from '@credtrail/core-domain';
 import {
   findAssertionById,
+  resolveAssertionLifecycleState,
   findTenantSigningRegistrationByDid,
   listAssertionStatusListEntries,
   type AssertionRecord,
@@ -53,11 +55,19 @@ interface VerificationResponse {
   tenantId: string;
   issuedAt: string;
   verification: {
-    status: 'active' | 'expired' | 'revoked';
+    status: 'active' | 'suspended' | 'expired' | 'revoked';
     reason: string | null;
     checkedAt: string;
     expiresAt: string | null;
     revokedAt: string | null;
+    assertionLifecycle: {
+      state: 'active' | 'suspended' | 'revoked' | 'expired';
+      source: 'lifecycle_event' | 'assertion_revocation' | 'default_active';
+      reasonCode: string | null;
+      reason: string | null;
+      transitionedAt: string | null;
+      revokedAt: string | null;
+    };
     statusList: {
       id: string;
       type: string;
@@ -110,6 +120,7 @@ interface ErrorResponse {
 }
 
 const mockedFindAssertionById = vi.mocked(findAssertionById);
+const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
 const mockedFindTenantSigningRegistrationByDid = vi.mocked(findTenantSigningRegistrationByDid);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedListAssertionStatusListEntries = vi.mocked(listAssertionStatusListEntries);
@@ -136,6 +147,15 @@ const createEnv = (): {
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedResolveAssertionLifecycleState.mockReset();
+  mockedResolveAssertionLifecycleState.mockResolvedValue({
+    state: 'active',
+    source: 'default_active',
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    revokedAt: null,
+  });
   mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
 });
 
@@ -294,6 +314,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(body.verification.status).toBe('active');
     expect(body.verification.reason).toBeNull();
+    expect(body.verification.assertionLifecycle.state).toBe('active');
     expect(body.verification.checkedAt.length).toBeGreaterThan(0);
     expect(body.verification.expiresAt).toBeNull();
     expect(body.verification.revokedAt).toBeNull();
@@ -347,7 +368,41 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(body.verification.status).toBe('revoked');
     expect(body.verification.reason).toBe('credential has been revoked by issuer');
     expect(body.verification.revokedAt).toBe('2026-02-11T01:00:00.000Z');
+    expect(body.verification.assertionLifecycle.state).toBe('active');
     expect(body.verification.proof.status).toBe('unchecked');
+  });
+
+  it('returns suspended lifecycle status when assertion lifecycle is suspended', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential'],
+    };
+
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+    mockedResolveAssertionLifecycleState.mockResolvedValue({
+      state: 'suspended',
+      source: 'lifecycle_event',
+      reasonCode: 'administrative_hold',
+      reason: 'Credential is suspended pending review',
+      transitionedAt: '2026-02-12T02:30:00.000Z',
+      revokedAt: null,
+    });
+
+    const response = await app.request(
+      '/credentials/v1/tenant_123%3Aassertion_456',
+      undefined,
+      env,
+    );
+    const body = await response.json<VerificationResponse>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-credtrail-credential-state')).toBe('suspended');
+    expect(body.verification.status).toBe('suspended');
+    expect(body.verification.reason).toBe('Credential is suspended pending review');
+    expect(body.verification.assertionLifecycle.state).toBe('suspended');
+    expect(body.verification.assertionLifecycle.reasonCode).toBe('administrative_hold');
   });
 
   it('marks credential status as revoked when status list entry is revoked', async () => {
@@ -1330,4 +1385,3 @@ describe('GET /credentials/v1/:credentialId', () => {
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 });
-

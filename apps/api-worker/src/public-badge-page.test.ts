@@ -10,6 +10,7 @@ vi.mock('@credtrail/db', async () => {
     findLearnerProfileById: vi.fn(),
     findUserById: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
+    resolveAssertionLifecycleState: vi.fn(),
   };
 });
 
@@ -35,6 +36,7 @@ import {
   findAssertionByPublicId,
   findLearnerProfileById,
   listLtiIssuerRegistrations,
+  resolveAssertionLifecycleState,
   type AssertionRecord,
   type LearnerProfileRecord,
   type SqlDatabase,
@@ -46,6 +48,7 @@ import { app } from './index';
 const mockedFindAssertionById = vi.mocked(findAssertionById);
 const mockedFindAssertionByPublicId = vi.mocked(findAssertionByPublicId);
 const mockedFindLearnerProfileById = vi.mocked(findLearnerProfileById);
+const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -108,6 +111,15 @@ beforeEach(() => {
   mockedFindAssertionByPublicId.mockReset();
   mockedFindAssertionById.mockReset();
   mockedFindLearnerProfileById.mockReset();
+  mockedResolveAssertionLifecycleState.mockReset();
+  mockedResolveAssertionLifecycleState.mockResolvedValue({
+    state: 'active',
+    source: 'default_active',
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    revokedAt: null,
+  });
   mockedGetImmutableCredentialObject.mockReset();
   mockedListLtiIssuerRegistrations.mockReset();
   mockedListLtiIssuerRegistrations.mockResolvedValue([]);
@@ -385,6 +397,14 @@ describe('GET /badges/:badgeIdentifier', () => {
         revokedAt: '2026-02-11T01:00:00.000Z',
       }),
     );
+    mockedResolveAssertionLifecycleState.mockResolvedValue({
+      state: 'revoked',
+      source: 'lifecycle_event',
+      reasonCode: 'issuer_requested',
+      reason: 'Issuer requested revocation',
+      transitionedAt: '2026-02-11T01:00:00.000Z',
+      revokedAt: '2026-02-11T01:00:00.000Z',
+    });
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
@@ -398,6 +418,41 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('Revoked');
     expect(body).toContain('Revoked at');
     expect(body).not.toContain('Evidence</h2>');
+  });
+
+  it('renders suspended lifecycle state with reason text', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      credentialSubject: {
+        achievement: {
+          name: 'TypeScript Foundations',
+        },
+      },
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedResolveAssertionLifecycleState.mockResolvedValue({
+      state: 'suspended',
+      source: 'lifecycle_event',
+      reasonCode: 'administrative_hold',
+      reason: 'Suspended pending conduct review',
+      transitionedAt: '2026-02-12T02:30:00.000Z',
+      revokedAt: null,
+    });
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const response = await app.request(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      undefined,
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Suspended');
+    expect(body).toContain('Suspended pending conduct review');
+    expect(body).toContain('since');
   });
 
   it('returns not found page when credential does not exist', async () => {

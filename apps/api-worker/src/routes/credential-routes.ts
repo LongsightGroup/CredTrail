@@ -12,6 +12,15 @@ interface VerificationAssertion {
   statusListIndex: number | null;
 }
 
+interface AssertionLifecycleSummary {
+  state: 'active' | 'suspended' | 'revoked' | 'expired';
+  source: 'lifecycle_event' | 'assertion_revocation' | 'default_active';
+  reasonCode: string | null;
+  reason: string | null;
+  transitionedAt: string | null;
+  revokedAt: string | null;
+}
+
 interface VerificationViewModel<
   AssertionValue extends VerificationAssertion,
   CredentialValue extends JsonObject,
@@ -19,6 +28,7 @@ interface VerificationViewModel<
   assertion: AssertionValue;
   credential: CredentialValue;
   recipientDisplayName: string | null;
+  lifecycle: AssertionLifecycleSummary;
 }
 
 type VerificationLookupResult<
@@ -52,7 +62,7 @@ interface CredentialVerificationChecksSummary {
 }
 
 interface CredentialLifecycleVerificationSummary {
-  state: 'active' | 'expired' | 'revoked';
+  state: 'active' | 'suspended' | 'expired' | 'revoked';
   reason: string | null;
   checkedAt: string;
   expiresAt: string | null;
@@ -69,7 +79,7 @@ interface BadgePdfDocumentInput {
   recipientIdentifier: string;
   issuerName: string;
   issuedAt: string;
-  status: 'Verified' | 'Revoked';
+  status: 'Verified' | 'Suspended' | 'Revoked' | 'Expired';
   assertionId: string;
   credentialId: string;
   publicBadgeUrl: string;
@@ -179,6 +189,85 @@ const credentialLookupErrorResponse = (
     },
     statusCode,
   );
+};
+
+const sanitizeHeaderValue = (value: string): string => {
+  return value.replaceAll(/[\r\n]+/g, ' ').trim();
+};
+
+const mergedCredentialLifecycle = (input: {
+  baseLifecycle: CredentialLifecycleVerificationSummary;
+  assertionLifecycle: AssertionLifecycleSummary;
+}): CredentialLifecycleVerificationSummary => {
+  const { baseLifecycle, assertionLifecycle } = input;
+
+  if (assertionLifecycle.state === 'revoked') {
+    return {
+      state: 'revoked',
+      reason:
+        assertionLifecycle.reason ??
+        baseLifecycle.reason ??
+        'credential has been revoked by issuer',
+      checkedAt: baseLifecycle.checkedAt,
+      expiresAt: baseLifecycle.expiresAt,
+      revokedAt: assertionLifecycle.revokedAt ?? baseLifecycle.revokedAt,
+    };
+  }
+
+  if (baseLifecycle.state === 'revoked') {
+    return baseLifecycle;
+  }
+
+  if (assertionLifecycle.state === 'suspended') {
+    return {
+      state: 'suspended',
+      reason: assertionLifecycle.reason ?? 'credential has been suspended by issuer',
+      checkedAt: baseLifecycle.checkedAt,
+      expiresAt: baseLifecycle.expiresAt,
+      revokedAt: baseLifecycle.revokedAt,
+    };
+  }
+
+  if (assertionLifecycle.state === 'expired') {
+    return {
+      state: 'expired',
+      reason:
+        assertionLifecycle.reason ??
+        baseLifecycle.reason ??
+        'credential is expired under institutional lifecycle policy',
+      checkedAt: baseLifecycle.checkedAt,
+      expiresAt: baseLifecycle.expiresAt ?? assertionLifecycle.transitionedAt,
+      revokedAt: baseLifecycle.revokedAt,
+    };
+  }
+
+  return baseLifecycle;
+};
+
+const credentialLifecycleLabel = (
+  state: CredentialLifecycleVerificationSummary['state'],
+): BadgePdfDocumentInput['status'] => {
+  switch (state) {
+    case 'active':
+      return 'Verified';
+    case 'suspended':
+      return 'Suspended';
+    case 'revoked':
+      return 'Revoked';
+    case 'expired':
+      return 'Expired';
+  }
+};
+
+const setCredentialLifecycleHeaders = (
+  c: AppContext,
+  lifecycle: CredentialLifecycleVerificationSummary,
+): void => {
+  c.header('X-Credtrail-Credential-State', lifecycle.state);
+
+  if (lifecycle.reason !== null) {
+    c.header('X-Credtrail-Credential-Reason', sanitizeHeaderValue(lifecycle.reason));
+  }
 };
 
 export const registerCredentialRoutes = <
@@ -333,18 +422,31 @@ export const registerCredentialRoutes = <
       resolvedRevokedAt,
       checkedAt,
     );
+    const effectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: lifecycle,
+      assertionLifecycle: result.value.lifecycle,
+    });
     const proof = await verifyCredentialProofSummary(c, result.value.credential);
+    setCredentialLifecycleHeaders(c, effectiveLifecycle);
 
     return c.json({
       assertionId: result.value.assertion.id,
       tenantId: result.value.assertion.tenantId,
       issuedAt: result.value.assertion.issuedAt,
       verification: {
-        status: lifecycle.state,
-        reason: lifecycle.reason,
-        checkedAt: lifecycle.checkedAt,
-        expiresAt: lifecycle.expiresAt,
-        revokedAt: lifecycle.revokedAt,
+        status: effectiveLifecycle.state,
+        reason: effectiveLifecycle.reason,
+        checkedAt: effectiveLifecycle.checkedAt,
+        expiresAt: effectiveLifecycle.expiresAt,
+        revokedAt: effectiveLifecycle.revokedAt,
+        assertionLifecycle: {
+          state: result.value.lifecycle.state,
+          source: result.value.lifecycle.source,
+          reasonCode: result.value.lifecycle.reasonCode,
+          reason: result.value.lifecycle.reason,
+          transitionedAt: result.value.lifecycle.transitionedAt,
+          revokedAt: result.value.lifecycle.revokedAt,
+        },
         statusList,
         checks,
         proof,
@@ -367,6 +469,17 @@ export const registerCredentialRoutes = <
 
     c.header('Cache-Control', 'no-store');
     c.header('Content-Type', 'application/ld+json; charset=utf-8');
+    const jsonCheckedAt = new Date().toISOString();
+    const jsonBaseLifecycle = summarizeCredentialLifecycleVerification(
+      result.value.credential,
+      result.value.assertion.revokedAt,
+      jsonCheckedAt,
+    );
+    const jsonEffectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: jsonBaseLifecycle,
+      assertionLifecycle: result.value.lifecycle,
+    });
+    setCredentialLifecycleHeaders(c, jsonEffectiveLifecycle);
 
     return c.body(JSON.stringify(result.value.credential, null, 2));
   });
@@ -385,6 +498,17 @@ export const registerCredentialRoutes = <
 
     c.header('Cache-Control', 'no-store');
     c.header('Content-Type', 'application/ld+json; charset=utf-8');
+    const downloadCheckedAt = new Date().toISOString();
+    const downloadBaseLifecycle = summarizeCredentialLifecycleVerification(
+      result.value.credential,
+      result.value.assertion.revokedAt,
+      downloadCheckedAt,
+    );
+    const downloadEffectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: downloadBaseLifecycle,
+      assertionLifecycle: result.value.lifecycle,
+    });
+    setCredentialLifecycleHeaders(c, downloadEffectiveLifecycle);
     c.header(
       'Content-Disposition',
       `attachment; filename="${credentialDownloadFilename(result.value.assertion.id)}"`,
@@ -408,6 +532,16 @@ export const registerCredentialRoutes = <
     const publicBadgePath = publicBadgePathForAssertion(result.value.assertion);
     const verificationPath = `/credentials/v1/${encodeURIComponent(result.value.assertion.id)}`;
     const ob3JsonPath = `${verificationPath}/jsonld`;
+    const pdfCheckedAt = new Date().toISOString();
+    const pdfBaseLifecycle = summarizeCredentialLifecycleVerification(
+      result.value.credential,
+      result.value.assertion.revokedAt,
+      pdfCheckedAt,
+    );
+    const pdfEffectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: pdfBaseLifecycle,
+      assertionLifecycle: result.value.lifecycle,
+    });
     const credentialId = asString(result.value.credential.id) ?? result.value.assertion.id;
     const achievementDetails = achievementDetailsFromCredential(result.value.credential);
     const recipientName =
@@ -420,17 +554,17 @@ export const registerCredentialRoutes = <
       recipientIdentifier: recipientFromCredential(result.value.credential),
       issuerName: issuerNameFromCredential(result.value.credential),
       issuedAt: `${formatIsoTimestamp(result.value.assertion.issuedAt)} UTC`,
-      status: result.value.assertion.revokedAt === null ? 'Verified' : 'Revoked',
+      status: credentialLifecycleLabel(pdfEffectiveLifecycle.state),
       assertionId: result.value.assertion.id,
       credentialId,
       publicBadgeUrl: new URL(publicBadgePath, c.req.url).toString(),
       verificationUrl: new URL(verificationPath, c.req.url).toString(),
       ob3JsonUrl: new URL(ob3JsonPath, c.req.url).toString(),
       badgeImageUrl: achievementDetails.imageUri,
-      ...(result.value.assertion.revokedAt === null
+      ...(pdfEffectiveLifecycle.revokedAt === null
         ? {}
         : {
-            revokedAt: `${formatIsoTimestamp(result.value.assertion.revokedAt)} UTC`,
+            revokedAt: `${formatIsoTimestamp(pdfEffectiveLifecycle.revokedAt)} UTC`,
           }),
     });
     const pdfBody = Uint8Array.from(pdfDocument).buffer;
@@ -441,6 +575,12 @@ export const registerCredentialRoutes = <
         'Cache-Control': 'no-store',
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${credentialPdfDownloadFilename(result.value.assertion.id)}"`,
+        'X-Credtrail-Credential-State': pdfEffectiveLifecycle.state,
+        ...(pdfEffectiveLifecycle.reason === null
+          ? {}
+          : {
+              'X-Credtrail-Credential-Reason': sanitizeHeaderValue(pdfEffectiveLifecycle.reason),
+            }),
       },
     });
   });
