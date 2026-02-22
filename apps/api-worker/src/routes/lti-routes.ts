@@ -10,6 +10,7 @@ import {
   type TenantMembershipRole,
 } from '@credtrail/db';
 import {
+  LTI_CLAIM_CONTEXT,
   LTI_CLAIM_VERSION,
   LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS,
   LTI_CLAIM_DEEP_LINKING_DATA,
@@ -56,7 +57,12 @@ import {
   type LtiStatePayload,
   type LtiStateValidationResult,
 } from '../lti/lti-helpers';
-import { ltiDeepLinkSelectionPage, ltiLaunchResultPage } from '../lti/pages';
+import { fetchNrpsRoster, parseLtiNrpsNamesRoleServiceClaim } from '../lti/nrps';
+import {
+  ltiDeepLinkSelectionPage,
+  ltiLaunchResultPage,
+  type LtiBulkIssuanceView,
+} from '../lti/pages';
 import { parseCompactJwsHeaderObject, parseCompactJwsPayloadObject } from '../ob3/oauth-utils';
 import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
 
@@ -196,6 +202,16 @@ const parseDeepLinkingSettings = (claimValue: unknown): LtiDeepLinkingSettings |
     ...(data === undefined ? {} : { data }),
     ...(acceptTypes === undefined ? {} : { acceptTypes }),
   };
+};
+
+const badgeTemplateIdFromTargetLinkUri = (targetLinkUri: string): string | null => {
+  try {
+    const parsed = new URL(targetLinkUri);
+    const badgeTemplateId = parsed.searchParams.get('badgeTemplateId')?.trim() ?? '';
+    return badgeTemplateId.length === 0 ? null : badgeTemplateId;
+  } catch {
+    return null;
+  }
 };
 
 export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
@@ -707,6 +723,106 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
 
     const dashboardPath = ltiLearnerDashboardPath(session.tenantId);
     c.header('Cache-Control', 'no-store');
+    let bulkIssuanceView: LtiBulkIssuanceView | null = null;
+
+    if (messageType === LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST && roleKind === 'instructor') {
+      const nrpsClaim = parseLtiNrpsNamesRoleServiceClaim(launchClaims);
+      const contextClaim = asJsonObject(launchClaims[LTI_CLAIM_CONTEXT]);
+      const courseContextTitle =
+        asNonEmptyString(contextClaim?.title) ??
+        asNonEmptyString(contextClaim?.label) ??
+        null;
+      const courseContextId = asNonEmptyString(contextClaim?.id);
+      const badgeTemplateId = badgeTemplateIdFromTargetLinkUri(resolvedTargetLinkUri);
+
+      if (nrpsClaim === null) {
+        bulkIssuanceView = {
+          status: 'unavailable',
+          message: 'LMS launch did not include NRPS names/roles service claim details.',
+          badgeTemplateId,
+          courseContextTitle,
+          courseContextId,
+          contextMembershipsUrl: null,
+          learnerCount: 0,
+          totalCount: 0,
+          members: [],
+        };
+      } else if (
+        issuerEntry.tokenEndpoint === undefined ||
+        issuerEntry.clientSecret === undefined
+      ) {
+        bulkIssuanceView = {
+          status: 'unavailable',
+          message:
+            'NRPS roster unavailable: issuer registration is missing token endpoint and client secret.',
+          badgeTemplateId,
+          courseContextTitle,
+          courseContextId,
+          contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
+          learnerCount: 0,
+          totalCount: 0,
+          members: [],
+        };
+      } else {
+        try {
+          const roster = await fetchNrpsRoster({
+            tokenEndpoint: issuerEntry.tokenEndpoint,
+            clientId: issuerEntry.clientId,
+            clientSecret: issuerEntry.clientSecret,
+            contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
+          });
+          const learnerMembers = roster.learnerMembers.map((member) => {
+            return {
+              userId: member.userId,
+              sourcedId: member.sourcedId,
+              displayName: member.displayName,
+              email: member.email,
+              roleSummary: member.roleSummary,
+              status: member.status,
+            };
+          });
+          bulkIssuanceView = {
+            status: 'ready',
+            message: `Loaded ${String(learnerMembers.length)} learner members from LMS NRPS roster.`,
+            badgeTemplateId,
+            courseContextTitle,
+            courseContextId: courseContextId ?? roster.contextId,
+            contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
+            learnerCount: learnerMembers.length,
+            totalCount: roster.members.length,
+            members: learnerMembers,
+          };
+        } catch (error) {
+          await captureSentryException({
+            context: observabilityContext(c.env),
+            dsn: c.env.SENTRY_DSN,
+            error,
+            message: 'NRPS roster pull failed for LTI launch',
+            tags: {
+              path: LTI_LAUNCH_PATH,
+              method: c.req.method,
+            },
+            extra: {
+              issuer: launchClaims.iss,
+              tenantId: session.tenantId,
+              deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
+              contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
+            },
+          });
+          bulkIssuanceView = {
+            status: 'error',
+            message: 'NRPS roster request failed for this launch. Check issuer token settings.',
+            badgeTemplateId,
+            courseContextTitle,
+            courseContextId,
+            contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
+            learnerCount: 0,
+            totalCount: 0,
+            members: [],
+          };
+        }
+      }
+    }
 
     if (messageType === LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST && deepLinkingSettings !== null) {
       const badgeTemplates = await listBadgeTemplates(db, {
@@ -783,6 +899,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         targetLinkUri: resolvedTargetLinkUri,
         messageType,
         dashboardPath,
+        bulkIssuanceView,
       }),
     );
   });

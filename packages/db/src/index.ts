@@ -111,6 +111,8 @@ export interface LtiIssuerRegistrationRecord {
   tenantId: string;
   authorizationEndpoint: string;
   clientId: string;
+  tokenEndpoint: string | null;
+  clientSecret: string | null;
   allowUnsignedIdToken: boolean;
   createdAt: string;
   updatedAt: string;
@@ -121,6 +123,8 @@ export interface UpsertLtiIssuerRegistrationInput {
   tenantId: string;
   authorizationEndpoint: string;
   clientId: string;
+  tokenEndpoint?: string | undefined;
+  clientSecret?: string | undefined;
   allowUnsignedIdToken?: boolean | undefined;
 }
 
@@ -1493,6 +1497,8 @@ interface LtiIssuerRegistrationRow {
   tenantId: string;
   authorizationEndpoint: string;
   clientId: string;
+  tokenEndpoint: string | null;
+  clientSecret: string | null;
   allowUnsignedIdToken: number | boolean;
   createdAt: string;
   updatedAt: string;
@@ -1714,11 +1720,18 @@ const isMissingLtiIssuerRegistrationsTableError = (error: unknown): boolean => {
     return false;
   }
 
-  return (
+  const missingTable =
     (error.message.includes('no such table') ||
       error.message.includes('relation') ||
       error.message.includes('does not exist')) &&
-    error.message.includes('lti_issuer_registrations')
+    error.message.includes('lti_issuer_registrations');
+  const missingNrpsColumns =
+    error.message.includes('column') &&
+    error.message.includes('does not exist') &&
+    (error.message.includes('token_endpoint') || error.message.includes('client_secret'));
+
+  return (
+    missingTable || missingNrpsColumns
   );
 };
 
@@ -1975,6 +1988,8 @@ const ensureLtiIssuerRegistrationsTable = async (db: SqlDatabase): Promise<void>
         tenant_id TEXT NOT NULL,
         authorization_endpoint TEXT NOT NULL,
         client_id TEXT NOT NULL,
+        token_endpoint TEXT,
+        client_secret TEXT,
         allow_unsigned_id_token INTEGER NOT NULL DEFAULT 0 CHECK (allow_unsigned_id_token IN (0, 1)),
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1989,6 +2004,24 @@ const ensureLtiIssuerRegistrationsTable = async (db: SqlDatabase): Promise<void>
       `
       CREATE INDEX IF NOT EXISTS idx_lti_issuer_registrations_tenant
         ON lti_issuer_registrations (tenant_id)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      ALTER TABLE lti_issuer_registrations
+      ADD COLUMN IF NOT EXISTS token_endpoint TEXT
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      ALTER TABLE lti_issuer_registrations
+      ADD COLUMN IF NOT EXISTS client_secret TEXT
     `,
     )
     .run();
@@ -5443,6 +5476,8 @@ const mapLtiIssuerRegistrationRow = (
     tenantId: row.tenantId,
     authorizationEndpoint: row.authorizationEndpoint,
     clientId: row.clientId,
+    tokenEndpoint: row.tokenEndpoint,
+    clientSecret: row.clientSecret,
     allowUnsignedIdToken: row.allowUnsignedIdToken === 1 || row.allowUnsignedIdToken === true,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -7819,16 +7854,20 @@ export const upsertLtiIssuerRegistration = async (
           tenant_id,
           authorization_endpoint,
           client_id,
+          token_endpoint,
+          client_secret,
           allow_unsigned_id_token,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (issuer)
         DO UPDATE SET
           tenant_id = excluded.tenant_id,
           authorization_endpoint = excluded.authorization_endpoint,
           client_id = excluded.client_id,
+          token_endpoint = COALESCE(excluded.token_endpoint, lti_issuer_registrations.token_endpoint),
+          client_secret = COALESCE(excluded.client_secret, lti_issuer_registrations.client_secret),
           allow_unsigned_id_token = excluded.allow_unsigned_id_token,
           updated_at = excluded.updated_at
       `,
@@ -7838,6 +7877,8 @@ export const upsertLtiIssuerRegistration = async (
         input.tenantId,
         input.authorizationEndpoint,
         input.clientId,
+        input.tokenEndpoint ?? null,
+        input.clientSecret ?? null,
         allowUnsignedIdToken ? 1 : 0,
         nowIso,
         nowIso,
@@ -7853,6 +7894,8 @@ export const upsertLtiIssuerRegistration = async (
           tenant_id AS tenantId,
           authorization_endpoint AS authorizationEndpoint,
           client_id AS clientId,
+          token_endpoint AS tokenEndpoint,
+          client_secret AS clientSecret,
           allow_unsigned_id_token AS allowUnsignedIdToken,
           created_at AS createdAt,
           updated_at AS updatedAt
@@ -7896,6 +7939,8 @@ export const listLtiIssuerRegistrations = async (
           tenant_id AS tenantId,
           authorization_endpoint AS authorizationEndpoint,
           client_id AS clientId,
+          token_endpoint AS tokenEndpoint,
+          client_secret AS clientSecret,
           allow_unsigned_id_token AS allowUnsignedIdToken,
           created_at AS createdAt,
           updated_at AS updatedAt

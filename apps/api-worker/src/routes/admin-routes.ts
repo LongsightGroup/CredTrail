@@ -157,6 +157,22 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     };
   };
 
+  const ltiIssuerRegistrationApiResponse = (
+    registration: Awaited<ReturnType<typeof upsertLtiIssuerRegistration>>,
+  ): Record<string, unknown> => {
+    return {
+      issuer: registration.issuer,
+      tenantId: registration.tenantId,
+      authorizationEndpoint: registration.authorizationEndpoint,
+      clientId: registration.clientId,
+      tokenEndpoint: registration.tokenEndpoint,
+      hasClientSecret: registration.clientSecret !== null && registration.clientSecret.length > 0,
+      allowUnsignedIdToken: registration.allowUnsignedIdToken,
+      createdAt: registration.createdAt,
+      updatedAt: registration.updatedAt,
+    };
+  };
+
   app.put('/v1/admin/tenants/:tenantId', async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
@@ -877,7 +893,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     const registrations = await listLtiIssuerRegistrations(resolveDatabase(c.env));
 
     return c.json({
-      registrations,
+      registrations: registrations.map((registration) => ltiIssuerRegistrationApiResponse(registration)),
     });
   });
 
@@ -1142,6 +1158,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: request.tenantId,
       authorizationEndpoint: request.authorizationEndpoint,
       clientId: request.clientId,
+      tokenEndpoint: request.tokenEndpoint,
+      clientSecret: request.clientSecret,
       allowUnsignedIdToken: request.allowUnsignedIdToken,
     });
 
@@ -1155,13 +1173,15 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: registration.tenantId,
         clientId: registration.clientId,
         authorizationEndpoint: registration.authorizationEndpoint,
+        tokenEndpoint: registration.tokenEndpoint,
+        hasClientSecret: registration.clientSecret !== null,
         allowUnsignedIdToken: registration.allowUnsignedIdToken,
       },
     });
 
     return c.json(
       {
-        registration,
+        registration: ltiIssuerRegistrationApiResponse(registration),
       },
       201,
     );
@@ -1260,8 +1280,12 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: formData.get('tenantId') ?? '',
       authorizationEndpoint: formData.get('authorizationEndpoint') ?? '',
       clientId: formData.get('clientId') ?? '',
+      tokenEndpoint: formData.get('tokenEndpoint') ?? '',
+      clientSecret: formData.get('clientSecret') ?? '',
       allowUnsignedIdToken: formData.get('allowUnsignedIdToken') !== null,
     };
+    const parsedTokenEndpoint = formState.tokenEndpoint?.trim() ?? '';
+    const parsedClientSecret = formState.clientSecret?.trim() ?? '';
 
     let request;
 
@@ -1271,6 +1295,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: formState.tenantId,
         authorizationEndpoint: formState.authorizationEndpoint,
         clientId: formState.clientId,
+        ...(parsedTokenEndpoint.length === 0 ? {} : { tokenEndpoint: parsedTokenEndpoint }),
+        ...(parsedClientSecret.length === 0 ? {} : { clientSecret: parsedClientSecret }),
         allowUnsignedIdToken: formState.allowUnsignedIdToken,
       });
     } catch (error) {
@@ -1287,6 +1313,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: request.tenantId,
       authorizationEndpoint: request.authorizationEndpoint,
       clientId: request.clientId,
+      tokenEndpoint: request.tokenEndpoint,
+      clientSecret: request.clientSecret,
       allowUnsignedIdToken: request.allowUnsignedIdToken,
     });
 
@@ -1300,6 +1328,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: registration.tenantId,
         clientId: registration.clientId,
         authorizationEndpoint: registration.authorizationEndpoint,
+        tokenEndpoint: registration.tokenEndpoint,
+        hasClientSecret: registration.clientSecret !== null,
         allowUnsignedIdToken: registration.allowUnsignedIdToken,
       },
     });

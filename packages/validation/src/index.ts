@@ -711,6 +711,8 @@ export const adminUpsertLtiIssuerRegistrationRequestSchema = z.object({
   tenantId: tenantIdSchema,
   authorizationEndpoint: z.string().url(),
   clientId: z.string().trim().min(1).max(255),
+  tokenEndpoint: z.string().url().optional(),
+  clientSecret: z.string().trim().min(1).max(2048).optional(),
   allowUnsignedIdToken: z.boolean().optional(),
 });
 

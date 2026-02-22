@@ -78,6 +78,8 @@ const sampleLtiIssuerRegistration = (
     tenantId: 'tenant_123',
     authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
     clientId: 'canvas-client-123',
+    tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+    clientSecret: null,
     allowUnsignedIdToken: false,
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
@@ -117,11 +119,17 @@ describe('admin LTI issuer registration configuration', () => {
       env,
     );
     const body = await response.json<{
-      registrations: LtiIssuerRegistrationRecord[];
+      registrations: {
+        issuer: string;
+        tokenEndpoint: string | null;
+        hasClientSecret: boolean;
+      }[];
     }>();
 
     expect(response.status).toBe(200);
     expect(body.registrations[0]?.issuer).toBe('https://canvas.example.edu');
+    expect(body.registrations[0]?.tokenEndpoint).toBe('https://canvas.example.edu/login/oauth2/token');
+    expect(body.registrations[0]?.hasClientSecret).toBe(false);
     expect(mockedListLtiIssuerRegistrations).toHaveBeenCalledWith(fakeDb);
   });
 
@@ -132,6 +140,7 @@ describe('admin LTI issuer registration configuration', () => {
     };
     mockedUpsertLtiIssuerRegistration.mockResolvedValue(
       sampleLtiIssuerRegistration({
+        clientSecret: 'canvas-secret',
         allowUnsignedIdToken: true,
       }),
     );
@@ -149,22 +158,32 @@ describe('admin LTI issuer registration configuration', () => {
           tenantId: 'tenant_123',
           authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
           clientId: 'canvas-client-123',
+          tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+          clientSecret: 'canvas-secret',
           allowUnsignedIdToken: true,
         }),
       },
       env,
     );
     const body = await response.json<{
-      registration: LtiIssuerRegistrationRecord;
+      registration: {
+        hasClientSecret: boolean;
+        tokenEndpoint: string | null;
+        allowUnsignedIdToken: boolean;
+      };
     }>();
 
     expect(response.status).toBe(201);
     expect(body.registration.allowUnsignedIdToken).toBe(true);
+    expect(body.registration.tokenEndpoint).toBe('https://canvas.example.edu/login/oauth2/token');
+    expect(body.registration.hasClientSecret).toBe(true);
     expect(mockedUpsertLtiIssuerRegistration).toHaveBeenCalledWith(fakeDb, {
       issuer: 'https://canvas.example.edu',
       tenantId: 'tenant_123',
       authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
       clientId: 'canvas-client-123',
+      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+      clientSecret: 'canvas-secret',
       allowUnsignedIdToken: true,
     });
   });
@@ -199,6 +218,8 @@ describe('admin LTI issuer registration configuration', () => {
           tenantId: 'tenant_123',
           authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
           clientId: 'canvas-client-123',
+          tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+          clientSecret: 'canvas-secret',
           allowUnsignedIdToken: 'on',
         }).toString(),
       },
@@ -214,6 +235,8 @@ describe('admin LTI issuer registration configuration', () => {
       tenantId: 'tenant_123',
       authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
       clientId: 'canvas-client-123',
+      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+      clientSecret: 'canvas-secret',
       allowUnsignedIdToken: true,
     });
   });

@@ -26,6 +26,27 @@ const ltiRoleLabel = (roleKind: LtiRoleKind): string => {
 
 const LTI_PAGE_HEAD_TAGS = renderPageAssetTags(['foundationCss', 'ltiPagesCss']);
 
+export interface LtiBulkIssuanceRosterMember {
+  userId: string;
+  sourcedId: string | null;
+  displayName: string | null;
+  email: string | null;
+  roleSummary: string;
+  status: string | null;
+}
+
+export interface LtiBulkIssuanceView {
+  status: 'ready' | 'unavailable' | 'error';
+  message: string;
+  badgeTemplateId: string | null;
+  courseContextTitle: string | null;
+  courseContextId: string | null;
+  contextMembershipsUrl: string | null;
+  learnerCount: number;
+  totalCount: number;
+  members: readonly LtiBulkIssuanceRosterMember[];
+}
+
 export const ltiLaunchResultPage = (input: {
   roleKind: LtiRoleKind;
   tenantId: string;
@@ -38,7 +59,78 @@ export const ltiLaunchResultPage = (input: {
   targetLinkUri: string;
   messageType: string;
   dashboardPath: string;
+  bulkIssuanceView: LtiBulkIssuanceView | null;
 }): string => {
+  const bulkIssuanceSection =
+    input.bulkIssuanceView === null
+      ? ''
+      : (() => {
+          const view = input.bulkIssuanceView;
+          const rosterRows =
+            view.members.length === 0
+              ? '<tr><td colspan="5" class="lti-launch__bulk-empty">No learner members returned by LMS roster for this launch.</td></tr>'
+              : view.members
+                  .map((member) => {
+                    const displayName = member.displayName ?? member.userId;
+                    const email = member.email ?? 'Not provided';
+                    const sourcedId = member.sourcedId ?? 'Not provided';
+                    const roles = member.roleSummary.length === 0 ? 'Not provided' : member.roleSummary;
+                    const status = member.status ?? 'Not provided';
+
+                    return `<tr>
+              <td>${escapeHtml(displayName)}</td>
+              <td>${escapeHtml(email)}</td>
+              <td>${escapeHtml(sourcedId)}</td>
+              <td>${escapeHtml(roles)}</td>
+              <td>${escapeHtml(status)}</td>
+            </tr>`;
+                  })
+                  .join('\n');
+          const contextTitle =
+            view.courseContextTitle === null ? 'Not provided' : escapeHtml(view.courseContextTitle);
+          const contextId = view.courseContextId === null ? 'Not provided' : escapeHtml(view.courseContextId);
+          const badgeTemplateId =
+            view.badgeTemplateId === null ? 'Not provided in placement URL' : escapeHtml(view.badgeTemplateId);
+          const contextMembershipsUrl =
+            view.contextMembershipsUrl === null ? 'Not provided' : escapeHtml(view.contextMembershipsUrl);
+
+          return `<article class="lti-launch__card lti-launch__card--stack">
+        <h2 class="lti-launch__bulk-title">Bulk issuance view</h2>
+        <p class="lti-launch__hint">NRPS roster pull for instructor launch context.</p>
+        <p class="lti-launch__bulk-status lti-launch__bulk-status--${escapeHtml(view.status)}">${escapeHtml(
+            view.message,
+          )}</p>
+        <dl class="lti-launch__bulk-meta">
+          <dt>Badge template</dt>
+          <dd>${badgeTemplateId}</dd>
+          <dt>Course context</dt>
+          <dd>${contextTitle}</dd>
+          <dt>Course context ID</dt>
+          <dd>${contextId}</dd>
+          <dt>Roster endpoint</dt>
+          <dd>${contextMembershipsUrl}</dd>
+          <dt>Learner members</dt>
+          <dd>${escapeHtml(String(view.learnerCount))} of ${escapeHtml(String(view.totalCount))}</dd>
+        </dl>
+        <div class="lti-launch__bulk-table-wrap">
+          <table class="lti-launch__bulk-table">
+            <thead>
+              <tr>
+                <th>Learner</th>
+                <th>Email</th>
+                <th>Sourced ID</th>
+                <th>Roles</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rosterRows}
+            </tbody>
+          </table>
+        </div>
+      </article>`;
+        })();
+
   return renderPageShell(
     'LTI Launch Complete | CredTrail',
     `<section class="lti-launch">
@@ -74,6 +166,7 @@ export const ltiLaunchResultPage = (input: {
           <a href="${escapeHtml(input.dashboardPath)}">Open learner dashboard</a>
         </p>
       </article>
+      ${bulkIssuanceSection}
     </section>`,
     LTI_PAGE_HEAD_TAGS,
   );
@@ -165,6 +258,8 @@ export interface LtiIssuerRegistrationFormState {
   tenantId?: string;
   authorizationEndpoint?: string;
   clientId?: string;
+  tokenEndpoint?: string;
+  clientSecret?: string;
   allowUnsignedIdToken?: boolean;
 }
 
@@ -176,14 +271,21 @@ export const ltiIssuerRegistrationAdminPage = (input: {
 }): string => {
   const registrationRows =
     input.registrations.length === 0
-      ? '<tr><td colspan="6" class="lti-registration__empty">No LTI issuer registrations configured.</td></tr>'
+      ? '<tr><td colspan="8" class="lti-registration__empty">No LTI issuer registrations configured.</td></tr>'
       : input.registrations
           .map((registration) => {
+            const tokenEndpointCell =
+              registration.tokenEndpoint === null
+                ? 'Not configured'
+                : escapeHtml(registration.tokenEndpoint);
+
             return `<tr>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.issuer)}</td>
       <td>${escapeHtml(registration.tenantId)}</td>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.clientId)}</td>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.authorizationEndpoint)}</td>
+      <td class="lti-registration__wrap-anywhere">${tokenEndpointCell}</td>
+      <td>${registration.clientSecret === null ? 'Not set' : 'Configured'}</td>
       <td>${registration.allowUnsignedIdToken ? 'true' : 'false'}</td>
       <td>
         <form method="post" action="/admin/lti/issuer-registrations/delete">
@@ -228,6 +330,14 @@ export const ltiIssuerRegistrationAdminPage = (input: {
           <span>Authorization endpoint</span>
           <input name="authorizationEndpoint" type="url" required value="${escapeHtml(input.formState?.authorizationEndpoint ?? '')}" />
         </label>
+        <label class="lti-registration__field">
+          <span>Token endpoint (required for NRPS roster pull)</span>
+          <input name="tokenEndpoint" type="url" value="${escapeHtml(input.formState?.tokenEndpoint ?? '')}" />
+        </label>
+        <label class="lti-registration__field">
+          <span>Client secret (required for NRPS roster pull)</span>
+          <input name="clientSecret" type="password" value="" autocomplete="off" />
+        </label>
         <label class="lti-registration__checkbox">
           <input name="allowUnsignedIdToken" type="checkbox" ${
             input.formState?.allowUnsignedIdToken === true ? 'checked' : ''
@@ -246,6 +356,8 @@ export const ltiIssuerRegistrationAdminPage = (input: {
               <th>Tenant</th>
               <th>Client ID</th>
               <th>Authorization endpoint</th>
+              <th>Token endpoint</th>
+              <th>NRPS client secret</th>
               <th>Unsigned test mode</th>
               <th>Actions</th>
             </tr>

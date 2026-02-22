@@ -96,6 +96,8 @@ const sampleLtiIssuerRegistration = (
     tenantId: 'tenant_123',
     authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
     clientId: 'canvas-client-123',
+    tokenEndpoint: null,
+    clientSecret: null,
     allowUnsignedIdToken: false,
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
@@ -466,6 +468,216 @@ describe('LTI 1.3 core launch flow', () => {
         tenantId,
         userId: linkedUserId,
       }),
+    );
+  });
+
+  it('pulls NRPS roster for instructor launch and renders bulk issuance view', async () => {
+    const env = createLtiEnv();
+    const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
+    env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
+      [issuer]: {
+        authorizationEndpoint,
+        clientId,
+        tenantId,
+        tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+        clientSecret: 'canvas-secret',
+        allowUnsignedIdToken: true,
+      },
+    });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: 'nrps-access-token',
+            token_type: 'Bearer',
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'membership-container-001',
+            context: {
+              id: 'course-42',
+            },
+            members: [
+              {
+                user_id: 'learner-001',
+                name: 'Learner One',
+                email: 'learner-one@example.edu',
+                lis_person_sourcedid: 'sourced-learner-001',
+                roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+                status: 'Active',
+              },
+              {
+                user_id: 'teacher-001',
+                name: 'Instructor One',
+                roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    try {
+      const loginResponse = await app.request(
+        `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+          'opaque-login-hint',
+        )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+          deploymentId,
+        )}`,
+        undefined,
+        env,
+      );
+      const loginLocation = loginResponse.headers.get('location');
+      const loginUrl = new URL(loginLocation ?? '');
+      const state = loginUrl.searchParams.get('state') ?? '';
+      const nonce = loginUrl.searchParams.get('nonce') ?? '';
+      const nowEpochSeconds = Math.floor(Date.now() / 1000);
+      const idToken = compactJwsForTest({
+        header: {
+          alg: 'RS256',
+          typ: 'JWT',
+        },
+        payload: {
+          iss: issuer,
+          sub: 'instructor-001',
+          aud: clientId,
+          exp: nowEpochSeconds + 300,
+          iat: nowEpochSeconds - 10,
+          nonce,
+          'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
+          'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
+          'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+          'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': rosterTargetLinkUri,
+          'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
+            id: 'resource-link-nrps-1',
+          },
+          'https://purl.imsglobal.org/spec/lti/claim/context': {
+            id: 'course-42',
+            title: 'Course 42',
+          },
+          'https://purl.imsglobal.org/spec/lti/claim/roles': [
+            'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+          ],
+          'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice': {
+            context_memberships_url: 'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
+            service_versions: ['2.0'],
+          },
+        },
+      });
+
+      const response = await app.request(
+        '/v1/lti/launch',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            id_token: idToken,
+            state,
+          }).toString(),
+        },
+        env,
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain('Bulk issuance view');
+      expect(body).toContain('Loaded 1 learner members from LMS NRPS roster.');
+      expect(body).toContain('badge_template_001');
+      expect(body).toContain('learner-one@example.edu');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe('https://canvas.example.edu/login/oauth2/token');
+      expect(fetchMock.mock.calls[1]?.[0]).toBe(
+        'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('renders unavailable NRPS state when issuer token settings are missing', async () => {
+    const env = createLtiEnv();
+    const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
+    const loginResponse = await app.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        'opaque-login-hint',
+      )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+        deploymentId,
+      )}`,
+      undefined,
+      env,
+    );
+    const loginLocation = loginResponse.headers.get('location');
+    const loginUrl = new URL(loginLocation ?? '');
+    const state = loginUrl.searchParams.get('state') ?? '';
+    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: 'RS256',
+        typ: 'JWT',
+      },
+      payload: {
+        iss: issuer,
+        sub: 'instructor-002',
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': rosterTargetLinkUri,
+        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
+          id: 'resource-link-nrps-2',
+        },
+        'https://purl.imsglobal.org/spec/lti/claim/roles': [
+          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        ],
+        'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice': {
+          context_memberships_url: 'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
+          service_versions: ['2.0'],
+        },
+      },
+    });
+
+    const response = await app.request(
+      '/v1/lti/launch',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state,
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Bulk issuance view');
+    expect(body).toContain(
+      'NRPS roster unavailable: issuer registration is missing token endpoint and client secret.',
     );
   });
 

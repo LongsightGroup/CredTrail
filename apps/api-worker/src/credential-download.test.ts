@@ -97,6 +97,8 @@ const sampleLtiIssuerRegistration = (
     tenantId: 'tenant_123',
     authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
     clientId: 'canvas-client-123',
+    tokenEndpoint: null,
+    clientSecret: null,
     allowUnsignedIdToken: false,
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',

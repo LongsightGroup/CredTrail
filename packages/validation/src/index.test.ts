@@ -535,11 +535,15 @@ describe('admin LTI issuer registration parsers', () => {
       tenantId: 'tenant_123',
       authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
       clientId: 'canvas-client-123',
+      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+      clientSecret: 'canvas-client-secret',
       allowUnsignedIdToken: true,
     });
 
     expect(request.issuer).toBe('https://canvas.example.edu');
     expect(request.tenantId).toBe('tenant_123');
+    expect(request.tokenEndpoint).toBe('https://canvas.example.edu/login/oauth2/token');
+    expect(request.clientSecret).toBe('canvas-client-secret');
     expect(request.allowUnsignedIdToken).toBe(true);
   });
 
@@ -558,6 +562,18 @@ describe('admin LTI issuer registration parsers', () => {
         tenantId: 'tenant_123',
         authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
         clientId: 'canvas-client-123',
+      });
+    }).toThrowError();
+  });
+
+  it('rejects invalid token endpoint URLs', () => {
+    expect(() => {
+      parseAdminUpsertLtiIssuerRegistrationRequest({
+        issuer: 'https://canvas.example.edu',
+        tenantId: 'tenant_123',
+        authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
+        clientId: 'canvas-client-123',
+        tokenEndpoint: 'not-a-url',
       });
     }).toThrowError();
   });

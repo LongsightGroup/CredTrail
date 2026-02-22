@@ -7,6 +7,8 @@ export interface LtiIssuerRegistryEntry {
   authorizationEndpoint: string;
   clientId: string;
   tenantId: string;
+  tokenEndpoint?: string;
+  clientSecret?: string;
   allowUnsignedIdToken: boolean;
 }
 
@@ -196,7 +198,11 @@ export const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): 
     const authorizationEndpoint = asNonEmptyString(entryObject.authorizationEndpoint);
     const clientId = asNonEmptyString(entryObject.clientId);
     const tenantId = asNonEmptyString(entryObject.tenantId);
+    const tokenEndpointRaw = entryObject.tokenEndpoint;
+    const clientSecretRaw = entryObject.clientSecret;
     const allowUnsignedIdToken = entryObject.allowUnsignedIdToken;
+    let tokenEndpoint: string | undefined;
+    let clientSecret: string | undefined;
 
     if (authorizationEndpoint === null || !isAbsoluteHttpUrl(authorizationEndpoint)) {
       throw new Error(
@@ -218,10 +224,36 @@ export const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): 
       );
     }
 
+    if (tokenEndpointRaw !== undefined) {
+      const parsedTokenEndpoint = asNonEmptyString(tokenEndpointRaw);
+
+      if (parsedTokenEndpoint === null || !isAbsoluteHttpUrl(parsedTokenEndpoint)) {
+        throw new Error(
+          `LTI_ISSUER_REGISTRY_JSON["${issuer}"].tokenEndpoint must be an absolute http(s) URL when provided`,
+        );
+      }
+
+      tokenEndpoint = parsedTokenEndpoint;
+    }
+
+    if (clientSecretRaw !== undefined) {
+      const parsedClientSecret = asNonEmptyString(clientSecretRaw);
+
+      if (parsedClientSecret === null) {
+        throw new Error(
+          `LTI_ISSUER_REGISTRY_JSON["${issuer}"].clientSecret must be a non-empty string when provided`,
+        );
+      }
+
+      clientSecret = parsedClientSecret;
+    }
+
     registry[normalizeLtiIssuer(issuer)] = {
       authorizationEndpoint,
       clientId,
       tenantId,
+      ...(tokenEndpoint === undefined ? {} : { tokenEndpoint }),
+      ...(clientSecret === undefined ? {} : { clientSecret }),
       allowUnsignedIdToken: allowUnsignedIdToken ?? false,
     };
   }
@@ -256,10 +288,20 @@ export const ltiIssuerRegistryFromStoredRows = (
       throw new Error(`Stored LTI issuer "${row.issuer}" has empty tenantId`);
     }
 
+    if (row.tokenEndpoint !== null && !isAbsoluteHttpUrl(row.tokenEndpoint)) {
+      throw new Error(`Stored LTI issuer "${row.issuer}" has invalid token endpoint URL`);
+    }
+
+    if (row.clientSecret !== null && row.clientSecret.trim().length === 0) {
+      throw new Error(`Stored LTI issuer "${row.issuer}" has empty client secret`);
+    }
+
     registry[issuer] = {
       authorizationEndpoint: row.authorizationEndpoint,
       clientId,
       tenantId,
+      ...(row.tokenEndpoint === null ? {} : { tokenEndpoint: row.tokenEndpoint }),
+      ...(row.clientSecret === null ? {} : { clientSecret: row.clientSecret }),
       allowUnsignedIdToken: row.allowUnsignedIdToken,
     };
   }
