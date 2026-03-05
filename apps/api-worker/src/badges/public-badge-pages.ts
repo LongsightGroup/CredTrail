@@ -1458,6 +1458,17 @@ export const createPublicBadgePageRenderers = (
           text-decoration: none;
           font-weight: 700;
           background: var(--ct-theme-surface-brand-chip);
+          transition:
+            background-color var(--ct-duration-fast) var(--ct-ease-standard),
+            border-color var(--ct-duration-fast) var(--ct-ease-standard),
+            color var(--ct-duration-fast) var(--ct-ease-standard);
+        }
+
+        .badge-wall__hero-link:hover,
+        .badge-wall__hero-link:focus-visible {
+          color: var(--ct-theme-text-on-brand);
+          background: var(--ct-theme-surface-brand-chip-strong);
+          border-color: var(--ct-theme-text-inverse);
         }
   
         .badge-wall__list {
@@ -1607,12 +1618,29 @@ export const createPublicBadgePageRenderers = (
           );
           cursor: pointer;
           text-decoration: none;
+          transition:
+            transform var(--ct-duration-fast) var(--ct-ease-standard),
+            box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
+            border-color var(--ct-duration-fast) var(--ct-ease-standard),
+            color var(--ct-duration-fast) var(--ct-ease-standard);
+        }
+
+        .badge-wall__button:hover {
+          color: var(--ct-theme-text-body);
+          transform: translateY(-1px);
+          box-shadow: var(--ct-theme-shadow-soft);
+          border-color: var(--ct-theme-border-strong);
         }
 
         .badge-wall__button--primary {
           border-color: transparent;
           color: var(--ct-theme-text-on-brand);
           background: var(--ct-theme-gradient-action);
+        }
+
+        .badge-wall__button--primary:hover {
+          color: var(--ct-theme-text-on-brand);
+          background: var(--ct-theme-gradient-action-hover);
         }
 
         .badge-wall__copy-status {
@@ -1978,6 +2006,12 @@ export const createPublicBadgePageRenderers = (
           width: fit-content;
           color: var(--ct-theme-text-on-brand);
           font-weight: 700;
+        }
+
+        .criteria-registry__hero-link:hover,
+        .criteria-registry__hero-link:focus-visible {
+          color: var(--ct-theme-text-on-brand);
+          text-decoration-color: var(--ct-brand-sun-400);
         }
 
         .criteria-registry__template-grid {

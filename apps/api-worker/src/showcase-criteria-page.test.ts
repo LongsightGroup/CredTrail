@@ -261,6 +261,7 @@ describe('GET /showcase/:tenantId/criteria', () => {
     expect(body).toContain(
       '<meta name="description" content="Public criteria and governance metadata for tenant &quot;sakai&quot; badge template &quot;badge_template_sakai_1000&quot;."',
     );
+    expect(body).toContain('.criteria-registry__hero-link:hover');
 
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'sakai',
