@@ -1385,6 +1385,33 @@ export interface ListLearnerBadgeSummariesInput {
   userId: string;
 }
 
+export interface ListTenantAssertionsInput {
+  tenantId: string;
+  badgeTemplateId?: string | undefined;
+  recipientQuery?: string | undefined;
+  state?: AssertionLifecycleState | undefined;
+  limit?: number | undefined;
+}
+
+export interface TenantAssertionSummaryRecord {
+  assertionId: string;
+  tenantId: string;
+  publicId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  state: AssertionLifecycleState;
+  source: ResolveAssertionLifecycleStateResult['source'];
+  reasonCode: AssertionLifecycleReasonCode | null;
+  reason: string | null;
+  transitionedAt: string | null;
+}
+
 export interface ListPublicBadgeWallEntriesInput {
   tenantId: string;
   badgeTemplateId?: string | undefined;
@@ -3047,6 +3074,24 @@ interface LearnerBadgeSummaryRow {
   badgeDescription: string | null;
   issuedAt: string;
   revokedAt: string | null;
+}
+
+interface TenantAssertionSummaryRow {
+  assertionId: string;
+  tenantId: string;
+  publicId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  latestToState: AssertionLifecycleState | null;
+  latestReasonCode: AssertionLifecycleReasonCode | null;
+  latestReason: string | null;
+  latestTransitionedAt: string | null;
 }
 
 interface PublicBadgeWallEntryRow {
@@ -6181,6 +6226,54 @@ const mapLearnerBadgeSummaryRow = (row: LearnerBadgeSummaryRow): LearnerBadgeSum
     badgeDescription: row.badgeDescription,
     issuedAt: row.issuedAt,
     revokedAt: row.revokedAt,
+  };
+};
+
+const mapTenantAssertionSummaryRow = (
+  row: TenantAssertionSummaryRow,
+): TenantAssertionSummaryRecord => {
+  let state: AssertionLifecycleState = 'active';
+  let source: ResolveAssertionLifecycleStateResult['source'] = 'default_active';
+  let reasonCode: AssertionLifecycleReasonCode | null = null;
+  let reason: string | null = null;
+  let transitionedAt: string | null = null;
+
+  if (row.revokedAt !== null && row.latestToState === 'revoked') {
+    state = 'revoked';
+    source = 'lifecycle_event';
+    reasonCode = row.latestReasonCode;
+    reason = row.latestReason ?? 'credential has been revoked by issuer';
+    transitionedAt = row.latestTransitionedAt ?? row.revokedAt;
+  } else if (row.revokedAt !== null) {
+    state = 'revoked';
+    source = 'assertion_revocation';
+    reason = 'credential has been revoked by issuer';
+    transitionedAt = row.revokedAt;
+  } else if (row.latestToState !== null) {
+    state = row.latestToState;
+    source = 'lifecycle_event';
+    reasonCode = row.latestReasonCode;
+    reason = row.latestReason;
+    transitionedAt = row.latestTransitionedAt;
+  }
+
+  return {
+    assertionId: row.assertionId,
+    tenantId: row.tenantId,
+    publicId: row.publicId,
+    badgeTemplateId: row.badgeTemplateId,
+    badgeTitle: row.badgeTitle,
+    badgeImageUri: row.badgeImageUri,
+    recipientIdentity: row.recipientIdentity,
+    recipientIdentityType: row.recipientIdentityType,
+    issuedAt: row.issuedAt,
+    issuedByUserId: row.issuedByUserId,
+    revokedAt: row.revokedAt,
+    state,
+    source,
+    reasonCode,
+    reason,
+    transitionedAt,
   };
 };
 
@@ -10906,6 +10999,101 @@ export const listLearnerBadgeSummaries = async (
     .all<LearnerBadgeSummaryRow>();
 
   return result.results.map((row) => mapLearnerBadgeSummaryRow(row));
+};
+
+export const listTenantAssertions = async (
+  db: SqlDatabase,
+  input: ListTenantAssertionsInput,
+): Promise<TenantAssertionSummaryRecord[]> => {
+  const queryLimit = Math.max(1, Math.min(input.limit ?? 100, 500));
+  const whereClauses = ['assertions.tenant_id = ?'];
+  const params: unknown[] = [input.tenantId];
+
+  if (input.badgeTemplateId !== undefined) {
+    whereClauses.push('assertions.badge_template_id = ?');
+    params.push(input.badgeTemplateId);
+  }
+
+  if (input.recipientQuery !== undefined) {
+    const normalizedQuery = `%${input.recipientQuery.trim().toLowerCase()}%`;
+    whereClauses.push(
+      `(
+        LOWER(assertions.recipient_identity) LIKE ?
+        OR LOWER(assertions.id) LIKE ?
+        OR LOWER(COALESCE(assertions.public_id, '')) LIKE ?
+      )`,
+    );
+    params.push(normalizedQuery, normalizedQuery, normalizedQuery);
+  }
+
+  if (input.state !== undefined) {
+    whereClauses.push(
+      `(
+        CASE
+          WHEN assertions.revoked_at IS NOT NULL THEN 'revoked'
+          WHEN lifecycle.to_state IS NOT NULL THEN lifecycle.to_state
+          ELSE 'active'
+        END
+      ) = ?`,
+    );
+    params.push(input.state);
+  }
+
+  const listStatement = (): Promise<SqlQueryResult<TenantAssertionSummaryRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          assertions.id AS assertionId,
+          assertions.tenant_id AS tenantId,
+          assertions.public_id AS publicId,
+          assertions.badge_template_id AS badgeTemplateId,
+          badge_templates.title AS badgeTitle,
+          badge_templates.image_uri AS badgeImageUri,
+          assertions.recipient_identity AS recipientIdentity,
+          assertions.recipient_identity_type AS recipientIdentityType,
+          assertions.issued_at AS issuedAt,
+          assertions.issued_by_user_id AS issuedByUserId,
+          assertions.revoked_at AS revokedAt,
+          lifecycle.to_state AS latestToState,
+          lifecycle.reason_code AS latestReasonCode,
+          lifecycle.reason AS latestReason,
+          lifecycle.transitioned_at AS latestTransitionedAt
+        FROM assertions
+        INNER JOIN badge_templates
+          ON badge_templates.tenant_id = assertions.tenant_id
+          AND badge_templates.id = assertions.badge_template_id
+        LEFT JOIN assertion_lifecycle_events lifecycle
+          ON lifecycle.id = (
+            SELECT ale.id
+            FROM assertion_lifecycle_events ale
+            WHERE ale.tenant_id = assertions.tenant_id
+              AND ale.assertion_id = assertions.id
+            ORDER BY ale.transitioned_at DESC, ale.created_at DESC, ale.id DESC
+            LIMIT 1
+          )
+        WHERE ${whereClauses.join('\n          AND ')}
+        ORDER BY assertions.issued_at DESC, assertions.id DESC
+        LIMIT ?
+      `,
+      )
+      .bind(...params, queryLimit)
+      .all<TenantAssertionSummaryRow>();
+
+  let result: SqlQueryResult<TenantAssertionSummaryRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionLifecycleEventsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionLifecycleEventsTable(db);
+    result = await listStatement();
+  }
+
+  return result.results.map((row) => mapTenantAssertionSummaryRow(row));
 };
 
 export const listPublicBadgeWallEntries = async (

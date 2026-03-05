@@ -6,6 +6,7 @@ import {
   parseRevokeTenantApiKeyRequest,
   parseResolveDedicatedDbProvisioningRequest,
   parseTenantApiKeyListQuery,
+  parseTenantAssertionListQuery,
   parseTenantApiKeyPathParams,
   parseTenantDedicatedDbProvisioningRequestPathParams,
   parseUpsertTenantSsoSamlConfigurationRequest,
@@ -1267,6 +1268,39 @@ describe('enterprise governance request parsers', () => {
     expect(pathParams.apiKeyId).toBe('tak_123');
     expect(defaultQuery.includeRevoked).toBe(false);
     expect(explicitQuery.includeRevoked).toBe(true);
+  });
+
+  it('parses tenant assertion list query filters and bounds', () => {
+    const defaultQuery = parseTenantAssertionListQuery({});
+    const filteredQuery = parseTenantAssertionListQuery({
+      badgeTemplateId: 'badge_template_001',
+      recipientQuery: 'csev@umich.edu',
+      state: 'revoked',
+      limit: '125',
+    });
+
+    expect(defaultQuery.badgeTemplateId).toBeUndefined();
+    expect(defaultQuery.recipientQuery).toBeUndefined();
+    expect(defaultQuery.state).toBeUndefined();
+    expect(defaultQuery.limit).toBeUndefined();
+    expect(filteredQuery.badgeTemplateId).toBe('badge_template_001');
+    expect(filteredQuery.recipientQuery).toBe('csev@umich.edu');
+    expect(filteredQuery.state).toBe('revoked');
+    expect(filteredQuery.limit).toBe(125);
+  });
+
+  it('rejects invalid tenant assertion list query values', () => {
+    expect(() => {
+      parseTenantAssertionListQuery({
+        state: 'paused',
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseTenantAssertionListQuery({
+        limit: '0',
+      });
+    }).toThrowError();
   });
 
   it('parses tenant API key create and revoke payloads', () => {

@@ -264,6 +264,11 @@ export const institutionAdminDashboardPage = (input: {
       )}</option>`;
     })
     .join('\n');
+  const templateFilterOptions = input.badgeTemplates
+    .map((template) => {
+      return `<option value="${escapeHtml(template.id)}">${escapeHtml(template.title)}</option>`;
+    })
+    .join('\n');
   const formatRuleOption = (rule: BadgeIssuanceRuleRecord, includeSelected: boolean, index: number): string => {
       const versions = versionsByRuleId.get(rule.id) ?? [];
       const latestVersion = versions[0] ?? null;
@@ -323,6 +328,7 @@ export const institutionAdminDashboardPage = (input: {
           <a href="#org-unit-panel">Org units</a>
           <a href="#api-key-panel">API keys</a>
           <a href="#governance-panel">Delegation</a>
+          <a href="#issued-badges-panel">Issued badges</a>
           <a href="#lifecycle-panel">Lifecycle</a>
           <a href="${escapeHtml(adminAuditLogPath)}">Audit logs</a>
           <a href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
@@ -642,6 +648,65 @@ export const institutionAdminDashboardPage = (input: {
           </article>
         </div>
         <div class="ct-admin__grid ct-stack">
+          <article id="issued-badges-panel" class="ct-admin__panel ct-admin__panel--table ct-stack">
+            <h2>Issued Badges Ledger</h2>
+            <p>Tenant-wide assertion log with direct audit and revocation actions.</p>
+            <form id="issued-badges-filter-form" class="ct-admin__form ct-admin__form--inline ct-grid">
+              <label>
+                Recipient / assertion search
+                <input
+                  name="recipientQuery"
+                  type="text"
+                  placeholder="csev@umich.edu or tenant_123:assertion_456"
+                />
+              </label>
+              <label>
+                Badge template
+                <select name="badgeTemplateId">
+                  <option value="">All templates</option>
+                  ${templateFilterOptions}
+                </select>
+              </label>
+              <label>
+                Lifecycle state
+                <select name="state">
+                  <option value="">All states</option>
+                  <option value="active">active</option>
+                  <option value="suspended">suspended</option>
+                  <option value="revoked">revoked</option>
+                  <option value="expired">expired</option>
+                </select>
+              </label>
+              <label>
+                Limit
+                <input name="limit" type="number" min="1" max="500" step="1" value="100" />
+              </label>
+              <button type="submit">Load issued badges</button>
+            </form>
+            <p id="issued-badges-status" class="ct-admin__status">Load tenant assertions from the browser.</p>
+            <div class="ct-admin__table-wrap">
+              <table class="ct-admin__table">
+                <thead>
+                  <tr>
+                    <th>Issued</th>
+                    <th>Recipient</th>
+                    <th>Template</th>
+                    <th>State</th>
+                    <th>Assertion</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="issued-badges-body">
+                  <tr>
+                    <td colspan="6" class="ct-admin__empty">
+                      No assertions loaded yet.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p id="issued-badges-action-status" class="ct-admin__status"></p>
+          </article>
           <article class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Badge Rules (${ruleCount})</h2>
             <p>Lifecycle actions operate on each rule’s latest version.</p>

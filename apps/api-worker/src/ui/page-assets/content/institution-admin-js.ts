@@ -112,6 +112,10 @@ export const INSTITUTION_ADMIN_JS = `
   const ruleEvaluateForm = document.getElementById('rule-evaluate-form');
   const ruleEvaluateStatus = document.getElementById('rule-evaluate-status');
   const ruleActionStatus = document.getElementById('rule-action-status');
+  const issuedBadgesFilterForm = document.getElementById('issued-badges-filter-form');
+  const issuedBadgesStatus = document.getElementById('issued-badges-status');
+  const issuedBadgesBody = document.getElementById('issued-badges-body');
+  const issuedBadgesActionStatus = document.getElementById('issued-badges-action-status');
   const membershipScopeForm = document.getElementById('membership-scope-form');
   const membershipScopeStatus = document.getElementById('membership-scope-status');
   const membershipScopeRemoveForm = document.getElementById('membership-scope-remove-form');
@@ -168,6 +172,132 @@ export const INSTITUTION_ADMIN_JS = `
 
     el.hidden = false;
     el.textContent = value;
+  };
+  const escapeHtml = (value) => {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  };
+  const formatTimestamp = (value) => {
+    if (typeof value !== 'string' || value.length === 0) {
+      return 'n/a';
+    }
+
+    const parsed = Date.parse(value);
+
+    if (!Number.isFinite(parsed)) {
+      return value;
+    }
+
+    return new Date(parsed).toLocaleString();
+  };
+  const parseIssuedBadgesLimit = (rawValue) => {
+    const fallbackLimit = 100;
+
+    if (typeof rawValue !== 'string') {
+      return fallbackLimit;
+    }
+
+    const parsed = Number(rawValue.trim());
+
+    if (!Number.isFinite(parsed)) {
+      return fallbackLimit;
+    }
+
+    return Math.max(1, Math.min(500, Math.trunc(parsed)));
+  };
+  const fillLifecycleAssertionIdInputs = (assertionId) => {
+    if (typeof assertionId !== 'string' || assertionId.length === 0) {
+      return;
+    }
+
+    if (assertionLifecycleViewForm instanceof HTMLFormElement) {
+      const lifecycleInput = assertionLifecycleViewForm.elements.namedItem('assertionId');
+
+      if (lifecycleInput instanceof HTMLInputElement) {
+        lifecycleInput.value = assertionId;
+      }
+    }
+
+    if (assertionLifecycleTransitionForm instanceof HTMLFormElement) {
+      const transitionInput = assertionLifecycleTransitionForm.elements.namedItem('assertionId');
+
+      if (transitionInput instanceof HTMLInputElement) {
+        transitionInput.value = assertionId;
+      }
+    }
+  };
+  const setIssuedBadgesEmptyState = (message) => {
+    if (!(issuedBadgesBody instanceof HTMLElement)) {
+      return;
+    }
+
+    issuedBadgesBody.innerHTML =
+      '<tr><td colspan="6" class="ct-admin__empty">' + escapeHtml(message) + '</td></tr>';
+  };
+  const loadAssertionLifecycle = async (assertionId, statusElement) => {
+    const normalizedAssertionId =
+      typeof assertionId === 'string' ? assertionId.trim() : '';
+
+    if (normalizedAssertionId.length === 0) {
+      if (statusElement instanceof HTMLElement) {
+        setStatus(statusElement, 'Assertion ID is required.', true);
+      }
+
+      return null;
+    }
+
+    if (statusElement instanceof HTMLElement) {
+      setStatus(statusElement, 'Loading lifecycle state...', false);
+    }
+
+    setCodeOutput(assertionLifecycleOutput, '');
+
+    try {
+      const response = await fetch(
+        assertionsApiPathPrefix + '/' + encodeURIComponent(normalizedAssertionId) + '/lifecycle',
+      );
+      const payload = await parseJsonBody(response);
+
+      if (!response.ok) {
+        if (statusElement instanceof HTMLElement) {
+          setStatus(statusElement, errorDetailFromPayload(payload), true);
+        }
+
+        return null;
+      }
+
+      const state = payload && typeof payload.state === 'string' ? payload.state : 'unknown';
+      const source = payload && typeof payload.source === 'string' ? payload.source : 'unknown';
+      const eventCount = payload && Array.isArray(payload.events) ? payload.events.length : 0;
+
+      if (statusElement instanceof HTMLElement) {
+        setStatus(
+          statusElement,
+          'Lifecycle loaded: state=' +
+            state +
+            ', source=' +
+            source +
+            ', events=' +
+            String(eventCount) +
+            '.',
+          false,
+        );
+      }
+
+      setCodeOutput(assertionLifecycleOutput, JSON.stringify(payload, null, 2));
+      fillLifecycleAssertionIdInputs(normalizedAssertionId);
+      return payload;
+    } catch {
+      if (statusElement instanceof HTMLElement) {
+        setStatus(statusElement, 'Unable to load lifecycle state from this browser session.', true);
+      }
+
+      return null;
+    }
   };
 
   if (manualIssueForm instanceof HTMLFormElement && manualIssueStatus instanceof HTMLElement) {
@@ -765,45 +895,9 @@ export const INSTITUTION_ADMIN_JS = `
   ) {
     assertionLifecycleViewForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      setStatus(assertionLifecycleViewStatus, 'Loading lifecycle state...', false);
-      setCodeOutput(assertionLifecycleOutput, '');
       const data = new FormData(assertionLifecycleViewForm);
       const assertionIdRaw = data.get('assertionId');
-      const assertionId = typeof assertionIdRaw === 'string' ? assertionIdRaw.trim() : '';
-
-      if (assertionId.length === 0) {
-        setStatus(assertionLifecycleViewStatus, 'Assertion ID is required.', true);
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          assertionsApiPathPrefix + '/' + encodeURIComponent(assertionId) + '/lifecycle',
-        );
-        const payload = await parseJsonBody(response);
-
-        if (!response.ok) {
-          setStatus(assertionLifecycleViewStatus, errorDetailFromPayload(payload), true);
-          return;
-        }
-
-        const state = payload && typeof payload.state === 'string' ? payload.state : 'unknown';
-        const source = payload && typeof payload.source === 'string' ? payload.source : 'unknown';
-        const eventCount =
-          payload && Array.isArray(payload.events) ? payload.events.length : 0;
-        setStatus(
-          assertionLifecycleViewStatus,
-          'Lifecycle loaded: state=' + state + ', source=' + source + ', events=' + String(eventCount) + '.',
-          false,
-        );
-        setCodeOutput(assertionLifecycleOutput, JSON.stringify(payload, null, 2));
-      } catch {
-        setStatus(
-          assertionLifecycleViewStatus,
-          'Unable to load lifecycle state from this browser session.',
-          true,
-        );
-      }
+      await loadAssertionLifecycle(assertionIdRaw, assertionLifecycleViewStatus);
     });
   }
 
@@ -874,6 +968,254 @@ export const INSTITUTION_ADMIN_JS = `
         );
       }
     });
+  }
+
+  if (
+    issuedBadgesFilterForm instanceof HTMLFormElement &&
+    issuedBadgesStatus instanceof HTMLElement &&
+    issuedBadgesBody instanceof HTMLElement &&
+    issuedBadgesActionStatus instanceof HTMLElement
+  ) {
+    const renderIssuedBadgeRows = (assertions) => {
+      if (!Array.isArray(assertions) || assertions.length === 0) {
+        setIssuedBadgesEmptyState('No assertions matched the selected filters.');
+        return;
+      }
+
+      issuedBadgesBody.innerHTML = assertions
+        .map((entry) => {
+          const assertionId =
+            entry && typeof entry.assertionId === 'string' ? entry.assertionId : '';
+          const recipientIdentity =
+            entry && typeof entry.recipientIdentity === 'string' ? entry.recipientIdentity : 'unknown';
+          const badgeTitle =
+            entry && typeof entry.badgeTitle === 'string' ? entry.badgeTitle : 'Unknown template';
+          const badgeTemplateId =
+            entry && typeof entry.badgeTemplateId === 'string' ? entry.badgeTemplateId : '';
+          const issuedAt = entry && typeof entry.issuedAt === 'string' ? entry.issuedAt : '';
+          const state = entry && typeof entry.state === 'string' ? entry.state : 'active';
+          const source = entry && typeof entry.source === 'string' ? entry.source : 'default_active';
+          const publicId = entry && typeof entry.publicId === 'string' ? entry.publicId : null;
+          const stateClass = ['active', 'suspended', 'revoked', 'expired'].includes(state)
+            ? state
+            : 'none';
+          const canRevoke = state !== 'revoked';
+          const viewBadgeHref = '/badges/' + encodeURIComponent(assertionId);
+          const rawJsonHref =
+            '/credentials/v1/' + encodeURIComponent(assertionId) + '/jsonld';
+
+          return (
+            '<tr>' +
+            '<td>' +
+            escapeHtml(formatTimestamp(issuedAt)) +
+            '</td>' +
+            '<td><strong>' +
+            escapeHtml(recipientIdentity) +
+            '</strong></td>' +
+            '<td><strong>' +
+            escapeHtml(badgeTitle) +
+            '</strong><div class="ct-admin__meta">' +
+            escapeHtml(badgeTemplateId) +
+            '</div></td>' +
+            '<td><span class="ct-admin__status-pill ct-admin__status-pill--' +
+            escapeHtml(stateClass) +
+            '">' +
+            escapeHtml(state) +
+            '</span><div class="ct-admin__meta">' +
+            escapeHtml(source) +
+            '</div></td>' +
+            '<td><div class="ct-admin__assertion-id">' +
+            escapeHtml(assertionId) +
+            '</div>' +
+            (publicId === null
+              ? ''
+              : '<div class="ct-admin__meta">public: ' + escapeHtml(publicId) + '</div>') +
+            '</td>' +
+            '<td><div class="ct-admin__actions">' +
+            '<a class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary" href="' +
+            escapeHtml(viewBadgeHref) +
+            '" target="_blank" rel="noopener noreferrer">View badge</a>' +
+            '<a class="ct-admin__button ct-admin__button--tiny ct-admin__button--ghost" href="' +
+            escapeHtml(rawJsonHref) +
+            '" target="_blank" rel="noopener noreferrer">JSON-LD</a>' +
+            '<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary" data-issued-action="audit" data-assertion-id="' +
+            escapeHtml(assertionId) +
+            '">Audit</button>' +
+            (canRevoke
+              ? '<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger" data-issued-action="revoke" data-assertion-id="' +
+                escapeHtml(assertionId) +
+                '">Revoke</button>'
+              : '') +
+            '</div></td>' +
+            '</tr>'
+          );
+        })
+        .join('');
+    };
+
+    const loadIssuedBadges = async () => {
+      setStatus(issuedBadgesStatus, 'Loading issued badges...', false);
+      setIssuedBadgesEmptyState('Loading assertions...');
+      const data = new FormData(issuedBadgesFilterForm);
+      const recipientQueryRaw = data.get('recipientQuery');
+      const badgeTemplateIdRaw = data.get('badgeTemplateId');
+      const stateRaw = data.get('state');
+      const limitRaw = data.get('limit');
+      const recipientQuery =
+        typeof recipientQueryRaw === 'string' ? recipientQueryRaw.trim() : '';
+      const badgeTemplateId =
+        typeof badgeTemplateIdRaw === 'string' ? badgeTemplateIdRaw.trim() : '';
+      const state = typeof stateRaw === 'string' ? stateRaw.trim() : '';
+      const limit = parseIssuedBadgesLimit(limitRaw);
+      const query = new URLSearchParams();
+      query.set('limit', String(limit));
+
+      if (recipientQuery.length > 0) {
+        query.set('recipientQuery', recipientQuery);
+      }
+
+      if (badgeTemplateId.length > 0) {
+        query.set('badgeTemplateId', badgeTemplateId);
+      }
+
+      if (state.length > 0) {
+        query.set('state', state);
+      }
+
+      try {
+        const response = await fetch(assertionsApiPathPrefix + '?' + query.toString());
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(issuedBadgesStatus, errorDetailFromPayload(payload), true);
+          setIssuedBadgesEmptyState('Unable to load assertions.');
+          return;
+        }
+
+        const assertions = payload && Array.isArray(payload.assertions) ? payload.assertions : [];
+        renderIssuedBadgeRows(assertions);
+        setStatus(
+          issuedBadgesStatus,
+          'Loaded ' + String(assertions.length) + ' assertion' + (assertions.length === 1 ? '' : 's') + '.',
+          false,
+        );
+      } catch {
+        setStatus(issuedBadgesStatus, 'Unable to load assertions from this browser session.', true);
+        setIssuedBadgesEmptyState('Unable to load assertions.');
+      }
+    };
+
+    const revokeAssertion = async (assertionId) => {
+      const reasonPrompt = window.prompt(
+        'Optional revocation reason for ' + assertionId + ':',
+        'Institution admin revocation',
+      );
+
+      if (reasonPrompt === null) {
+        return;
+      }
+
+      setStatus(issuedBadgesActionStatus, 'Revoking assertion ' + assertionId + '...', false);
+
+      try {
+        const response = await fetch(
+          assertionsApiPathPrefix +
+            '/' +
+            encodeURIComponent(assertionId) +
+            '/lifecycle/transition',
+          {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              toState: 'revoked',
+              reasonCode: 'issuer_requested',
+              ...(reasonPrompt.trim().length > 0 ? { reason: reasonPrompt.trim() } : {}),
+            }),
+          },
+        );
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(issuedBadgesActionStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(issuedBadgesActionStatus, 'Assertion revoked: ' + assertionId + '.', false);
+        await loadAssertionLifecycle(assertionId, assertionLifecycleViewStatus);
+        await loadIssuedBadges();
+      } catch {
+        setStatus(
+          issuedBadgesActionStatus,
+          'Unable to revoke assertion from this browser session.',
+          true,
+        );
+      }
+    };
+
+    issuedBadgesFilterForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await loadIssuedBadges();
+    });
+
+    issuedBadgesBody.addEventListener('click', async (event) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const actionButton = target.closest('button[data-issued-action]');
+
+      if (!(actionButton instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      const action = actionButton.dataset.issuedAction;
+      const assertionId = actionButton.dataset.assertionId;
+
+      if (typeof assertionId !== 'string' || assertionId.trim().length === 0) {
+        setStatus(issuedBadgesActionStatus, 'Missing assertion ID for selected action.', true);
+        return;
+      }
+
+      if (action === 'audit') {
+        setStatus(issuedBadgesActionStatus, 'Loading lifecycle audit for ' + assertionId + '...', false);
+        const lifecyclePayload = await loadAssertionLifecycle(
+          assertionId,
+          assertionLifecycleViewStatus,
+        );
+
+        if (lifecyclePayload === null) {
+          setStatus(issuedBadgesActionStatus, 'Unable to load lifecycle audit.', true);
+          return;
+        }
+
+        setStatus(issuedBadgesActionStatus, 'Lifecycle audit loaded for ' + assertionId + '.', false);
+        const lifecyclePanel = document.getElementById('lifecycle-panel');
+
+        if (lifecyclePanel instanceof HTMLElement) {
+          lifecyclePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        return;
+      }
+
+      if (action === 'revoke') {
+        if (
+          !window.confirm(
+            'Revoke assertion "' + assertionId + '"? This changes credential lifecycle state.',
+          )
+        ) {
+          return;
+        }
+
+        await revokeAssertion(assertionId);
+      }
+    });
+
+    void loadIssuedBadges();
   }
 
   if (ruleGovernanceForm instanceof HTMLFormElement && ruleGovernanceStatus instanceof HTMLElement) {

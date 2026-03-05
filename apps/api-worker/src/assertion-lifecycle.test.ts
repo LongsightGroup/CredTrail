@@ -14,6 +14,7 @@ vi.mock('@credtrail/db', async () => {
     findUserById: vi.fn(),
     hasTenantMembershipOrgUnitAccess: vi.fn(),
     hasTenantMembershipOrgUnitScopeAssignments: vi.fn(),
+    listTenantAssertions: vi.fn(),
     listAssertionLifecycleEvents: vi.fn(),
     recordAssertionLifecycleTransition: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
@@ -36,6 +37,7 @@ import {
   findTenantMembership,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
+  listTenantAssertions,
   listAssertionLifecycleEvents,
   recordAssertionLifecycleTransition,
   resolveAssertionLifecycleState,
@@ -64,6 +66,7 @@ const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgU
 const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
+const mockedListTenantAssertions = vi.mocked(listTenantAssertions);
 const mockedListAssertionLifecycleEvents = vi.mocked(listAssertionLifecycleEvents);
 const mockedRecordAssertionLifecycleTransition = vi.mocked(recordAssertionLifecycleTransition);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
@@ -215,10 +218,84 @@ describe('assertion lifecycle endpoints', () => {
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockReset();
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockResolvedValue(null);
     mockedResolveAssertionLifecycleState.mockReset();
+    mockedListTenantAssertions.mockReset();
+    mockedListTenantAssertions.mockResolvedValue([]);
     mockedListAssertionLifecycleEvents.mockReset();
     mockedRecordAssertionLifecycleTransition.mockReset();
     mockedCreateAuditLog.mockClear();
     mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
+  });
+
+  it('lists tenant assertions for issuer roles', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListTenantAssertions.mockResolvedValue([
+      {
+        assertionId: 'tenant_123:assertion_456',
+        tenantId: 'tenant_123',
+        publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+        badgeTemplateId: 'badge_template_001',
+        badgeTitle: 'TypeScript Foundations',
+        badgeImageUri: 'https://example.edu/badges/typescript.png',
+        recipientIdentity: 'learner@example.edu',
+        recipientIdentityType: 'email',
+        issuedAt: '2026-02-10T22:00:00.000Z',
+        issuedByUserId: 'usr_issuer',
+        revokedAt: null,
+        state: 'active',
+        source: 'default_active',
+        reasonCode: null,
+        reason: null,
+        transitionedAt: null,
+      },
+    ]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions?badgeTemplateId=badge_template_001&state=active&limit=25',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body.count).toBe(1);
+    expect(Array.isArray(body.assertions)).toBe(true);
+    expect(mockedListTenantAssertions).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      badgeTemplateId: 'badge_template_001',
+      state: 'active',
+      limit: 25,
+    });
+  });
+
+  it('returns 400 for invalid assertion list query filters', async () => {
+    const env = createEnv();
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/assertions?state=paused',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('Invalid assertion list query parameters');
+    expect(mockedListTenantAssertions).not.toHaveBeenCalled();
   });
 
   it('returns assertion lifecycle state and history for issuer roles', async () => {

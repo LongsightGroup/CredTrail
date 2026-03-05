@@ -108,6 +108,11 @@ export const INSTITUTION_ADMIN_CSS = `
   --ct-stack-gap: 0.65rem;
   min-width: 0;
 }
+.ct-admin__form--inline.ct-grid {
+  --ct-grid-gap: 0.6rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  align-items: end;
+}
 .ct-admin__form label {
   --ct-stack-gap: 0.28rem;
   display: grid;
@@ -358,6 +363,9 @@ export const INSTITUTION_ADMIN_CSS = `
   cursor: pointer;
 }
 .ct-admin__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--ct-radius-sm);
   padding: 0.45rem 0.72rem;
@@ -365,6 +373,8 @@ export const INSTITUTION_ADMIN_CSS = `
   font-weight: 700;
   color: var(--ct-theme-text-on-brand);
   background: var(--ct-theme-gradient-action);
+  text-decoration: none;
+  line-height: 1.1;
   cursor: pointer;
 }
 .ct-admin__button:disabled {
@@ -485,11 +495,29 @@ export const INSTITUTION_ADMIN_CSS = `
   color: var(--ct-theme-state-success);
   border-color: var(--ct-theme-border-success);
 }
+.ct-admin__status-pill--suspended,
+.ct-admin__status-pill--expired {
+  background: var(--ct-theme-surface-warning);
+  color: var(--ct-theme-state-warning);
+  border-color: var(--ct-theme-border-warning);
+}
 .ct-admin__status-pill--rejected,
-.ct-admin__status-pill--deprecated {
+.ct-admin__status-pill--deprecated,
+.ct-admin__status-pill--revoked {
   background: var(--ct-theme-surface-danger);
   color: var(--ct-theme-state-danger);
   border-color: var(--ct-theme-border-danger);
+}
+.ct-admin__assertion-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--ct-theme-text-subtle);
+  overflow-wrap: anywhere;
+}
+.ct-admin__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
 }
 .ct-admin__template-image {
   width: 3.2rem;
@@ -663,6 +691,7 @@ export const INSTITUTION_ADMIN_CSS = `
   color: var(--ct-theme-state-danger);
 }
 @media (max-width: 780px) {
+  .ct-admin__form--inline.ct-grid,
   .ct-admin__builder-grid.ct-grid,
   .ct-admin__condition-fields.ct-grid,
   .ct-admin__condition-header-fields.ct-grid {

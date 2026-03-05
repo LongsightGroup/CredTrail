@@ -304,6 +304,19 @@ export const tenantApiKeyListQuerySchema = z.object({
   }, z.boolean()),
 });
 
+export const tenantAssertionListQuerySchema = z.object({
+  badgeTemplateId: resourceIdSchema.optional(),
+  recipientQuery: z.string().trim().min(1).max(320).optional(),
+  state: assertionLifecycleStateSchema.optional(),
+  limit: z.preprocess((input) => {
+    if (input === undefined || input === '') {
+      return undefined;
+    }
+
+    return input;
+  }, z.coerce.number().int().min(1).max(500).optional()),
+});
+
 export const createBadgeTemplateRequestSchema = z.object({
   slug: badgeTemplateSlugSchema,
   title: badgeTemplateTitleSchema,
@@ -1053,6 +1066,7 @@ export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
   typeof delegatedIssuingAuthorityGrantListQuerySchema
 >;
 export type TenantApiKeyListQuery = z.infer<typeof tenantApiKeyListQuerySchema>;
+export type TenantAssertionListQuery = z.infer<typeof tenantAssertionListQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
 export type CreateTenantOrgUnitRequest = z.infer<typeof createTenantOrgUnitRequestSchema>;
@@ -1290,6 +1304,10 @@ export const parseDelegatedIssuingAuthorityGrantListQuery = (
 
 export const parseTenantApiKeyListQuery = (input: unknown): TenantApiKeyListQuery => {
   return tenantApiKeyListQuerySchema.parse(input);
+};
+
+export const parseTenantAssertionListQuery = (input: unknown): TenantAssertionListQuery => {
+  return tenantAssertionListQuerySchema.parse(input);
 };
 
 export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemplateRequest => {

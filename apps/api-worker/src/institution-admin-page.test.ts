@@ -305,6 +305,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Governance Delegation');
     expect(body).toContain('Rule Builder Workspace');
     expect(body).toContain('Evaluate Rule');
+    expect(body).toContain('Issued Badges Ledger');
     expect(body).toContain('Badge Rules (1)');
     expect(body).toContain('CS101 Excellence Rule');
     expect(body).toContain('TypeScript Foundations');
@@ -333,7 +334,12 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('href="#org-unit-panel"');
     expect(body).toContain('href="#api-key-panel"');
     expect(body).toContain('href="#governance-panel"');
+    expect(body).toContain('href="#issued-badges-panel"');
     expect(body).toContain('href="#lifecycle-panel"');
+    expect(body).toContain('id="issued-badges-filter-form"');
+    expect(body).toContain('id="issued-badges-body"');
+    expect(body).toContain('id="issued-badges-status"');
+    expect(body).toContain('id="issued-badges-action-status"');
     expect(body).toContain('id="assertion-lifecycle-view-form"');
     expect(body).toContain('id="assertion-lifecycle-transition-form"');
     expect(body).toContain('id="rule-governance-form"');

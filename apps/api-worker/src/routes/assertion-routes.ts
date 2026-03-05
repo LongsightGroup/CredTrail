@@ -3,6 +3,7 @@ import {
   createAuditLog,
   findAssertionById,
   findBadgeTemplateById,
+  listTenantAssertions,
   listAssertionLifecycleEvents,
   recordAssertionLifecycleTransition,
   resolveAssertionLifecycleState,
@@ -16,6 +17,7 @@ import {
   parseAssertionLifecycleTransitionRequest,
   parseAssertionPathParams,
   parseManualIssueBadgeRequest,
+  parseTenantAssertionListQuery,
   parseTenantPathParams,
   type ManualIssueBadgeRequest,
 } from '@credtrail/validation';
@@ -157,6 +159,49 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
 
       throw error;
     }
+  });
+
+  app.get('/v1/tenants/:tenantId/assertions', async (c): Promise<Response> => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseTenantAssertionListQuery({
+        badgeTemplateId: c.req.query('badgeTemplateId'),
+        recipientQuery: c.req.query('recipientQuery'),
+        state: c.req.query('state'),
+        limit: c.req.query('limit'),
+      });
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid assertion list query parameters',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const assertions = await listTenantAssertions(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      ...(query.badgeTemplateId === undefined ? {} : { badgeTemplateId: query.badgeTemplateId }),
+      ...(query.recipientQuery === undefined ? {} : { recipientQuery: query.recipientQuery }),
+      ...(query.state === undefined ? {} : { state: query.state }),
+      ...(query.limit === undefined ? {} : { limit: query.limit }),
+    });
+
+    c.header('Cache-Control', 'no-store');
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      count: assertions.length,
+      assertions,
+    });
   });
 
   app.get('/v1/tenants/:tenantId/assertions/:assertionId/lifecycle', async (c): Promise<Response> => {
