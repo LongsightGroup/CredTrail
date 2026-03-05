@@ -17,6 +17,7 @@ import {
   listIssuedBadgeTemplateIdsForRecipient,
   submitBadgeIssuanceRuleVersionForApproval,
   updateTenantCanvasGradebookIntegrationTokens,
+  type BadgeIssuanceRuleLmsProviderKind,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
@@ -270,6 +271,7 @@ const resolveRuleDefinition = (
 const loadRuleFacts = async (input: {
   db: SqlDatabase;
   tenantId: string;
+  lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
   learnerId: string;
   recipientIdentity: string;
   recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
@@ -316,16 +318,24 @@ const loadRuleFacts = async (input: {
   }
 
   const requirements = extractBadgeIssuanceRuleRequirements(input.definition);
+  const providerLabel = input.lmsProviderKind === 'sakai' ? 'Sakai' : 'Canvas';
+
+  if (input.lmsProviderKind !== 'canvas' && input.lmsProviderKind !== 'sakai') {
+    throw new Error(
+      `Automated rule evaluation is not implemented for LMS provider "${input.lmsProviderKind}"`,
+    );
+  }
+
   const integration = await findTenantCanvasGradebookIntegration(input.db, input.tenantId);
 
   if (integration === null) {
-    throw new Error('Canvas integration is required for automated rule evaluation');
+    throw new Error(`${providerLabel} gradebook integration is required for automated rule evaluation`);
   }
 
   let accessToken = integration.accessToken;
 
   if (accessToken === null) {
-    throw new Error('Canvas integration has no access token. Complete OAuth connection first.');
+    throw new Error(`${providerLabel} gradebook integration has no access token. Connect LMS first.`);
   }
 
   if (
@@ -359,7 +369,7 @@ const loadRuleFacts = async (input: {
 
   const provider = createGradebookProvider({
     config: {
-      kind: 'canvas',
+      kind: input.lmsProviderKind,
       apiBaseUrl: integration.apiBaseUrl,
       accessToken,
     },
@@ -554,6 +564,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       facts = await loadRuleFacts({
         db,
         tenantId: pathParams.tenantId,
+        lmsProviderKind: request.lmsProviderKind,
         learnerId: request.learnerId,
         recipientIdentity: request.recipientIdentity,
         recipientIdentityType: request.recipientIdentityType,
@@ -1211,6 +1222,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       facts = await loadRuleFacts({
         db,
         tenantId: pathParams.tenantId,
+        lmsProviderKind: rule.lmsProviderKind,
         learnerId: request.learnerId,
         recipientIdentity: request.recipientIdentity,
         recipientIdentityType: request.recipientIdentityType,

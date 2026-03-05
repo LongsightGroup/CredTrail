@@ -2664,6 +2664,7 @@ export const INSTITUTION_ADMIN_JS = `
 
         const learnerId = getTextFieldValue('testLearnerId');
         const recipientIdentity = getTextFieldValue('testRecipientIdentity').toLowerCase();
+        const lmsProviderKind = getTextFieldValue('lmsProviderKind');
         const sampleCourseId = getTextFieldValue('testCourseId');
         const sampleFinalScoreText = getTextFieldValue('testFinalScore');
         const testFactsJson = getTextFieldValue('testFactsJson');
@@ -2728,6 +2729,7 @@ export const INSTITUTION_ADMIN_JS = `
             },
             body: JSON.stringify({
               definition,
+              lmsProviderKind: lmsProviderKind.length === 0 ? 'canvas' : lmsProviderKind,
               learnerId,
               recipientIdentity,
               recipientIdentityType: 'email',

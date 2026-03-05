@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockedIssueBadgeForTenant } = vi.hoisted(() => {
+const { mockedIssueBadgeForTenant, mockedCreateGradebookProvider } = vi.hoisted(() => {
   return {
     mockedIssueBadgeForTenant: vi.fn(),
+    mockedCreateGradebookProvider: vi.fn(),
   };
 });
 
@@ -47,6 +48,17 @@ vi.mock('./badges/direct-issue', () => {
   };
 });
 
+vi.mock('./lms/gradebook-provider', async () => {
+  const actual = await vi.importActual<typeof import('./lms/gradebook-provider')>(
+    './lms/gradebook-provider',
+  );
+
+  return {
+    ...actual,
+    createGradebookProvider: mockedCreateGradebookProvider,
+  };
+});
+
 import {
   activateBadgeIssuanceRuleVersion,
   createAuditLog,
@@ -59,6 +71,8 @@ import {
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
   findTenantMembership,
+  findTenantCanvasGradebookIntegration,
+  listIssuedBadgeTemplateIdsForRecipient,
   listAuditLogs,
   listBadgeIssuanceRuleVersionApprovalEvents,
   listBadgeIssuanceRuleVersionApprovalSteps,
@@ -74,6 +88,7 @@ import {
   type BadgeIssuanceRuleVersionRecord,
   type SessionRecord,
   type SqlDatabase,
+  type TenantCanvasGradebookIntegrationRecord,
   type TenantMembershipRecord,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -104,6 +119,32 @@ const mockedCreateBadgeIssuanceRuleEvaluation = vi.mocked(createBadgeIssuanceRul
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedTouchSession = vi.mocked(touchSession);
+const mockedFindTenantCanvasGradebookIntegration = vi.mocked(findTenantCanvasGradebookIntegration);
+const mockedListIssuedBadgeTemplateIdsForRecipient = vi.mocked(
+  listIssuedBadgeTemplateIdsForRecipient,
+);
+
+const sampleCanvasIntegration = (
+  overrides?: Partial<TenantCanvasGradebookIntegrationRecord>,
+): TenantCanvasGradebookIntegrationRecord => {
+  return {
+    tenantId: 'tenant_123',
+    apiBaseUrl: 'https://canvas.example.edu',
+    authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
+    tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
+    clientId: 'client-id',
+    clientSecret: 'client-secret',
+    scope: 'url:GET|/api/v1/courses',
+    accessToken: 'canvas-token',
+    refreshToken: 'canvas-refresh-token',
+    accessTokenExpiresAt: null,
+    refreshTokenExpiresAt: null,
+    connectedAt: '2026-02-17T00:00:00.000Z',
+    createdAt: '2026-02-17T00:00:00.000Z',
+    updatedAt: '2026-02-17T00:00:00.000Z',
+    ...overrides,
+  };
+};
 
 const fakeDb = {
   prepare: vi.fn(),
@@ -299,6 +340,11 @@ beforeEach(() => {
   mockedListAuditLogs.mockResolvedValue([]);
   mockedCreateBadgeIssuanceRuleEvaluation.mockReset();
   mockedIssueBadgeForTenant.mockReset();
+  mockedCreateGradebookProvider.mockReset();
+  mockedFindTenantCanvasGradebookIntegration.mockReset();
+  mockedFindTenantCanvasGradebookIntegration.mockResolvedValue(sampleCanvasIntegration());
+  mockedListIssuedBadgeTemplateIdsForRecipient.mockReset();
+  mockedListIssuedBadgeTemplateIdsForRecipient.mockResolvedValue([]);
 });
 
 describe('badge rule routes', () => {
@@ -637,6 +683,101 @@ describe('badge rule routes', () => {
     expect(body.evaluation.matched).toBe(true);
     expect(body.facts.grades).toHaveLength(1);
     expect(mockedIssueBadgeForTenant).not.toHaveBeenCalled();
+  });
+
+  it('uses the requested LMS provider kind for automated preview evaluation', async () => {
+    const env = createEnv();
+    mockedFindTenantCanvasGradebookIntegration.mockResolvedValue(
+      sampleCanvasIntegration({
+        apiBaseUrl: 'https://sakai.example.edu',
+        accessToken: 'sakai-token',
+        refreshToken: null,
+      }),
+    );
+    mockedCreateGradebookProvider.mockReturnValue({
+      kind: 'sakai',
+      listCourses: () => Promise.resolve([]),
+      listAssignments: () => Promise.resolve([]),
+      listEnrollments: () => Promise.resolve([]),
+      listSubmissions: () => Promise.resolve([]),
+      listGrades: () =>
+        Promise.resolve([
+        {
+          courseId: 'course_101',
+          learnerId: 'learner_123',
+          currentScore: 91,
+          finalScore: 91,
+          currentGrade: 'A-',
+          finalGrade: 'A-',
+        },
+      ]),
+      listCompletions: () =>
+        Promise.resolve([
+        {
+          courseId: 'course_101',
+          learnerId: 'learner_123',
+          completed: true,
+          completedAt: null,
+          completionPercent: 100,
+          sourceState: 'graded',
+        },
+      ]),
+    });
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-rules/preview-evaluate',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          definition: {
+            conditions: {
+              all: [
+                {
+                  type: 'course_completion',
+                  courseId: 'course_101',
+                  requireCompleted: true,
+                },
+                {
+                  type: 'grade_threshold',
+                  courseId: 'course_101',
+                  minScore: 80,
+                },
+              ],
+            },
+          },
+          lmsProviderKind: 'sakai',
+          learnerId: 'learner_123',
+          recipientIdentity: 'learner@example.edu',
+          recipientIdentityType: 'email',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<{
+      evaluation: {
+        matched: boolean;
+      };
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.evaluation.matched).toBe(true);
+    expect(mockedCreateGradebookProvider).toHaveBeenCalledTimes(1);
+    const providerInput: unknown = mockedCreateGradebookProvider.mock.calls[0]?.[0];
+    const providerConfig =
+      providerInput !== null &&
+      typeof providerInput === 'object' &&
+      'config' in providerInput &&
+      providerInput.config !== null &&
+      typeof providerInput.config === 'object'
+        ? providerInput.config
+        : null;
+
+    expect(providerConfig).not.toBeNull();
+    expect(providerConfig && 'kind' in providerConfig ? providerConfig.kind : null).toBe('sakai');
   });
 
   it('evaluates active rules and issues badges when matched', async () => {

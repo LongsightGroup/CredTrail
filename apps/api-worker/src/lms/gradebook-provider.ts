@@ -1,5 +1,6 @@
 import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
 import { createCanvasGradebookProvider } from './canvas-gradebook-provider';
+import { createSakaiGradebookProvider } from './sakai-gradebook-provider';
 import {
   GRADEBOOK_PROVIDER_KINDS,
   type GradebookProvider,
@@ -61,12 +62,18 @@ export interface CreateGradebookProviderInput {
 }
 
 export const createGradebookProvider = (input: CreateGradebookProviderInput): GradebookProvider => {
-  if (input.config.kind === 'canvas') {
-    return createCanvasGradebookProvider({
-      config: input.config,
-      ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
-    });
+  switch (input.config.kind) {
+    case 'canvas':
+      return createCanvasGradebookProvider({
+        config: input.config,
+        ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
+      });
+    case 'sakai':
+      return createSakaiGradebookProvider({
+        config: input.config,
+        ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
+      });
+    default:
+      throw new Error(`Gradebook provider "${input.config.kind}" is not implemented yet`);
   }
-
-  throw new Error(`Gradebook provider "${input.config.kind}" is not implemented yet`);
 };

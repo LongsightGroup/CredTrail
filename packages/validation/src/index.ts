@@ -660,6 +660,7 @@ export const evaluateBadgeIssuanceRuleRequestSchema = z.object({
 
 export const previewEvaluateBadgeIssuanceRuleRequestSchema = z.object({
   definition: badgeIssuanceRuleDefinitionSchema,
+  lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema.default('canvas'),
   learnerId: z.string().trim().min(1).max(255),
   recipientIdentity: z.string().trim().min(1).max(512),
   recipientIdentityType: recipientIdentityTypeSchema,

@@ -74,6 +74,28 @@ describe('createGradebookProvider', () => {
     expect(provider.kind).toBe('canvas');
   });
 
+  it('creates a sakai provider', () => {
+    const provider = createGradebookProvider({
+      config: {
+        kind: 'sakai',
+        apiBaseUrl: 'https://sakai.example.edu',
+        accessToken: 'secret-token',
+      },
+      fetchImpl: (): Promise<Response> => {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+            },
+          }),
+        );
+      },
+    });
+
+    expect(provider.kind).toBe('sakai');
+  });
+
   it('throws for providers that are not implemented yet', () => {
     expect(() =>
       createGradebookProvider({
