@@ -9,6 +9,8 @@ coverage/
 # Local project surfaces
 .local/
 artifacts/
+.playwright-cli/
+output/
 
 # OS
 .DS_Store
