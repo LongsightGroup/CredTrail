@@ -507,7 +507,7 @@ const jsonLdDocumentLoader = async (
     });
 
     if (!response.ok) {
-      throw new Error(`Unable to load JSON-LD context: ${url} (${response.status})`);
+      throw new Error(`Unable to load JSON-LD context: ${url} (${String(response.status)})`);
     }
 
     const document = await response.json();
