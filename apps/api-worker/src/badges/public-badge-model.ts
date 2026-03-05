@@ -1,0 +1,267 @@
+import {
+  getImmutableCredentialObject,
+  splitTenantScopedId,
+  type ImmutableCredentialStore,
+  type JsonObject,
+} from '@credtrail/core-domain';
+import {
+  findBadgeTemplateById,
+  findAssertionById,
+  findAssertionByPublicId,
+  findLearnerProfileById,
+  resolveAssertionLifecycleState,
+  type AssertionRecord,
+  type ResolveAssertionLifecycleStateResult,
+  type SqlDatabase,
+} from '@credtrail/db';
+
+export interface VerificationViewModel {
+  assertion: AssertionRecord;
+  credential: JsonObject;
+  recipientDisplayName: string | null;
+  badgeTemplateImageUri: string | null;
+  lifecycle: ResolveAssertionLifecycleStateResult;
+}
+
+export type VerificationLookupResult =
+  | {
+      status: 'ok';
+      value: VerificationViewModel;
+    }
+  | {
+      status: 'invalid_id' | 'not_found';
+    };
+
+export type PublicBadgeLookupResult =
+  | {
+      status: 'ok';
+      value: VerificationViewModel;
+    }
+  | {
+      status: 'redirect';
+      canonicalPath: string;
+    }
+  | {
+      status: 'not_found';
+    };
+
+export const parseTenantScopedCredentialId = (
+  credentialId: string,
+): { tenantId: string; resourceId: string } | null => {
+  try {
+    const parsed = splitTenantScopedId(credentialId);
+
+    if (parsed.tenantId.trim().length === 0 || parsed.resourceId.trim().length === 0) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+export const assertionBelongsToTenant = (tenantId: string, assertionId: string): boolean => {
+  const scoped = parseTenantScopedCredentialId(assertionId);
+  return scoped !== null && scoped.tenantId === tenantId;
+};
+
+export const publicBadgePermalinkSegment = (assertion: AssertionRecord): string => {
+  return assertion.publicId ?? assertion.id;
+};
+
+export const publicBadgePathForAssertion = (assertion: AssertionRecord): string => {
+  return `/badges/${encodeURIComponent(publicBadgePermalinkSegment(assertion))}`;
+};
+
+export const loadCredentialForAssertion = async (
+  store: ImmutableCredentialStore,
+  assertion: AssertionRecord,
+): Promise<JsonObject> => {
+  const credential = await getImmutableCredentialObject(store, {
+    tenantId: assertion.tenantId,
+    assertionId: assertion.id,
+  });
+
+  if (credential === null) {
+    throw new Error(`Assertion "${assertion.id}" is missing its immutable credential object`);
+  }
+
+  return credential;
+};
+
+const loadRecipientDisplayNameForAssertion = async (
+  db: SqlDatabase,
+  assertion: AssertionRecord,
+): Promise<string | null> => {
+  if (assertion.learnerProfileId === null) {
+    return null;
+  }
+
+  const learnerProfile = await findLearnerProfileById(
+    db,
+    assertion.tenantId,
+    assertion.learnerProfileId,
+  );
+  return learnerProfile?.displayName ?? null;
+};
+
+const loadBadgeTemplateImageUriForAssertion = async (
+  db: SqlDatabase,
+  assertion: AssertionRecord,
+): Promise<string | null> => {
+  try {
+    const template = await findBadgeTemplateById(db, assertion.tenantId, assertion.badgeTemplateId);
+    return template?.imageUri ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const loadVerificationViewModel = async (
+  db: SqlDatabase,
+  store: ImmutableCredentialStore,
+  credentialId: string,
+): Promise<VerificationLookupResult> => {
+  const tenantScopedCredentialId = parseTenantScopedCredentialId(credentialId);
+
+  if (tenantScopedCredentialId === null) {
+    return {
+      status: 'invalid_id',
+    };
+  }
+
+  const assertion = await findAssertionById(db, tenantScopedCredentialId.tenantId, credentialId);
+
+  if (assertion === null) {
+    return {
+      status: 'not_found',
+    };
+  }
+
+  const credential = await loadCredentialForAssertion(store, assertion);
+  const badgeTemplateImageUri = await loadBadgeTemplateImageUriForAssertion(db, assertion);
+  const lifecycle =
+    (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
+    {
+      state: assertion.revokedAt === null ? 'active' : 'revoked',
+      source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
+      reasonCode: null,
+      reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
+      transitionedAt: assertion.revokedAt,
+      revokedAt: assertion.revokedAt,
+    };
+
+  return {
+    status: 'ok',
+    value: {
+      assertion,
+      credential,
+      recipientDisplayName: null,
+      badgeTemplateImageUri,
+      lifecycle,
+    },
+  };
+};
+
+export const loadPublicBadgeViewModel = async (
+  db: SqlDatabase,
+  store: ImmutableCredentialStore,
+  badgeIdentifier: string,
+): Promise<PublicBadgeLookupResult> => {
+  const trimmedIdentifier = badgeIdentifier.trim();
+
+  if (trimmedIdentifier.length === 0) {
+    return {
+      status: 'not_found',
+    };
+  }
+
+  const assertionByPublicId = await findAssertionByPublicId(db, trimmedIdentifier);
+
+  if (assertionByPublicId !== null) {
+    const credential = await loadCredentialForAssertion(store, assertionByPublicId);
+    const recipientDisplayName = await loadRecipientDisplayNameForAssertion(
+      db,
+      assertionByPublicId,
+    );
+    const badgeTemplateImageUri = await loadBadgeTemplateImageUriForAssertion(
+      db,
+      assertionByPublicId,
+    );
+    const lifecycle =
+      (await resolveAssertionLifecycleState(db, assertionByPublicId.tenantId, assertionByPublicId.id)) ??
+      {
+        state: assertionByPublicId.revokedAt === null ? 'active' : 'revoked',
+        source: assertionByPublicId.revokedAt === null ? 'default_active' : 'assertion_revocation',
+        reasonCode: null,
+        reason:
+          assertionByPublicId.revokedAt === null ? null : 'credential has been revoked by issuer',
+        transitionedAt: assertionByPublicId.revokedAt,
+        revokedAt: assertionByPublicId.revokedAt,
+      };
+
+    return {
+      status: 'ok',
+      value: {
+        assertion: assertionByPublicId,
+        credential,
+        recipientDisplayName,
+        badgeTemplateImageUri,
+        lifecycle,
+      },
+    };
+  }
+
+  const tenantScopedCredentialId = parseTenantScopedCredentialId(trimmedIdentifier);
+
+  if (tenantScopedCredentialId === null) {
+    return {
+      status: 'not_found',
+    };
+  }
+
+  const assertion = await findAssertionById(
+    db,
+    tenantScopedCredentialId.tenantId,
+    trimmedIdentifier,
+  );
+
+  if (assertion === null) {
+    return {
+      status: 'not_found',
+    };
+  }
+
+  if (publicBadgePermalinkSegment(assertion) === trimmedIdentifier) {
+    const credential = await loadCredentialForAssertion(store, assertion);
+    const recipientDisplayName = await loadRecipientDisplayNameForAssertion(db, assertion);
+    const badgeTemplateImageUri = await loadBadgeTemplateImageUriForAssertion(db, assertion);
+    const lifecycle =
+      (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
+      {
+        state: assertion.revokedAt === null ? 'active' : 'revoked',
+        source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
+        reasonCode: null,
+        reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
+        transitionedAt: assertion.revokedAt,
+        revokedAt: assertion.revokedAt,
+      };
+
+    return {
+      status: 'ok',
+      value: {
+        assertion,
+        credential,
+        recipientDisplayName,
+        badgeTemplateImageUri,
+        lifecycle,
+      },
+    };
+  }
+
+  return {
+    status: 'redirect',
+    canonicalPath: publicBadgePathForAssertion(assertion),
+  };
+};

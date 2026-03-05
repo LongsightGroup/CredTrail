@@ -1,0 +1,299 @@
+import {
+  listBadgeIssuanceRuleVersionApprovalEvents,
+  listBadgeIssuanceRuleVersionApprovalSteps,
+  listBadgeIssuanceRuleVersions,
+  listBadgeIssuanceRules,
+  listBadgeTemplateOwnershipEvents,
+  listBadgeTemplates,
+  listPublicBadgeWallEntries,
+  listTenantOrgUnits,
+  resolveAssertionLifecycleState,
+  type SqlDatabase,
+} from '@credtrail/db';
+import type { Hono } from 'hono';
+import { parseTenantPathParams } from '@credtrail/validation';
+import type { ImmutableCredentialStore } from '@credtrail/core-domain';
+import type { AppBindings, AppEnv } from '../app';
+import type {
+  PublicBadgeCriteriaRegistryViewModel,
+  PublicBadgeCriteriaRuleViewRecord,
+  PublicBadgeWallEntryViewRecord,
+} from '../badges/public-badge-pages';
+
+interface RegisterPublicBadgeRoutesInput<PublicBadgeValue> {
+  app: Hono<AppEnv>;
+  resolveDatabase: (bindings: AppBindings) => SqlDatabase;
+  loadPublicBadgeViewModel: (
+    db: SqlDatabase,
+    badgeObjects: ImmutableCredentialStore,
+    badgeIdentifier: string,
+  ) => Promise<
+    | {
+        status: 'not_found';
+      }
+    | {
+        status: 'redirect';
+        canonicalPath: string;
+      }
+    | {
+        status: 'ok';
+        value: PublicBadgeValue;
+      }
+  >;
+  publicBadgeNotFoundPage: (requestUrl: string) => string;
+  publicBadgePage: (requestUrl: string, value: PublicBadgeValue) => string;
+  publicBadgeSummaryPayload: (
+    requestUrl: string,
+    value: PublicBadgeValue,
+  ) => Record<string, unknown>;
+  tenantBadgeWallPage: (
+    requestUrl: string,
+    tenantId: string,
+    entries: readonly PublicBadgeWallEntryViewRecord[],
+    badgeTemplateId: string | null,
+  ) => string;
+  tenantBadgeCriteriaRegistryPage: (
+    requestUrl: string,
+    tenantId: string,
+    model: PublicBadgeCriteriaRegistryViewModel,
+    badgeTemplateId: string | null,
+  ) => string;
+  asNonEmptyString: (value: unknown) => string | null;
+  SAKAI_SHOWCASE_TENANT_ID: string;
+  SAKAI_SHOWCASE_TEMPLATE_ID: string;
+}
+
+const buildPublicBadgeCriteriaRegistryViewModel = async (
+  db: SqlDatabase,
+  tenantId: string,
+  badgeTemplateId: string | null,
+): Promise<PublicBadgeCriteriaRegistryViewModel> => {
+  const [templates, orgUnits, rules] = await Promise.all([
+    listBadgeTemplates(db, {
+      tenantId,
+      includeArchived: false,
+    }),
+    listTenantOrgUnits(db, {
+      tenantId,
+      includeInactive: true,
+    }),
+    listBadgeIssuanceRules(db, {
+      tenantId,
+    }),
+  ]);
+  const filteredTemplates =
+    badgeTemplateId === null
+      ? templates
+      : templates.filter((template) => template.id === badgeTemplateId);
+  const orgUnitById = new Map(orgUnits.map((orgUnit) => [orgUnit.id, orgUnit]));
+  const rulesByTemplateId = new Map<string, PublicBadgeCriteriaRuleViewRecord[]>();
+
+  await Promise.all(
+    rules.map(async (rule) => {
+      const versions = await listBadgeIssuanceRuleVersions(db, {
+        tenantId,
+        ruleId: rule.id,
+      });
+      const latestVersion = versions[0] ?? null;
+      const activeVersion =
+        (rule.activeVersionId === null
+          ? null
+          : (versions.find((version) => version.id === rule.activeVersionId) ?? null)) ??
+        (versions.find((version) => version.status === 'active') ?? null);
+      const governanceVersion = activeVersion ?? latestVersion;
+      const [approvalSteps, approvalEvents] =
+        governanceVersion === null
+          ? [[], []]
+          : await Promise.all([
+              listBadgeIssuanceRuleVersionApprovalSteps(db, {
+                tenantId,
+                ruleId: rule.id,
+                versionId: governanceVersion.id,
+              }),
+              listBadgeIssuanceRuleVersionApprovalEvents(db, {
+                tenantId,
+                ruleId: rule.id,
+                versionId: governanceVersion.id,
+              }),
+            ]);
+      const byTemplate = rulesByTemplateId.get(rule.badgeTemplateId);
+      const ruleRecord: PublicBadgeCriteriaRuleViewRecord = {
+        rule,
+        latestVersion,
+        activeVersion,
+        approvalSteps,
+        approvalEvents,
+      };
+
+      if (byTemplate === undefined) {
+        rulesByTemplateId.set(rule.badgeTemplateId, [ruleRecord]);
+        return;
+      }
+
+      byTemplate.push(ruleRecord);
+    }),
+  );
+
+  const templateEntries = await Promise.all(
+    filteredTemplates.map(async (template) => {
+      const ownershipEvents = await listBadgeTemplateOwnershipEvents(db, {
+        tenantId,
+        badgeTemplateId: template.id,
+        limit: 20,
+      });
+      const rulesForTemplate = rulesByTemplateId.get(template.id) ?? [];
+
+      return {
+        template,
+        ownerOrgUnit: orgUnitById.get(template.ownerOrgUnitId) ?? null,
+        ownershipEvents,
+        rules: rulesForTemplate,
+      };
+    }),
+  );
+
+  return {
+    orgUnits,
+    templates: templateEntries,
+  };
+};
+
+export const registerPublicBadgeRoutes = <PublicBadgeValue>(
+  input: RegisterPublicBadgeRoutesInput<PublicBadgeValue>,
+): void => {
+  const {
+    app,
+    resolveDatabase,
+    loadPublicBadgeViewModel,
+    publicBadgeNotFoundPage,
+    publicBadgePage,
+    publicBadgeSummaryPayload,
+    tenantBadgeWallPage,
+    tenantBadgeCriteriaRegistryPage,
+    asNonEmptyString,
+    SAKAI_SHOWCASE_TENANT_ID,
+    SAKAI_SHOWCASE_TEMPLATE_ID,
+  } = input;
+
+  app.get('/badges/:badgeIdentifier/public_url', (c) => {
+    const badgeIdentifier = c.req.param('badgeIdentifier').trim();
+
+    if (badgeIdentifier.length === 0) {
+      return c.html(publicBadgeNotFoundPage(c.req.url), 404);
+    }
+
+    return c.redirect(`/badges/${encodeURIComponent(badgeIdentifier)}`, 308);
+  });
+
+  app.get('/badges/:badgeIdentifier', async (c) => {
+    const badgeIdentifier = c.req.param('badgeIdentifier');
+    const result = await loadPublicBadgeViewModel(
+      resolveDatabase(c.env),
+      c.env.BADGE_OBJECTS,
+      badgeIdentifier,
+    );
+
+    c.header('Cache-Control', 'no-store');
+
+    if (result.status === 'not_found') {
+      return c.html(publicBadgeNotFoundPage(c.req.url), 404);
+    }
+
+    if (result.status === 'redirect') {
+      return c.redirect(result.canonicalPath, 308);
+    }
+
+    return c.html(publicBadgePage(c.req.url, result.value));
+  });
+
+  app.get('/badges/:badgeIdentifier/summary', async (c) => {
+    const badgeIdentifier = c.req.param('badgeIdentifier');
+    const result = await loadPublicBadgeViewModel(
+      resolveDatabase(c.env),
+      c.env.BADGE_OBJECTS,
+      badgeIdentifier,
+    );
+
+    c.header('Cache-Control', 'no-store');
+
+    if (result.status === 'not_found') {
+      return c.json(
+        {
+          error: 'Badge not found',
+        },
+        404,
+      );
+    }
+
+    if (result.status === 'redirect') {
+      if (result.canonicalPath.startsWith('/badges/')) {
+        const canonicalBadgeIdentifier = result.canonicalPath.slice('/badges/'.length);
+        return c.redirect(`/badges/${canonicalBadgeIdentifier}/summary`, 308);
+      }
+
+      return c.json(
+        {
+          error: 'Badge not found',
+        },
+        404,
+      );
+    }
+
+    return c.json(publicBadgeSummaryPayload(c.req.url, result.value));
+  });
+
+  app.get('/showcase/:tenantId', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const requestedBadgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
+    const badgeTemplateId =
+      requestedBadgeTemplateId ??
+      (pathParams.tenantId === SAKAI_SHOWCASE_TENANT_ID ? SAKAI_SHOWCASE_TEMPLATE_ID : null);
+    const db = resolveDatabase(c.env);
+    const entries = await listPublicBadgeWallEntries(db, {
+      tenantId: pathParams.tenantId,
+      ...(badgeTemplateId === null ? {} : { badgeTemplateId }),
+    });
+    const entriesWithLifecycle: PublicBadgeWallEntryViewRecord[] = await Promise.all(
+      entries.map(async (entry) => {
+        const lifecycle =
+          (await resolveAssertionLifecycleState(db, pathParams.tenantId, entry.assertionId)) ??
+          {
+            state: entry.revokedAt === null ? 'active' : 'revoked',
+            source: entry.revokedAt === null ? 'default_active' : 'assertion_revocation',
+            reasonCode: null,
+            reason: null,
+            transitionedAt: entry.revokedAt,
+            revokedAt: entry.revokedAt,
+          };
+
+        return {
+          ...entry,
+          lifecycle,
+        };
+      }),
+    );
+    c.header('Cache-Control', 'no-store');
+    return c.html(
+      tenantBadgeWallPage(c.req.url, pathParams.tenantId, entriesWithLifecycle, badgeTemplateId),
+    );
+  });
+
+  app.get('/showcase/:tenantId/criteria', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const requestedBadgeTemplateId = asNonEmptyString(c.req.query('badgeTemplateId'));
+    const badgeTemplateId =
+      requestedBadgeTemplateId ??
+      (pathParams.tenantId === SAKAI_SHOWCASE_TENANT_ID ? SAKAI_SHOWCASE_TEMPLATE_ID : null);
+    const db = resolveDatabase(c.env);
+    const model = await buildPublicBadgeCriteriaRegistryViewModel(
+      db,
+      pathParams.tenantId,
+      badgeTemplateId,
+    );
+
+    c.header('Cache-Control', 'no-store');
+    return c.html(
+      tenantBadgeCriteriaRegistryPage(c.req.url, pathParams.tenantId, model, badgeTemplateId),
+    );
+  });
+};

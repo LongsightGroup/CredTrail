@@ -1,0 +1,162 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "CredTrail Open Badges API",
+    "description": "Open Badges v3.0 Service Description Document",
+    "version": "3.0",
+    "termsOfService": "https://credtrail.org/terms",
+    "x-imssf-privacyPolicyUrl": "https://credtrail.org/privacy",
+    "x-imssf-image": "https://credtrail.org/credtrail-logo.png"
+  },
+  "servers": [
+    {
+      "url": "https://credtrail.org/ims/ob/v3p0",
+      "description": "Open Badges v3.0 service endpoint"
+    }
+  ],
+  "tags": [
+    {
+      "name": "OpenBadgeCredentials",
+      "description": "Exchange OpenBadgeCredentials and Profile resources."
+    },
+    {
+      "name": "Discovery",
+      "description": "Service Description Document metadata endpoint."
+    }
+  ],
+  "paths": {
+    "/credentials": {
+      "get": {
+        "tags": [
+          "OpenBadgeCredentials"
+        ],
+        "summary": "Get credentials for the authenticated entity.",
+        "operationId": "getCredentials",
+        "responses": {
+          "200": {
+            "description": "Credentials returned."
+          },
+          "default": {
+            "description": "Request was invalid or cannot be served."
+          }
+        },
+        "security": [
+          {
+            "OAuth2ACG": [
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "OpenBadgeCredentials"
+        ],
+        "summary": "Create or update a credential for the authenticated entity.",
+        "operationId": "upsertCredential",
+        "responses": {
+          "200": {
+            "description": "Credential replaced."
+          },
+          "201": {
+            "description": "Credential created."
+          },
+          "default": {
+            "description": "Request was invalid or cannot be served."
+          }
+        },
+        "security": [
+          {
+            "OAuth2ACG": [
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert"
+            ]
+          }
+        ]
+      }
+    },
+    "/profile": {
+      "get": {
+        "tags": [
+          "OpenBadgeCredentials"
+        ],
+        "summary": "Get profile for the authenticated entity.",
+        "operationId": "getProfile",
+        "responses": {
+          "200": {
+            "description": "Profile returned."
+          },
+          "default": {
+            "description": "Request was invalid or cannot be served."
+          }
+        },
+        "security": [
+          {
+            "OAuth2ACG": [
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly"
+            ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "OpenBadgeCredentials"
+        ],
+        "summary": "Update profile for the authenticated entity.",
+        "operationId": "putProfile",
+        "responses": {
+          "200": {
+            "description": "Profile updated."
+          },
+          "default": {
+            "description": "Request was invalid or cannot be served."
+          }
+        },
+        "security": [
+          {
+            "OAuth2ACG": [
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update"
+            ]
+          }
+        ]
+      }
+    },
+    "/discovery": {
+      "get": {
+        "tags": [
+          "Discovery"
+        ],
+        "summary": "Get the service description document.",
+        "operationId": "getServiceDescription",
+        "responses": {
+          "200": {
+            "description": "Service description document returned."
+          },
+          "default": {
+            "description": "Request was invalid or cannot be served."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth2ACG": {
+        "type": "oauth2",
+        "x-imssf-registrationUrl": "https://credtrail.org/ims/ob/v3p0/oauth/register",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://credtrail.org/ims/ob/v3p0/oauth/authorize",
+            "tokenUrl": "https://credtrail.org/ims/ob/v3p0/oauth/token",
+            "refreshUrl": "https://credtrail.org/ims/ob/v3p0/oauth/refresh",
+            "scopes": {
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly": "Permission to read AchievementCredentials for the authenticated entity.",
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert": "Permission to create or update AchievementCredentials for the authenticated entity.",
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly": "Permission to read the profile for the authenticated entity.",
+              "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update": "Permission to update the profile for the authenticated entity."
+            }
+          }
+        }
+      }
+    }
+  }
+}

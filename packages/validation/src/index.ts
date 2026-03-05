@@ -1,0 +1,1460 @@
+import { z } from 'zod';
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+export const queueJobTypeSchema = z.enum([
+  'issue_badge',
+  'revoke_badge',
+  'rebuild_verification_cache',
+  'import_migration_batch',
+]);
+
+export const idempotencyKeySchema = z.string().min(1).max(128);
+
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ]),
+);
+
+export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(jsonValueSchema);
+
+export const didWebSchema = z.string().startsWith('did:web:');
+
+export const ed25519PublicJwkSchema = z.object({
+  kty: z.literal('OKP'),
+  crv: z.literal('Ed25519'),
+  x: z.string().min(1),
+  kid: z.string().min(1).optional(),
+});
+
+export const ed25519PrivateJwkSchema = ed25519PublicJwkSchema.extend({
+  d: z.string().min(1),
+});
+
+export const p256PublicJwkSchema = z.object({
+  kty: z.literal('EC'),
+  crv: z.literal('P-256'),
+  x: z.string().min(1),
+  y: z.string().min(1),
+  kid: z.string().min(1).optional(),
+});
+
+export const p256PrivateJwkSchema = p256PublicJwkSchema.extend({
+  d: z.string().min(1),
+});
+
+const tenantSigningRegistryEntryEd25519Schema = z.object({
+  tenantId: z.string().min(1),
+  keyId: z.string().min(1),
+  publicJwk: ed25519PublicJwkSchema,
+  privateJwk: ed25519PrivateJwkSchema.optional(),
+});
+
+const tenantSigningRegistryEntryP256Schema = z.object({
+  tenantId: z.string().min(1),
+  keyId: z.string().min(1),
+  publicJwk: p256PublicJwkSchema,
+  privateJwk: p256PrivateJwkSchema.optional(),
+});
+
+export const tenantSigningRegistryEntrySchema = z.union([
+  tenantSigningRegistryEntryEd25519Schema,
+  tenantSigningRegistryEntryP256Schema,
+]);
+
+export const tenantSigningRegistrySchema = z.record(
+  z.string().min(1),
+  tenantSigningRegistryEntrySchema,
+);
+
+export const keyGenerationRequestSchema = z.object({
+  did: didWebSchema,
+  keyId: z.string().min(1).max(128).optional(),
+});
+
+export const signCredentialRequestSchema = z
+  .object({
+    did: didWebSchema,
+    credential: jsonObjectSchema,
+    proofType: z.enum(['Ed25519Signature2020', 'DataIntegrityProof']).optional(),
+    cryptosuite: z.enum(['eddsa-rdfc-2022', 'ecdsa-sd-2023']).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.proofType === 'DataIntegrityProof' && value.cryptosuite === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cryptosuite'],
+        message: 'cryptosuite is required when proofType is DataIntegrityProof',
+      });
+    }
+
+    if (value.proofType !== 'DataIntegrityProof' && value.cryptosuite !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cryptosuite'],
+        message: 'cryptosuite is only allowed when proofType is DataIntegrityProof',
+      });
+    }
+  });
+
+export const tenantIdSchema = z.string().min(1);
+export const resourceIdSchema = z.string().min(1);
+export const userIdSchema = z.string().min(1);
+export const isoTimestampSchema = z.string().datetime();
+export const tenantPlanTierSchema = z.enum(['free', 'team', 'institution', 'enterprise']);
+export const tenantMembershipRoleSchema = z.enum(['owner', 'admin', 'issuer', 'viewer']);
+export const recipientIdentityTypeSchema = z.enum(['email', 'email_sha256', 'did', 'url']);
+export const recipientIdentifierTypeSchema = z.enum([
+  'emailAddress',
+  'sourcedId',
+  'did',
+  'nationalIdentityNumber',
+  'studentId',
+]);
+export const recipientIdentifierSchema = z.object({
+  identifierType: recipientIdentifierTypeSchema,
+  identifier: z.string().trim().min(1).max(512),
+});
+export const badgeTemplateSlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(96)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export const badgeTemplateTitleSchema = z.string().trim().min(1).max(200);
+export const badgeTemplateDescriptionSchema = z.string().trim().min(1).max(2000);
+export const badgeTemplateUriSchema = z.string().url().max(2048);
+export const orgUnitTypeSchema = z.enum(['institution', 'college', 'department', 'program']);
+export const tenantMembershipOrgUnitScopeRoleSchema = z.enum(['admin', 'issuer', 'viewer']);
+export const delegatedIssuingAuthorityActionSchema = z.enum([
+  'issue_badge',
+  'revoke_badge',
+  'manage_lifecycle',
+]);
+export const orgUnitSlugSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(96)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+export const orgUnitDisplayNameSchema = z.string().trim().min(1).max(200);
+export const badgeTemplateOwnershipReasonCodeSchema = z.enum([
+  'initial_assignment',
+  'administrative_transfer',
+  'reorganization',
+  'governance_policy_update',
+  'other',
+]);
+export const badgeTemplateOwnershipTransferReasonCodeSchema = z.enum([
+  'administrative_transfer',
+  'reorganization',
+  'governance_policy_update',
+  'other',
+]);
+
+export const tenantPathParamsSchema = z.object({
+  tenantId: tenantIdSchema,
+});
+
+export const badgeTemplatePathParamsSchema = tenantPathParamsSchema.extend({
+  badgeTemplateId: resourceIdSchema,
+});
+
+export const tenantUserPathParamsSchema = tenantPathParamsSchema.extend({
+  userId: userIdSchema,
+});
+
+export const tenantUserOrgUnitPathParamsSchema = tenantUserPathParamsSchema.extend({
+  orgUnitId: resourceIdSchema,
+});
+
+export const tenantUserDelegatedGrantPathParamsSchema = tenantUserPathParamsSchema.extend({
+  grantId: resourceIdSchema,
+});
+
+export const tenantApiKeyPathParamsSchema = tenantPathParamsSchema.extend({
+  apiKeyId: resourceIdSchema,
+});
+
+export const migrationBatchPathParamsSchema = tenantPathParamsSchema.extend({
+  batchId: z.string().trim().min(1).max(128),
+});
+
+export const tenantDedicatedDbProvisioningRequestPathParamsSchema = tenantPathParamsSchema.extend({
+  requestId: resourceIdSchema,
+});
+
+export const credentialPathParamsSchema = z.object({
+  credentialId: resourceIdSchema,
+});
+
+export const assertionLifecycleStateSchema = z.enum(['active', 'suspended', 'revoked', 'expired']);
+
+export const assertionLifecycleTransitionSourceSchema = z.enum(['manual', 'automation']);
+
+export const assertionLifecycleReasonCodeSchema = z.enum([
+  'administrative_hold',
+  'policy_violation',
+  'appeal_pending',
+  'appeal_resolved',
+  'credential_expired',
+  'issuer_requested',
+  'other',
+]);
+
+export const assertionPathParamsSchema = tenantPathParamsSchema.extend({
+  assertionId: resourceIdSchema,
+});
+
+export const badgeTemplateListQuerySchema = z.object({
+  includeArchived: z.preprocess((input) => {
+    if (input === undefined) {
+      return false;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
+export const tenantOrgUnitListQuerySchema = z.object({
+  includeInactive: z.preprocess((input) => {
+    if (input === undefined) {
+      return false;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
+export const delegatedIssuingAuthorityGrantListQuerySchema = z.object({
+  includeRevoked: z.preprocess((input) => {
+    if (input === undefined) {
+      return false;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+  includeExpired: z.preprocess((input) => {
+    if (input === undefined) {
+      return false;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
+export const tenantApiKeyListQuerySchema = z.object({
+  includeRevoked: z.preprocess((input) => {
+    if (input === undefined) {
+      return false;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
+export const createBadgeTemplateRequestSchema = z.object({
+  slug: badgeTemplateSlugSchema,
+  title: badgeTemplateTitleSchema,
+  description: badgeTemplateDescriptionSchema.optional(),
+  criteriaUri: badgeTemplateUriSchema.optional(),
+  imageUri: badgeTemplateUriSchema.optional(),
+  ownerOrgUnitId: resourceIdSchema.optional(),
+});
+
+export const updateBadgeTemplateRequestSchema = z
+  .object({
+    slug: badgeTemplateSlugSchema.optional(),
+    title: badgeTemplateTitleSchema.optional(),
+    description: badgeTemplateDescriptionSchema.nullable().optional(),
+    criteriaUri: badgeTemplateUriSchema.nullable().optional(),
+    imageUri: badgeTemplateUriSchema.nullable().optional(),
+  })
+  .refine(
+    (payload) =>
+      payload.slug !== undefined ||
+      payload.title !== undefined ||
+      payload.description !== undefined ||
+      payload.criteriaUri !== undefined ||
+      payload.imageUri !== undefined,
+    {
+      message: 'At least one badge template field must be provided',
+    },
+  );
+
+export const createTenantOrgUnitRequestSchema = z.object({
+  unitType: orgUnitTypeSchema,
+  slug: orgUnitSlugSchema,
+  displayName: orgUnitDisplayNameSchema,
+  parentOrgUnitId: resourceIdSchema.optional(),
+});
+
+export const upsertTenantMembershipOrgUnitScopeRequestSchema = z.object({
+  role: tenantMembershipOrgUnitScopeRoleSchema,
+});
+
+export const createDelegatedIssuingAuthorityGrantRequestSchema = z
+  .object({
+    orgUnitId: resourceIdSchema,
+    badgeTemplateIds: z.array(resourceIdSchema).min(1).max(100).optional(),
+    allowedActions: z.array(delegatedIssuingAuthorityActionSchema).min(1).max(10),
+    startsAt: isoTimestampSchema.optional(),
+    endsAt: isoTimestampSchema,
+    reason: z.string().trim().min(1).max(512).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const uniqueActions = new Set(value.allowedActions);
+
+    if (uniqueActions.size !== value.allowedActions.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['allowedActions'],
+        message: 'allowedActions must not contain duplicates',
+      });
+    }
+
+    if (value.badgeTemplateIds !== undefined) {
+      const uniqueTemplateIds = new Set(value.badgeTemplateIds);
+
+      if (uniqueTemplateIds.size !== value.badgeTemplateIds.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['badgeTemplateIds'],
+          message: 'badgeTemplateIds must not contain duplicates',
+        });
+      }
+    }
+
+    if (value.startsAt !== undefined) {
+      const startsAtMs = Date.parse(value.startsAt);
+      const endsAtMs = Date.parse(value.endsAt);
+
+      if (Number.isFinite(startsAtMs) && Number.isFinite(endsAtMs) && endsAtMs <= startsAtMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['endsAt'],
+          message: 'endsAt must be after startsAt',
+        });
+      }
+    }
+  });
+
+export const revokeDelegatedIssuingAuthorityGrantRequestSchema = z.object({
+  reason: z.string().trim().min(1).max(512).optional(),
+  revokedAt: isoTimestampSchema.optional(),
+});
+
+export const transferBadgeTemplateOwnershipRequestSchema = z.object({
+  toOrgUnitId: resourceIdSchema,
+  reasonCode: badgeTemplateOwnershipTransferReasonCodeSchema,
+  reason: z.string().trim().min(1).max(512).optional(),
+  governanceMetadata: jsonObjectSchema.optional(),
+  transferredAt: isoTimestampSchema.optional(),
+});
+
+export const createTenantApiKeyRequestSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  scopes: z.array(z.string().trim().min(1).max(120)).min(1).max(20).optional(),
+  expiresAt: isoTimestampSchema.optional(),
+});
+
+export const revokeTenantApiKeyRequestSchema = z.object({
+  revokedAt: isoTimestampSchema.optional(),
+});
+
+export const upsertTenantSsoSamlConfigurationRequestSchema = z.object({
+  idpEntityId: z.string().trim().min(1).max(512),
+  ssoLoginUrl: z.string().url().max(2048),
+  idpCertificatePem: z.string().trim().min(1).max(32000),
+  idpMetadataUrl: z.string().url().max(2048).optional(),
+  spEntityId: z.string().trim().min(1).max(512),
+  assertionConsumerServiceUrl: z.string().url().max(2048),
+  nameIdFormat: z.string().trim().min(1).max(255).optional(),
+  enforced: z.boolean().optional(),
+});
+
+export const upsertTenantCanvasGradebookIntegrationRequestSchema = z.object({
+  apiBaseUrl: z.string().url().max(2048),
+  authorizationEndpoint: z.string().url().max(2048),
+  tokenEndpoint: z.string().url().max(2048),
+  clientId: z.string().trim().min(1).max(512),
+  clientSecret: z.string().trim().min(1).max(2048),
+  scope: z.string().trim().min(1).max(2048).optional(),
+});
+
+export const adminCanvasOAuthAuthorizeUrlRequestSchema = z.object({
+  redirectUri: z.string().url().max(2048).optional(),
+});
+
+export const adminCanvasOAuthExchangeRequestSchema = z.object({
+  code: z.string().trim().min(1).max(4096),
+  state: z.string().trim().min(20).max(4096),
+  redirectUri: z.string().url().max(2048).optional(),
+});
+
+export const tenantCanvasGradebookSnapshotQuerySchema = z.object({
+  courseId: z.string().trim().min(1).max(255).optional(),
+  learnerId: z.string().trim().min(1).max(255).optional(),
+  assignmentId: z.string().trim().min(1).max(255).optional(),
+});
+
+export const badgeIssuanceRuleLmsProviderKindSchema = z.enum([
+  'canvas',
+  'moodle',
+  'blackboard_ultra',
+  'd2l_brightspace',
+  'sakai',
+]);
+
+const badgeIssuanceRuleGradeThresholdConditionSchema = z
+  .object({
+    type: z.literal('grade_threshold'),
+    courseId: z.string().trim().min(1).max(255),
+    scoreField: z.enum(['final_score', 'current_score']).optional(),
+    minScore: z.number().finite().min(0).max(100).optional(),
+    maxScore: z.number().finite().min(0).max(100).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.minScore === undefined && value.maxScore === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'grade_threshold must include minScore or maxScore',
+      });
+    }
+  });
+
+const badgeIssuanceRuleCourseCompletionConditionSchema = z.object({
+  type: z.literal('course_completion'),
+  courseId: z.string().trim().min(1).max(255),
+  requireCompleted: z.boolean().optional(),
+  minCompletionPercent: z.number().finite().min(0).max(100).optional(),
+});
+
+const badgeIssuanceRuleProgramCompletionConditionSchema = z
+  .object({
+    type: z.literal('program_completion'),
+    courseIds: z.array(z.string().trim().min(1).max(255)).min(1).max(200),
+    minimumCompleted: z.number().int().min(1).max(200).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.minimumCompleted !== undefined && value.minimumCompleted > value.courseIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'minimumCompleted must be less than or equal to the number of courseIds',
+      });
+    }
+  });
+
+const badgeIssuanceRuleAssignmentSubmissionConditionSchema = z.object({
+  type: z.literal('assignment_submission'),
+  courseId: z.string().trim().min(1).max(255),
+  assignmentId: z.string().trim().min(1).max(255),
+  minScore: z.number().finite().min(0).max(100).optional(),
+  requireSubmitted: z.boolean().optional(),
+  workflowStates: z.array(z.string().trim().min(1).max(64)).min(1).max(20).optional(),
+});
+
+const badgeIssuanceRuleTimeWindowConditionSchema = z
+  .object({
+    type: z.literal('time_window'),
+    notBefore: isoTimestampSchema.optional(),
+    notAfter: isoTimestampSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.notBefore === undefined && value.notAfter === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'time_window must include notBefore or notAfter',
+      });
+    }
+  });
+
+const badgeIssuanceRulePrerequisiteBadgeConditionSchema = z.object({
+  type: z.literal('prerequisite_badge'),
+  badgeTemplateId: resourceIdSchema,
+});
+
+export type BadgeIssuanceRuleCondition =
+  | {
+      all: BadgeIssuanceRuleCondition[];
+    }
+  | {
+      any: BadgeIssuanceRuleCondition[];
+    }
+  | {
+      not: BadgeIssuanceRuleCondition;
+    }
+  | z.infer<typeof badgeIssuanceRuleGradeThresholdConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleCourseCompletionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleProgramCompletionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleAssignmentSubmissionConditionSchema>
+  | z.infer<typeof badgeIssuanceRuleTimeWindowConditionSchema>
+  | z.infer<typeof badgeIssuanceRulePrerequisiteBadgeConditionSchema>;
+
+export const badgeIssuanceRuleConditionSchema: z.ZodType<BadgeIssuanceRuleCondition> = z.lazy(() =>
+  z.union([
+    z.object({
+      all: z.array(badgeIssuanceRuleConditionSchema).min(1).max(50),
+    }),
+    z.object({
+      any: z.array(badgeIssuanceRuleConditionSchema).min(1).max(50),
+    }),
+    z.object({
+      not: badgeIssuanceRuleConditionSchema,
+    }),
+    badgeIssuanceRuleGradeThresholdConditionSchema,
+    badgeIssuanceRuleCourseCompletionConditionSchema,
+    badgeIssuanceRuleProgramCompletionConditionSchema,
+    badgeIssuanceRuleAssignmentSubmissionConditionSchema,
+    badgeIssuanceRuleTimeWindowConditionSchema,
+    badgeIssuanceRulePrerequisiteBadgeConditionSchema,
+  ]),
+);
+
+export const badgeIssuanceRuleDefinitionOptionsSchema = z.object({
+  issuanceTiming: z.enum(['immediate', 'manual', 'end_of_term']).optional(),
+});
+
+export const badgeIssuanceRuleDefinitionSchema = z.object({
+  conditions: badgeIssuanceRuleConditionSchema,
+  options: badgeIssuanceRuleDefinitionOptionsSchema.optional(),
+});
+
+export const badgeIssuanceRulePathParamsSchema = tenantPathParamsSchema.extend({
+  ruleId: resourceIdSchema,
+});
+
+export const badgeIssuanceRuleVersionPathParamsSchema = badgeIssuanceRulePathParamsSchema.extend({
+  versionId: resourceIdSchema,
+});
+
+export const badgeIssuanceRuleVersionDiffQuerySchema = z.object({
+  baseVersionId: resourceIdSchema.optional(),
+});
+
+export const badgeIssuanceRuleAuditLogQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+const badgeIssuanceRuleApprovalChainStepSchema = z.object({
+  requiredRole: tenantMembershipRoleSchema,
+  label: z.string().trim().min(1).max(120).optional(),
+});
+
+const badgeIssuanceRuleApprovalChainSchema = z
+  .array(badgeIssuanceRuleApprovalChainStepSchema)
+  .min(1)
+  .max(10);
+
+export const createBadgeIssuanceRuleRequestSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  description: z.string().trim().min(1).max(2000).optional(),
+  badgeTemplateId: resourceIdSchema,
+  lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema,
+  definition: badgeIssuanceRuleDefinitionSchema,
+  approvalChain: badgeIssuanceRuleApprovalChainSchema.optional(),
+  changeSummary: z.string().trim().min(1).max(1000).optional(),
+});
+
+export const createBadgeIssuanceRuleVersionRequestSchema = z.object({
+  definition: badgeIssuanceRuleDefinitionSchema,
+  approvalChain: badgeIssuanceRuleApprovalChainSchema.optional(),
+  changeSummary: z.string().trim().min(1).max(1000).optional(),
+});
+
+export const decideBadgeIssuanceRuleVersionRequestSchema = z.object({
+  decision: z.enum(['approved', 'rejected']),
+  comment: z.string().trim().min(1).max(2000).optional(),
+});
+
+const badgeIssuanceRuleFactGradeSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  currentScore: z.number().finite().nullable().optional(),
+  finalScore: z.number().finite().nullable().optional(),
+});
+
+const badgeIssuanceRuleFactCompletionSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  completed: z.boolean(),
+  completionPercent: z.number().finite().nullable().optional(),
+});
+
+const badgeIssuanceRuleFactSubmissionSchema = z.object({
+  courseId: z.string().trim().min(1).max(255),
+  assignmentId: z.string().trim().min(1).max(255),
+  learnerId: z.string().trim().min(1).max(255),
+  score: z.number().finite().nullable().optional(),
+  workflowState: z.string().trim().min(1).max(64).nullable().optional(),
+  submittedAt: isoTimestampSchema.nullable().optional(),
+});
+
+export const badgeIssuanceRuleFactsSchema = z.object({
+  nowIso: isoTimestampSchema.optional(),
+  grades: z.array(badgeIssuanceRuleFactGradeSchema).optional(),
+  completions: z.array(badgeIssuanceRuleFactCompletionSchema).optional(),
+  submissions: z.array(badgeIssuanceRuleFactSubmissionSchema).optional(),
+  earnedBadgeTemplateIds: z.array(resourceIdSchema).optional(),
+});
+
+export const evaluateBadgeIssuanceRuleRequestSchema = z.object({
+  learnerId: z.string().trim().min(1).max(255),
+  recipientIdentity: z.string().trim().min(1).max(512),
+  recipientIdentityType: recipientIdentityTypeSchema,
+  versionId: resourceIdSchema.optional(),
+  dryRun: z.boolean().optional(),
+  facts: badgeIssuanceRuleFactsSchema.optional(),
+});
+
+export const previewEvaluateBadgeIssuanceRuleRequestSchema = z.object({
+  definition: badgeIssuanceRuleDefinitionSchema,
+  learnerId: z.string().trim().min(1).max(255),
+  recipientIdentity: z.string().trim().min(1).max(512),
+  recipientIdentityType: recipientIdentityTypeSchema,
+  facts: badgeIssuanceRuleFactsSchema.optional(),
+});
+
+export const createDedicatedDbProvisioningRequestSchema = z.object({
+  targetRegion: z
+    .string()
+    .trim()
+    .min(2)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/),
+  notes: z.string().trim().min(1).max(2000).optional(),
+});
+
+export const resolveDedicatedDbProvisioningRequestSchema = z.object({
+  status: z.enum(['provisioned', 'failed', 'canceled']),
+  dedicatedDatabaseUrl: z.string().url().max(4096).optional(),
+  notes: z.string().trim().min(1).max(2000).optional(),
+  resolvedAt: isoTimestampSchema.optional(),
+});
+
+export const adminUpsertTenantRequestSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(96)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  displayName: z.string().trim().min(1).max(200),
+  planTier: tenantPlanTierSchema.optional(),
+  issuerDomain: z.string().trim().min(1).max(255).optional(),
+  isActive: z.boolean().optional(),
+});
+
+const adminUpsertTenantSigningRegistrationEd25519RequestSchema = z.object({
+  keyId: z.string().trim().min(1).max(128),
+  publicJwk: ed25519PublicJwkSchema,
+  privateJwk: ed25519PrivateJwkSchema.optional(),
+});
+
+const adminUpsertTenantSigningRegistrationP256RequestSchema = z.object({
+  keyId: z.string().trim().min(1).max(128),
+  publicJwk: p256PublicJwkSchema,
+  privateJwk: p256PrivateJwkSchema.optional(),
+});
+
+export const adminUpsertTenantSigningRegistrationRequestSchema = z.union([
+  adminUpsertTenantSigningRegistrationEd25519RequestSchema,
+  adminUpsertTenantSigningRegistrationP256RequestSchema,
+]);
+
+export const adminUpsertBadgeTemplateByIdRequestSchema = createBadgeTemplateRequestSchema;
+
+export const adminUpsertTenantMembershipRoleRequestSchema = z.object({
+  role: tenantMembershipRoleSchema,
+});
+
+export const adminUpsertLtiIssuerRegistrationRequestSchema = z.object({
+  issuer: z.string().url(),
+  tenantId: tenantIdSchema,
+  authorizationEndpoint: z.string().url(),
+  clientId: z.string().trim().min(1).max(255),
+  tokenEndpoint: z.string().url().optional(),
+  clientSecret: z.string().trim().min(1).max(2048).optional(),
+  allowUnsignedIdToken: z.boolean().optional(),
+});
+
+export const adminDeleteLtiIssuerRegistrationRequestSchema = z.object({
+  issuer: z.string().url(),
+});
+
+export const adminAuditLogListQuerySchema = z.object({
+  tenantId: tenantIdSchema,
+  action: z
+    .preprocess((input) => {
+      if (typeof input !== 'string') {
+        return input;
+      }
+
+      const trimmed = input.trim();
+      return trimmed.length === 0 ? undefined : trimmed;
+    }, z.string().min(1).max(200))
+    .optional(),
+  limit: z.preprocess((input) => {
+    if (input === undefined) {
+      return undefined;
+    }
+
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+
+      if (trimmed.length === 0) {
+        return undefined;
+      }
+
+      const parsed = Number(trimmed);
+      return Number.isNaN(parsed) ? input : parsed;
+    }
+
+    return input;
+  }, z.number().int().min(1).max(200).default(100)),
+});
+
+export const magicLinkRequestSchema = z.object({
+  tenantId: tenantIdSchema,
+  email: z.string().email(),
+});
+
+export const magicLinkVerifyRequestSchema = z.object({
+  token: z.string().min(20),
+});
+
+export const learnerIdentityLinkRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+export const learnerIdentityLinkVerifyRequestSchema = z.object({
+  token: z.string().min(20),
+});
+
+const isSupportedLearnerDidMethod = (value: string): boolean => {
+  return (
+    value.startsWith('did:key:') || value.startsWith('did:web:') || value.startsWith('did:ion:')
+  );
+};
+
+export const learnerDidSettingsRequestSchema = z.object({
+  did: z
+    .string()
+    .trim()
+    .max(2048)
+    .optional()
+    .refine(
+      (value) => value === undefined || value.length === 0 || isSupportedLearnerDidMethod(value),
+      {
+        message: 'did must use did:key, did:web, or did:ion',
+      },
+    ),
+});
+
+export const presentationCreateRequestSchema = z
+  .object({
+    holderDid: z.string().trim().min(1).max(2048).startsWith('did:'),
+    holderPrivateJwk: ed25519PrivateJwkSchema,
+    credentialIds: z.array(resourceIdSchema).min(1).max(25),
+  })
+  .superRefine((value, ctx) => {
+    const uniqueIds = new Set(value.credentialIds);
+
+    if (uniqueIds.size !== value.credentialIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['credentialIds'],
+        message: 'credentialIds must not contain duplicates',
+      });
+    }
+  });
+
+export const presentationVerifyRequestSchema = z.object({
+  presentation: jsonObjectSchema,
+});
+
+export const assertionLifecycleTransitionRequestSchema = z.object({
+  toState: assertionLifecycleStateSchema,
+  reasonCode: assertionLifecycleReasonCodeSchema,
+  reason: z.string().trim().min(1).max(512).optional(),
+  transitionSource: assertionLifecycleTransitionSourceSchema.default('manual'),
+  transitionedAt: isoTimestampSchema.optional(),
+});
+
+export const issueBadgeRequestSchema = z.object({
+  tenantId: tenantIdSchema,
+  badgeTemplateId: resourceIdSchema,
+  recipientIdentity: z.string().min(1),
+  recipientIdentityType: recipientIdentityTypeSchema,
+  recipientIdentifiers: z.array(recipientIdentifierSchema).max(10).optional(),
+  requestedByUserId: userIdSchema.optional(),
+  idempotencyKey: idempotencyKeySchema.optional(),
+});
+
+export const manualIssueBadgeRequestSchema = issueBadgeRequestSchema.omit({
+  tenantId: true,
+  requestedByUserId: true,
+});
+
+export const githubUsernameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(39)
+  .regex(/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/);
+
+export const revokeBadgeRequestSchema = z.object({
+  tenantId: tenantIdSchema,
+  assertionId: resourceIdSchema,
+  reason: z.string().min(1).max(512),
+  requestedByUserId: userIdSchema.optional(),
+  idempotencyKey: idempotencyKeySchema.optional(),
+});
+
+export const processQueueRequestSchema = z.object({
+  limit: z.number().int().min(1).max(100).optional(),
+  leaseSeconds: z.number().int().min(1).max(300).optional(),
+  retryDelaySeconds: z.number().int().min(1).max(3600).optional(),
+});
+
+export const migrationBatchUploadQuerySchema = z.object({
+  dryRun: z.preprocess((input) => {
+    if (input === undefined) {
+      return true;
+    }
+
+    if (input === 'true') {
+      return true;
+    }
+
+    if (input === 'false') {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
+export const migrationProgressQuerySchema = z.object({
+  source: z.preprocess((input) => {
+    if (input === undefined) {
+      return 'all';
+    }
+
+    return input;
+  }, z.enum(['all', 'file_upload', 'credly_export', 'parchment_export'])),
+  limit: z.preprocess((input) => {
+    if (input === undefined) {
+      return 50;
+    }
+
+    if (typeof input === 'string') {
+      const parsed = Number.parseInt(input, 10);
+
+      return Number.isFinite(parsed) ? parsed : input;
+    }
+
+    return input;
+  }, z.number().int().min(1).max(200)),
+});
+
+export const migrationBatchRetryRequestSchema = z.object({
+  source: z.enum(['file_upload', 'credly_export', 'parchment_export']).optional(),
+  rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
+});
+
+export const ob2ImportConversionRequestSchema = z
+  .object({
+    ob2Assertion: jsonObjectSchema.optional(),
+    ob2BadgeClass: jsonObjectSchema.optional(),
+    ob2Issuer: jsonObjectSchema.optional(),
+    bakedBadgeImage: z.string().trim().min(1).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.ob2Assertion === undefined && value.bakedBadgeImage === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ob2Assertion'],
+        message: 'Either ob2Assertion or bakedBadgeImage is required',
+      });
+    }
+  });
+
+export const issueBadgeJobPayloadSchema = z.object({
+  assertionId: resourceIdSchema,
+  badgeTemplateId: resourceIdSchema,
+  recipientIdentity: z.string().min(1),
+  recipientIdentityType: recipientIdentityTypeSchema,
+  recipientIdentifiers: z.array(recipientIdentifierSchema).max(10).optional(),
+  requestedAt: isoTimestampSchema,
+  requestedByUserId: userIdSchema.optional(),
+});
+
+export const revokeBadgeJobPayloadSchema = z.object({
+  revocationId: resourceIdSchema,
+  assertionId: resourceIdSchema,
+  reason: z.string().min(1).max(512),
+  requestedAt: isoTimestampSchema,
+  requestedByUserId: userIdSchema.optional(),
+});
+
+export const issueBadgeQueueJobSchema = z.object({
+  jobType: z.literal('issue_badge'),
+  tenantId: tenantIdSchema,
+  payload: issueBadgeJobPayloadSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const revokeBadgeQueueJobSchema = z.object({
+  jobType: z.literal('revoke_badge'),
+  tenantId: tenantIdSchema,
+  payload: revokeBadgeJobPayloadSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const rebuildVerificationCacheQueueJobSchema = z.object({
+  jobType: z.literal('rebuild_verification_cache'),
+  tenantId: tenantIdSchema,
+  payload: z.record(z.string(), z.unknown()),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const importMigrationBatchQueueJobSchema = z.object({
+  jobType: z.literal('import_migration_batch'),
+  tenantId: tenantIdSchema,
+  payload: z.record(z.string(), z.unknown()),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export const queueJobSchema = z.discriminatedUnion('jobType', [
+  issueBadgeQueueJobSchema,
+  revokeBadgeQueueJobSchema,
+  rebuildVerificationCacheQueueJobSchema,
+  importMigrationBatchQueueJobSchema,
+]);
+
+export const queueEnvelopeSchema = z.object({
+  jobType: queueJobTypeSchema,
+  tenantId: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()),
+  idempotencyKey: idempotencyKeySchema,
+});
+
+export type QueueJob = z.infer<typeof queueJobSchema>;
+export type KeyGenerationRequest = z.infer<typeof keyGenerationRequestSchema>;
+export type SignCredentialRequest = z.infer<typeof signCredentialRequestSchema>;
+export type TenantSigningRegistry = z.infer<typeof tenantSigningRegistrySchema>;
+export type TenantSigningRegistryEntry = z.infer<typeof tenantSigningRegistryEntrySchema>;
+export type MagicLinkRequest = z.infer<typeof magicLinkRequestSchema>;
+export type MagicLinkVerifyRequest = z.infer<typeof magicLinkVerifyRequestSchema>;
+export type LearnerIdentityLinkRequest = z.infer<typeof learnerIdentityLinkRequestSchema>;
+export type LearnerIdentityLinkVerifyRequest = z.infer<
+  typeof learnerIdentityLinkVerifyRequestSchema
+>;
+export type LearnerDidSettingsRequest = z.infer<typeof learnerDidSettingsRequestSchema>;
+export type PresentationCreateRequest = z.infer<typeof presentationCreateRequestSchema>;
+export type PresentationVerifyRequest = z.infer<typeof presentationVerifyRequestSchema>;
+export type AssertionLifecycleTransitionRequest = z.infer<
+  typeof assertionLifecycleTransitionRequestSchema
+>;
+export type AssertionPathParams = z.infer<typeof assertionPathParamsSchema>;
+export type AssertionLifecycleState = z.infer<typeof assertionLifecycleStateSchema>;
+export type AssertionLifecycleReasonCode = z.infer<typeof assertionLifecycleReasonCodeSchema>;
+export type AssertionLifecycleTransitionSource = z.infer<
+  typeof assertionLifecycleTransitionSourceSchema
+>;
+export type RecipientIdentityType = z.infer<typeof recipientIdentityTypeSchema>;
+export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
+export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
+export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
+export type MigrationBatchUploadQuery = z.infer<typeof migrationBatchUploadQuerySchema>;
+export type MigrationProgressQuery = z.infer<typeof migrationProgressQuerySchema>;
+export type MigrationBatchRetryRequest = z.infer<typeof migrationBatchRetryRequestSchema>;
+export type Ob2ImportConversionRequest = z.infer<typeof ob2ImportConversionRequestSchema>;
+export type IssueBadgeQueueJob = z.infer<typeof issueBadgeQueueJobSchema>;
+export type RevokeBadgeQueueJob = z.infer<typeof revokeBadgeQueueJobSchema>;
+export type ManualIssueBadgeRequest = z.infer<typeof manualIssueBadgeRequestSchema>;
+export type TenantPathParams = z.infer<typeof tenantPathParamsSchema>;
+export type MigrationBatchPathParams = z.infer<typeof migrationBatchPathParamsSchema>;
+export type BadgeTemplatePathParams = z.infer<typeof badgeTemplatePathParamsSchema>;
+export type CredentialPathParams = z.infer<typeof credentialPathParamsSchema>;
+export type TenantUserPathParams = z.infer<typeof tenantUserPathParamsSchema>;
+export type TenantUserOrgUnitPathParams = z.infer<typeof tenantUserOrgUnitPathParamsSchema>;
+export type TenantUserDelegatedGrantPathParams = z.infer<
+  typeof tenantUserDelegatedGrantPathParamsSchema
+>;
+export type TenantApiKeyPathParams = z.infer<typeof tenantApiKeyPathParamsSchema>;
+export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
+  typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
+>;
+export type BadgeIssuanceRulePathParams = z.infer<typeof badgeIssuanceRulePathParamsSchema>;
+export type BadgeIssuanceRuleVersionPathParams = z.infer<
+  typeof badgeIssuanceRuleVersionPathParamsSchema
+>;
+export type BadgeIssuanceRuleVersionDiffQuery = z.infer<
+  typeof badgeIssuanceRuleVersionDiffQuerySchema
+>;
+export type BadgeIssuanceRuleAuditLogQuery = z.infer<typeof badgeIssuanceRuleAuditLogQuerySchema>;
+export type BadgeTemplateListQuery = z.infer<typeof badgeTemplateListQuerySchema>;
+export type TenantOrgUnitListQuery = z.infer<typeof tenantOrgUnitListQuerySchema>;
+export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
+  typeof delegatedIssuingAuthorityGrantListQuerySchema
+>;
+export type TenantApiKeyListQuery = z.infer<typeof tenantApiKeyListQuerySchema>;
+export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
+export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
+export type CreateTenantOrgUnitRequest = z.infer<typeof createTenantOrgUnitRequestSchema>;
+export type UpsertTenantMembershipOrgUnitScopeRequest = z.infer<
+  typeof upsertTenantMembershipOrgUnitScopeRequestSchema
+>;
+export type CreateDelegatedIssuingAuthorityGrantRequest = z.infer<
+  typeof createDelegatedIssuingAuthorityGrantRequestSchema
+>;
+export type RevokeDelegatedIssuingAuthorityGrantRequest = z.infer<
+  typeof revokeDelegatedIssuingAuthorityGrantRequestSchema
+>;
+export type TransferBadgeTemplateOwnershipRequest = z.infer<
+  typeof transferBadgeTemplateOwnershipRequestSchema
+>;
+export type CreateTenantApiKeyRequest = z.infer<typeof createTenantApiKeyRequestSchema>;
+export type RevokeTenantApiKeyRequest = z.infer<typeof revokeTenantApiKeyRequestSchema>;
+export type UpsertTenantSsoSamlConfigurationRequest = z.infer<
+  typeof upsertTenantSsoSamlConfigurationRequestSchema
+>;
+export type UpsertTenantCanvasGradebookIntegrationRequest = z.infer<
+  typeof upsertTenantCanvasGradebookIntegrationRequestSchema
+>;
+export type AdminCanvasOAuthAuthorizeUrlRequest = z.infer<
+  typeof adminCanvasOAuthAuthorizeUrlRequestSchema
+>;
+export type AdminCanvasOAuthExchangeRequest = z.infer<typeof adminCanvasOAuthExchangeRequestSchema>;
+export type TenantCanvasGradebookSnapshotQuery = z.infer<
+  typeof tenantCanvasGradebookSnapshotQuerySchema
+>;
+export type BadgeIssuanceRuleLmsProviderKind = z.infer<typeof badgeIssuanceRuleLmsProviderKindSchema>;
+export type BadgeIssuanceRuleDefinition = z.infer<typeof badgeIssuanceRuleDefinitionSchema>;
+export type CreateBadgeIssuanceRuleRequest = z.infer<typeof createBadgeIssuanceRuleRequestSchema>;
+export type CreateBadgeIssuanceRuleVersionRequest = z.infer<
+  typeof createBadgeIssuanceRuleVersionRequestSchema
+>;
+export type DecideBadgeIssuanceRuleVersionRequest = z.infer<
+  typeof decideBadgeIssuanceRuleVersionRequestSchema
+>;
+export type BadgeIssuanceRuleFacts = z.infer<typeof badgeIssuanceRuleFactsSchema>;
+export type EvaluateBadgeIssuanceRuleRequest = z.infer<typeof evaluateBadgeIssuanceRuleRequestSchema>;
+export type PreviewEvaluateBadgeIssuanceRuleRequest = z.infer<
+  typeof previewEvaluateBadgeIssuanceRuleRequestSchema
+>;
+export type CreateDedicatedDbProvisioningRequest = z.infer<
+  typeof createDedicatedDbProvisioningRequestSchema
+>;
+export type ResolveDedicatedDbProvisioningRequest = z.infer<
+  typeof resolveDedicatedDbProvisioningRequestSchema
+>;
+export type OrgUnitType = z.infer<typeof orgUnitTypeSchema>;
+export type TenantMembershipOrgUnitScopeRole = z.infer<
+  typeof tenantMembershipOrgUnitScopeRoleSchema
+>;
+export type DelegatedIssuingAuthorityAction = z.infer<typeof delegatedIssuingAuthorityActionSchema>;
+export type BadgeTemplateOwnershipReasonCode = z.infer<
+  typeof badgeTemplateOwnershipReasonCodeSchema
+>;
+export type BadgeTemplateOwnershipTransferReasonCode = z.infer<
+  typeof badgeTemplateOwnershipTransferReasonCodeSchema
+>;
+export type AdminUpsertTenantRequest = z.infer<typeof adminUpsertTenantRequestSchema>;
+export type AdminUpsertTenantSigningRegistrationRequest = z.infer<
+  typeof adminUpsertTenantSigningRegistrationRequestSchema
+>;
+export type AdminUpsertBadgeTemplateByIdRequest = z.infer<
+  typeof adminUpsertBadgeTemplateByIdRequestSchema
+>;
+export type AdminUpsertTenantMembershipRoleRequest = z.infer<
+  typeof adminUpsertTenantMembershipRoleRequestSchema
+>;
+export type AdminUpsertLtiIssuerRegistrationRequest = z.infer<
+  typeof adminUpsertLtiIssuerRegistrationRequestSchema
+>;
+export type AdminDeleteLtiIssuerRegistrationRequest = z.infer<
+  typeof adminDeleteLtiIssuerRegistrationRequestSchema
+>;
+export type AdminAuditLogListQuery = z.infer<typeof adminAuditLogListQuerySchema>;
+
+export const parseQueueJob = (input: unknown): QueueJob => {
+  return queueJobSchema.parse(input);
+};
+
+export const parseKeyGenerationRequest = (input: unknown): KeyGenerationRequest => {
+  return keyGenerationRequestSchema.parse(input);
+};
+
+export const parseSignCredentialRequest = (input: unknown): SignCredentialRequest => {
+  return signCredentialRequestSchema.parse(input);
+};
+
+export const parseTenantSigningRegistry = (input: unknown): TenantSigningRegistry => {
+  return tenantSigningRegistrySchema.parse(input);
+};
+
+export const parseTenantSigningRegistryEntry = (input: unknown): TenantSigningRegistryEntry => {
+  return tenantSigningRegistryEntrySchema.parse(input);
+};
+
+export const parseMagicLinkRequest = (input: unknown): MagicLinkRequest => {
+  return magicLinkRequestSchema.parse(input);
+};
+
+export const parseMagicLinkVerifyRequest = (input: unknown): MagicLinkVerifyRequest => {
+  return magicLinkVerifyRequestSchema.parse(input);
+};
+
+export const parseLearnerIdentityLinkRequest = (input: unknown): LearnerIdentityLinkRequest => {
+  return learnerIdentityLinkRequestSchema.parse(input);
+};
+
+export const parseLearnerIdentityLinkVerifyRequest = (
+  input: unknown,
+): LearnerIdentityLinkVerifyRequest => {
+  return learnerIdentityLinkVerifyRequestSchema.parse(input);
+};
+
+export const parseLearnerDidSettingsRequest = (input: unknown): LearnerDidSettingsRequest => {
+  return learnerDidSettingsRequestSchema.parse(input);
+};
+
+export const parsePresentationCreateRequest = (input: unknown): PresentationCreateRequest => {
+  return presentationCreateRequestSchema.parse(input);
+};
+
+export const parsePresentationVerifyRequest = (input: unknown): PresentationVerifyRequest => {
+  return presentationVerifyRequestSchema.parse(input);
+};
+
+export const parseAssertionLifecycleTransitionRequest = (
+  input: unknown,
+): AssertionLifecycleTransitionRequest => {
+  return assertionLifecycleTransitionRequestSchema.parse(input);
+};
+
+export const parseAssertionPathParams = (input: unknown): AssertionPathParams => {
+  return assertionPathParamsSchema.parse(input);
+};
+
+export const parseIssueBadgeRequest = (input: unknown): IssueBadgeRequest => {
+  return issueBadgeRequestSchema.parse(input);
+};
+
+export const parseRevokeBadgeRequest = (input: unknown): RevokeBadgeRequest => {
+  return revokeBadgeRequestSchema.parse(input);
+};
+
+export const parseProcessQueueRequest = (input: unknown): ProcessQueueRequest => {
+  return processQueueRequestSchema.parse(input);
+};
+
+export const parseMigrationBatchUploadQuery = (input: unknown): MigrationBatchUploadQuery => {
+  return migrationBatchUploadQuerySchema.parse(input);
+};
+
+export const parseMigrationProgressQuery = (input: unknown): MigrationProgressQuery => {
+  return migrationProgressQuerySchema.parse(input);
+};
+
+export const parseMigrationBatchRetryRequest = (input: unknown): MigrationBatchRetryRequest => {
+  return migrationBatchRetryRequestSchema.parse(input);
+};
+
+export const parseOb2ImportConversionRequest = (input: unknown): Ob2ImportConversionRequest => {
+  return ob2ImportConversionRequestSchema.parse(input);
+};
+
+export const parseManualIssueBadgeRequest = (input: unknown): ManualIssueBadgeRequest => {
+  return manualIssueBadgeRequestSchema.parse(input);
+};
+
+export const parseTenantPathParams = (input: unknown): TenantPathParams => {
+  return tenantPathParamsSchema.parse(input);
+};
+
+export const parseMigrationBatchPathParams = (input: unknown): MigrationBatchPathParams => {
+  return migrationBatchPathParamsSchema.parse(input);
+};
+
+export const parseBadgeTemplatePathParams = (input: unknown): BadgeTemplatePathParams => {
+  return badgeTemplatePathParamsSchema.parse(input);
+};
+
+export const parseCredentialPathParams = (input: unknown): CredentialPathParams => {
+  return credentialPathParamsSchema.parse(input);
+};
+
+export const parseTenantUserPathParams = (input: unknown): TenantUserPathParams => {
+  return tenantUserPathParamsSchema.parse(input);
+};
+
+export const parseTenantUserOrgUnitPathParams = (input: unknown): TenantUserOrgUnitPathParams => {
+  return tenantUserOrgUnitPathParamsSchema.parse(input);
+};
+
+export const parseTenantUserDelegatedGrantPathParams = (
+  input: unknown,
+): TenantUserDelegatedGrantPathParams => {
+  return tenantUserDelegatedGrantPathParamsSchema.parse(input);
+};
+
+export const parseTenantApiKeyPathParams = (input: unknown): TenantApiKeyPathParams => {
+  return tenantApiKeyPathParamsSchema.parse(input);
+};
+
+export const parseTenantDedicatedDbProvisioningRequestPathParams = (
+  input: unknown,
+): TenantDedicatedDbProvisioningRequestPathParams => {
+  return tenantDedicatedDbProvisioningRequestPathParamsSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRulePathParams = (input: unknown): BadgeIssuanceRulePathParams => {
+  return badgeIssuanceRulePathParamsSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleVersionPathParams = (
+  input: unknown,
+): BadgeIssuanceRuleVersionPathParams => {
+  return badgeIssuanceRuleVersionPathParamsSchema.parse(input);
+};
+
+export const parseBadgeTemplateListQuery = (input: unknown): BadgeTemplateListQuery => {
+  return badgeTemplateListQuerySchema.parse(input);
+};
+
+export const parseTenantOrgUnitListQuery = (input: unknown): TenantOrgUnitListQuery => {
+  return tenantOrgUnitListQuerySchema.parse(input);
+};
+
+export const parseDelegatedIssuingAuthorityGrantListQuery = (
+  input: unknown,
+): DelegatedIssuingAuthorityGrantListQuery => {
+  return delegatedIssuingAuthorityGrantListQuerySchema.parse(input);
+};
+
+export const parseTenantApiKeyListQuery = (input: unknown): TenantApiKeyListQuery => {
+  return tenantApiKeyListQuerySchema.parse(input);
+};
+
+export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemplateRequest => {
+  return createBadgeTemplateRequestSchema.parse(input);
+};
+
+export const parseCreateTenantOrgUnitRequest = (input: unknown): CreateTenantOrgUnitRequest => {
+  return createTenantOrgUnitRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantMembershipOrgUnitScopeRequest = (
+  input: unknown,
+): UpsertTenantMembershipOrgUnitScopeRequest => {
+  return upsertTenantMembershipOrgUnitScopeRequestSchema.parse(input);
+};
+
+export const parseCreateDelegatedIssuingAuthorityGrantRequest = (
+  input: unknown,
+): CreateDelegatedIssuingAuthorityGrantRequest => {
+  return createDelegatedIssuingAuthorityGrantRequestSchema.parse(input);
+};
+
+export const parseRevokeDelegatedIssuingAuthorityGrantRequest = (
+  input: unknown,
+): RevokeDelegatedIssuingAuthorityGrantRequest => {
+  return revokeDelegatedIssuingAuthorityGrantRequestSchema.parse(input);
+};
+
+export const parseTransferBadgeTemplateOwnershipRequest = (
+  input: unknown,
+): TransferBadgeTemplateOwnershipRequest => {
+  return transferBadgeTemplateOwnershipRequestSchema.parse(input);
+};
+
+export const parseCreateTenantApiKeyRequest = (input: unknown): CreateTenantApiKeyRequest => {
+  return createTenantApiKeyRequestSchema.parse(input);
+};
+
+export const parseRevokeTenantApiKeyRequest = (input: unknown): RevokeTenantApiKeyRequest => {
+  return revokeTenantApiKeyRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantSsoSamlConfigurationRequest = (
+  input: unknown,
+): UpsertTenantSsoSamlConfigurationRequest => {
+  return upsertTenantSsoSamlConfigurationRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantCanvasGradebookIntegrationRequest = (
+  input: unknown,
+): UpsertTenantCanvasGradebookIntegrationRequest => {
+  return upsertTenantCanvasGradebookIntegrationRequestSchema.parse(input);
+};
+
+export const parseAdminCanvasOAuthAuthorizeUrlRequest = (
+  input: unknown,
+): AdminCanvasOAuthAuthorizeUrlRequest => {
+  return adminCanvasOAuthAuthorizeUrlRequestSchema.parse(input);
+};
+
+export const parseAdminCanvasOAuthExchangeRequest = (
+  input: unknown,
+): AdminCanvasOAuthExchangeRequest => {
+  return adminCanvasOAuthExchangeRequestSchema.parse(input);
+};
+
+export const parseTenantCanvasGradebookSnapshotQuery = (
+  input: unknown,
+): TenantCanvasGradebookSnapshotQuery => {
+  return tenantCanvasGradebookSnapshotQuerySchema.parse(input);
+};
+
+export const parseCreateBadgeIssuanceRuleRequest = (
+  input: unknown,
+): CreateBadgeIssuanceRuleRequest => {
+  return createBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleVersionDiffQuery = (
+  input: unknown,
+): BadgeIssuanceRuleVersionDiffQuery => {
+  return badgeIssuanceRuleVersionDiffQuerySchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleAuditLogQuery = (input: unknown): BadgeIssuanceRuleAuditLogQuery => {
+  return badgeIssuanceRuleAuditLogQuerySchema.parse(input);
+};
+
+export const parseCreateBadgeIssuanceRuleVersionRequest = (
+  input: unknown,
+): CreateBadgeIssuanceRuleVersionRequest => {
+  return createBadgeIssuanceRuleVersionRequestSchema.parse(input);
+};
+
+export const parseDecideBadgeIssuanceRuleVersionRequest = (
+  input: unknown,
+): DecideBadgeIssuanceRuleVersionRequest => {
+  return decideBadgeIssuanceRuleVersionRequestSchema.parse(input);
+};
+
+export const parseEvaluateBadgeIssuanceRuleRequest = (
+  input: unknown,
+): EvaluateBadgeIssuanceRuleRequest => {
+  return evaluateBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parsePreviewEvaluateBadgeIssuanceRuleRequest = (
+  input: unknown,
+): PreviewEvaluateBadgeIssuanceRuleRequest => {
+  return previewEvaluateBadgeIssuanceRuleRequestSchema.parse(input);
+};
+
+export const parseBadgeIssuanceRuleDefinition = (input: unknown): BadgeIssuanceRuleDefinition => {
+  return badgeIssuanceRuleDefinitionSchema.parse(input);
+};
+
+export const parseCreateDedicatedDbProvisioningRequest = (
+  input: unknown,
+): CreateDedicatedDbProvisioningRequest => {
+  return createDedicatedDbProvisioningRequestSchema.parse(input);
+};
+
+export const parseResolveDedicatedDbProvisioningRequest = (
+  input: unknown,
+): ResolveDedicatedDbProvisioningRequest => {
+  return resolveDedicatedDbProvisioningRequestSchema.parse(input);
+};
+
+export const parseUpdateBadgeTemplateRequest = (input: unknown): UpdateBadgeTemplateRequest => {
+  return updateBadgeTemplateRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantRequest = (input: unknown): AdminUpsertTenantRequest => {
+  return adminUpsertTenantRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantSigningRegistrationRequest = (
+  input: unknown,
+): AdminUpsertTenantSigningRegistrationRequest => {
+  return adminUpsertTenantSigningRegistrationRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertBadgeTemplateByIdRequest = (
+  input: unknown,
+): AdminUpsertBadgeTemplateByIdRequest => {
+  return adminUpsertBadgeTemplateByIdRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertTenantMembershipRoleRequest = (
+  input: unknown,
+): AdminUpsertTenantMembershipRoleRequest => {
+  return adminUpsertTenantMembershipRoleRequestSchema.parse(input);
+};
+
+export const parseAdminUpsertLtiIssuerRegistrationRequest = (
+  input: unknown,
+): AdminUpsertLtiIssuerRegistrationRequest => {
+  return adminUpsertLtiIssuerRegistrationRequestSchema.parse(input);
+};
+
+export const parseAdminDeleteLtiIssuerRegistrationRequest = (
+  input: unknown,
+): AdminDeleteLtiIssuerRegistrationRequest => {
+  return adminDeleteLtiIssuerRegistrationRequestSchema.parse(input);
+};
+
+export const parseAdminAuditLogListQuery = (input: unknown): AdminAuditLogListQuery => {
+  return adminAuditLogListQuerySchema.parse(input);
+};

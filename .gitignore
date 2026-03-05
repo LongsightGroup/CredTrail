@@ -1,0 +1,14 @@
+# Node + tooling
+node_modules/
+*.log
+dist/
+coverage/
+.wrangler/
+.astro/
+
+# Local project surfaces
+.local/
+artifacts/
+
+# OS
+.DS_Store
