@@ -29,8 +29,6 @@ export const renderPageShell = (
       rel="stylesheet"
     />
     ${headContent}
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.20.1/cdn/shoelace-autoloader.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -45,8 +43,8 @@ export const renderPageShell = (
         --ct-brand-lake-500: #3a8fcb;
         --ct-brand-lake-400: #61a8d8;
         --ct-brand-sun-400: #f0c251;
-        --ct-brand-mint-600: #1f8a5a;
-        --ct-brand-amber-600: #a36412;
+        --ct-brand-mint-600: #166b46;
+        --ct-brand-amber-600: #7a4700;
         --ct-brand-rose-600: #ad3d31;
         --ct-theme-text-title: #0d2543;
         --ct-theme-text-body: #173a5c;

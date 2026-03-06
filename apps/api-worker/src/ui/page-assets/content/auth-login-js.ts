@@ -16,7 +16,7 @@ export const AUTH_LOGIN_JS = `
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    setStatus('Sending magic link...', 'info');
+    setStatus('Sending your sign-in link...', 'info');
     devLinkEl.textContent = '';
     const data = new FormData(form);
     const tenantIdRaw = data.get('tenantId');
@@ -27,7 +27,7 @@ export const AUTH_LOGIN_JS = `
     const next = typeof nextRaw === 'string' ? nextRaw.trim() : '';
 
     if (tenantId.length === 0 || email.length === 0) {
-      setStatus('Tenant ID and email are required.', 'error');
+      setStatus('Enter both your tenant ID and institution email.', 'error');
       return;
     }
 
@@ -56,10 +56,10 @@ export const AUTH_LOGIN_JS = `
           : 'sent';
       setStatus(
         deliveryStatus === 'sent'
-          ? 'Magic link sent. Check your inbox.'
+          ? 'Check your inbox for a sign-in link from CredTrail. It expires in 10 minutes.'
           : deliveryStatus === 'failed'
-            ? 'Magic link created, but email delivery failed. Contact support.'
-            : 'Magic link created.',
+            ? 'Your sign-in link was created, but the email could not be delivered. Contact support.'
+            : 'Your sign-in link is ready.',
         deliveryStatus === 'failed' ? 'error' : 'success',
       );
 
@@ -68,10 +68,10 @@ export const AUTH_LOGIN_JS = `
         if (next.length > 0 && next.startsWith('/')) {
           url.searchParams.set('next', next);
         }
-        devLinkEl.innerHTML = '<a href="' + url.toString() + '">Open magic link (development helper)</a>';
+        devLinkEl.innerHTML = '<a href="' + url.toString() + '">Open sign-in link (development helper)</a>';
       }
     } catch {
-      setStatus('Unable to request magic link right now.', 'error');
+      setStatus('We could not send the sign-in link right now. Please try again.', 'error');
     }
   });
 })();

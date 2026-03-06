@@ -259,19 +259,21 @@ export const createPublicBadgePageRenderers = (
 
   const ruleConditionMarkup = (condition: BadgeIssuanceRuleCondition): string => {
     if ('all' in condition) {
-      return `<li><strong>All of:</strong><ul>${condition.all
+      return `<li><strong>All of these must be true:</strong><ul>${condition.all
         .map((entry) => ruleConditionMarkup(entry))
         .join('')}</ul></li>`;
     }
 
     if ('any' in condition) {
-      return `<li><strong>Any of:</strong><ul>${condition.any
+      return `<li><strong>At least one of these must be true:</strong><ul>${condition.any
         .map((entry) => ruleConditionMarkup(entry))
         .join('')}</ul></li>`;
     }
 
     if ('not' in condition) {
-      return `<li><strong>Not:</strong><ul>${ruleConditionMarkup(condition.not)}</ul></li>`;
+      return `<li><strong>None of these can be true:</strong><ul>${ruleConditionMarkup(
+        condition.not,
+      )}</ul></li>`;
     }
 
     switch (condition.type) {
@@ -283,60 +285,60 @@ export const createPublicBadgePageRenderers = (
             : condition.minScore !== undefined
               ? `at least ${String(condition.minScore)}`
               : `at most ${String(condition.maxScore)}`;
-        return `<li>Grade threshold for course ${escapeHtml(
+        return `<li>For course ${escapeHtml(
           condition.courseId,
-        )}: ${escapeHtml(scoreField)} ${escapeHtml(range)}</li>`;
+        )}, ${escapeHtml(scoreField)} must be ${escapeHtml(range)}.</li>`;
       }
       case 'course_completion': {
         const completionTarget =
           condition.minCompletionPercent === undefined
             ? ''
-            : ` with completion percent >= ${String(condition.minCompletionPercent)}`;
+            : ` and reach at least ${String(condition.minCompletionPercent)}% completion`;
         const completionRequirement =
-          condition.requireCompleted === false ? 'Completion flag not required' : 'Must be completed';
-        return `<li>Course completion for ${escapeHtml(condition.courseId)}: ${escapeHtml(
+          condition.requireCompleted === false ? 'Completion does not need to be marked complete' : 'The course must be marked complete';
+        return `<li>For course ${escapeHtml(condition.courseId)}, ${escapeHtml(
           completionRequirement,
-        )}${escapeHtml(completionTarget)}</li>`;
+        )}${escapeHtml(completionTarget)}.</li>`;
       }
       case 'program_completion': {
         const minimumCompleted =
           condition.minimumCompleted === undefined
-            ? `all listed courses (${String(condition.courseIds.length)})`
-            : `${String(condition.minimumCompleted)} of ${String(condition.courseIds.length)} courses`;
-        return `<li>Program completion: ${escapeHtml(minimumCompleted)} required (${escapeHtml(
+            ? `complete all ${String(condition.courseIds.length)} listed courses`
+            : `complete ${String(condition.minimumCompleted)} of ${String(condition.courseIds.length)} listed courses`;
+        return `<li>Program requirement: ${escapeHtml(minimumCompleted)} (${escapeHtml(
           condition.courseIds.join(', '),
-        )})</li>`;
+        )}).</li>`;
       }
       case 'assignment_submission': {
         const scoreClause =
-          condition.minScore === undefined ? '' : ` with minimum score ${String(condition.minScore)}`;
+          condition.minScore === undefined ? '' : ` and earn at least ${String(condition.minScore)}`;
         const submissionClause =
-          condition.requireSubmitted === false ? 'submission optional' : 'submission required';
+          condition.requireSubmitted === false ? 'submission is optional' : 'submission is required';
         const workflowClause =
           condition.workflowStates === undefined
             ? ''
-            : ` and workflow state in (${escapeHtml(condition.workflowStates.join(', '))})`;
-        return `<li>Assignment submission for ${escapeHtml(
+            : `, with workflow state in ${escapeHtml(condition.workflowStates.join(', '))}`;
+        return `<li>For assignment ${escapeHtml(condition.assignmentId)} in ${escapeHtml(
           condition.courseId,
-        )}/${escapeHtml(condition.assignmentId)}: ${escapeHtml(
+        )}, ${escapeHtml(
           submissionClause,
-        )}${escapeHtml(scoreClause)}${workflowClause}</li>`;
+        )}${escapeHtml(scoreClause)}${workflowClause}.</li>`;
       }
       case 'time_window': {
         const notBefore =
           condition.notBefore === undefined
             ? ''
-            : ` not before ${escapeHtml(formatIsoTimestamp(condition.notBefore))} UTC`;
+            : ` on or after ${escapeHtml(formatIsoTimestamp(condition.notBefore))} UTC`;
         const notAfter =
           condition.notAfter === undefined
             ? ''
-            : ` not after ${escapeHtml(formatIsoTimestamp(condition.notAfter))} UTC`;
-        return `<li>Time window:${notBefore}${notAfter}</li>`;
+            : ` on or before ${escapeHtml(formatIsoTimestamp(condition.notAfter))} UTC`;
+        return `<li>Qualifying activity must happen${notBefore}${notAfter}.</li>`;
       }
       case 'prerequisite_badge':
-        return `<li>Requires prerequisite badge template ${escapeHtml(
+        return `<li>Requires earning this badge first: ${escapeHtml(
           condition.badgeTemplateId,
-        )}</li>`;
+        )}.</li>`;
     }
   };
 
@@ -385,13 +387,13 @@ export const createPublicBadgePageRenderers = (
     const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
     const summaryPath = `${publicBadgePath}/summary`;
     const summaryUrl = new URL(summaryPath, requestUrl).toString();
-    const verificationApiPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}`;
+    const verificationApiPath = `${publicBadgePath}/verification`;
     const verificationApiUrl = new URL(verificationApiPath, requestUrl).toString();
-    const ob3JsonPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/jsonld`;
+    const ob3JsonPath = `${publicBadgePath}/jsonld`;
     const ob3JsonUrl = new URL(ob3JsonPath, requestUrl).toString();
-    const credentialDownloadPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/download`;
+    const credentialDownloadPath = `${publicBadgePath}/download`;
     const credentialDownloadUrl = new URL(credentialDownloadPath, requestUrl).toString();
-    const credentialPdfDownloadPath = `/credentials/v1/${encodeURIComponent(model.assertion.id)}/download.pdf`;
+    const credentialPdfDownloadPath = `${publicBadgePath}/download.pdf`;
     const credentialPdfDownloadUrl = new URL(credentialPdfDownloadPath, requestUrl).toString();
     const walletOfferBadgeIdentifier = model.assertion.publicId ?? model.assertion.id;
     const walletOfferPath = `/credentials/v1/offers/${encodeURIComponent(walletOfferBadgeIdentifier)}`;
@@ -465,16 +467,18 @@ export const createPublicBadgePageRenderers = (
             </a>`,
                 ]),
           ].join('');
-    const imsValidatorDetailsSection =
+    const validatorToolsMarkup =
       assertionValidatorUrl === null
         ? ''
-        : `<details class="public-badge__actions-details">
-              <summary>Validate with IMS tools</summary>
+        : `<div class="public-badge__validator-block">
+              <p class="public-badge__validator-note">
+                Use IMS tools to validate the published JSON and issuer records.
+              </p>
               <div class="public-badge__validator-links">${validatorLinks}</div>
               <p class="public-badge__validator-note">
                 IMS validator expects JSON/image targets. Validate using the Open Badges 3.0 JSON URL, not this HTML page URL.
               </p>
-            </details>`;
+            </div>`;
     const badgeClassValidationTechnicalDetail =
       badgeClassValidatorUrl === null
         ? '<span>Not available (badge class URI is not a web URL).</span>'
@@ -506,6 +510,52 @@ export const createPublicBadgePageRenderers = (
     });
     const linkedInShareUrl = new URL('https://www.linkedin.com/sharing/share-offsite/');
     linkedInShareUrl.searchParams.set('url', publicBadgeUrl);
+    const advancedActionButtons = [
+      `<a
+          class="public-badge__button"
+          href="${escapeHtml(dccWalletDeepLinkUrl.toString())}"
+        >
+          Open in DCC Learner Wallet
+        </a>`,
+      `<a
+          class="public-badge__button"
+          href="${escapeHtml(linkedInAddProfileUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Add to LinkedIn Profile
+        </a>`,
+      `<a
+          class="public-badge__button"
+          href="${escapeHtml(linkedInShareUrl.toString())}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Share on LinkedIn Feed
+        </a>`,
+      `<a class="public-badge__button" href="${escapeHtml(ob3JsonPath)}">
+          Open Badges 3.0 JSON
+        </a>`,
+      `<a class="public-badge__button" href="${escapeHtml(summaryPath)}">Summary JSON</a>`,
+      `<a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download .jsonld VC</a>`,
+      `<a class="public-badge__button" href="${escapeHtml(credentialPdfDownloadPath)}">Download PDF</a>`,
+      `<a class="public-badge__button" href="${escapeHtml(walletOfferPath)}">OpenID4VCI Offer</a>`,
+      `<button
+          id="chapi-store-button"
+          class="public-badge__button"
+          type="button"
+          data-credential-json-url="${escapeHtml(ob3JsonPath)}"
+        >
+          Add to Browser Wallet
+        </button>`,
+    ].join('');
+    const advancedActionsSection = `<details class="public-badge__actions-details">
+      <summary>Share, download, and advanced tools</summary>
+      <div class="public-badge__actions public-badge__actions--secondary">
+        ${advancedActionButtons}
+      </div>
+      ${validatorToolsMarkup}
+    </details>`;
     const issuedAt = `${formatIsoTimestamp(model.assertion.issuedAt)} UTC`;
     const issuerLine =
       issuerUrl === null
@@ -773,6 +823,14 @@ export const createPublicBadgePageRenderers = (
           margin: 0;
           color: var(--ct-theme-text-muted);
         }
+
+        .public-badge__issuer a,
+        .public-badge__achievement-copy a,
+        .public-badge__evidence-item a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.75rem;
+        }
   
         .public-badge__recipient-name {
           margin: 0;
@@ -813,20 +871,6 @@ export const createPublicBadgePageRenderers = (
           margin: 0;
           color: var(--ct-theme-text-muted);
         }
-  
-        .public-badge__action-group {
-          display: grid;
-          gap: 0.44rem;
-        }
-
-        .public-badge__action-label {
-          margin: 0;
-          font-size: 0.76rem;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: var(--ct-theme-text-muted);
-          font-weight: 700;
-        }
 
         .public-badge__actions {
           display: flex;
@@ -844,9 +888,13 @@ export const createPublicBadgePageRenderers = (
         }
 
         .public-badge__button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
           border: 1px solid var(--ct-theme-border-default);
           border-radius: 0.7rem;
-          padding: 0.44rem 0.74rem;
+          min-height: 2.75rem;
+          padding: 0.6rem 0.9rem;
           text-decoration: none;
           font-size: 0.84rem;
           line-height: 1.2;
@@ -881,20 +929,6 @@ export const createPublicBadgePageRenderers = (
           background: var(--ct-theme-gradient-action-hover);
           color: var(--ct-theme-text-on-brand);
         }
-
-        .public-badge__button--wallet {
-          box-shadow: var(--ct-theme-shadow-card);
-        }
-  
-        .public-badge__button--accent {
-          border-color: var(--ct-theme-border-warning);
-          background: var(--ct-theme-surface-warning);
-          color: var(--ct-theme-state-warning);
-        }
-
-        .public-badge__button--accent:hover {
-          color: var(--ct-theme-state-warning);
-        }
   
         .public-badge__copy-status {
           margin: 0;
@@ -915,14 +949,22 @@ export const createPublicBadgePageRenderers = (
         }
 
         .public-badge__actions-details summary {
+          display: flex;
+          align-items: center;
+          min-height: 2.75rem;
           cursor: pointer;
           font-weight: 700;
           color: var(--ct-theme-text-body);
           font-size: 0.92rem;
         }
-  
+
+        .public-badge__validator-block {
+          margin-top: 0.72rem;
+          display: grid;
+          gap: 0.48rem;
+        }
+
         .public-badge__validator-links {
-          margin-top: 0.5rem;
           display: grid;
           gap: 0.48rem;
         }
@@ -976,6 +1018,9 @@ export const createPublicBadgePageRenderers = (
         }
   
         .public-badge__technical summary {
+          display: flex;
+          align-items: center;
+          min-height: 2.75rem;
           cursor: pointer;
           font-weight: 700;
         }
@@ -1021,25 +1066,21 @@ export const createPublicBadgePageRenderers = (
             column-gap: 1rem;
             align-items: start;
           }
-
-          .public-badge__share .public-badge__section-title {
-            grid-column: 1 / -1;
-          }
-
-          .public-badge__share-main {
-            grid-column: 1;
-          }
-
-          .public-badge__share .public-badge__qr {
-            grid-column: 2;
-            grid-row: 2;
-          }
         }
 
         @media (max-width: 759px) {
           .public-badge__status {
             flex-direction: column;
             align-items: flex-start;
+          }
+
+          .public-badge__actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .public-badge__button {
+            width: 100%;
           }
 
           .public-badge__share .public-badge__qr {
@@ -1094,72 +1135,30 @@ export const createPublicBadgePageRenderers = (
         ${evidenceSection}
   
         <section class="public-badge__card public-badge__stack-sm public-badge__share">
-          <h2 class="public-badge__section-title">Share and verify</h2>
           <div class="public-badge__share-main">
-            <div class="public-badge__action-group">
-              <p class="public-badge__action-label">Primary actions</p>
-              <div class="public-badge__actions public-badge__actions--primary">
-                <a
-                  class="public-badge__button public-badge__button--accent"
-                  href="${escapeHtml(linkedInAddProfileUrl)}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Add to LinkedIn Profile
-                </a>
-                <a
-                  class="public-badge__button"
-                  href="${escapeHtml(linkedInShareUrl.toString())}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Share on LinkedIn Feed
-                </a>
-                <a
-                  class="public-badge__button public-badge__button--primary public-badge__button--wallet"
-                  href="${escapeHtml(walletDeepLinkUrl.toString())}"
-                >
-                  Open in Wallet App
-                </a>
-                <a
-                  class="public-badge__button public-badge__button--wallet"
-                  href="${escapeHtml(dccWalletDeepLinkUrl.toString())}"
-                >
-                  Open in DCC Learner Wallet
-                </a>
-                <a class="public-badge__button public-badge__button--primary" href="${escapeHtml(ob3JsonPath)}">
-                  Open Badges 3.0 JSON
-                </a>
-                <button
-                  id="copy-badge-url-button"
-                  class="public-badge__button"
-                  type="button"
-                  data-copy-value="${escapeHtml(publicBadgeUrl)}"
-                >
-                  Copy URL
-                </button>
-              </div>
+            <h2 class="public-badge__section-title">Claim this credential</h2>
+            <p class="public-badge__achievement-copy">
+              Add it to a compatible wallet or copy the public link to share it.
+              Recruiters and other verifiers can review the issuer, evidence, and technical details on this page.
+            </p>
+            <div class="public-badge__actions public-badge__actions--primary">
+              <a class="public-badge__button public-badge__button--primary" href="${escapeHtml(
+                walletDeepLinkUrl.toString(),
+              )}">
+                Claim in Wallet
+              </a>
+              <button
+                id="copy-badge-url-button"
+                class="public-badge__button"
+                type="button"
+                data-copy-value="${escapeHtml(publicBadgeUrl)}"
+              >
+                Copy public URL
+              </button>
             </div>
-            <details class="public-badge__actions-details">
-              <summary>More share/download options</summary>
-              <div class="public-badge__actions public-badge__actions--secondary">
-                <a class="public-badge__button" href="${escapeHtml(summaryPath)}">Summary JSON</a>
-                <a class="public-badge__button" href="${escapeHtml(credentialDownloadPath)}">Download .jsonld VC</a>
-                <a class="public-badge__button" href="${escapeHtml(credentialPdfDownloadPath)}">Download PDF</a>
-                <a class="public-badge__button" href="${escapeHtml(walletOfferPath)}">OpenID4VCI Offer</a>
-                <button
-                  id="chapi-store-button"
-                  class="public-badge__button"
-                  type="button"
-                  data-credential-json-url="${escapeHtml(ob3JsonPath)}"
-                >
-                  Add to Browser Wallet
-                </button>
-              </div>
-            </details>
+            ${advancedActionsSection}
             <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
             <p id="chapi-store-status" class="public-badge__copy-status" aria-live="polite"></p>
-            ${imsValidatorDetailsSection}
           </div>
           <figure class="public-badge__qr">
             <img
@@ -1225,9 +1224,9 @@ export const createPublicBadgePageRenderers = (
             button.addEventListener('click', async () => {
               try {
                 await navigator.clipboard.writeText(value);
-                status.textContent = 'Badge URL copied';
+                status.textContent = 'Public URL copied';
               } catch {
-                status.textContent = 'Unable to copy URL automatically';
+                status.textContent = 'Unable to copy public URL automatically';
               }
             });
 
@@ -1453,7 +1452,8 @@ export const createPublicBadgePageRenderers = (
           width: fit-content;
           border: 1px solid var(--ct-theme-surface-brand-chip-strong);
           border-radius: 0.65rem;
-          padding: 0.35rem 0.62rem;
+          min-height: 2.75rem;
+          padding: 0.5rem 0.9rem;
           color: var(--ct-theme-text-on-brand);
           text-decoration: none;
           font-weight: 700;
@@ -1605,11 +1605,20 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__button {
+          display: inline-flex;
+          flex: 0 0 8.75rem;
+          inline-size: 8.75rem;
+          align-items: center;
+          justify-content: center;
+          appearance: none;
           border: 1px solid var(--ct-theme-border-default);
           border-radius: 0.62rem;
-          padding: 0.36rem 0.66rem;
-          font-size: 0.8rem;
+          min-height: 2.75rem;
+          height: 2.75rem;
+          padding: 0 0.72rem;
+          font-size: 0.78rem;
           font-weight: 700;
+          line-height: 1.2;
           color: var(--ct-theme-text-body);
           background: linear-gradient(
             180deg,
@@ -1636,15 +1645,18 @@ export const createPublicBadgePageRenderers = (
           border-color: transparent;
           color: var(--ct-theme-text-on-brand);
           background: var(--ct-theme-gradient-action);
+          box-shadow: 0 0.48rem 0.95rem rgba(7, 27, 51, 0.13);
         }
 
         .badge-wall__button--primary:hover {
           color: var(--ct-theme-text-on-brand);
           background: var(--ct-theme-gradient-action-hover);
+          box-shadow: 0 0.58rem 1.08rem rgba(7, 27, 51, 0.16);
         }
 
         .badge-wall__copy-status {
           margin: 0;
+          flex-basis: 100%;
           font-size: 0.78rem;
           color: var(--ct-theme-text-subtle);
           min-height: 1rem;
@@ -1658,6 +1670,9 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__url-details summary {
+          display: flex;
+          align-items: center;
+          min-height: 2.75rem;
           cursor: pointer;
           font-size: 0.78rem;
           font-weight: 700;
@@ -1690,6 +1705,15 @@ export const createPublicBadgePageRenderers = (
           .badge-wall__summary {
             grid-template-columns: 1fr;
             align-items: start;
+          }
+
+          .badge-wall__actions {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+          }
+
+          .badge-wall__button {
+            width: 100%;
           }
         }
       </style>
@@ -1759,6 +1783,10 @@ export const createPublicBadgePageRenderers = (
       filterBadgeTemplateId === null
         ? `Public criteria and governance metadata for badge templates under tenant "${tenantId}".`
         : `Public criteria and governance metadata for tenant "${tenantId}" badge template "${filterBadgeTemplateId}".`;
+    const heroLead =
+      filterBadgeTemplateId === null
+        ? 'Use this page to understand what each public badge recognizes, who publishes it, and how qualification rules are reviewed.'
+        : 'Use this page to understand what this public badge recognizes, who publishes it, and how qualification rules are reviewed.';
     const badgeWallPath =
       filterBadgeTemplateId === null
         ? `/showcase/${encodeURIComponent(tenantId)}`
@@ -1768,7 +1796,7 @@ export const createPublicBadgePageRenderers = (
     const orgUnitById = new Map(model.orgUnits.map((orgUnit) => [orgUnit.id, orgUnit]));
     const templateCards =
       model.templates.length === 0
-        ? '<p class="criteria-registry__empty">No badge templates matched this criteria registry view.</p>'
+        ? '<p class="criteria-registry__empty">No public badge templates matched this view.</p>'
         : model.templates
             .map((entry) => {
               const template = entry.template;
@@ -1782,21 +1810,33 @@ export const createPublicBadgePageRenderers = (
               )}?badgeTemplateId=${encodeURIComponent(template.id)}`;
               const criteriaLink =
                 template.criteriaUri === null
-                  ? '<span class="criteria-registry__muted">No external criteria URL published.</span>'
+                  ? '<span class="criteria-registry__muted">No public criteria link is published for this badge.</span>'
                   : `<a href="${escapeHtml(template.criteriaUri)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
                       template.criteriaUri,
                     )}</a>`;
-              const governanceMetadataSection =
+              const templateRecordDetails =
                 template.governanceMetadataJson === null
-                  ? ''
+                  ? `<details class="criteria-registry__details">
+                      <summary>Badge record details</summary>
+                      <div class="criteria-registry__details-body criteria-registry__stack-sm">
+                        <p class="criteria-registry__muted">Template ID: ${escapeHtml(template.id)}</p>
+                        <p class="criteria-registry__muted">Slug: ${escapeHtml(template.slug)}</p>
+                      </div>
+                    </details>`
                   : `<details class="criteria-registry__details">
-                      <summary>Governance metadata</summary>
+                      <summary>Badge record details and raw metadata</summary>
+                      <div class="criteria-registry__details-body criteria-registry__stack-sm">
+                        <p class="criteria-registry__muted">Template ID: ${escapeHtml(template.id)}</p>
+                        <p class="criteria-registry__muted">Slug: ${escapeHtml(template.slug)}</p>
+                      </div>
                       <pre class="criteria-registry__pre">${escapeHtml(template.governanceMetadataJson)}</pre>
                     </details>`;
-              const ownershipTimeline =
+              const ownershipHistorySection =
                 entry.ownershipEvents.length === 0
-                  ? '<p class="criteria-registry__muted">No ownership transfer events recorded.</p>'
-                  : `<ol class="criteria-registry__timeline">
+                  ? '<p class="criteria-registry__muted">No published ownership changes are recorded for this badge yet.</p>'
+                  : `<details class="criteria-registry__details">
+                      <summary>View ownership transfer history</summary>
+                      <ol class="criteria-registry__timeline">
                       ${entry.ownershipEvents
                         .map((event) => {
                           const fromOrgUnit =
@@ -1804,7 +1844,8 @@ export const createPublicBadgePageRenderers = (
                               ? null
                               : (orgUnitById.get(event.fromOrgUnitId) ?? null);
                           const toOrgUnit = orgUnitById.get(event.toOrgUnitId) ?? null;
-                          const fromLabel = fromOrgUnit === null ? 'Unassigned' : fromOrgUnit.displayName;
+                          const fromLabel =
+                            fromOrgUnit === null ? 'No previous owner recorded' : fromOrgUnit.displayName;
                           const toLabel = toOrgUnit === null ? event.toOrgUnitId : toOrgUnit.displayName;
                           const actor = event.transferredByUserId ?? 'system';
                           const reason =
@@ -1815,18 +1856,19 @@ export const createPublicBadgePageRenderers = (
                             <p><strong>${escapeHtml(fromLabel)}</strong> → <strong>${escapeHtml(
                             toLabel,
                           )}</strong></p>
-                            <p class="criteria-registry__muted">Reason: ${escapeHtml(
+                            <p class="criteria-registry__muted">Why it changed: ${escapeHtml(
                               reason,
-                            )} · Actor: ${escapeHtml(actor)} · ${escapeHtml(
+                            )} · Recorded by ${escapeHtml(actor)} · ${escapeHtml(
                               formatIsoTimestamp(event.transferredAt),
                             )} UTC</p>
                           </li>`;
                         })
                         .join('')}
-                    </ol>`;
+                    </ol>
+                    </details>`;
               const rulesSection =
                 entry.rules.length === 0
-                  ? '<p class="criteria-registry__muted">No issuance rules are linked to this template.</p>'
+                  ? '<p class="criteria-registry__muted">No published qualification rules are available for this badge yet.</p>'
                   : entry.rules
                       .map((ruleEntry) => {
                         const latestVersion = ruleEntry.latestVersion;
@@ -1834,31 +1876,39 @@ export const createPublicBadgePageRenderers = (
                         const effectiveVersion = activeVersion ?? latestVersion;
                         const latestVersionLabel =
                           latestVersion === null
-                            ? 'none'
+                            ? 'No recorded version'
                             : `v${String(latestVersion.versionNumber)} (${latestVersion.status})`;
                         const activeVersionLabel =
-                          activeVersion === null ? 'none' : `v${String(activeVersion.versionNumber)}`;
+                          activeVersion === null
+                            ? 'No published version'
+                            : `v${String(activeVersion.versionNumber)}`;
                         const changeSummary =
                           effectiveVersion?.changeSummary === null ||
                           effectiveVersion?.changeSummary === undefined
-                            ? '<span class="criteria-registry__muted">No change summary provided.</span>'
+                            ? '<span class="criteria-registry__muted">No public summary was provided for the latest rule update.</span>'
                             : escapeHtml(effectiveVersion.changeSummary);
                         const approvalStepsMarkup =
                           ruleEntry.approvalSteps.length === 0
-                            ? '<p class="criteria-registry__muted">No approval steps recorded for this version.</p>'
+                            ? '<p class="criteria-registry__muted">No review steps are published for this rule version.</p>'
                             : `<ol class="criteria-registry__approval-steps">
                                 ${ruleEntry.approvalSteps
                                   .map((step) => {
                                     const actor = step.decidedByUserId ?? 'pending';
                                     const decidedAt =
                                       step.decidedAt === null
-                                        ? 'awaiting decision'
+                                        ? 'Awaiting decision'
                                         : `${formatIsoTimestamp(step.decidedAt)} UTC`;
+                                    const reviewLabel =
+                                      step.label === null || step.label.trim().length === 0
+                                        ? `Step ${String(step.stepNumber)}`
+                                        : step.label;
                                     return `<li>
-                                      <p>Step ${String(step.stepNumber)} · required role <strong>${escapeHtml(
-                                      step.requiredRole,
-                                    )}</strong> · status <strong>${escapeHtml(step.status)}</strong></p>
-                                      <p class="criteria-registry__muted">Actor: ${escapeHtml(
+                                      <p><strong>${escapeHtml(reviewLabel)}</strong> · status <strong>${escapeHtml(
+                                        step.status,
+                                      )}</strong></p>
+                                      <p class="criteria-registry__muted">Required role: ${escapeHtml(
+                                        step.requiredRole,
+                                      )} · Reviewed by ${escapeHtml(
                                         actor,
                                       )} · ${escapeHtml(decidedAt)}</p>
                                     </li>`;
@@ -1867,7 +1917,7 @@ export const createPublicBadgePageRenderers = (
                               </ol>`;
                         const approvalEventsMarkup =
                           ruleEntry.approvalEvents.length === 0
-                            ? '<p class="criteria-registry__muted">No approval events recorded.</p>'
+                            ? '<p class="criteria-registry__muted">No detailed approval history is published for this rule version.</p>'
                             : `<ol class="criteria-registry__approval-events">
                                 ${ruleEntry.approvalEvents
                                   .map((event) => {
@@ -1879,40 +1929,42 @@ export const createPublicBadgePageRenderers = (
                                         : ` · ${escapeHtml(event.comment)}`;
                                     return `<li>${escapeHtml(event.action)} by ${escapeHtml(
                                       actor,
-                                    )} (${escapeHtml(role)}) at ${escapeHtml(
+                                    )} (${escapeHtml(role)}) · ${escapeHtml(
                                       formatIsoTimestamp(event.occurredAt),
                                     )} UTC${comment}</li>`;
                                   })
                                   .join('')}
                               </ol>`;
+                        const ruleGovernanceDetails = `<details class="criteria-registry__details">
+                          <summary>Rule history and governance details</summary>
+                          <div class="criteria-registry__details-body criteria-registry__stack-sm">
+                            <p class="criteria-registry__muted">Rule ID: ${escapeHtml(ruleEntry.rule.id)}</p>
+                            <p class="criteria-registry__muted">Source system: ${escapeHtml(
+                              ruleEntry.rule.lmsProviderKind,
+                            )}</p>
+                            <p class="criteria-registry__muted">
+                              Current published version: ${escapeHtml(activeVersionLabel)} · Most recent recorded version: ${escapeHtml(
+                                latestVersionLabel,
+                              )}
+                            </p>
+                            <p><strong>Review steps</strong></p>
+                            ${approvalStepsMarkup}
+                            <p><strong>Detailed approval history</strong></p>
+                            ${approvalEventsMarkup}
+                          </div>
+                        </details>`;
 
                         return `<article class="criteria-registry__rule">
                           <header>
                             <h3>${escapeHtml(ruleEntry.rule.name)}</h3>
-                            <p class="criteria-registry__muted">
-                              Rule ID: ${escapeHtml(ruleEntry.rule.id)} · LMS: ${escapeHtml(
-                                ruleEntry.rule.lmsProviderKind,
-                              )}
-                            </p>
-                            <p class="criteria-registry__muted">
-                              Active version: ${escapeHtml(activeVersionLabel)} · Latest version: ${escapeHtml(
-                                latestVersionLabel,
-                              )}
-                            </p>
+                            <p class="criteria-registry__muted">This published rule explains when a learner qualifies for this badge.</p>
                           </header>
                           <div class="criteria-registry__stack-sm">
-                            <p><strong>What qualifies a learner</strong></p>
+                            <p><strong>Learners qualify when these checks are met</strong></p>
                             ${ruleDefinitionSummaryMarkup(effectiveVersion?.ruleJson ?? null)}
-                            <p><strong>Change summary</strong></p>
+                            <p><strong>Latest published update</strong></p>
                             <p class="criteria-registry__muted">${changeSummary}</p>
-                            <details class="criteria-registry__details">
-                              <summary>Approval chain and sign-off</summary>
-                              ${approvalStepsMarkup}
-                            </details>
-                            <details class="criteria-registry__details">
-                              <summary>Approval event history</summary>
-                              ${approvalEventsMarkup}
-                            </details>
+                            ${ruleGovernanceDetails}
                           </div>
                         </article>`;
                       })
@@ -1929,39 +1981,39 @@ export const createPublicBadgePageRenderers = (
                   }
                   <div class="criteria-registry__template-meta">
                     <h2>${escapeHtml(template.title)}</h2>
-                    <p class="criteria-registry__muted">Template ID: ${escapeHtml(template.id)}</p>
-                    <p class="criteria-registry__muted">Slug: ${escapeHtml(template.slug)}</p>
                   </div>
                 </header>
                 <p class="criteria-registry__description">${escapeHtml(
-                  template.description ?? 'No description published.',
+                  template.description ?? 'No public description is published for this badge yet.',
                 )}</p>
                 <dl class="criteria-registry__facts">
                   <div class="criteria-registry__fact">
-                    <dt>Criteria URL</dt>
+                    <dt>Published criteria</dt>
                     <dd>${criteriaLink}</dd>
                   </div>
                   <div class="criteria-registry__fact">
-                    <dt>Governance owner</dt>
+                    <dt>Current badge owner</dt>
                     <dd>${escapeHtml(ownerLabel)}</dd>
                   </div>
                   <div class="criteria-registry__fact">
-                    <dt>Last updated</dt>
+                    <dt>Registry updated</dt>
                     <dd>${escapeHtml(formatIsoTimestamp(template.updatedAt))} UTC</dd>
                   </div>
                 </dl>
                 <p class="criteria-registry__actions">
-                  <a href="${escapeHtml(templateShowcasePath)}">View badge wall entries for this template</a>
+                  <a href="${escapeHtml(templateShowcasePath)}">View public badge examples</a>
                 </p>
                 <section class="criteria-registry__section">
-                  <h3>Issuance rules</h3>
+                  <h3>How someone qualifies</h3>
+                  <p class="criteria-registry__muted">These published rules explain how a learner becomes eligible for this badge.</p>
                   ${rulesSection}
                 </section>
                 <section class="criteria-registry__section">
-                  <h3>Ownership history</h3>
-                  ${ownershipTimeline}
+                  <h3>Governance and ownership</h3>
+                  <p class="criteria-registry__muted">This section shows who is responsible for the badge and any published changes to ownership.</p>
+                  ${ownershipHistorySection}
+                  ${templateRecordDetails}
                 </section>
-                ${governanceMetadataSection}
               </article>`;
             })
             .join('');
@@ -2003,6 +2055,9 @@ export const createPublicBadgePageRenderers = (
         }
 
         .criteria-registry__hero-link {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.75rem;
           width: fit-content;
           color: var(--ct-theme-text-on-brand);
           font-weight: 700;
@@ -2099,7 +2154,7 @@ export const createPublicBadgePageRenderers = (
           font-size: 0.74rem;
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          color: var(--ct-theme-text-subtle);
+          color: var(--ct-theme-text-muted);
           font-weight: 700;
         }
 
@@ -2107,6 +2162,13 @@ export const createPublicBadgePageRenderers = (
           margin: 0;
           color: var(--ct-theme-text-body);
           word-break: break-word;
+        }
+
+        .criteria-registry__fact dd a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.75rem;
+          max-width: 100%;
         }
 
         .criteria-registry__muted {
@@ -2134,6 +2196,10 @@ export const createPublicBadgePageRenderers = (
         }
 
         .criteria-registry__actions a {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 2.75rem;
           font-weight: 700;
         }
 
@@ -2184,9 +2250,16 @@ export const createPublicBadgePageRenderers = (
         }
 
         .criteria-registry__details summary {
+          display: flex;
+          align-items: center;
+          min-height: 2.75rem;
           cursor: pointer;
           font-weight: 700;
           color: var(--ct-theme-text-body);
+        }
+
+        .criteria-registry__details-body {
+          margin-top: 0.55rem;
         }
 
         .criteria-registry__pre {
@@ -2211,6 +2284,14 @@ export const createPublicBadgePageRenderers = (
         }
 
         @media (max-width: 640px) {
+          .criteria-registry__actions {
+            width: 100%;
+          }
+
+          .criteria-registry__actions a {
+            width: 100%;
+          }
+
           .criteria-registry__template-header {
             grid-template-columns: 1fr;
             align-items: start;
@@ -2220,7 +2301,7 @@ export const createPublicBadgePageRenderers = (
       <section class="criteria-registry">
         <header class="criteria-registry__hero">
           <h1>${escapeHtml(title)}</h1>
-          <p>${escapeHtml(subtitle)}</p>
+          <p>${escapeHtml(heroLead)}</p>
           <a class="criteria-registry__hero-link" href="${escapeHtml(badgeWallPath)}">
             Back to badge wall
           </a>

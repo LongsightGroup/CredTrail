@@ -308,20 +308,22 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('Example University');
     expect(body).toContain('https://example.edu');
     expect(body).toContain('Ada Lovelace');
-    expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456');
-    expect(body).toContain('Copy URL');
+    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification');
+    expect(body).toContain('Claim this credential');
+    expect(body).toContain('Copy public URL');
     expect(body).toContain('Summary JSON');
     expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary');
-    expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/download');
-    expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/download.pdf');
-    expect(body).toContain('/credentials/v1/tenant_123%3Aassertion_456/jsonld');
+    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download');
+    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf');
+    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld');
     expect(body).toContain('/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
     expect(body).toContain('Download PDF');
     expect(body).toContain('Download .jsonld VC');
     expect(body).toContain('OpenID4VCI Offer');
     expect(body).toContain('Add to Browser Wallet');
-    expect(body).toContain('Open in Wallet App');
+    expect(body).toContain('Claim in Wallet');
     expect(body).toContain('Open in DCC Learner Wallet');
+    expect(body).toContain('Share, download, and advanced tools');
     expect(body).toContain('openid-credential-offer:');
     expect(body).toContain('credential_offer_uri=');
     expect(body).toContain('https://lcw.app/request?request=');
@@ -348,7 +350,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('QR code for OpenID4VCI credential offer endpoint');
     expect(body).toContain('Open Badges 3.0 JSON');
     expect(body).toContain(
-      '<link rel="alternate" type="application/ld+json" href="http://localhost/credentials/v1/tenant_123%3Aassertion_456/jsonld"',
+      '<link rel="alternate" type="application/ld+json" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld"',
     );
     expect(body).toContain(
       '<link rel="alternate" type="application/json" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary"',
@@ -518,6 +520,84 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(response.headers.get('location')).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
   });
 
+  it('redirects legacy tenant-scoped badge asset URLs to canonical public alias URLs', async () => {
+    const env = createEnv();
+
+    mockedFindAssertionByPublicId.mockResolvedValue(null);
+    mockedFindAssertionById.mockResolvedValue(sampleAssertion());
+
+    const response = await app.request(
+      '/badges/tenant_123%3Aassertion_456/jsonld',
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
+    );
+    expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
+  });
+
+  it('returns verification JSON through the canonical public alias route', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      '@context': ['https://www.w3.org/ns/credentials/v2'],
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const response = await app.request(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
+      undefined,
+      env,
+    );
+    const body = await response.json<{
+      verification: {
+        status: string;
+      };
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body.verification.status).toBe('active');
+  });
+
+  it('returns JSON-LD and PDF downloads through canonical public alias routes', async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      '@context': ['https://www.w3.org/ns/credentials/v2'],
+      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const jsonldResponse = await app.request(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
+      undefined,
+      env,
+    );
+    const jsonldBody = await jsonldResponse.text();
+    const pdfResponse = await app.request(
+      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf',
+      undefined,
+      env,
+    );
+    const pdfBody = await pdfResponse.arrayBuffer();
+
+    expect(jsonldResponse.status).toBe(200);
+    expect(jsonldResponse.headers.get('content-type')).toContain('application/ld+json');
+    expect(jsonldBody).toContain('"OpenBadgeCredential"');
+    expect(pdfResponse.status).toBe(200);
+    expect(pdfResponse.headers.get('content-type')).toContain('application/pdf');
+    expect(new TextDecoder().decode(pdfBody.slice(0, 5))).toBe('%PDF-');
+  });
+
   it('returns public summary JSON payload for canonical public badge identifier', async () => {
     const env = createEnv();
     const credential: JsonObject = {
@@ -674,13 +754,13 @@ describe('GET /badges/:badgeIdentifier', () => {
       'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
     );
     expect(body.x_credtrail.verification_url).toBe(
-      'http://localhost/credentials/v1/tenant_123%3Aassertion_456',
+      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
     );
     expect(body.x_credtrail.credential_jsonld_url).toBe(
-      'http://localhost/credentials/v1/tenant_123%3Aassertion_456/jsonld',
+      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
     );
     expect(body.x_credtrail.credential_download_url).toBe(
-      'http://localhost/credentials/v1/tenant_123%3Aassertion_456/download',
+      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download',
     );
     expect(mockedCreateOid4vciPreAuthorizedCode).toHaveBeenCalledTimes(1);
   });

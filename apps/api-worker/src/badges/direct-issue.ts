@@ -335,8 +335,8 @@ export const createIssueBadgeForTenant = <
     if (request.recipientIdentityType === 'email') {
       const recipientEmail = request.recipientIdentity.trim().toLowerCase();
       const publicBadgePath = input.publicBadgePathForAssertion(createdAssertion);
-      const verificationPath = `/credentials/v1/${encodeURIComponent(assertionId)}`;
-      const credentialDownloadPath = `/credentials/v1/${encodeURIComponent(assertionId)}/download`;
+      const verificationPath = `${publicBadgePath}/verification`;
+      const credentialDownloadPath = `${publicBadgePath}/download`;
 
       try {
         await input.sendIssuanceEmailNotification({

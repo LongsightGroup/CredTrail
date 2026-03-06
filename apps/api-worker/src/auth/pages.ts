@@ -28,7 +28,7 @@ export const magicLinkLoginPage = (input: {
       ? ''
       : `<p class="ct-login__context">
           ${input.reason === 'auth_required' ? 'Sign in required.' : 'Continue sign-in.'}
-          You are accessing <strong>${escapeHtml(adminTenantLabel)}</strong> institution admin.
+          You are opening <strong>${escapeHtml(adminTenantLabel)}</strong> institution admin. Use an email that already has access to this tenant.
         </p>`;
   const tenantLinkHref =
     effectiveTenantId.length === 0
@@ -43,21 +43,32 @@ export const magicLinkLoginPage = (input: {
     'Sign In · CredTrail',
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
-        <aside class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Institution Access</p>
-          <h1 class="ct-login__title">Sign in to your CredTrail tenant</h1>
+        <div class="ct-login__hero ct-stack">
+          <p class="ct-login__eyebrow">Secure sign-in</p>
+          <h1 class="ct-login__title">Access your CredTrail tenant</h1>
           <p class="ct-login__lede">
-            We send a one-click secure magic link to your email. No password, no copy/paste token flow.
+            Use your tenant ID and institution email to receive a secure sign-in link from CredTrail.
           </p>
-          <div class="ct-login__chips ct-cluster">
-            <span class="ct-login__chip">Magic Link</span>
-            <span class="ct-login__chip">Tenant-Scoped</span>
-            <span class="ct-login__chip">Session Secured</span>
-          </div>
-        </aside>
+          <ol class="ct-login__steps">
+            <li class="ct-login__step">
+              <strong>Enter your details.</strong>
+              Use the email your institution already uses for CredTrail access.
+            </li>
+            <li class="ct-login__step">
+              <strong>Check your inbox.</strong>
+              The sign-in email comes from CredTrail and expires in 10 minutes.
+            </li>
+            <li class="ct-login__step">
+              <strong>Open the link on this browser.</strong>
+              We will return you to the tenant page you were trying to reach.
+            </li>
+          </ol>
+        </div>
         <div class="ct-login__form-wrap ct-stack">
-          <h2 class="ct-login__form-title">Request sign-in link</h2>
-          <p class="ct-login__form-text">Enter your tenant ID and institution email.</p>
+          <h2 class="ct-login__form-title">Email me a sign-in link</h2>
+          <p class="ct-login__form-text">
+            Enter your tenant ID and institution email. We will send the sign-in link from a CredTrail email address.
+          </p>
           ${accessContextNotice}
           <form id="magic-link-login-form" class="ct-login__form ct-stack">
             <label class="ct-login__field ct-stack">
@@ -65,14 +76,16 @@ export const magicLinkLoginPage = (input: {
               <input name="tenantId" type="text" required value="${escapeHtml(effectiveTenantId)}" placeholder="sakai" />
             </label>
             <label class="ct-login__field ct-stack">
-              <span>Email</span>
+              <span>Institution email</span>
+              <span class="ct-login__field-help">Use the email your institution already uses for CredTrail access.</span>
               <input name="email" type="email" required placeholder="name@institution.edu" />
             </label>
             <input name="next" type="hidden" value="${escapeHtml(input.nextPath)}" />
-            <button type="submit" class="ct-login__submit">Send magic link</button>
+            <button type="submit" class="ct-login__submit">Send sign-in link</button>
           </form>
-          <p class="ct-login__help">Magic links expire in 10 minutes and are sent by CredTrail email.</p>
-          <p class="ct-login__help">Use your institution-admin email address for tenant access.</p>
+          <p class="ct-login__help">
+            The sign-in email comes from CredTrail, works for this tenant flow, and expires in 10 minutes.
+          </p>
           <p id="magic-link-login-status" class="ct-login__status" hidden></p>
           <p id="magic-link-dev-link" class="ct-login__dev"></p>
           <p class="ct-login__back">

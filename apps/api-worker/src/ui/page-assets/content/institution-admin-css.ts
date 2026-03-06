@@ -32,7 +32,8 @@ export const INSTITUTION_ADMIN_CSS = `
   color: var(--ct-theme-text-on-brand);
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.22rem 0.62rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
   text-decoration: none;
 }
 .ct-admin__quick-links a:hover {
@@ -41,9 +42,11 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__cta-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   border-radius: var(--ct-radius-pill);
   border: 1px solid var(--ct-border-strong);
-  padding: 0.32rem 0.78rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
   font-weight: 700;
   text-decoration: none;
   background: var(--ct-theme-surface-info);
@@ -140,7 +143,8 @@ export const INSTITUTION_ADMIN_CSS = `
   box-sizing: border-box;
   border: 1px solid var(--ct-border-strong);
   border-radius: var(--ct-radius-md);
-  padding: 0.52rem 0.62rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.72rem;
   font-size: 0.94rem;
 }
 .ct-admin__form textarea {
@@ -353,10 +357,14 @@ export const INSTITUTION_ADMIN_CSS = `
   margin: 0;
 }
 .ct-admin__form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   justify-self: start;
   border: none;
   border-radius: var(--ct-radius-md);
-  padding: 0.52rem 0.9rem;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.96rem;
   font-weight: 700;
   color: var(--ct-theme-text-on-brand);
   background: var(--ct-theme-gradient-action);
@@ -368,7 +376,8 @@ export const INSTITUTION_ADMIN_CSS = `
   justify-content: center;
   border: none;
   border-radius: var(--ct-radius-sm);
-  padding: 0.45rem 0.72rem;
+  min-height: 2.75rem;
+  padding: 0.58rem 0.88rem;
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--ct-theme-text-on-brand);
@@ -382,8 +391,8 @@ export const INSTITUTION_ADMIN_CSS = `
   cursor: progress;
 }
 .ct-admin__button--tiny {
-  padding: 0.3rem 0.55rem;
-  font-size: 0.76rem;
+  padding: 0.45rem 0.72rem;
+  font-size: 0.78rem;
 }
 .ct-admin__button--danger {
   background: var(--ct-theme-gradient-danger);
@@ -463,6 +472,11 @@ export const INSTITUTION_ADMIN_CSS = `
   padding: 0.55rem;
   vertical-align: top;
   font-size: 0.9rem;
+}
+.ct-admin__table a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
 }
 .ct-admin__empty {
   color: var(--ct-color-ink-soft);
@@ -578,9 +592,10 @@ export const INSTITUTION_ADMIN_CSS = `
   border-radius: var(--ct-radius-pill);
   background: var(--ct-theme-surface-info);
   color: var(--ct-theme-text-body);
+  min-height: 2.75rem;
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.32rem 0.74rem;
+  padding: 0.5rem 0.92rem;
   cursor: pointer;
   transition:
     border-color var(--ct-duration-fast) var(--ct-ease-standard),
@@ -616,6 +631,9 @@ export const INSTITUTION_ADMIN_CSS = `
   padding: 0.58rem 0.64rem;
 }
 .ct-admin__builder-advanced > summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
   cursor: pointer;
   font-weight: 700;
   color: var(--ct-color-ink);
@@ -630,6 +648,9 @@ export const INSTITUTION_ADMIN_CSS = `
   padding: 0.58rem 0.64rem;
 }
 .ct-admin__builder-guide > summary {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
   cursor: pointer;
   font-weight: 700;
   color: var(--ct-color-ink);
@@ -696,6 +717,37 @@ export const INSTITUTION_ADMIN_CSS = `
   .ct-admin__condition-fields.ct-grid,
   .ct-admin__condition-header-fields.ct-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ct-admin__quick-links,
+  .ct-admin__builder-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ct-admin__quick-links a,
+  .ct-admin__step-button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .ct-admin__builder-inline,
+  .ct-admin__builder-toolbar,
+  .ct-admin__builder-step-nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ct-admin__builder-step-nav {
+    justify-items: stretch;
+  }
+
+  .ct-admin__builder-inline > .ct-admin__button,
+  .ct-admin__builder-toolbar .ct-admin__button,
+  .ct-admin__builder-step-nav .ct-admin__button,
+  .ct-admin__builder-step-nav #rule-builder-submit {
+    width: 100%;
   }
 
   .ct-admin__builder-step-nav #rule-builder-submit {

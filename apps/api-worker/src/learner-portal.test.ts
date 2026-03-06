@@ -208,14 +208,17 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('Your credential collection');
     expect(body).toContain('Your badges');
     expect(body).toContain('TypeScript Foundations');
     expect(body).toContain('Advanced TypeScript');
     expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
     expect(body).toContain('/badges/public_assertion_999');
+    expect(body).toContain('View public badge');
     expect(body).toContain('Verified');
     expect(body).toContain('Revoked');
     expect(body).toContain('Profile settings');
+    expect(body).toContain('Manage learner DID');
     expect(body).toContain('No learner DID is currently configured.');
     expect(mockedListLearnerIdentitiesByProfile).toHaveBeenCalledWith(
       fakeDb,
@@ -263,6 +266,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain(
       'Learner DID updated. Newly issued badges will use this DID as credentialSubject.id.',
     );
+    expect(body).toContain('<details class="learner-dashboard__profile-details" open>');
     expect(body).toContain('Current DID:');
     expect(body).toContain('did:key:z6MkhLearnerDidExample');
   });
@@ -286,6 +290,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
+    expect(body).toContain('Your credential collection is ready for its first published badge.');
     expect(body).toContain('No badges have been issued to this learner account yet.');
   });
 });

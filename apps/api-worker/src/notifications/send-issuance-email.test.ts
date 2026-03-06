@@ -18,10 +18,11 @@ describe('sendIssuanceEmailNotification', () => {
       assertionId: 'tenant_123:assertion_456',
       tenantId: 'tenant_123',
       issuedAtIso: '2026-02-10T22:00:00.000Z',
-      publicBadgeUrl: 'https://credtrail.test/badges/tenant_123%3Aassertion_456',
-      verificationUrl: 'https://credtrail.test/credentials/v1/tenant_123%3Aassertion_456',
+      publicBadgeUrl: 'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      verificationUrl:
+        'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
       credentialDownloadUrl:
-        'https://credtrail.test/credentials/v1/tenant_123%3Aassertion_456/download',
+        'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download',
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
@@ -47,10 +48,11 @@ describe('sendIssuanceEmailNotification', () => {
       assertionId: 'tenant_123:assertion_456',
       tenantId: 'tenant_123',
       issuedAtIso: '2026-02-10T22:00:00.000Z',
-      publicBadgeUrl: 'https://credtrail.test/badges/tenant_123%3Aassertion_456',
-      verificationUrl: 'https://credtrail.test/credentials/v1/tenant_123%3Aassertion_456',
+      publicBadgeUrl: 'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      verificationUrl:
+        'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
       credentialDownloadUrl:
-        'https://credtrail.test/credentials/v1/tenant_123%3Aassertion_456/download',
+        'https://credtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download',
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();

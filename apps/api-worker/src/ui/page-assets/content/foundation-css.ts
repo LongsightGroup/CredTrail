@@ -14,8 +14,8 @@ export const FOUNDATION_CSS = `
   --ct-brand-lake-500: #3a8fcb;
   --ct-brand-lake-400: #61a8d8;
   --ct-brand-sun-400: #f0c251;
-  --ct-brand-mint-600: #1f8a5a;
-  --ct-brand-amber-600: #a36412;
+  --ct-brand-mint-600: #166b46;
+  --ct-brand-amber-600: #7a4700;
   --ct-brand-rose-600: #ad3d31;
 
   /* Semantic text tokens. */
@@ -153,17 +153,6 @@ export const FOUNDATION_CSS = `
   --ct-duration-standard: 220ms;
   --ct-ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ct-max-content-width: 1080px;
-
-  --sl-font-sans: var(--ct-font-sans);
-  --sl-font-serif: var(--ct-font-display);
-  --sl-color-primary-700: var(--ct-color-primary-700);
-  --sl-color-primary-600: var(--ct-color-primary-700);
-  --sl-color-primary-500: var(--ct-color-primary-500);
-  --sl-color-success-600: var(--ct-color-success);
-  --sl-color-danger-600: var(--ct-color-danger);
-  --sl-border-radius-small: var(--ct-radius-sm);
-  --sl-border-radius-medium: var(--ct-radius-md);
-  --sl-border-radius-large: var(--ct-radius-lg);
 }
 
 .ct-container {
@@ -219,9 +208,21 @@ export const FOUNDATION_CSS = `
 
 .ct-checkbox-row input[type='checkbox'] {
   margin: 0;
-  width: 1rem;
-  height: 1rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
   accent-color: var(--ct-theme-link);
+}
+
+@media (max-width: 780px), (pointer: coarse) {
+  .ct-checkbox-row {
+    align-items: flex-start;
+  }
+
+  .ct-checkbox-row input[type='checkbox'] {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 }
 
 @media (max-width: 980px) {

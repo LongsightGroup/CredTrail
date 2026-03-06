@@ -125,6 +125,23 @@ interface RegisterCredentialRoutesInput<
     store: ImmutableCredentialStore,
     credentialId: string,
   ) => Promise<VerificationLookupResult<AssertionValue, CredentialValue>>;
+  loadPublicBadgeViewModel: (
+    db: SqlDatabase,
+    store: ImmutableCredentialStore,
+    badgeIdentifier: string,
+  ) => Promise<
+    | {
+        status: 'not_found';
+      }
+    | {
+        status: 'redirect';
+        canonicalPath: string;
+      }
+    | {
+        status: 'ok';
+        value: VerificationViewModel<AssertionValue, CredentialValue>;
+      }
+  >;
   credentialStatusForAssertion: (
     statusListCredential: string,
     statusListIndex: number,
@@ -188,6 +205,15 @@ const credentialLookupErrorResponse = (
       error: errorMessage,
     },
     statusCode,
+  );
+};
+
+const publicBadgeLookupErrorResponse = (c: AppContext): Response => {
+  return c.json(
+    {
+      error: 'Badge not found',
+    },
+    404,
   );
 };
 
@@ -280,6 +306,7 @@ export const registerCredentialRoutes = <
     app,
     resolveDatabase,
     loadVerificationViewModel,
+    loadPublicBadgeViewModel,
     credentialStatusForAssertion,
     revocationStatusListUrlForTenant,
     summarizeCredentialVerificationChecks,
@@ -301,6 +328,206 @@ export const registerCredentialRoutes = <
     buildRevocationStatusListCredential,
     signCredentialForDid,
   } = input;
+
+  const publicBadgeVerificationPathForAssertion = (assertion: AssertionValue): string => {
+    return `${publicBadgePathForAssertion(assertion)}/verification`;
+  };
+
+  const publicBadgeJsonldPathForAssertion = (assertion: AssertionValue): string => {
+    return `${publicBadgePathForAssertion(assertion)}/jsonld`;
+  };
+
+  const loadCredentialRouteModel = async (
+    c: AppContext,
+    credentialId: string,
+  ): Promise<Response | VerificationViewModel<AssertionValue, CredentialValue>> => {
+    const result = await loadVerificationViewModel(
+      resolveDatabase(c.env),
+      c.env.BADGE_OBJECTS,
+      credentialId,
+    );
+
+    if (result.status !== 'ok') {
+      return credentialLookupErrorResponse(c, result.status);
+    }
+
+    return result.value;
+  };
+
+  const loadPublicBadgeRouteModel = async (
+    c: AppContext,
+    badgeIdentifier: string,
+    suffix: '/verification' | '/jsonld' | '/download' | '/download.pdf',
+  ): Promise<Response | VerificationViewModel<AssertionValue, CredentialValue>> => {
+    const result = await loadPublicBadgeViewModel(
+      resolveDatabase(c.env),
+      c.env.BADGE_OBJECTS,
+      badgeIdentifier,
+    );
+
+    if (result.status === 'not_found') {
+      return publicBadgeLookupErrorResponse(c);
+    }
+
+    if (result.status === 'redirect') {
+      return c.redirect(`${result.canonicalPath}${suffix}`, 308);
+    }
+
+    return result.value;
+  };
+
+  const buildVerificationResponse = async (
+    c: AppContext,
+    model: VerificationViewModel<AssertionValue, CredentialValue>,
+  ): Promise<Response> => {
+    c.header('Cache-Control', 'no-store');
+
+    const statusList: CredentialStatusListReference | null =
+      model.assertion.statusListIndex === null
+        ? null
+        : credentialStatusForAssertion(
+            revocationStatusListUrlForTenant(c.req.url, model.assertion.tenantId),
+            model.assertion.statusListIndex,
+          );
+    const checkedAt = new Date().toISOString();
+    const checks = await summarizeCredentialVerificationChecks({
+      context: c,
+      credential: model.credential,
+      checkedAt,
+      expectedStatusList: statusList,
+    });
+    const resolvedRevokedAt =
+      checks.credentialStatus.status === 'valid'
+        ? checks.credentialStatus.revoked
+          ? checkedAt
+          : null
+        : model.assertion.revokedAt;
+    const lifecycle = summarizeCredentialLifecycleVerification(
+      model.credential,
+      resolvedRevokedAt,
+      checkedAt,
+    );
+    const effectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: lifecycle,
+      assertionLifecycle: model.lifecycle,
+    });
+    const proof = await verifyCredentialProofSummary(c, model.credential);
+    setCredentialLifecycleHeaders(c, effectiveLifecycle);
+
+    return c.json({
+      assertionId: model.assertion.id,
+      tenantId: model.assertion.tenantId,
+      issuedAt: model.assertion.issuedAt,
+      verification: {
+        status: effectiveLifecycle.state,
+        reason: effectiveLifecycle.reason,
+        checkedAt: effectiveLifecycle.checkedAt,
+        expiresAt: effectiveLifecycle.expiresAt,
+        revokedAt: effectiveLifecycle.revokedAt,
+        assertionLifecycle: {
+          state: model.lifecycle.state,
+          source: model.lifecycle.source,
+          reasonCode: model.lifecycle.reasonCode,
+          reason: model.lifecycle.reason,
+          transitionedAt: model.lifecycle.transitionedAt,
+          revokedAt: model.lifecycle.revokedAt,
+        },
+        statusList,
+        checks,
+        proof,
+      },
+      credential: model.credential,
+    });
+  };
+
+  const buildJsonldResponse = (
+    c: AppContext,
+    model: VerificationViewModel<AssertionValue, CredentialValue>,
+    download: boolean,
+  ): Response => {
+    c.header('Cache-Control', 'no-store');
+    c.header('Content-Type', 'application/ld+json; charset=utf-8');
+    const checkedAt = new Date().toISOString();
+    const baseLifecycle = summarizeCredentialLifecycleVerification(
+      model.credential,
+      model.assertion.revokedAt,
+      checkedAt,
+    );
+    const effectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle,
+      assertionLifecycle: model.lifecycle,
+    });
+    setCredentialLifecycleHeaders(c, effectiveLifecycle);
+
+    if (download) {
+      c.header(
+        'Content-Disposition',
+        `attachment; filename="${credentialDownloadFilename(model.assertion.id)}"`,
+      );
+    }
+
+    return c.body(JSON.stringify(model.credential, null, 2));
+  };
+
+  const buildPdfResponse = async (
+    c: AppContext,
+    model: VerificationViewModel<AssertionValue, CredentialValue>,
+  ): Promise<Response> => {
+    const publicBadgePath = publicBadgePathForAssertion(model.assertion);
+    const verificationPath = publicBadgeVerificationPathForAssertion(model.assertion);
+    const ob3JsonPath = publicBadgeJsonldPathForAssertion(model.assertion);
+    const pdfCheckedAt = new Date().toISOString();
+    const pdfBaseLifecycle = summarizeCredentialLifecycleVerification(
+      model.credential,
+      model.assertion.revokedAt,
+      pdfCheckedAt,
+    );
+    const pdfEffectiveLifecycle = mergedCredentialLifecycle({
+      baseLifecycle: pdfBaseLifecycle,
+      assertionLifecycle: model.lifecycle,
+    });
+    const credentialId = asString(model.credential.id) ?? model.assertion.id;
+    const achievementDetails = achievementDetailsFromCredential(model.credential);
+    const recipientName =
+      model.recipientDisplayName ??
+      recipientDisplayNameFromAssertion(model.assertion) ??
+      'Badge recipient';
+    const pdfDocument = await renderBadgePdfDocument({
+      badgeName: badgeNameFromCredential(model.credential),
+      recipientName,
+      recipientIdentifier: recipientFromCredential(model.credential),
+      issuerName: issuerNameFromCredential(model.credential),
+      issuedAt: `${formatIsoTimestamp(model.assertion.issuedAt)} UTC`,
+      status: credentialLifecycleLabel(pdfEffectiveLifecycle.state),
+      assertionId: model.assertion.id,
+      credentialId,
+      publicBadgeUrl: new URL(publicBadgePath, c.req.url).toString(),
+      verificationUrl: new URL(verificationPath, c.req.url).toString(),
+      ob3JsonUrl: new URL(ob3JsonPath, c.req.url).toString(),
+      badgeImageUrl: achievementDetails.imageUri,
+      ...(pdfEffectiveLifecycle.revokedAt === null
+        ? {}
+        : {
+            revokedAt: `${formatIsoTimestamp(pdfEffectiveLifecycle.revokedAt)} UTC`,
+          }),
+    });
+    const pdfBody = Uint8Array.from(pdfDocument).buffer;
+
+    return new Response(pdfBody, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${credentialPdfDownloadFilename(model.assertion.id)}"`,
+        'X-Credtrail-Credential-State': pdfEffectiveLifecycle.state,
+        ...(pdfEffectiveLifecycle.reason === null
+          ? {}
+          : {
+              'X-Credtrail-Credential-Reason': sanitizeHeaderValue(pdfEffectiveLifecycle.reason),
+            }),
+      },
+    });
+  };
 
   app.get('/credentials/v1/status-lists/:tenantId/revocation', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
@@ -385,203 +612,85 @@ export const registerCredentialRoutes = <
 
   app.get('/credentials/v1/:credentialId', async (c) => {
     const pathParams = parseCredentialPathParams(c.req.param());
-    const result = await loadVerificationViewModel(
-      resolveDatabase(c.env),
-      c.env.BADGE_OBJECTS,
-      pathParams.credentialId,
-    );
+    const model = await loadCredentialRouteModel(c, pathParams.credentialId);
 
-    if (result.status !== 'ok') {
-      return credentialLookupErrorResponse(c, result.status);
+    if (model instanceof Response) {
+      return model;
     }
 
-    c.header('Cache-Control', 'no-store');
-
-    const statusList: CredentialStatusListReference | null =
-      result.value.assertion.statusListIndex === null
-        ? null
-        : credentialStatusForAssertion(
-            revocationStatusListUrlForTenant(c.req.url, result.value.assertion.tenantId),
-            result.value.assertion.statusListIndex,
-          );
-    const checkedAt = new Date().toISOString();
-    const checks = await summarizeCredentialVerificationChecks({
-      context: c,
-      credential: result.value.credential,
-      checkedAt,
-      expectedStatusList: statusList,
-    });
-    const resolvedRevokedAt =
-      checks.credentialStatus.status === 'valid'
-        ? checks.credentialStatus.revoked
-          ? checkedAt
-          : null
-        : result.value.assertion.revokedAt;
-    const lifecycle = summarizeCredentialLifecycleVerification(
-      result.value.credential,
-      resolvedRevokedAt,
-      checkedAt,
-    );
-    const effectiveLifecycle = mergedCredentialLifecycle({
-      baseLifecycle: lifecycle,
-      assertionLifecycle: result.value.lifecycle,
-    });
-    const proof = await verifyCredentialProofSummary(c, result.value.credential);
-    setCredentialLifecycleHeaders(c, effectiveLifecycle);
-
-    return c.json({
-      assertionId: result.value.assertion.id,
-      tenantId: result.value.assertion.tenantId,
-      issuedAt: result.value.assertion.issuedAt,
-      verification: {
-        status: effectiveLifecycle.state,
-        reason: effectiveLifecycle.reason,
-        checkedAt: effectiveLifecycle.checkedAt,
-        expiresAt: effectiveLifecycle.expiresAt,
-        revokedAt: effectiveLifecycle.revokedAt,
-        assertionLifecycle: {
-          state: result.value.lifecycle.state,
-          source: result.value.lifecycle.source,
-          reasonCode: result.value.lifecycle.reasonCode,
-          reason: result.value.lifecycle.reason,
-          transitionedAt: result.value.lifecycle.transitionedAt,
-          revokedAt: result.value.lifecycle.revokedAt,
-        },
-        statusList,
-        checks,
-        proof,
-      },
-      credential: result.value.credential,
-    });
+    return buildVerificationResponse(c, model);
   });
 
   app.get('/credentials/v1/:credentialId/jsonld', async (c) => {
     const pathParams = parseCredentialPathParams(c.req.param());
-    const result = await loadVerificationViewModel(
-      resolveDatabase(c.env),
-      c.env.BADGE_OBJECTS,
-      pathParams.credentialId,
-    );
+    const model = await loadCredentialRouteModel(c, pathParams.credentialId);
 
-    if (result.status !== 'ok') {
-      return credentialLookupErrorResponse(c, result.status);
+    if (model instanceof Response) {
+      return model;
     }
 
-    c.header('Cache-Control', 'no-store');
-    c.header('Content-Type', 'application/ld+json; charset=utf-8');
-    const jsonCheckedAt = new Date().toISOString();
-    const jsonBaseLifecycle = summarizeCredentialLifecycleVerification(
-      result.value.credential,
-      result.value.assertion.revokedAt,
-      jsonCheckedAt,
-    );
-    const jsonEffectiveLifecycle = mergedCredentialLifecycle({
-      baseLifecycle: jsonBaseLifecycle,
-      assertionLifecycle: result.value.lifecycle,
-    });
-    setCredentialLifecycleHeaders(c, jsonEffectiveLifecycle);
-
-    return c.body(JSON.stringify(result.value.credential, null, 2));
+    return buildJsonldResponse(c, model, false);
   });
 
   app.get('/credentials/v1/:credentialId/download', async (c) => {
     const pathParams = parseCredentialPathParams(c.req.param());
-    const result = await loadVerificationViewModel(
-      resolveDatabase(c.env),
-      c.env.BADGE_OBJECTS,
-      pathParams.credentialId,
-    );
+    const model = await loadCredentialRouteModel(c, pathParams.credentialId);
 
-    if (result.status !== 'ok') {
-      return credentialLookupErrorResponse(c, result.status);
+    if (model instanceof Response) {
+      return model;
     }
 
-    c.header('Cache-Control', 'no-store');
-    c.header('Content-Type', 'application/ld+json; charset=utf-8');
-    const downloadCheckedAt = new Date().toISOString();
-    const downloadBaseLifecycle = summarizeCredentialLifecycleVerification(
-      result.value.credential,
-      result.value.assertion.revokedAt,
-      downloadCheckedAt,
-    );
-    const downloadEffectiveLifecycle = mergedCredentialLifecycle({
-      baseLifecycle: downloadBaseLifecycle,
-      assertionLifecycle: result.value.lifecycle,
-    });
-    setCredentialLifecycleHeaders(c, downloadEffectiveLifecycle);
-    c.header(
-      'Content-Disposition',
-      `attachment; filename="${credentialDownloadFilename(result.value.assertion.id)}"`,
-    );
-
-    return c.body(JSON.stringify(result.value.credential, null, 2));
+    return buildJsonldResponse(c, model, true);
   });
 
   app.get('/credentials/v1/:credentialId/download.pdf', async (c) => {
     const pathParams = parseCredentialPathParams(c.req.param());
-    const result = await loadVerificationViewModel(
-      resolveDatabase(c.env),
-      c.env.BADGE_OBJECTS,
-      pathParams.credentialId,
-    );
+    const model = await loadCredentialRouteModel(c, pathParams.credentialId);
 
-    if (result.status !== 'ok') {
-      return credentialLookupErrorResponse(c, result.status);
+    if (model instanceof Response) {
+      return model;
     }
 
-    const publicBadgePath = publicBadgePathForAssertion(result.value.assertion);
-    const verificationPath = `/credentials/v1/${encodeURIComponent(result.value.assertion.id)}`;
-    const ob3JsonPath = `${verificationPath}/jsonld`;
-    const pdfCheckedAt = new Date().toISOString();
-    const pdfBaseLifecycle = summarizeCredentialLifecycleVerification(
-      result.value.credential,
-      result.value.assertion.revokedAt,
-      pdfCheckedAt,
-    );
-    const pdfEffectiveLifecycle = mergedCredentialLifecycle({
-      baseLifecycle: pdfBaseLifecycle,
-      assertionLifecycle: result.value.lifecycle,
-    });
-    const credentialId = asString(result.value.credential.id) ?? result.value.assertion.id;
-    const achievementDetails = achievementDetailsFromCredential(result.value.credential);
-    const recipientName =
-      result.value.recipientDisplayName ??
-      recipientDisplayNameFromAssertion(result.value.assertion) ??
-      'Badge recipient';
-    const pdfDocument = await renderBadgePdfDocument({
-      badgeName: badgeNameFromCredential(result.value.credential),
-      recipientName,
-      recipientIdentifier: recipientFromCredential(result.value.credential),
-      issuerName: issuerNameFromCredential(result.value.credential),
-      issuedAt: `${formatIsoTimestamp(result.value.assertion.issuedAt)} UTC`,
-      status: credentialLifecycleLabel(pdfEffectiveLifecycle.state),
-      assertionId: result.value.assertion.id,
-      credentialId,
-      publicBadgeUrl: new URL(publicBadgePath, c.req.url).toString(),
-      verificationUrl: new URL(verificationPath, c.req.url).toString(),
-      ob3JsonUrl: new URL(ob3JsonPath, c.req.url).toString(),
-      badgeImageUrl: achievementDetails.imageUri,
-      ...(pdfEffectiveLifecycle.revokedAt === null
-        ? {}
-        : {
-            revokedAt: `${formatIsoTimestamp(pdfEffectiveLifecycle.revokedAt)} UTC`,
-          }),
-    });
-    const pdfBody = Uint8Array.from(pdfDocument).buffer;
+    return buildPdfResponse(c, model);
+  });
 
-    return new Response(pdfBody, {
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-store',
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${credentialPdfDownloadFilename(result.value.assertion.id)}"`,
-        'X-Credtrail-Credential-State': pdfEffectiveLifecycle.state,
-        ...(pdfEffectiveLifecycle.reason === null
-          ? {}
-          : {
-              'X-Credtrail-Credential-Reason': sanitizeHeaderValue(pdfEffectiveLifecycle.reason),
-            }),
-      },
-    });
+  app.get('/badges/:badgeIdentifier/verification', async (c) => {
+    const model = await loadPublicBadgeRouteModel(c, c.req.param('badgeIdentifier'), '/verification');
+
+    if (model instanceof Response) {
+      return model;
+    }
+
+    return buildVerificationResponse(c, model);
+  });
+
+  app.get('/badges/:badgeIdentifier/jsonld', async (c) => {
+    const model = await loadPublicBadgeRouteModel(c, c.req.param('badgeIdentifier'), '/jsonld');
+
+    if (model instanceof Response) {
+      return model;
+    }
+
+    return buildJsonldResponse(c, model, false);
+  });
+
+  app.get('/badges/:badgeIdentifier/download', async (c) => {
+    const model = await loadPublicBadgeRouteModel(c, c.req.param('badgeIdentifier'), '/download');
+
+    if (model instanceof Response) {
+      return model;
+    }
+
+    return buildJsonldResponse(c, model, true);
+  });
+
+  app.get('/badges/:badgeIdentifier/download.pdf', async (c) => {
+    const model = await loadPublicBadgeRouteModel(c, c.req.param('badgeIdentifier'), '/download.pdf');
+
+    if (model instanceof Response) {
+      return model;
+    }
+
+    return buildPdfResponse(c, model);
   });
 };

@@ -431,8 +431,10 @@ const walletCredentialOfferPayload = (
 ): Record<string, unknown> => {
   const assertion = model.assertion;
   const requestBaseUrl = new URL(requestUrl);
-  const credentialPath = `/credentials/v1/${encodeURIComponent(assertion.id)}`;
   const publicBadgePath = `/badges/${encodeURIComponent(assertion.publicId ?? assertion.id)}`;
+  const verificationPath = `${publicBadgePath}/verification`;
+  const credentialJsonldPath = `${publicBadgePath}/jsonld`;
+  const credentialDownloadPath = `${publicBadgePath}/download`;
   const preAuthorizedCode =
     options?.preAuthorizedCode ?? `public-badge:${assertion.publicId ?? assertion.id}`;
   const tokenEndpointPath = options?.tokenEndpointPath ?? '/credentials/v1/token';
@@ -458,9 +460,9 @@ const walletCredentialOfferPayload = (
       token_endpoint: new URL(tokenEndpointPath, requestBaseUrl).toString(),
       credential_endpoint: new URL(credentialEndpointPath, requestBaseUrl).toString(),
       public_badge_url: new URL(publicBadgePath, requestBaseUrl).toString(),
-      verification_url: new URL(credentialPath, requestBaseUrl).toString(),
-      credential_jsonld_url: new URL(`${credentialPath}/jsonld`, requestBaseUrl).toString(),
-      credential_download_url: new URL(`${credentialPath}/download`, requestBaseUrl).toString(),
+      verification_url: new URL(verificationPath, requestBaseUrl).toString(),
+      credential_jsonld_url: new URL(credentialJsonldPath, requestBaseUrl).toString(),
+      credential_download_url: new URL(credentialDownloadPath, requestBaseUrl).toString(),
       ...(options?.offerExpiresAt === undefined
         ? {}
         : {
@@ -487,10 +489,10 @@ const publicBadgeSummaryPayload = (
   const recipientId = recipientFromCredential(model.credential);
   const publicBadgePath = `/badges/${encodeURIComponent(assertion.publicId ?? assertion.id)}`;
   const summaryPath = `${publicBadgePath}/summary`;
-  const verificationPath = `/credentials/v1/${encodeURIComponent(assertion.id)}`;
-  const ob3JsonPath = `${verificationPath}/jsonld`;
-  const credentialDownloadPath = `${verificationPath}/download`;
-  const credentialPdfDownloadPath = `${verificationPath}/download.pdf`;
+  const verificationPath = `${publicBadgePath}/verification`;
+  const ob3JsonPath = `${publicBadgePath}/jsonld`;
+  const credentialDownloadPath = `${publicBadgePath}/download`;
+  const credentialPdfDownloadPath = `${publicBadgePath}/download.pdf`;
   const walletOfferPath = `/credentials/v1/offers/${encodeURIComponent(assertion.publicId ?? assertion.id)}`;
   const showcasePath = `/showcase/${encodeURIComponent(assertion.tenantId)}?badgeTemplateId=${encodeURIComponent(assertion.badgeTemplateId)}`;
   const criteriaRegistryPath = `/showcase/${encodeURIComponent(
@@ -642,6 +644,7 @@ registerCredentialRoutes({
   app,
   resolveDatabase,
   loadVerificationViewModel,
+  loadPublicBadgeViewModel,
   credentialStatusForAssertion,
   revocationStatusListUrlForTenant,
   summarizeCredentialVerificationChecks,

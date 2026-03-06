@@ -17,8 +17,8 @@ export const AUTH_LOGIN_CSS = `
   padding: var(--ct-space-5);
   color: var(--ct-theme-text-on-brand);
   background:
-    radial-gradient(circle at 8% 8%, var(--ct-theme-accent-glow-1), transparent 38%),
-    radial-gradient(circle at 92% 8%, var(--ct-theme-accent-glow-3), transparent 36%),
+    radial-gradient(circle at 12% 10%, color-mix(in srgb, var(--ct-theme-accent-glow-1) 72%, transparent), transparent 42%),
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--ct-theme-accent-glow-3) 68%, transparent), transparent 34%),
     var(--ct-theme-gradient-hero);
 }
 
@@ -41,21 +41,49 @@ export const AUTH_LOGIN_CSS = `
 .ct-login__lede {
   margin: 0;
   color: var(--ct-theme-text-inverse);
+  max-width: 34rem;
 }
 
-.ct-login__chips {
-  --ct-cluster-gap: 0.42rem;
+.ct-login__steps {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0.25rem 0 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: login-steps;
 }
 
-.ct-login__chip {
+.ct-login__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.78rem 0.84rem;
+  border: 1px solid color-mix(in srgb, var(--ct-theme-surface-brand-chip-strong) 84%, transparent);
+  border-radius: var(--ct-radius-md);
+  background: color-mix(in srgb, var(--ct-theme-surface-brand-chip) 80%, transparent);
+  color: var(--ct-theme-text-inverse);
+  line-height: 1.45;
+}
+
+.ct-login__step::before {
+  counter-increment: login-steps;
+  content: counter(login-steps);
   display: inline-flex;
   align-items: center;
-  padding: 0.18rem var(--ct-space-2);
-  border-radius: var(--ct-radius-pill);
-  font-size: 0.75rem;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ct-theme-text-on-brand);
+  font-size: 0.82rem;
   font-weight: 700;
-  background: var(--ct-theme-surface-brand-chip);
-  border: 1px solid var(--ct-theme-surface-brand-chip-strong);
+}
+
+.ct-login__step strong {
+  display: block;
+  color: var(--ct-theme-text-on-brand);
 }
 
 .ct-login__form-wrap {
@@ -77,12 +105,12 @@ export const AUTH_LOGIN_CSS = `
   font-size: 0.93rem;
   line-height: 1.4;
   color: var(--ct-color-ink-soft);
+  max-width: 33rem;
 }
 
 .ct-login__context {
   margin: 0;
   border: 1px solid var(--ct-theme-border-info);
-  border-left: 4px solid var(--ct-theme-link);
   border-radius: var(--ct-radius-md);
   padding: 0.62rem 0.72rem;
   background: var(--ct-theme-surface-info);
@@ -104,10 +132,18 @@ export const AUTH_LOGIN_CSS = `
   font-weight: 700;
 }
 
+.ct-login__field-help {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ct-color-ink-soft);
+  font-weight: 500;
+}
+
 .ct-login__field input {
   border: 1px solid var(--ct-border-soft);
   border-radius: var(--ct-radius-md);
-  padding: 0.58rem 0.68rem;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.8rem;
   font-size: 0.94rem;
   color: var(--ct-color-ink);
   background: var(--ct-surface-base);
@@ -120,9 +156,13 @@ export const AUTH_LOGIN_CSS = `
 }
 
 .ct-login__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--ct-radius-md);
-  padding: 0.6rem 0.86rem;
+  min-height: 2.75rem;
+  padding: 0.7rem 1rem;
   font-size: 0.94rem;
   font-weight: 700;
   color: var(--ct-theme-text-on-brand);
@@ -186,8 +226,8 @@ export const AUTH_LOGIN_CSS = `
 .ct-login__help {
   margin: 0;
   color: var(--ct-color-ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.34;
+  font-size: 0.84rem;
+  line-height: 1.4;
 }
 
 .ct-login__back {
@@ -199,6 +239,10 @@ export const AUTH_LOGIN_CSS = `
 }
 
 .ct-login__back a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.25rem 0.1rem;
   font-weight: 700;
 }
 

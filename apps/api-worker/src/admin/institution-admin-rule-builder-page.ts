@@ -463,7 +463,7 @@ export const institutionAdminRuleBuilderPage = (input: {
           <p id="rule-create-status" class="ct-admin__status"></p>
         </article>
 
-        <aside class="ct-admin__panel ct-admin__builder-rail ct-stack" aria-live="polite">
+        <section class="ct-admin__panel ct-admin__builder-rail ct-stack" aria-live="polite">
           <h2>Validation & Summary</h2>
           <p class="ct-admin__hint">Live health checks for this draft as you edit conditions and test facts.</p>
           <dl class="ct-admin__builder-summary-list">
@@ -493,7 +493,7 @@ export const institutionAdminRuleBuilderPage = (input: {
             Saved drafts are stored in this browser and scoped to
             <strong>${escapeHtml(ruleBuilderPath)}</strong>.
           </p>
-        </aside>
+        </section>
       </section>
 
       <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>

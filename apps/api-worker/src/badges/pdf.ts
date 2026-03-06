@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from 'pdf-lib';
 
 export const badgeInitialsFromName = (badgeName: string): string => {
   const trimmedName = badgeName.trim();
@@ -190,52 +190,92 @@ const loadBadgePdfImageAsset = async (imageUrl: string): Promise<BadgePdfImageAs
   }
 };
 
-const wrapPdfText = (value: string, maxChars: number): string[] => {
-  if (value.length <= maxChars) {
-    return [value];
+const splitPdfWordToWidth = (
+  word: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number,
+): string[] => {
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  for (const character of word) {
+    const candidate = `${currentChunk}${character}`;
+
+    if (currentChunk.length > 0 && font.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
+      chunks.push(currentChunk);
+      currentChunk = character;
+      continue;
+    }
+
+    currentChunk = candidate;
   }
 
-  const words = value.split(/\s+/).filter((word) => word.length > 0);
-
-  if (words.length === 0) {
-    return [value.slice(0, maxChars)];
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
   }
 
+  return chunks.length === 0 ? [word] : chunks;
+};
+
+const wrapPdfText = (
+  value: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number,
+): string[] => {
+  const trimmedValue = value.trim();
+
+  if (trimmedValue.length === 0) {
+    return [''];
+  }
+
+  const paragraphs = trimmedValue.split(/\r?\n/);
   const lines: string[] = [];
-  let currentLine = '';
 
-  for (const word of words) {
-    let remainingWord = word;
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter((word) => word.length > 0);
 
-    while (remainingWord.length > maxChars) {
-      if (currentLine.length > 0) {
-        lines.push(currentLine);
-        currentLine = '';
+    if (words.length === 0) {
+      if (lines.length > 0 && lines.at(-1) !== '') {
+        lines.push('');
+      }
+      continue;
+    }
+
+    let currentLine = '';
+
+    for (const word of words) {
+      if (font.widthOfTextAtSize(word, fontSize) > maxWidth) {
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = '';
+        }
+
+        const chunks = splitPdfWordToWidth(word, font, fontSize, maxWidth);
+        const trailingChunk = chunks.pop();
+        lines.push(...chunks);
+        currentLine = trailingChunk ?? '';
+        continue;
       }
 
-      lines.push(remainingWord.slice(0, maxChars));
-      remainingWord = remainingWord.slice(maxChars);
+      const candidate = currentLine.length === 0 ? word : `${currentLine} ${word}`;
+
+      if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+        currentLine = candidate;
+        continue;
+      }
+
+      lines.push(currentLine);
+      currentLine = word;
     }
 
-    if (remainingWord.length === 0) {
-      continue;
+    if (currentLine.length > 0) {
+      lines.push(currentLine);
     }
-
-    const nextLine = currentLine.length === 0 ? remainingWord : `${currentLine} ${remainingWord}`;
-    if (nextLine.length <= maxChars) {
-      currentLine = nextLine;
-      continue;
-    }
-
-    lines.push(currentLine);
-    currentLine = remainingWord;
   }
 
-  if (currentLine.length > 0) {
-    lines.push(currentLine);
-  }
-
-  return lines;
+  return lines.length === 0 ? [''] : lines;
 };
 
 const embedBadgePdfImage = async (
@@ -300,6 +340,7 @@ const drawPdfTextLines = (
   x: number,
   startY: number,
   options: {
+    font: PDFFont;
     size: number;
     color: ReturnType<typeof rgb>;
     lineHeight: number;
@@ -311,6 +352,7 @@ const drawPdfTextLines = (
     page.drawText(line, {
       x,
       y: currentY,
+      font: options.font,
       size: options.size,
       color: options.color,
     });
@@ -326,21 +368,36 @@ const drawPdfField = (
   value: string,
   x: number,
   startY: number,
+  options: {
+    labelFont: PDFFont;
+    labelSize: number;
+    labelColor: ReturnType<typeof rgb>;
+    valueFont: PDFFont;
+    valueSize: number;
+    valueColor: ReturnType<typeof rgb>;
+    lineHeight: number;
+    maxWidth: number;
+    gapAfter: number;
+    labelGap?: number;
+  },
 ): number => {
   page.drawText(label, {
     x,
     y: startY,
-    size: 10,
-    color: rgb(0.36, 0.42, 0.49),
-  });
-  const wrappedValueLines = wrapPdfText(value, 45);
-  const nextY = drawPdfTextLines(page, wrappedValueLines, x, startY - 14, {
-    size: 12,
-    color: rgb(0.08, 0.11, 0.17),
-    lineHeight: 14,
+    font: options.labelFont,
+    size: options.labelSize,
+    color: options.labelColor,
   });
 
-  return nextY - 8;
+  const wrappedValueLines = wrapPdfText(value, options.valueFont, options.valueSize, options.maxWidth);
+  const nextY = drawPdfTextLines(page, wrappedValueLines, x, startY - (options.labelGap ?? 13), {
+    font: options.valueFont,
+    size: options.valueSize,
+    color: options.valueColor,
+    lineHeight: options.lineHeight,
+  });
+
+  return nextY - options.gapAfter;
 };
 
 const drawPdfLinkBlock = (
@@ -349,19 +406,118 @@ const drawPdfLinkBlock = (
   value: string,
   x: number,
   startY: number,
+  options: {
+    labelFont: PDFFont;
+    valueFont: PDFFont;
+    labelColor: ReturnType<typeof rgb>;
+    valueColor: ReturnType<typeof rgb>;
+    maxWidth: number;
+  },
 ): number => {
-  page.drawText(label, {
-    x,
-    y: startY,
-    size: 10,
-    color: rgb(0.36, 0.42, 0.49),
+  return drawPdfField(page, label, value, x, startY, {
+    labelFont: options.labelFont,
+    labelSize: 9.2,
+    labelColor: options.labelColor,
+    valueFont: options.valueFont,
+    valueSize: 10.2,
+    valueColor: options.valueColor,
+    lineHeight: 12.2,
+    maxWidth: options.maxWidth,
+    gapAfter: 8,
+    labelGap: 11,
   });
-  const wrappedValueLines = wrapPdfText(value, 88);
+};
 
-  return drawPdfTextLines(page, wrappedValueLines, x, startY - 13, {
-    size: 10.5,
-    color: rgb(0.08, 0.11, 0.17),
-    lineHeight: 13,
+const drawPdfPanel = (
+  page: PDFPage,
+  frame: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  },
+  options: {
+    fill: ReturnType<typeof rgb>;
+    border: ReturnType<typeof rgb>;
+    accent?: ReturnType<typeof rgb>;
+  },
+): void => {
+  page.drawRectangle({
+    x: frame.x,
+    y: frame.y,
+    width: frame.width,
+    height: frame.height,
+    borderWidth: 1,
+    borderColor: options.border,
+    color: options.fill,
+  });
+
+  if (options.accent !== undefined) {
+    page.drawRectangle({
+      x: frame.x,
+      y: frame.y + frame.height - 4,
+      width: frame.width,
+      height: 4,
+      color: options.accent,
+    });
+  }
+};
+
+const drawPdfStatusPill = (
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  options: {
+    font: PDFFont;
+    size: number;
+    fill: ReturnType<typeof rgb>;
+    textColor: ReturnType<typeof rgb>;
+  },
+): number => {
+  const horizontalPadding = 12;
+  const height = 26;
+  const width = options.font.widthOfTextAtSize(text, options.size) + horizontalPadding * 2;
+
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color: options.fill,
+  });
+
+  const textWidth = options.font.widthOfTextAtSize(text, options.size);
+  page.drawText(text, {
+    x: x + (width - textWidth) / 2,
+    y: y + 8.2,
+    font: options.font,
+    size: options.size,
+    color: options.textColor,
+  });
+
+  return width;
+};
+
+const drawPdfCenteredText = (
+  page: PDFPage,
+  value: string,
+  centerX: number,
+  y: number,
+  options: {
+    font: PDFFont;
+    size: number;
+    color: ReturnType<typeof rgb>;
+  },
+): void => {
+  const textWidth = options.font.widthOfTextAtSize(value, options.size);
+
+  page.drawText(value, {
+    x: centerX - textWidth / 2,
+    y,
+    font: options.font,
+    size: options.size,
+    color: options.color,
   });
 };
 
@@ -370,71 +526,149 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   const page = pdfDocument.addPage([612, 792]);
   const regularFont = await pdfDocument.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDocument.embedFont(StandardFonts.HelveticaBold);
+  const displayFont = await pdfDocument.embedFont(StandardFonts.TimesRomanBold);
 
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
-  const margin = 30;
+  const shellMargin = 24;
+  const contentMargin = 34;
+
+  const colors = {
+    paper: rgb(0.95, 0.97, 0.99),
+    shell: rgb(0.99, 0.995, 1),
+    ink: rgb(0.09, 0.14, 0.22),
+    muted: rgb(0.33, 0.41, 0.51),
+    subtle: rgb(0.44, 0.5, 0.58),
+    border: rgb(0.8, 0.84, 0.89),
+    borderStrong: rgb(0.71, 0.77, 0.84),
+    hero: rgb(0.05, 0.17, 0.31),
+    heroOverlay: rgb(0.11, 0.45, 0.72),
+    accent: rgb(0.94, 0.74, 0.2),
+    panel: rgb(1, 1, 1),
+    panelTint: rgb(0.97, 0.985, 1),
+    noteTint: rgb(0.995, 0.992, 0.975),
+  };
+
+  const normalizedStatus = input.status.toLowerCase();
+  const statusPalette =
+    normalizedStatus === 'revoked'
+      ? {
+          fill: rgb(0.69, 0.22, 0.17),
+          text: rgb(0.99, 0.985, 0.98),
+        }
+      : normalizedStatus === 'suspended'
+        ? {
+            fill: rgb(0.73, 0.48, 0.14),
+            text: rgb(0.99, 0.985, 0.96),
+          }
+        : normalizedStatus === 'expired'
+          ? {
+              fill: rgb(0.36, 0.43, 0.53),
+              text: rgb(0.98, 0.99, 1),
+            }
+          : {
+              fill: rgb(0.11, 0.42, 0.29),
+              text: rgb(0.98, 0.99, 1),
+            };
 
   page.drawRectangle({
     x: 0,
     y: 0,
     width: pageWidth,
     height: pageHeight,
-    color: rgb(0.97, 0.98, 0.99),
+    color: colors.paper,
   });
   page.drawRectangle({
-    x: margin - 6,
-    y: margin - 6,
-    width: pageWidth - (margin - 6) * 2,
-    height: pageHeight - (margin - 6) * 2,
+    x: shellMargin,
+    y: shellMargin,
+    width: pageWidth - shellMargin * 2,
+    height: pageHeight - shellMargin * 2,
     borderWidth: 1,
-    borderColor: rgb(0.76, 0.81, 0.87),
+    borderColor: colors.border,
+    color: colors.shell,
   });
 
-  const headerY = pageHeight - 96;
+  const headerFrame = {
+    x: contentMargin,
+    y: 644,
+    width: pageWidth - contentMargin * 2,
+    height: 104,
+  };
+
   page.drawRectangle({
-    x: margin,
-    y: headerY,
-    width: pageWidth - margin * 2,
-    height: 58,
-    color: rgb(0.09, 0.35, 0.21),
+    x: headerFrame.x,
+    y: headerFrame.y,
+    width: headerFrame.width,
+    height: headerFrame.height,
+    color: colors.hero,
   });
   page.drawRectangle({
-    x: margin + 10,
-    y: headerY + 8,
-    width: 7,
-    height: 42,
-    color: rgb(0.96, 0.76, 0.14),
+    x: headerFrame.x + headerFrame.width * 0.58,
+    y: headerFrame.y,
+    width: headerFrame.width * 0.42,
+    height: headerFrame.height,
+    color: colors.heroOverlay,
+    opacity: 0.38,
   });
-  page.drawText('OFFICIAL BADGE CREDENTIAL', {
-    x: margin + 26,
-    y: headerY + 33,
-    size: 18,
-    color: rgb(0.97, 0.98, 1),
+  page.drawRectangle({
+    x: headerFrame.x + 14,
+    y: headerFrame.y + 16,
+    width: 6,
+    height: headerFrame.height - 32,
+    color: colors.accent,
+  });
+  page.drawText('OPEN BADGES 3.0', {
+    x: headerFrame.x + 30,
+    y: headerFrame.y + 76,
+    size: 9.5,
+    color: rgb(0.89, 0.95, 1),
     font: boldFont,
   });
-  page.drawText('Issued by CredTrail - Open Badges 3.0 Verification Record', {
-    x: margin + 26,
-    y: headerY + 15,
+  page.drawText('Learner Badge Record', {
+    x: headerFrame.x + 30,
+    y: headerFrame.y + 48,
+    size: 24,
+    color: rgb(0.98, 0.99, 1),
+    font: boldFont,
+  });
+  page.drawText('Recipient copy for professional review, sharing, and formal verification.', {
+    x: headerFrame.x + 30,
+    y: headerFrame.y + 22,
     size: 10.5,
-    color: rgb(0.89, 0.95, 0.92),
+    color: rgb(0.84, 0.91, 0.98),
     font: regularFont,
   });
 
-  const imageFrame = {
-    x: margin + 14,
-    y: 408,
-    width: 212,
-    height: 222,
+  const statusText = input.status.toUpperCase();
+  const statusWidth = boldFont.widthOfTextAtSize(statusText, 10.3) + 24;
+  drawPdfStatusPill(page, statusText, headerFrame.x + headerFrame.width - statusWidth - 18, headerFrame.y + 66, {
+    font: boldFont,
+    size: 10.3,
+    fill: statusPalette.fill,
+    textColor: statusPalette.text,
+  });
+
+  const heroFrame = {
+    x: contentMargin,
+    y: 424,
+    width: pageWidth - contentMargin * 2,
+    height: 196,
   };
-  page.drawRectangle({
-    x: imageFrame.x - 1,
-    y: imageFrame.y - 1,
-    width: imageFrame.width + 2,
-    height: imageFrame.height + 2,
-    borderWidth: 1,
-    borderColor: rgb(0.72, 0.79, 0.86),
-    color: rgb(1, 1, 1),
+  drawPdfPanel(page, heroFrame, {
+    fill: colors.panel,
+    border: colors.border,
+    accent: rgb(0.2, 0.46, 0.74),
+  });
+
+  const imageFrame = {
+    x: heroFrame.x + 18,
+    y: heroFrame.y + 24,
+    width: 152,
+    height: 148,
+  };
+  drawPdfPanel(page, imageFrame, {
+    fill: colors.panelTint,
+    border: colors.border,
   });
 
   let embeddedBadgeImage: PDFImage | null = null;
@@ -449,8 +683,8 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     drawBadgePdfPlaceholder(page, input.badgeName, imageFrame);
   } else {
     const imageScale = Math.min(
-      (imageFrame.width - 10) / embeddedBadgeImage.width,
-      (imageFrame.height - 10) / embeddedBadgeImage.height,
+      (imageFrame.width - 20) / embeddedBadgeImage.width,
+      (imageFrame.height - 20) / embeddedBadgeImage.height,
     );
     const imageWidth = embeddedBadgeImage.width * imageScale;
     const imageHeight = embeddedBadgeImage.height * imageScale;
@@ -463,161 +697,324 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     });
   }
 
-  page.drawText('Badge Artwork', {
-    x: imageFrame.x + 4,
-    y: imageFrame.y - 16,
-    size: 9.5,
-    color: rgb(0.36, 0.42, 0.49),
-    font: regularFont,
-  });
-
-  const normalizedStatus = input.status.toLowerCase();
-  const statusColor =
-    normalizedStatus === 'revoked'
-      ? rgb(0.66, 0.14, 0.09)
-      : normalizedStatus === 'suspended'
-        ? rgb(0.64, 0.4, 0.0)
-        : normalizedStatus === 'expired'
-          ? rgb(0.29, 0.36, 0.46)
-          : rgb(0.1, 0.41, 0.24);
-  page.drawRectangle({
-    x: 446,
-    y: 618,
-    width: 136,
-    height: 28,
-    color: statusColor,
-  });
-  page.drawText(input.status.toUpperCase(), {
-    x: 474,
-    y: 628,
-    size: 10.5,
-    color: rgb(0.98, 0.99, 1),
+  page.drawText('Badge', {
+    x: imageFrame.x + 10,
+    y: imageFrame.y + imageFrame.height - 16,
+    size: 9,
+    color: colors.subtle,
     font: boldFont,
   });
 
-  const badgeNameLines = wrapPdfText(input.badgeName, 34);
-  let detailY = drawPdfTextLines(page, badgeNameLines, 276, 588, {
-    size: 21,
-    color: rgb(0.08, 0.11, 0.17),
-    lineHeight: 24,
-  });
-  detailY -= 6;
+  const detailX = imageFrame.x + imageFrame.width + 22;
+  const detailWidth = heroFrame.x + heroFrame.width - detailX - 20;
 
-  detailY = drawPdfField(page, 'Recipient', input.recipientName, 276, detailY);
-  detailY = drawPdfField(page, 'Recipient identifier', input.recipientIdentifier, 276, detailY);
-  detailY = drawPdfField(page, 'Issuing organization', input.issuerName, 276, detailY);
-  detailY = drawPdfField(page, 'Issued at', input.issuedAt, 276, detailY);
-  detailY = drawPdfField(page, 'Assertion ID', input.assertionId, 276, detailY);
-  detailY = drawPdfField(page, 'Credential ID', input.credentialId, 276, detailY);
-
-  if (input.revokedAt !== undefined) {
-    drawPdfField(page, 'Revoked at', input.revokedAt, 276, detailY);
-  }
-
-  page.drawLine({
-    start: {
-      x: margin + 2,
-      y: 365,
-    },
-    end: {
-      x: pageWidth - margin - 2,
-      y: 365,
-    },
-    thickness: 1,
-    color: rgb(0.79, 0.83, 0.89),
-  });
-
-  page.drawText('Verification References', {
-    x: margin + 14,
-    y: 344,
-    size: 14.5,
-    color: rgb(0.09, 0.35, 0.21),
+  page.drawText('Awarded badge', {
+    x: detailX,
+    y: heroFrame.y + heroFrame.height - 28,
+    size: 9.2,
+    color: colors.subtle,
     font: boldFont,
   });
 
-  let verificationY = 324;
+  const badgeNameLines = wrapPdfText(input.badgeName, displayFont, 24, detailWidth);
+  let detailY = drawPdfTextLines(page, badgeNameLines, detailX, heroFrame.y + heroFrame.height - 56, {
+    font: displayFont,
+    size: 24,
+    color: colors.ink,
+    lineHeight: 26,
+  });
+
+  detailY -= 8;
+  page.drawText('Awarded to', {
+    x: detailX,
+    y: detailY,
+    size: 9.4,
+    color: colors.subtle,
+    font: boldFont,
+  });
+  detailY = drawPdfTextLines(
+    page,
+    wrapPdfText(input.recipientName, boldFont, 18, detailWidth),
+    detailX,
+    detailY - 21,
+    {
+      font: boldFont,
+      size: 18,
+      color: colors.ink,
+      lineHeight: 20,
+    },
+  );
+
+  const metaStartY = detailY - 4;
+  const metaColumnWidth = (detailWidth - 18) / 2;
+  drawPdfField(page, 'Issued by', input.issuerName, detailX, metaStartY, {
+    labelFont: boldFont,
+    labelSize: 9.2,
+    labelColor: colors.subtle,
+    valueFont: boldFont,
+    valueSize: 11.8,
+    valueColor: colors.ink,
+    lineHeight: 13.2,
+    maxWidth: metaColumnWidth,
+    gapAfter: 0,
+    labelGap: 12,
+  });
+  drawPdfField(page, 'Issued on', input.issuedAt, detailX + metaColumnWidth + 18, metaStartY, {
+    labelFont: boldFont,
+    labelSize: 9.2,
+    labelColor: colors.subtle,
+    valueFont: regularFont,
+    valueSize: 11.2,
+    valueColor: colors.ink,
+    lineHeight: 13,
+    maxWidth: metaColumnWidth,
+    gapAfter: 0,
+    labelGap: 12,
+  });
+
+  const lowerPanelY = 204;
+  const lowerPanelHeight = 188;
+  const lowerPanelGap = 16;
+  const lowerPanelWidth = (heroFrame.width - lowerPanelGap) / 2;
+  const verificationFrame = {
+    x: contentMargin,
+    y: lowerPanelY,
+    width: lowerPanelWidth,
+    height: lowerPanelHeight,
+  };
+  const recordFrame = {
+    x: contentMargin + lowerPanelWidth + lowerPanelGap,
+    y: lowerPanelY,
+    width: lowerPanelWidth,
+    height: lowerPanelHeight,
+  };
+
+  drawPdfPanel(page, verificationFrame, {
+    fill: colors.panel,
+    border: colors.border,
+    accent: rgb(0.16, 0.44, 0.71),
+  });
+  drawPdfPanel(page, recordFrame, {
+    fill: colors.panel,
+    border: colors.border,
+    accent: statusPalette.fill,
+  });
+
+  page.drawText('Verification references', {
+    x: verificationFrame.x + 16,
+    y: verificationFrame.y + verificationFrame.height - 26,
+    size: 13,
+    color: colors.ink,
+    font: boldFont,
+  });
+  drawPdfTextLines(
+    page,
+    wrapPdfText(
+      'Share the public badge page for reviewers and use the JSON endpoints for direct checks.',
+      regularFont,
+      9.6,
+      verificationFrame.width - 32,
+    ),
+    verificationFrame.x + 16,
+    verificationFrame.y + verificationFrame.height - 44,
+    {
+      font: regularFont,
+      size: 9.6,
+      color: colors.muted,
+      lineHeight: 11.2,
+    },
+  );
+
+  let verificationY = verificationFrame.y + verificationFrame.height - 78;
   verificationY = drawPdfLinkBlock(
     page,
     'Public badge page',
     input.publicBadgeUrl,
-    margin + 14,
+    verificationFrame.x + 16,
     verificationY,
+    {
+      labelFont: boldFont,
+      valueFont: regularFont,
+      labelColor: colors.subtle,
+      valueColor: colors.ink,
+      maxWidth: verificationFrame.width - 32,
+    },
   );
   verificationY -= 6;
   verificationY = drawPdfLinkBlock(
     page,
-    'Verification JSON endpoint',
+    'Verification endpoint',
     input.verificationUrl,
-    margin + 14,
+    verificationFrame.x + 16,
     verificationY,
+    {
+      labelFont: boldFont,
+      valueFont: regularFont,
+      labelColor: colors.subtle,
+      valueColor: colors.ink,
+      maxWidth: verificationFrame.width - 32,
+    },
   );
   verificationY -= 6;
-  drawPdfLinkBlock(page, 'Open Badges 3.0 JSON-LD', input.ob3JsonUrl, margin + 14, verificationY);
-
-  page.drawRectangle({
-    x: margin + 14,
-    y: 90,
-    width: pageWidth - (margin + 14) * 2,
-    height: 66,
-    borderWidth: 1,
-    borderColor: rgb(0.8, 0.84, 0.89),
-    color: rgb(1, 1, 1),
+  drawPdfLinkBlock(page, 'Open Badges JSON-LD', input.ob3JsonUrl, verificationFrame.x + 16, verificationY, {
+    labelFont: boldFont,
+    valueFont: regularFont,
+    labelColor: colors.subtle,
+    valueColor: colors.ink,
+    maxWidth: verificationFrame.width - 32,
   });
-  page.drawText(
-    'This credential record is issued as an official verification document for institutional and hiring workflows.',
+
+  page.drawText('Record details', {
+    x: recordFrame.x + 16,
+    y: recordFrame.y + recordFrame.height - 26,
+    size: 13,
+    color: colors.ink,
+    font: boldFont,
+  });
+  drawPdfTextLines(
+    page,
+    wrapPdfText('Technical identifiers from the signed credential and assertion record.', regularFont, 9.6, recordFrame.width - 32),
+    recordFrame.x + 16,
+    recordFrame.y + recordFrame.height - 44,
     {
-      x: margin + 24,
-      y: 130,
-      size: 10.5,
-      color: rgb(0.26, 0.31, 0.38),
       font: regularFont,
+      size: 9.6,
+      color: colors.muted,
+      lineHeight: 11.2,
     },
   );
-  page.drawText('Authenticity can be confirmed using the verification references above.', {
-    x: margin + 24,
-    y: 114,
-    size: 10.5,
-    color: rgb(0.26, 0.31, 0.38),
-    font: regularFont,
+
+  let recordY = recordFrame.y + recordFrame.height - 78;
+  recordY = drawPdfField(page, 'Credential status', input.status, recordFrame.x + 16, recordY, {
+    labelFont: boldFont,
+    labelSize: 9.2,
+    labelColor: colors.subtle,
+    valueFont: boldFont,
+    valueSize: 11.4,
+    valueColor: colors.ink,
+    lineHeight: 13,
+    maxWidth: recordFrame.width - 32,
+    gapAfter: 8,
+    labelGap: 12,
+  });
+  recordY = drawPdfField(
+    page,
+    'Recipient identifier',
+    input.recipientIdentifier,
+    recordFrame.x + 16,
+    recordY,
+    {
+      labelFont: boldFont,
+      labelSize: 9.2,
+      labelColor: colors.subtle,
+      valueFont: regularFont,
+      valueSize: 10.2,
+      valueColor: colors.ink,
+      lineHeight: 11.8,
+      maxWidth: recordFrame.width - 32,
+      gapAfter: 8,
+      labelGap: 11,
+    },
+  );
+  recordY = drawPdfField(page, 'Assertion ID', input.assertionId, recordFrame.x + 16, recordY, {
+    labelFont: boldFont,
+    labelSize: 9.2,
+    labelColor: colors.subtle,
+    valueFont: regularFont,
+    valueSize: 10.2,
+    valueColor: colors.ink,
+    lineHeight: 11.8,
+    maxWidth: recordFrame.width - 32,
+    gapAfter: 8,
+    labelGap: 11,
+  });
+  recordY = drawPdfField(page, 'Credential ID', input.credentialId, recordFrame.x + 16, recordY, {
+    labelFont: boldFont,
+    labelSize: 9.2,
+    labelColor: colors.subtle,
+    valueFont: regularFont,
+    valueSize: 10.2,
+    valueColor: colors.ink,
+    lineHeight: 11.8,
+    maxWidth: recordFrame.width - 32,
+    gapAfter: 8,
+    labelGap: 11,
   });
 
-  page.drawLine({
-    start: {
-      x: margin + 28,
-      y: 68,
-    },
-    end: {
-      x: margin + 222,
-      y: 68,
-    },
-    thickness: 1,
-    color: rgb(0.64, 0.69, 0.75),
+  if (input.revokedAt !== undefined) {
+    drawPdfField(page, 'Revoked at', input.revokedAt, recordFrame.x + 16, recordY, {
+      labelFont: boldFont,
+      labelSize: 9.2,
+      labelColor: colors.subtle,
+      valueFont: regularFont,
+      valueSize: 10.2,
+      valueColor: colors.ink,
+      lineHeight: 11.8,
+      maxWidth: recordFrame.width - 32,
+      gapAfter: 0,
+      labelGap: 11,
+    });
+  }
+
+  const noteFrame = {
+    x: contentMargin,
+    y: 108,
+    width: pageWidth - contentMargin * 2,
+    height: 72,
+  };
+  drawPdfPanel(page, noteFrame, {
+    fill: colors.noteTint,
+    border: colors.border,
   });
-  page.drawLine({
-    start: {
-      x: pageWidth - margin - 222,
-      y: 68,
-    },
-    end: {
-      x: pageWidth - margin - 28,
-      y: 68,
-    },
-    thickness: 1,
-    color: rgb(0.64, 0.69, 0.75),
+  page.drawRectangle({
+    x: noteFrame.x,
+    y: noteFrame.y,
+    width: 6,
+    height: noteFrame.height,
+    color: colors.accent,
   });
-  page.drawText('Issuer signature reference', {
-    x: margin + 28,
-    y: 55,
-    size: 9,
-    color: rgb(0.4, 0.46, 0.53),
+  page.drawText('How to use this copy', {
+    x: noteFrame.x + 18,
+    y: noteFrame.y + noteFrame.height - 22,
+    size: 11.2,
+    color: colors.ink,
+    font: boldFont,
+  });
+  drawPdfTextLines(
+    page,
+    wrapPdfText(
+      input.revokedAt === undefined
+        ? 'Use the public badge page for human review, then rely on the verification endpoint or Open Badges JSON-LD URL above for direct system checks.'
+        : 'This credential has changed lifecycle state. Confirm the current status with the public badge page or the verification endpoint above before relying on this copy.',
+      regularFont,
+      10.2,
+      noteFrame.width - 36,
+    ),
+    noteFrame.x + 18,
+    noteFrame.y + 32,
+    {
+      font: regularFont,
+      size: 10.2,
+      color: colors.muted,
+      lineHeight: 12.2,
+    },
+  );
+
+  drawPdfCenteredText(
+    page,
+    'Recipient copy • Generated from the authoritative Open Badges 3.0 credential record',
+    pageWidth / 2,
+    70,
+    {
+      font: regularFont,
+      size: 9.2,
+      color: colors.subtle,
+    },
+  );
+  drawPdfCenteredText(page, input.publicBadgeUrl, pageWidth / 2, 54, {
     font: regularFont,
-  });
-  page.drawText('Recipient copy', {
-    x: pageWidth - margin - 130,
-    y: 55,
-    size: 9,
-    color: rgb(0.4, 0.46, 0.53),
-    font: regularFont,
+    size: 8.9,
+    color: colors.muted,
   });
 
   const pdfBytes = await pdfDocument.save();

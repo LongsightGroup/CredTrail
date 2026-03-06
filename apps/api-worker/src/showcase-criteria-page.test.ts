@@ -243,12 +243,21 @@ describe('GET /showcase/:tenantId/criteria', () => {
     expect(body).toContain('Badge Criteria Registry · sakai');
     expect(body).toContain('Sakai 1000+ Commits Contributor');
     expect(body).toContain('Sakai Project Institution');
+    expect(body).toContain(
+      'Use this page to understand what this public badge recognizes, who publishes it, and how qualification rules are reviewed.',
+    );
     expect(body).toContain('https://github.com/sakaiproject/sakai');
+    expect(body).toContain('Published criteria');
+    expect(body).toContain('Current badge owner');
     expect(body).toContain('Sakai Contributor Eligibility');
-    expect(body).toContain('Grade threshold for course SAKAI-COMMITS');
-    expect(body).toContain('required role <strong>admin</strong>');
+    expect(body).toContain('For course SAKAI-COMMITS, final_score must be at least 80.');
+    expect(body).toContain('How someone qualifies');
+    expect(body).toContain('Required role: admin');
     expect(body).toContain('approved by usr_admin (admin)');
     expect(body).toContain('administrative_transfer');
+    expect(body).toContain('Governance and ownership');
+    expect(body).toContain('View public badge examples');
+    expect(body).toContain('Badge record details and raw metadata');
     expect(body).toContain('/showcase/sakai?badgeTemplateId=badge_template_sakai_1000');
     expect(body).toContain(
       '<link rel="canonical" href="http://localhost/showcase/sakai/criteria?badgeTemplateId=badge_template_sakai_1000"',
@@ -283,7 +292,7 @@ describe('GET /showcase/:tenantId/criteria', () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain('badge template &quot;badge_template_sakai_1000&quot;');
-    expect(body).toContain('No badge templates matched this criteria registry view.');
+    expect(body).toContain('No public badge templates matched this view.');
   });
 
   it('renders empty state when no templates are available for tenant', async () => {
@@ -300,7 +309,7 @@ describe('GET /showcase/:tenantId/criteria', () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain('Badge Criteria Registry · tenant_123');
-    expect(body).toContain('No badge templates matched this criteria registry view.');
+    expect(body).toContain('No public badge templates matched this view.');
     expect(body).toContain('/showcase/tenant_123?badgeTemplateId=badge_template_missing');
   });
 });
