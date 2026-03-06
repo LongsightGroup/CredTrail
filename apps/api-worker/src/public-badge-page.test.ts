@@ -309,7 +309,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('https://example.edu');
     expect(body).toContain('Ada Lovelace');
     expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification');
-    expect(body).toContain('Claim this credential');
+    expect(body).toContain('Share this credential');
     expect(body).toContain('Copy public URL');
     expect(body).toContain('Summary JSON');
     expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary');
@@ -323,12 +323,13 @@ describe('GET /badges/:badgeIdentifier', () => {
     expect(body).toContain('Add to Browser Wallet');
     expect(body).toContain('Claim in Wallet');
     expect(body).toContain('Open in DCC Learner Wallet');
-    expect(body).toContain('Share, download, and advanced tools');
+    expect(body).toContain('Wallet, downloads, and advanced tools');
     expect(body).toContain('openid-credential-offer:');
     expect(body).toContain('credential_offer_uri=');
     expect(body).toContain('https://lcw.app/request?request=');
     expect(body).toContain('/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
     expect(body).toContain('Add to LinkedIn Profile');
+    expect(body).toContain('Prefer a wallet? Scan the QR code or use the wallet tools below.');
     expect(body).toContain('linkedin.com/profile/add');
     expect(body).toContain('startTask=CERTIFICATION_NAME');
     expect(body).toContain('name=TypeScript+Foundations');

@@ -513,17 +513,15 @@ export const createPublicBadgePageRenderers = (
     const advancedActionButtons = [
       `<a
           class="public-badge__button"
-          href="${escapeHtml(dccWalletDeepLinkUrl.toString())}"
+          href="${escapeHtml(walletDeepLinkUrl.toString())}"
         >
-          Open in DCC Learner Wallet
+          Claim in Wallet
         </a>`,
       `<a
           class="public-badge__button"
-          href="${escapeHtml(linkedInAddProfileUrl)}"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="${escapeHtml(dccWalletDeepLinkUrl.toString())}"
         >
-          Add to LinkedIn Profile
+          Open in DCC Learner Wallet
         </a>`,
       `<a
           class="public-badge__button"
@@ -550,7 +548,7 @@ export const createPublicBadgePageRenderers = (
         </button>`,
     ].join('');
     const advancedActionsSection = `<details class="public-badge__actions-details">
-      <summary>Share, download, and advanced tools</summary>
+      <summary>Wallet, downloads, and advanced tools</summary>
       <div class="public-badge__actions public-badge__actions--secondary">
         ${advancedActionButtons}
       </div>
@@ -1136,16 +1134,16 @@ export const createPublicBadgePageRenderers = (
   
         <section class="public-badge__card public-badge__stack-sm public-badge__share">
           <div class="public-badge__share-main">
-            <h2 class="public-badge__section-title">Claim this credential</h2>
+            <h2 class="public-badge__section-title">Share this credential</h2>
             <p class="public-badge__achievement-copy">
-              Add it to a compatible wallet or copy the public link to share it.
-              Recruiters and other verifiers can review the issuer, evidence, and technical details on this page.
+              Add it to your LinkedIn profile or copy the public link.
+              Recruiters and other reviewers can verify the issuer, evidence, and technical details on this page.
             </p>
             <div class="public-badge__actions public-badge__actions--primary">
               <a class="public-badge__button public-badge__button--primary" href="${escapeHtml(
-                walletDeepLinkUrl.toString(),
+                linkedInAddProfileUrl,
               )}">
-                Claim in Wallet
+                Add to LinkedIn Profile
               </a>
               <button
                 id="copy-badge-url-button"
@@ -1156,6 +1154,9 @@ export const createPublicBadgePageRenderers = (
                 Copy public URL
               </button>
             </div>
+            <p class="public-badge__achievement-copy">
+              Prefer a wallet? Scan the QR code or use the wallet tools below.
+            </p>
             ${advancedActionsSection}
             <p id="copy-badge-url-status" class="public-badge__copy-status" aria-live="polite"></p>
             <p id="chapi-store-status" class="public-badge__copy-status" aria-live="polite"></p>
