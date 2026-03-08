@@ -247,6 +247,81 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     };
   };
 
+  async function enqueueQueuedJob(
+    c: AppContext,
+    job: IssueBadgeQueueJob | RevokeBadgeQueueJob,
+  ): Promise<void> {
+    await enqueueJobQueueMessage(resolveDatabase(c.env), {
+      tenantId: job.tenantId,
+      jobType: job.jobType,
+      payload: job.payload,
+      idempotencyKey: job.idempotencyKey,
+    });
+  }
+
+  function createQueuedIssueResponse(
+    c: AppContext,
+    queued: IssueBadgeQueueEnvelope,
+    channel?: 'programmatic_api_key',
+  ): Response {
+    if (channel === undefined) {
+      return c.json(
+        {
+          status: 'queued',
+          jobType: queued.job.jobType,
+          assertionId: queued.assertionId,
+          idempotencyKey: queued.job.idempotencyKey,
+        },
+        202,
+      );
+    }
+
+    return c.json(
+      {
+        status: 'queued',
+        channel,
+        jobType: queued.job.jobType,
+        assertionId: queued.assertionId,
+        idempotencyKey: queued.job.idempotencyKey,
+      },
+      202,
+    );
+  }
+
+  function createQueuedRevokeResponse(
+    c: AppContext,
+    input: {
+      assertionId: string;
+      queued: RevokeBadgeQueueEnvelope;
+      channel?: 'programmatic_api_key';
+    },
+  ): Response {
+    if (input.channel === undefined) {
+      return c.json(
+        {
+          status: 'queued',
+          jobType: input.queued.job.jobType,
+          assertionId: input.assertionId,
+          revocationId: input.queued.revocationId,
+          idempotencyKey: input.queued.job.idempotencyKey,
+        },
+        202,
+      );
+    }
+
+    return c.json(
+      {
+        status: 'queued',
+        channel: input.channel,
+        jobType: input.queued.job.jobType,
+        assertionId: input.assertionId,
+        revocationId: input.queued.revocationId,
+        idempotencyKey: input.queued.job.idempotencyKey,
+      },
+      202,
+    );
+  }
+
   app.post('/v1/jobs/process', async (c) => {
     const configuredToken = c.env.JOB_PROCESSOR_TOKEN?.trim();
 
@@ -292,23 +367,9 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
     const request = parsedRequest.value;
     const queued = issueBadgeQueueJobFromRequest(request);
+    await enqueueQueuedJob(c, queued.job);
 
-    await enqueueJobQueueMessage(resolveDatabase(c.env), {
-      tenantId: queued.job.tenantId,
-      jobType: queued.job.jobType,
-      payload: queued.job.payload,
-      idempotencyKey: queued.job.idempotencyKey,
-    });
-
-    return c.json(
-      {
-        status: 'queued',
-        jobType: queued.job.jobType,
-        assertionId: queued.assertionId,
-        idempotencyKey: queued.job.idempotencyKey,
-      },
-      202,
-    );
+    return createQueuedIssueResponse(c, queued);
   });
 
   app.post('/v1/revoke', async (c) => {
@@ -327,24 +388,12 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
     const request = parsedRequest.value;
     const queued = revokeBadgeQueueJobFromRequest(request);
+    await enqueueQueuedJob(c, queued.job);
 
-    await enqueueJobQueueMessage(resolveDatabase(c.env), {
-      tenantId: queued.job.tenantId,
-      jobType: queued.job.jobType,
-      payload: queued.job.payload,
-      idempotencyKey: queued.job.idempotencyKey,
+    return createQueuedRevokeResponse(c, {
+      assertionId: request.assertionId,
+      queued,
     });
-
-    return c.json(
-      {
-        status: 'queued',
-        jobType: queued.job.jobType,
-        assertionId: request.assertionId,
-        revocationId: queued.revocationId,
-        idempotencyKey: queued.job.idempotencyKey,
-      },
-      202,
-    );
   });
 
   app.post('/v1/programmatic/issue', async (c) => {
@@ -369,24 +418,9 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
       ...request,
       requestedByUserId: authResult.actorUserId,
     });
+    await enqueueQueuedJob(c, queued.job);
 
-    await enqueueJobQueueMessage(resolveDatabase(c.env), {
-      tenantId: queued.job.tenantId,
-      jobType: queued.job.jobType,
-      payload: queued.job.payload,
-      idempotencyKey: queued.job.idempotencyKey,
-    });
-
-    return c.json(
-      {
-        status: 'queued',
-        channel: 'programmatic_api_key',
-        jobType: queued.job.jobType,
-        assertionId: queued.assertionId,
-        idempotencyKey: queued.job.idempotencyKey,
-      },
-      202,
-    );
+    return createQueuedIssueResponse(c, queued, 'programmatic_api_key');
   });
 
   app.post('/v1/programmatic/revoke', async (c) => {
@@ -411,24 +445,12 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
       ...request,
       requestedByUserId: authResult.actorUserId,
     });
+    await enqueueQueuedJob(c, queued.job);
 
-    await enqueueJobQueueMessage(resolveDatabase(c.env), {
-      tenantId: queued.job.tenantId,
-      jobType: queued.job.jobType,
-      payload: queued.job.payload,
-      idempotencyKey: queued.job.idempotencyKey,
+    return createQueuedRevokeResponse(c, {
+      assertionId: request.assertionId,
+      queued,
+      channel: 'programmatic_api_key',
     });
-
-    return c.json(
-      {
-        status: 'queued',
-        channel: 'programmatic_api_key',
-        jobType: queued.job.jobType,
-        assertionId: request.assertionId,
-        revocationId: queued.revocationId,
-        idempotencyKey: queued.job.idempotencyKey,
-      },
-      202,
-    );
   });
 };
