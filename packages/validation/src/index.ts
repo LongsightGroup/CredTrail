@@ -861,6 +861,14 @@ export const manualIssueBadgeRequestSchema = issueBadgeRequestSchema.omit({
   requestedByUserId: true,
 });
 
+export const programmaticIssueBadgeRequestSchema = issueBadgeRequestSchema
+  .omit({
+    requestedByUserId: true,
+  })
+  .extend({
+    idempotencyKey: idempotencyKeySchema,
+  });
+
 export const githubUsernameSchema = z
   .string()
   .trim()
@@ -875,6 +883,14 @@ export const revokeBadgeRequestSchema = z.object({
   requestedByUserId: userIdSchema.optional(),
   idempotencyKey: idempotencyKeySchema.optional(),
 });
+
+export const programmaticRevokeBadgeRequestSchema = revokeBadgeRequestSchema
+  .omit({
+    requestedByUserId: true,
+  })
+  .extend({
+    idempotencyKey: idempotencyKeySchema,
+  });
 
 export const processQueueRequestSchema = z.object({
   limit: z.number().int().min(1).max(100).optional(),
@@ -1031,6 +1047,8 @@ export type AssertionLifecycleTransitionSource = z.infer<
 export type RecipientIdentityType = z.infer<typeof recipientIdentityTypeSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
+export type ProgrammaticIssueBadgeRequest = z.infer<typeof programmaticIssueBadgeRequestSchema>;
+export type ProgrammaticRevokeBadgeRequest = z.infer<typeof programmaticRevokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
 export type MigrationBatchUploadQuery = z.infer<typeof migrationBatchUploadQuerySchema>;
 export type MigrationProgressQuery = z.infer<typeof migrationProgressQuerySchema>;
@@ -1212,6 +1230,18 @@ export const parseIssueBadgeRequest = (input: unknown): IssueBadgeRequest => {
 
 export const parseRevokeBadgeRequest = (input: unknown): RevokeBadgeRequest => {
   return revokeBadgeRequestSchema.parse(input);
+};
+
+export const parseProgrammaticIssueBadgeRequest = (
+  input: unknown,
+): ProgrammaticIssueBadgeRequest => {
+  return programmaticIssueBadgeRequestSchema.parse(input);
+};
+
+export const parseProgrammaticRevokeBadgeRequest = (
+  input: unknown,
+): ProgrammaticRevokeBadgeRequest => {
+  return programmaticRevokeBadgeRequestSchema.parse(input);
 };
 
 export const parseProcessQueueRequest = (input: unknown): ProcessQueueRequest => {

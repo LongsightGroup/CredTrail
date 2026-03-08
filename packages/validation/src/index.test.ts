@@ -37,6 +37,8 @@ import {
   parseUpsertTenantMembershipOrgUnitScopeRequest,
   parseIssueBadgeRequest,
   parseManualIssueBadgeRequest,
+  parseProgrammaticIssueBadgeRequest,
+  parseProgrammaticRevokeBadgeRequest,
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
   parseLearnerDidSettingsRequest,
@@ -220,6 +222,50 @@ describe('issue/revoke request parsers', () => {
     });
 
     expect(request.badgeTemplateId).toBe('badge_template_001');
+  });
+
+  it('requires idempotencyKey for programmatic issue requests', () => {
+    expect(() => {
+      parseProgrammaticIssueBadgeRequest({
+        tenantId: 'tenant_123',
+        badgeTemplateId: 'badge_template_001',
+        recipientIdentity: 'learner@example.edu',
+        recipientIdentityType: 'email',
+      });
+    }).toThrowError();
+  });
+
+  it('accepts a valid programmatic issue request with idempotencyKey', () => {
+    const request = parseProgrammaticIssueBadgeRequest({
+      tenantId: 'tenant_123',
+      badgeTemplateId: 'badge_template_001',
+      recipientIdentity: 'learner@example.edu',
+      recipientIdentityType: 'email',
+      idempotencyKey: 'idem_issue_123',
+    });
+
+    expect(request.idempotencyKey).toBe('idem_issue_123');
+  });
+
+  it('requires idempotencyKey for programmatic revoke requests', () => {
+    expect(() => {
+      parseProgrammaticRevokeBadgeRequest({
+        tenantId: 'tenant_123',
+        assertionId: 'assertion_456',
+        reason: 'Revoked by issuer',
+      });
+    }).toThrowError();
+  });
+
+  it('accepts a valid programmatic revoke request with idempotencyKey', () => {
+    const request = parseProgrammaticRevokeBadgeRequest({
+      tenantId: 'tenant_123',
+      assertionId: 'assertion_456',
+      reason: 'Revoked by issuer',
+      idempotencyKey: 'idem_revoke_123',
+    });
+
+    expect(request.idempotencyKey).toBe('idem_revoke_123');
   });
 
 });

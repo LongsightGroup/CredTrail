@@ -21,6 +21,12 @@ Programmatic queue ingress endpoints require `x-api-key`:
 - `POST /v1/programmatic/issue` (requires scope `queue.issue`)
 - `POST /v1/programmatic/revoke` (requires scope `queue.revoke`)
 
+Write-request contract:
+
+- `idempotencyKey` is required on all programmatic write requests.
+- Actor attribution is derived from the API key owner, not caller-supplied user IDs.
+- Internal legacy queue ingress routes (`POST /v1/issue`, `POST /v1/revoke`) are not public APIs and require `JOB_PROCESSOR_TOKEN` bearer authentication when enabled.
+
 Key behavior:
 
 - Plaintext key is returned only on create.

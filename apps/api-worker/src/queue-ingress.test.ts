@@ -42,6 +42,7 @@ const createEnv = (): {
   DATABASE_URL: string;
   BADGE_OBJECTS: R2Bucket;
   PLATFORM_DOMAIN: string;
+  JOB_PROCESSOR_TOKEN?: string;
 } => {
   return {
     APP_ENV: 'test',
@@ -61,7 +62,7 @@ beforeEach(() => {
 });
 
 describe('POST /v1/issue and /v1/revoke', () => {
-  it('stores issue requests as DB-backed queue messages', async () => {
+  it('hides internal queue ingress when JOB_PROCESSOR_TOKEN is not configured', async () => {
     const env = createEnv();
 
     const response = await app.request(
@@ -69,6 +70,36 @@ describe('POST /v1/issue and /v1/revoke', () => {
       {
         method: 'POST',
         headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          badgeTemplateId: 'badge_template_001',
+          recipientIdentity: 'learner@example.edu',
+          recipientIdentityType: 'email',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(404);
+    expect(body.error).toBe('Route unavailable');
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+  });
+
+  it('stores issue requests as DB-backed queue messages', async () => {
+    const env = {
+      ...createEnv(),
+      JOB_PROCESSOR_TOKEN: 'processor-secret',
+    };
+
+    const response = await app.request(
+      '/v1/issue',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer processor-secret',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -114,13 +145,17 @@ describe('POST /v1/issue and /v1/revoke', () => {
   });
 
   it('stores revoke requests as DB-backed queue messages', async () => {
-    const env = createEnv();
+    const env = {
+      ...createEnv(),
+      JOB_PROCESSOR_TOKEN: 'processor-secret',
+    };
 
     const response = await app.request(
       '/v1/revoke',
       {
         method: 'POST',
         headers: {
+          authorization: 'Bearer processor-secret',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -146,6 +181,34 @@ describe('POST /v1/issue and /v1/revoke', () => {
         jobType: 'revoke_badge',
       }),
     );
+  });
+
+  it('rejects internal queue ingress without the processor bearer token', async () => {
+    const env = {
+      ...createEnv(),
+      JOB_PROCESSOR_TOKEN: 'processor-secret',
+    };
+
+    const response = await app.request(
+      '/v1/revoke',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          assertionId: 'tenant_123:assertion_456',
+          reason: 'Requested by issuer',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe('Unauthorized');
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -187,6 +250,8 @@ describe('POST /v1/programmatic/issue and /v1/programmatic/revoke', () => {
           badgeTemplateId: 'badge_template_001',
           recipientIdentity: 'learner@example.edu',
           recipientIdentityType: 'email',
+          requestedByUserId: 'usr_spoofed',
+          idempotencyKey: 'idem_programmatic_issue_123',
         }),
       },
       env,
@@ -197,6 +262,12 @@ describe('POST /v1/programmatic/issue and /v1/programmatic/revoke', () => {
     expect(body.channel).toBe('programmatic_api_key');
     expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
     expect(mockedTouchTenantApiKeyLastUsedAt).toHaveBeenCalledTimes(1);
+    expect(mockedEnqueueJobQueueMessage.mock.calls[0]?.[1]).toMatchObject({
+      idempotencyKey: 'idem_programmatic_issue_123',
+      payload: {
+        requestedByUserId: 'usr_admin',
+      },
+    });
   });
 
   it('rejects programmatic requests when API key is missing', async () => {
@@ -213,6 +284,7 @@ describe('POST /v1/programmatic/issue and /v1/programmatic/revoke', () => {
           tenantId: 'tenant_123',
           assertionId: 'tenant_123:assertion_456',
           reason: 'Requested by issuer',
+          idempotencyKey: 'idem_programmatic_revoke_123',
         }),
       },
       env,
@@ -221,6 +293,67 @@ describe('POST /v1/programmatic/issue and /v1/programmatic/revoke', () => {
 
     expect(response.status).toBe(401);
     expect(body.error).toContain('x-api-key');
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects programmatic issue requests without an idempotencyKey', async () => {
+    const env = createEnv();
+    mockedFindActiveTenantApiKeyByHash.mockResolvedValue(sampleTenantApiKeyRecord());
+
+    const response = await app.request(
+      '/v1/programmatic/issue',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'ctak_example_secret',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          badgeTemplateId: 'badge_template_001',
+          recipientIdentity: 'learner@example.edu',
+          recipientIdentityType: 'email',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('Invalid request payload');
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+    expect(mockedTouchTenantApiKeyLastUsedAt).not.toHaveBeenCalled();
+  });
+
+  it('rejects programmatic write keys without an owning user', async () => {
+    const env = createEnv();
+    mockedFindActiveTenantApiKeyByHash.mockResolvedValue(
+      sampleTenantApiKeyRecord({
+        createdByUserId: null,
+      }),
+    );
+
+    const response = await app.request(
+      '/v1/programmatic/revoke',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': 'ctak_example_secret',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          assertionId: 'tenant_123:assertion_456',
+          reason: 'Requested by issuer',
+          idempotencyKey: 'idem_programmatic_revoke_456',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain('owning user');
     expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
   });
 });

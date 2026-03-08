@@ -7,6 +7,8 @@ import {
 import type { Hono } from 'hono';
 import {
   parseIssueBadgeRequest,
+  parseProgrammaticIssueBadgeRequest,
+  parseProgrammaticRevokeBadgeRequest,
   parseProcessQueueRequest,
   parseRevokeBadgeRequest,
   type IssueBadgeQueueJob,
@@ -38,6 +40,11 @@ interface ProcessQueueRunResult {
   retried: number;
   deadLettered: number;
   failedToFinalize: number;
+}
+
+interface ValidationIssue {
+  path: unknown[];
+  message: string;
 }
 
 interface RegisterQueueRoutesInput {
@@ -79,22 +86,103 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     }
   };
 
+  const isValidationError = (error: unknown): error is { issues: ValidationIssue[] } => {
+    const isValidationIssue = (issue: unknown): issue is ValidationIssue => {
+      if (typeof issue !== 'object' || issue === null) {
+        return false;
+      }
+
+      const candidate = issue as Record<string, unknown>;
+      return Array.isArray(candidate.path) && typeof candidate.message === 'string';
+    };
+
+    if (!(error instanceof Error) || !('issues' in error)) {
+      return false;
+    }
+
+    const issues = error.issues;
+
+    if (!Array.isArray(issues)) {
+      return false;
+    }
+
+    return issues.every((issue) => isValidationIssue(issue));
+  };
+
+  const parseRequest = <T>(
+    c: AppContext,
+    parser: (input: unknown) => T,
+    payload: unknown,
+  ): { value: T } | { response: Response } => {
+    try {
+      return {
+        value: parser(payload),
+      };
+    } catch (error) {
+      if (isValidationError(error)) {
+        return {
+          response: c.json(
+            {
+              error: 'Invalid request payload',
+              details: error.issues.map((issue) => ({
+                path: issue.path.map((segment) => String(segment)),
+                message: issue.message,
+              })),
+            },
+            400,
+          ),
+        };
+      }
+
+      throw error;
+    }
+  };
+
+  const authorizeTrustedInternalRequest = (c: AppContext): Response | null => {
+    const configuredToken = c.env.JOB_PROCESSOR_TOKEN?.trim();
+
+    if (configuredToken === undefined || configuredToken.length === 0) {
+      return c.json(
+        {
+          error: 'Route unavailable',
+        },
+        404,
+      );
+    }
+
+    const authorizationHeader = c.req.header('authorization');
+    const expectedAuthorization = `Bearer ${configuredToken}`;
+
+    if (authorizationHeader !== expectedAuthorization) {
+      return c.json(
+        {
+          error: 'Unauthorized',
+        },
+        401,
+      );
+    }
+
+    return null;
+  };
+
   const authorizeProgrammaticRequest = async (
     c: AppContext,
     input: {
       tenantId: string;
       requiredScope: 'queue.issue' | 'queue.revoke';
     },
-  ): Promise<Response | null> => {
+  ): Promise<{ actorUserId: string } | { response: Response }> => {
     const rawApiKey = c.req.header('x-api-key')?.trim();
 
     if (rawApiKey === undefined || rawApiKey.length === 0) {
-      return c.json(
-        {
-          error: 'x-api-key header is required',
-        },
-        401,
-      );
+      return {
+        response: c.json(
+          {
+            error: 'x-api-key header is required',
+          },
+          401,
+        ),
+      };
     }
 
     const nowIso = new Date().toISOString();
@@ -105,37 +193,58 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     });
 
     if (keyRecord === null) {
-      return c.json(
-        {
-          error: 'Invalid or expired API key',
-        },
-        401,
-      );
+      return {
+        response: c.json(
+          {
+            error: 'Invalid or expired API key',
+          },
+          401,
+        ),
+      };
     }
 
     if (keyRecord.tenantId !== input.tenantId) {
-      return c.json(
-        {
-          error: 'API key tenant does not match request tenant',
-        },
-        403,
-      );
+      return {
+        response: c.json(
+          {
+            error: 'API key tenant does not match request tenant',
+          },
+          403,
+        ),
+      };
     }
 
     const scopes = parseApiKeyScopes(keyRecord.scopesJson);
     const hasRequiredScope = scopes.includes('*') || scopes.includes(input.requiredScope);
 
     if (!hasRequiredScope) {
-      return c.json(
-        {
-          error: `API key is missing required scope: ${input.requiredScope}`,
-        },
-        403,
-      );
+      return {
+        response: c.json(
+          {
+            error: `API key is missing required scope: ${input.requiredScope}`,
+          },
+          403,
+        ),
+      };
+    }
+
+    const actorUserId = keyRecord.createdByUserId?.trim();
+
+    if (actorUserId === undefined || actorUserId.length === 0) {
+      return {
+        response: c.json(
+          {
+            error: 'API key is missing an owning user and cannot perform write operations',
+          },
+          403,
+        ),
+      };
     }
 
     await touchTenantApiKeyLastUsedAt(resolveDatabase(c.env), keyRecord.id, nowIso);
-    return null;
+    return {
+      actorUserId,
+    };
   };
 
   app.post('/v1/jobs/process', async (c) => {
@@ -168,8 +277,20 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
   });
 
   app.post('/v1/issue', async (c) => {
+    const authError = authorizeTrustedInternalRequest(c);
+
+    if (authError !== null) {
+      return authError;
+    }
+
     const payload = await c.req.json<unknown>();
-    const request = parseIssueBadgeRequest(payload);
+    const parsedRequest = parseRequest(c, parseIssueBadgeRequest, payload);
+
+    if ('response' in parsedRequest) {
+      return parsedRequest.response;
+    }
+
+    const request = parsedRequest.value;
     const queued = issueBadgeQueueJobFromRequest(request);
 
     await enqueueJobQueueMessage(resolveDatabase(c.env), {
@@ -191,8 +312,20 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
   });
 
   app.post('/v1/revoke', async (c) => {
+    const authError = authorizeTrustedInternalRequest(c);
+
+    if (authError !== null) {
+      return authError;
+    }
+
     const payload = await c.req.json<unknown>();
-    const request = parseRevokeBadgeRequest(payload);
+    const parsedRequest = parseRequest(c, parseRevokeBadgeRequest, payload);
+
+    if ('response' in parsedRequest) {
+      return parsedRequest.response;
+    }
+
+    const request = parsedRequest.value;
     const queued = revokeBadgeQueueJobFromRequest(request);
 
     await enqueueJobQueueMessage(resolveDatabase(c.env), {
@@ -216,17 +349,26 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
   app.post('/v1/programmatic/issue', async (c) => {
     const payload = await c.req.json<unknown>();
-    const request = parseIssueBadgeRequest(payload);
-    const authError = await authorizeProgrammaticRequest(c, {
+    const parsedRequest = parseRequest(c, parseProgrammaticIssueBadgeRequest, payload);
+
+    if ('response' in parsedRequest) {
+      return parsedRequest.response;
+    }
+
+    const request = parsedRequest.value;
+    const authResult = await authorizeProgrammaticRequest(c, {
       tenantId: request.tenantId,
       requiredScope: 'queue.issue',
     });
 
-    if (authError !== null) {
-      return authError;
+    if ('response' in authResult) {
+      return authResult.response;
     }
 
-    const queued = issueBadgeQueueJobFromRequest(request);
+    const queued = issueBadgeQueueJobFromRequest({
+      ...request,
+      requestedByUserId: authResult.actorUserId,
+    });
 
     await enqueueJobQueueMessage(resolveDatabase(c.env), {
       tenantId: queued.job.tenantId,
@@ -249,17 +391,26 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
   app.post('/v1/programmatic/revoke', async (c) => {
     const payload = await c.req.json<unknown>();
-    const request = parseRevokeBadgeRequest(payload);
-    const authError = await authorizeProgrammaticRequest(c, {
+    const parsedRequest = parseRequest(c, parseProgrammaticRevokeBadgeRequest, payload);
+
+    if ('response' in parsedRequest) {
+      return parsedRequest.response;
+    }
+
+    const request = parsedRequest.value;
+    const authResult = await authorizeProgrammaticRequest(c, {
       tenantId: request.tenantId,
       requiredScope: 'queue.revoke',
     });
 
-    if (authError !== null) {
-      return authError;
+    if ('response' in authResult) {
+      return authResult.response;
     }
 
-    const queued = revokeBadgeQueueJobFromRequest(request);
+    const queued = revokeBadgeQueueJobFromRequest({
+      ...request,
+      requestedByUserId: authResult.actorUserId,
+    });
 
     await enqueueJobQueueMessage(resolveDatabase(c.env), {
       tenantId: queued.job.tenantId,
