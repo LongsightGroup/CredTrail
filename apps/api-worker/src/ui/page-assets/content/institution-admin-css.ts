@@ -17,6 +17,36 @@ export const INSTITUTION_ADMIN_CSS = `
   color: var(--ct-theme-text-on-brand);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
 }
+.ct-admin__hero-layout.ct-grid {
+  --ct-grid-gap: 1rem;
+  grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.95fr);
+  align-items: start;
+}
+.ct-admin__hero-note {
+  --ct-stack-gap: 0.38rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-theme-surface-brand-chip-strong);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.08)
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.ct-admin__hero-note h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--ct-theme-text-on-brand);
+}
+.ct-admin__eyebrow {
+  margin: 0;
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  color: var(--ct-theme-text-subtle);
+}
 .ct-admin__meta-grid {
   --ct-cluster-gap: 0.5rem;
 }
@@ -61,6 +91,40 @@ export const INSTITUTION_ADMIN_CSS = `
   letter-spacing: 0.02em;
   background: var(--ct-theme-surface-brand-chip);
 }
+.ct-admin__workspace-grid.ct-grid {
+  --ct-grid-gap: 0.9rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ct-admin__workspace-card {
+  --ct-stack-gap: 0.7rem;
+  padding: 1rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid var(--ct-border-soft);
+  background: linear-gradient(
+    165deg,
+    var(--ct-theme-surface-card-strong),
+    var(--ct-theme-surface-soft)
+  );
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__workspace-card h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+.ct-admin__workspace-card p {
+  margin: 0;
+  color: var(--ct-theme-text-muted);
+}
+.ct-admin__workspace-stats {
+  --ct-cluster-gap: 0.4rem;
+}
+.ct-admin__workspace-actions {
+  --ct-cluster-gap: 0.45rem;
+}
+.ct-admin__workspace-actions .ct-admin__button,
+.ct-admin__workspace-actions .ct-admin__cta-link {
+  min-height: 2.75rem;
+}
 .ct-admin__layout {
   --ct-grid-gap: var(--ct-space-4);
   --ct-sidebar-width: 360px;
@@ -88,6 +152,10 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__panel p {
   margin: 0;
   color: var(--ct-color-ink-soft);
+}
+.ct-admin__panel h3,
+.ct-admin__panel h4 {
+  margin: 0;
 }
 .ct-admin__video-frame {
   position: relative;
@@ -160,6 +228,34 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__builder-grid.ct-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.ct-admin__builder-shell {
+  --ct-grid-gap: var(--ct-space-4);
+  grid-template-columns: minmax(16rem, 18rem) minmax(0, 1fr) minmax(17rem, 20rem);
+  align-items: start;
+}
+.ct-admin__builder-shell > * {
+  min-width: 0;
+}
+.ct-admin__builder-sidebar,
+.ct-admin__builder-rail {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+.ct-admin__builder-main {
+  min-width: 0;
+}
+.ct-admin__builder-intro-grid.ct-grid {
+  --ct-grid-gap: 0.7rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ct-admin__builder-intro-card {
+  --ct-stack-gap: 0.35rem;
+  padding: 0.8rem 0.82rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-border-soft);
+  background: var(--ct-theme-surface-soft);
+}
 .ct-admin__builder-inline {
   --ct-cluster-gap: 0.5rem;
   align-items: end;
@@ -168,6 +264,28 @@ export const INSTITUTION_ADMIN_CSS = `
   margin-top: -0.15rem;
   font-size: 0.85rem;
   font-weight: 700;
+}
+.ct-admin__builder-workbench.ct-grid {
+  --ct-grid-gap: 0.8rem;
+  grid-template-columns: minmax(0, 1.7fr) minmax(15rem, 0.95fr);
+  align-items: start;
+}
+.ct-admin__builder-workbench-main {
+  min-width: 0;
+}
+.ct-admin__builder-patterns {
+  --ct-stack-gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-border-soft);
+  background: linear-gradient(
+    180deg,
+    var(--ct-theme-surface-card-strong),
+    var(--ct-theme-surface-soft)
+  );
+}
+.ct-admin__builder-patterns-head {
+  --ct-stack-gap: 0.28rem;
 }
 .ct-admin__step-head {
   --ct-stack-gap: 0.28rem;
@@ -229,6 +347,30 @@ export const INSTITUTION_ADMIN_CSS = `
 }
 .ct-admin__builder-condition-list {
   --ct-stack-gap: 0.55rem;
+}
+.ct-admin__builder-test-layout.ct-grid,
+.ct-admin__builder-review-layout.ct-grid {
+  --ct-grid-gap: 0.8rem;
+  grid-template-columns: minmax(0, 1.45fr) minmax(15rem, 0.95fr);
+  align-items: start;
+}
+.ct-admin__builder-test-rail,
+.ct-admin__builder-checklist-panel,
+.ct-admin__builder-rail-card {
+  padding: 0.78rem 0.82rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-border-soft);
+  background: var(--ct-theme-surface-soft);
+}
+.ct-admin__builder-checklist {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  display: grid;
+  gap: 0.34rem;
+  color: var(--ct-theme-text-body);
+}
+.ct-admin__builder-checklist li {
+  line-height: 1.35;
 }
 .ct-admin__condition-card {
   --ct-stack-gap: 0.5rem;
@@ -559,49 +701,75 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__panel--table > .ct-admin__status {
   padding-inline: 0.1rem;
 }
-.ct-admin__builder-layout {
-  --ct-grid-gap: var(--ct-space-4);
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 21rem);
-  align-items: start;
-}
 .ct-admin__builder-step[hidden] {
   display: none;
 }
 .ct-admin__builder-step-nav {
-  justify-content: flex-start;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
+  --ct-grid-gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   border: 1px solid var(--ct-border-soft);
   border-radius: var(--ct-radius-md);
   background: var(--ct-theme-surface-shell);
   box-shadow: var(--ct-shadow-soft);
   padding: 0.58rem 0.62rem;
-  backdrop-filter: blur(6px);
+}
+.ct-admin__builder-step-nav #rule-builder-submit {
+  grid-column: 1 / -1;
 }
 .ct-admin__builder-steps {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.44rem;
+  display: grid;
+  gap: 0.48rem;
 }
 .ct-admin__step-button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  text-align: left;
   border: 1px solid var(--ct-border-strong);
-  border-radius: var(--ct-radius-pill);
+  border-radius: var(--ct-radius-md);
   background: var(--ct-theme-surface-info);
   color: var(--ct-theme-text-body);
   min-height: 2.75rem;
   font-size: 0.82rem;
   font-weight: 700;
-  padding: 0.5rem 0.92rem;
+  padding: 0.7rem 0.8rem;
   cursor: pointer;
   transition:
     border-color var(--ct-duration-fast) var(--ct-ease-standard),
     background var(--ct-duration-fast) var(--ct-ease-standard),
     color var(--ct-duration-fast) var(--ct-ease-standard),
     box-shadow var(--ct-duration-fast) var(--ct-ease-standard);
+}
+.ct-admin__step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.7rem;
+  block-size: 1.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--ct-border-soft);
+  background: var(--ct-theme-surface-card-strong);
+  color: var(--ct-theme-text-subtle);
+  font-size: 0.78rem;
+}
+.ct-admin__step-copy {
+  display: grid;
+  gap: 0.16rem;
+}
+.ct-admin__step-copy strong {
+  font-size: 0.84rem;
+}
+.ct-admin__step-copy small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ct-theme-text-muted);
 }
 .ct-admin__step-button:hover {
   border-color: var(--ct-theme-border-focus);
@@ -611,8 +779,13 @@ export const INSTITUTION_ADMIN_CSS = `
   background: var(--ct-theme-surface-success);
   color: var(--ct-theme-state-success);
 }
-.ct-admin__step-button.is-done::after {
-  content: "  ✓";
+.ct-admin__step-button.is-done .ct-admin__step-number {
+  border-color: var(--ct-theme-border-success);
+  background: var(--ct-theme-surface-card-strong);
+  color: var(--ct-theme-state-success);
+}
+.ct-admin__step-button.is-done .ct-admin__step-copy strong::after {
+  content: ' \u2713';
   font-weight: 800;
 }
 .ct-admin__step-button.is-active {
@@ -621,8 +794,13 @@ export const INSTITUTION_ADMIN_CSS = `
   background: var(--ct-theme-gradient-action);
   box-shadow: var(--ct-shadow-soft);
 }
-.ct-admin__builder-step-nav #rule-builder-submit {
-  margin-left: auto;
+.ct-admin__step-button.is-active .ct-admin__step-number {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--ct-theme-text-on-brand);
+}
+.ct-admin__step-button.is-active .ct-admin__step-copy small {
+  color: rgba(255, 255, 255, 0.78);
 }
 .ct-admin__builder-advanced {
   border: 1px solid var(--ct-border-soft);
@@ -678,11 +856,6 @@ export const INSTITUTION_ADMIN_CSS = `
   font-size: 0.79rem;
   color: var(--ct-theme-text-muted);
 }
-.ct-admin__builder-rail {
-  position: sticky;
-  top: 1rem;
-  align-self: start;
-}
 .ct-admin__builder-summary-list {
   margin: 0;
   padding: 0;
@@ -715,18 +888,21 @@ export const INSTITUTION_ADMIN_CSS = `
   .ct-admin__form--inline.ct-grid,
   .ct-admin__builder-grid.ct-grid,
   .ct-admin__condition-fields.ct-grid,
-  .ct-admin__condition-header-fields.ct-grid {
+  .ct-admin__condition-header-fields.ct-grid,
+  .ct-admin__builder-intro-grid.ct-grid,
+  .ct-admin__builder-workbench.ct-grid,
+  .ct-admin__builder-test-layout.ct-grid,
+  .ct-admin__builder-review-layout.ct-grid,
+  .ct-admin__workspace-grid.ct-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ct-admin__quick-links,
-  .ct-admin__builder-steps {
+  .ct-admin__quick-links {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ct-admin__quick-links a,
-  .ct-admin__step-button {
+  .ct-admin__quick-links a {
     width: 100%;
     justify-content: center;
     text-align: center;
@@ -749,16 +925,15 @@ export const INSTITUTION_ADMIN_CSS = `
   .ct-admin__builder-step-nav #rule-builder-submit {
     width: 100%;
   }
-
-  .ct-admin__builder-step-nav #rule-builder-submit {
-    margin-left: 0;
-  }
 }
-@media (max-width: 980px) {
-  .ct-admin__builder-layout {
+@media (max-width: 1180px) {
+  .ct-admin__hero-layout.ct-grid,
+  .ct-admin__builder-shell,
+  .ct-admin__workspace-grid.ct-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .ct-admin__builder-sidebar,
   .ct-admin__builder-rail {
     position: static;
     top: auto;

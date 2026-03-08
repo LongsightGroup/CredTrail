@@ -306,6 +306,55 @@ export const institutionAdminDashboardPage = (input: {
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
   });
+  const workspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Institution admin workstreams">
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Credential operations</p>
+      <h2>Issue, inspect, and change lifecycle state</h2>
+      <p>
+        Handle one-off issuance, tenant-wide assertion review, and direct lifecycle changes from the same operational lane.
+      </p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${ruleCount} rules</span>
+        <span class="ct-admin__status-pill">${badgeTemplateCount} templates</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="#manual-issue-panel">Manual issue</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#issued-badges-panel">Issued ledger</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#lifecycle-panel">Lifecycle</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Rule design</p>
+      <h2>Build eligibility logic before it reaches governance</h2>
+      <p>
+        Keep rule authoring separate from ledger operations. Start in the dedicated builder, then use governance tools for approvals and audit context.
+      </p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${ruleCount} active rule records</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(ruleBuilderPath)}">Open rule builder</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#rule-builder-panel">Governance tools</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#template-image-panel">Templates</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Access and structure</p>
+      <h2>Control keys, delegation, and org-unit scope</h2>
+      <p>
+        Configure the people and integrations that are allowed to issue or manage credentials for this tenant.
+      </p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${activeApiKeyCount} active keys</span>
+        <span class="ct-admin__status-pill">${orgUnitCount} org units</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="#api-key-panel">API keys</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#org-unit-panel">Org units</a>
+        <a class="ct-admin__button ct-admin__button--secondary" href="#governance-panel">Delegation</a>
+      </div>
+    </article>
+  </section>`;
 
   return renderPageShell(
     `Institution Admin · ${input.tenant.displayName}`,
@@ -322,18 +371,15 @@ export const institutionAdminDashboardPage = (input: {
           )}</span>
         </div>
         <nav class="ct-admin__quick-links ct-cluster" aria-label="Governance operations">
-          <a href="#manual-issue-panel">Manual issue</a>
+          <a href="#manual-issue-panel">Issue & lifecycle</a>
           <a href="${escapeHtml(ruleBuilderPath)}">Rule builder</a>
-          <a href="#template-image-panel">Template images</a>
-          <a href="#org-unit-panel">Org units</a>
-          <a href="#api-key-panel">API keys</a>
-          <a href="#governance-panel">Delegation</a>
-          <a href="#issued-badges-panel">Issued badges</a>
-          <a href="#lifecycle-panel">Lifecycle</a>
+          <a href="#api-key-panel">Access & integrations</a>
+          <a href="#issued-badges-panel">Issued ledger</a>
           <a href="${escapeHtml(adminAuditLogPath)}">Audit logs</a>
           <a href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
         </nav>
       </header>
+      ${workspaceCardsMarkup}
       <section class="ct-admin__layout ct-grid ct-grid--sidebar">
         <div class="ct-admin__grid ct-stack">
           <article id="manual-issue-panel" class="ct-admin__panel ct-stack">

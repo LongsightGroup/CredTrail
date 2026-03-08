@@ -121,8 +121,23 @@ export const institutionAdminRuleBuilderPage = (input: {
     `Rule Builder · ${input.tenant.displayName}`,
     `<section class="ct-admin ct-admin--rule-builder ct-stack">
       <header class="ct-admin__hero ct-stack">
-        <h1>Visual Rule Builder</h1>
-        <p>Focused workspace for creating, validating, and testing issuance rules before drafting.</p>
+        <div class="ct-admin__hero-layout ct-grid">
+          <div class="ct-stack">
+            <h1>Visual Rule Builder</h1>
+            <p>
+              Design issuance logic the way operations teams actually work: start from a known pattern,
+              tighten conditions, run a dry run, and only then create a governance draft.
+            </p>
+          </div>
+          <aside class="ct-admin__hero-note ct-stack">
+            <p class="ct-admin__eyebrow">Operating pattern</p>
+            <h2>Model, test, then release</h2>
+            <p>
+              Strong rule builders keep setup, logic, validation, and approval distinct so bad drafts
+              do not slip into governance review.
+            </p>
+          </aside>
+        </div>
         <div class="ct-admin__meta-grid ct-cluster">
           <span class="ct-admin__pill">Tenant: ${escapeHtml(input.tenant.id)}</span>
           <span class="ct-admin__pill">Role: ${escapeHtml(input.membershipRole)}</span>
@@ -132,41 +147,176 @@ export const institutionAdminRuleBuilderPage = (input: {
         </div>
         <nav class="ct-admin__quick-links ct-cluster" aria-label="Builder links">
           <a href="${escapeHtml(tenantAdminPath)}">Back to dashboard</a>
-          <a href="#builder-step-metadata">Step 1: Metadata</a>
-          <a href="#builder-step-conditions">Step 2: Conditions</a>
-          <a href="#builder-step-test">Step 3: Test</a>
-          <a href="#builder-step-review">Step 4: Review</a>
+          <a href="#rule-builder-stepper">Builder workflow</a>
+          <a href="#builder-step-test">Dry-run test</a>
+          <a href="#rule-builder-review-surface">Release review</a>
           <a href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
         </nav>
       </header>
 
-      <article class="ct-admin__panel ct-stack">
-        <h2>Five-minute walkthrough</h2>
-        <p>Use this video to orient first-time issuers before building or testing draft rules.</p>
-        ${tutorialEmbedMarkup}
-      </article>
+      <section class="ct-admin__builder-shell ct-grid">
+        <aside class="ct-admin__builder-sidebar ct-stack">
+          <section class="ct-admin__panel ct-stack">
+            <p class="ct-admin__eyebrow">Workflow</p>
+            <h2>Build in four passes</h2>
+            <ol id="rule-builder-stepper" class="ct-admin__builder-steps" aria-label="Rule builder steps">
+              <li>
+                <button type="button" class="ct-admin__step-button" data-rule-step-target="metadata">
+                  <span class="ct-admin__step-number">1</span>
+                  <span class="ct-admin__step-copy">
+                    <strong>Metadata</strong>
+                    <small>Name the rule and bind it to the right badge and LMS.</small>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="ct-admin__step-button" data-rule-step-target="conditions">
+                  <span class="ct-admin__step-number">2</span>
+                  <span class="ct-admin__step-copy">
+                    <strong>Conditions</strong>
+                    <small>Shape the qualification logic and keep the JSON in sync.</small>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="ct-admin__step-button" data-rule-step-target="test">
+                  <span class="ct-admin__step-number">3</span>
+                  <span class="ct-admin__step-copy">
+                    <strong>Test</strong>
+                    <small>Dry-run with representative learner facts before publishing.</small>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button type="button" class="ct-admin__step-button" data-rule-step-target="review">
+                  <span class="ct-admin__step-number">4</span>
+                  <span class="ct-admin__step-copy">
+                    <strong>Review</strong>
+                    <small>Set governance and create the draft that reviewers will see.</small>
+                  </span>
+                </button>
+              </li>
+            </ol>
+            <p id="rule-builder-step-progress" class="ct-admin__meta ct-admin__builder-progress" aria-live="polite">
+              Step 1 of 4 · Metadata
+            </p>
+          </section>
 
-      <section class="ct-admin__builder-layout ct-grid">
-        <article id="rule-builder-panel" class="ct-admin__panel ct-stack">
-          <h2>Build Rule Draft</h2>
-          <p>Use the step flow to define metadata, build condition cards, run dry-run tests, and submit a draft.</p>
+          <section class="ct-admin__panel ct-stack">
+            <p class="ct-admin__eyebrow">Start point</p>
+            <h2>Reuse proven patterns</h2>
+            <p class="ct-admin__hint">
+              Teams usually clone the last working rule or start from a preset. Both options stay
+              outside the main canvas so the authoring flow remains calm.
+            </p>
+            <label>
+              Quick-start template
+              <div class="ct-admin__builder-inline ct-cluster">
+                <select id="rule-builder-template-preset" name="templatePreset">
+                  <option value="course_completion">Course completion</option>
+                  <option value="course_and_grade" selected>Course + grade threshold</option>
+                  <option value="program_completion">Program completion</option>
+                  <option value="time_limited">Time-limited achievement</option>
+                  <option value="prerequisite_chain">Prerequisite badge chain</option>
+                  <option value="blank">Blank</option>
+                </select>
+                <button
+                  id="rule-builder-apply-template"
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny"
+                >
+                  Apply
+                </button>
+              </div>
+            </label>
+            <label>
+              Clone existing rule (optional)
+              <div class="ct-admin__builder-inline ct-cluster">
+                <select id="rule-builder-clone-rule" name="cloneRuleId">
+                  ${ruleCloneSelectOptions}
+                </select>
+                <button
+                  id="rule-builder-clone-load"
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+                >
+                  Load rule
+                </button>
+              </div>
+            </label>
+          </section>
 
-          <ol class="ct-admin__builder-steps" aria-label="Rule builder steps">
-            <li><button type="button" class="ct-admin__step-button" data-rule-step-target="metadata">1. Metadata</button></li>
-            <li><button type="button" class="ct-admin__step-button" data-rule-step-target="conditions">2. Conditions</button></li>
-            <li><button type="button" class="ct-admin__step-button" data-rule-step-target="test">3. Test</button></li>
-            <li><button type="button" class="ct-admin__step-button" data-rule-step-target="review">4. Review</button></li>
-          </ol>
-          <p id="rule-builder-step-progress" class="ct-admin__meta ct-admin__builder-progress" aria-live="polite">
-            Step 1 of 4 · Metadata
-          </p>
+          <details class="ct-admin__panel ct-admin__builder-tools ct-stack">
+            <summary>Draft tools</summary>
+            <div class="ct-admin__builder-toolbar ct-cluster">
+              <button
+                type="button"
+                id="rule-builder-save-draft"
+                class="ct-admin__button ct-admin__button--tiny"
+              >
+                Save local draft
+              </button>
+              <button
+                type="button"
+                id="rule-builder-load-draft"
+                class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+              >
+                Load local draft
+              </button>
+              <button
+                type="button"
+                id="rule-builder-export-json"
+                class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                id="rule-builder-import-json"
+                class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+              >
+                Import JSON
+              </button>
+              <input id="rule-builder-import-file" type="file" accept="application/json" hidden />
+            </div>
+            <p class="ct-admin__hint">
+              Local drafts stay in this browser. Use export/import when you want a portable review artifact.
+            </p>
+          </details>
+
+          <article class="ct-admin__panel ct-stack">
+            <h2>Five-minute walkthrough</h2>
+            <p>Use this video to orient first-time issuers before building or testing draft rules.</p>
+            ${tutorialEmbedMarkup}
+          </article>
+        </aside>
+
+        <div class="ct-admin__builder-main ct-stack">
+          <article id="rule-builder-panel" class="ct-admin__panel ct-stack">
+            <p class="ct-admin__eyebrow">Builder approach</p>
+            <h2>Keep the authoring surface focused</h2>
+            <div class="ct-admin__builder-intro-grid ct-grid">
+              <section class="ct-admin__builder-intro-card ct-stack">
+                <h3>Define scope first</h3>
+                <p>Lock the badge template, LMS source, and rule identity before touching logic.</p>
+              </section>
+              <section class="ct-admin__builder-intro-card ct-stack">
+                <h3>Model the rule visibly</h3>
+                <p>Condition cards stay front and center. JSON only appears when you need to import or inspect.</p>
+              </section>
+              <section class="ct-admin__builder-intro-card ct-stack">
+                <h3>Test before governance</h3>
+                <p>Dry-run against representative facts so approvers receive cleaner, more trustworthy drafts.</p>
+              </section>
+            </div>
+          </article>
 
           <form id="rule-create-form" class="ct-admin__form ct-stack">
             <section id="builder-step-metadata" class="ct-admin__builder-step" data-rule-step="metadata">
               <header class="ct-admin__step-head ct-stack">
                 <p class="ct-admin__step-kicker">Step 1</p>
                 <h3>Rule metadata</h3>
-                <p>Name the rule and bind it to a badge template and LMS source.</p>
+                <p>Set the permanent rule identity before you work on conditions or testing.</p>
               </header>
               <div class="ct-admin__builder-grid ct-grid">
                 <label>
@@ -204,137 +354,81 @@ export const institutionAdminRuleBuilderPage = (input: {
               <header class="ct-admin__step-head ct-stack">
                 <p class="ct-admin__step-kicker">Step 2</p>
                 <h3>Condition canvas</h3>
-                <p>Compose AND/OR logic using condition cards, then verify the generated JSON.</p>
+                <p>Compose the qualification logic on the canvas, then use JSON only for edge cases and transport.</p>
               </header>
-              <label>
-                Quick-start template
-                <div class="ct-admin__builder-inline ct-cluster">
-                  <select id="rule-builder-template-preset" name="templatePreset">
-                    <option value="course_completion">Course completion</option>
-                    <option value="course_and_grade" selected>Course + grade threshold</option>
-                    <option value="program_completion">Program completion</option>
-                    <option value="time_limited">Time-limited achievement</option>
-                    <option value="prerequisite_chain">Prerequisite badge chain</option>
-                    <option value="blank">Blank</option>
-                  </select>
-                  <button
-                    id="rule-builder-apply-template"
-                    type="button"
-                    class="ct-admin__button ct-admin__button--tiny"
-                  >
-                    Apply
-                  </button>
-                </div>
-              </label>
-              <label>
-                Root logic
-                <select id="rule-builder-root-logic" name="rootLogic">
-                  <option value="all" selected>AND (all conditions must pass)</option>
-                  <option value="any">OR (any condition can pass)</option>
-                </select>
-              </label>
-              <div class="ct-admin__builder-toolbar ct-cluster">
-                <button
-                  type="button"
-                  id="rule-builder-add-condition"
-                  class="ct-admin__button ct-admin__button--tiny"
-                >
-                  Add condition card
-                </button>
-              </div>
-              <section class="ct-admin__builder-canvas ct-stack">
-                <header class="ct-admin__builder-canvas-header ct-cluster">
-                  <strong>Condition Canvas</strong>
-                  <span class="ct-admin__meta">Drag cards to reorder. Use Invert for NOT logic.</span>
-                </header>
-                <div class="ct-admin__builder-canvas-meta ct-cluster">
-                  <span id="rule-builder-canvas-count" class="ct-admin__status-pill">0 cards</span>
-                  <span id="rule-builder-canvas-logic" class="ct-admin__status-pill">AND logic</span>
-                </div>
-                <p id="rule-builder-condition-empty" class="ct-admin__builder-canvas-empty">
-                  No conditions yet. Apply a template or add your first condition card.
-                </p>
-                <div id="rule-builder-condition-list" class="ct-admin__builder-condition-list ct-stack"></div>
-              </section>
-
-              <details class="ct-admin__builder-guide ct-stack" open>
-                <summary>Condition help</summary>
-                <dl class="ct-admin__builder-guide-list">
-                  <div>
-                    <dt>Course completion</dt>
-                    <dd>Matches when course completion facts show learner completion and optional minimum percent.</dd>
-                  </div>
-                  <div>
-                    <dt>Grade threshold</dt>
-                    <dd>Matches when a learner score is within configured min/max thresholds.</dd>
-                  </div>
-                  <div>
-                    <dt>Program completion</dt>
-                    <dd>Matches when enough required courses are completed for a program path.</dd>
-                  </div>
-                  <div>
-                    <dt>Assignment submission</dt>
-                    <dd>Matches when assignment submission, score, and workflow-state constraints pass.</dd>
-                  </div>
-                  <div>
-                    <dt>Time window</dt>
-                    <dd>Matches only inside optional not-before / not-after timestamps.</dd>
-                  </div>
-                  <div>
-                    <dt>Prerequisite badge</dt>
-                    <dd>Matches when learner already has an earned prerequisite badge template.</dd>
-                  </div>
-                </dl>
-              </details>
-
-              <details class="ct-admin__builder-advanced ct-stack">
-                <summary>Advanced controls</summary>
-                <div class="ct-admin__builder-toolbar ct-cluster">
-                  <button
-                    type="button"
-                    id="rule-builder-save-draft"
-                    class="ct-admin__button ct-admin__button--tiny"
-                  >
-                    Save local draft
-                  </button>
-                  <button
-                    type="button"
-                    id="rule-builder-load-draft"
-                    class="ct-admin__button ct-admin__button--tiny"
-                  >
-                    Load local draft
-                  </button>
-                  <button
-                    type="button"
-                    id="rule-builder-export-json"
-                    class="ct-admin__button ct-admin__button--tiny"
-                  >
-                    Export JSON
-                  </button>
-                  <button
-                    type="button"
-                    id="rule-builder-import-json"
-                    class="ct-admin__button ct-admin__button--tiny"
-                  >
-                    Import JSON
-                  </button>
-                  <input id="rule-builder-import-file" type="file" accept="application/json" hidden />
-                </div>
-                <label>
-                  Clone existing rule (optional)
-                  <div class="ct-admin__builder-inline ct-cluster">
-                    <select id="rule-builder-clone-rule" name="cloneRuleId">
-                      ${ruleCloneSelectOptions}
-                    </select>
+              <div class="ct-admin__builder-workbench ct-grid">
+                <div class="ct-admin__builder-workbench-main ct-stack">
+                  <div class="ct-admin__builder-toolbar ct-cluster">
+                    <label class="ct-admin__inline-control">
+                      Root logic
+                      <select id="rule-builder-root-logic" name="rootLogic">
+                        <option value="all" selected>AND (all conditions must pass)</option>
+                        <option value="any">OR (any condition can pass)</option>
+                      </select>
+                    </label>
                     <button
-                      id="rule-builder-clone-load"
                       type="button"
+                      id="rule-builder-add-condition"
                       class="ct-admin__button ct-admin__button--tiny"
                     >
-                      Load rule
+                      Add condition card
                     </button>
                   </div>
-                </label>
+                  <section class="ct-admin__builder-canvas ct-stack">
+                    <header class="ct-admin__builder-canvas-header ct-cluster">
+                      <strong>Condition Canvas</strong>
+                      <span class="ct-admin__meta">Drag cards to reorder. Use Invert for NOT logic.</span>
+                    </header>
+                    <div class="ct-admin__builder-canvas-meta ct-cluster">
+                      <span id="rule-builder-canvas-count" class="ct-admin__status-pill">0 cards</span>
+                      <span id="rule-builder-canvas-logic" class="ct-admin__status-pill">AND logic</span>
+                    </div>
+                    <p id="rule-builder-condition-empty" class="ct-admin__builder-canvas-empty">
+                      No conditions yet. Apply a template or add your first condition card.
+                    </p>
+                    <div id="rule-builder-condition-list" class="ct-admin__builder-condition-list ct-stack"></div>
+                  </section>
+                </div>
+
+                <aside class="ct-admin__builder-patterns ct-stack">
+                  <div class="ct-admin__builder-patterns-head ct-stack">
+                    <p class="ct-admin__eyebrow">Condition help</p>
+                    <h4>Use familiar rule blocks</h4>
+                    <p class="ct-admin__hint">
+                      Good builders keep the available rule types visible so authors do not hunt through raw JSON.
+                    </p>
+                  </div>
+                  <dl class="ct-admin__builder-guide-list">
+                    <div>
+                      <dt>Course completion</dt>
+                      <dd>Matches when course completion facts show learner completion and optional minimum percent.</dd>
+                    </div>
+                    <div>
+                      <dt>Grade threshold</dt>
+                      <dd>Matches when a learner score is within configured min/max thresholds.</dd>
+                    </div>
+                    <div>
+                      <dt>Program completion</dt>
+                      <dd>Matches when enough required courses are completed for a program path.</dd>
+                    </div>
+                    <div>
+                      <dt>Assignment submission</dt>
+                      <dd>Matches when assignment submission, score, and workflow-state constraints pass.</dd>
+                    </div>
+                    <div>
+                      <dt>Time window</dt>
+                      <dd>Matches only inside optional not-before / not-after timestamps.</dd>
+                    </div>
+                    <div>
+                      <dt>Prerequisite badge</dt>
+                      <dd>Matches when learner already has an earned prerequisite badge template.</dd>
+                    </div>
+                  </dl>
+                </aside>
+              </div>
+
+              <details class="ct-admin__builder-advanced ct-stack">
+                <summary>Advanced JSON editor</summary>
                 <label>
                   Rule JSON (advanced)
                   <textarea
@@ -360,65 +454,77 @@ export const institutionAdminRuleBuilderPage = (input: {
               <header class="ct-admin__step-head ct-stack">
                 <p class="ct-admin__step-kicker">Step 3</p>
                 <h3>Test against sample learner facts</h3>
-                <p>Use dry-run evaluation to confirm conditions pass/fail before drafting.</p>
+                <p>Use one representative learner case, then layer advanced fact JSON only when the simple path is insufficient.</p>
               </header>
-              <fieldset class="ct-admin__fieldset ct-stack">
-                <legend>Rule Test Mode (Dry Run)</legend>
-                <label>
-                  Learner ID
-                  <input name="testLearnerId" type="text" value="canvas:12345" />
-                </label>
-                <label>
-                  Recipient email
-                  <input name="testRecipientIdentity" type="email" value="learner@example.edu" />
-                </label>
-                <label>
-                  Sample course ID
-                  <input name="testCourseId" type="text" value="CS101" />
-                </label>
-                <label>
-                  Sample final score
-                  <input name="testFinalScore" type="number" min="0" max="100" step="0.01" value="92" />
-                </label>
-                <label class="ct-admin__checkbox-row ct-checkbox-row">
-                  <input name="testCompleted" type="checkbox" checked />
-                  Learner completed course
-                </label>
-                <label>
-                  Advanced facts JSON (optional)
-                  <textarea
-                    name="testFactsJson"
-                    rows="5"
-                    spellcheck="false"
-                    placeholder='{"grades":[{"courseId":"CS101","learnerId":"canvas:12345","finalScore":92}]}'
-                  ></textarea>
-                </label>
-                <div class="ct-admin__builder-inline ct-cluster">
-                  <label class="ct-admin__inline-control">
-                    Test fact preset
-                    <select id="rule-builder-test-preset" name="testPreset">
-                      <option value="canvas_course_grade" selected>Canvas course + grade</option>
-                      <option value="program_completion">Program completion</option>
-                      <option value="assignment_submission">Assignment submission</option>
-                      <option value="prerequisite_badge">Prerequisite badge</option>
-                    </select>
+              <div class="ct-admin__builder-test-layout ct-grid">
+                <fieldset class="ct-admin__fieldset ct-stack">
+                  <legend>Representative learner facts</legend>
+                  <label>
+                    Learner ID
+                    <input name="testLearnerId" type="text" value="canvas:12345" />
                   </label>
-                  <button
-                    id="rule-builder-apply-test-preset"
-                    type="button"
-                    class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
-                  >
-                    Apply preset
-                  </button>
+                  <label>
+                    Recipient email
+                    <input name="testRecipientIdentity" type="email" value="learner@example.edu" />
+                  </label>
+                  <label>
+                    Sample course ID
+                    <input name="testCourseId" type="text" value="CS101" />
+                  </label>
+                  <label>
+                    Sample final score
+                    <input name="testFinalScore" type="number" min="0" max="100" step="0.01" value="92" />
+                  </label>
+                  <label class="ct-admin__checkbox-row ct-checkbox-row">
+                    <input name="testCompleted" type="checkbox" checked />
+                    Learner completed course
+                  </label>
+                </fieldset>
+
+                <div class="ct-admin__builder-test-rail ct-stack">
+                  <fieldset class="ct-admin__fieldset ct-stack">
+                    <legend>Test presets</legend>
+                    <div class="ct-admin__builder-inline ct-cluster">
+                      <label class="ct-admin__inline-control">
+                        Test fact preset
+                        <select id="rule-builder-test-preset" name="testPreset">
+                          <option value="canvas_course_grade" selected>Canvas course + grade</option>
+                          <option value="program_completion">Program completion</option>
+                          <option value="assignment_submission">Assignment submission</option>
+                          <option value="prerequisite_badge">Prerequisite badge</option>
+                        </select>
+                      </label>
+                      <button
+                        id="rule-builder-apply-test-preset"
+                        type="button"
+                        class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+                      >
+                        Apply preset
+                      </button>
+                    </div>
+                    <button
+                      id="rule-builder-test"
+                      type="button"
+                      class="ct-admin__button ct-admin__button--tiny"
+                    >
+                      Test rule
+                    </button>
+                  </fieldset>
+
+                  <details class="ct-admin__builder-advanced ct-stack">
+                    <summary>Advanced facts JSON</summary>
+                    <label>
+                      Advanced facts JSON (optional)
+                      <textarea
+                        name="testFactsJson"
+                        rows="6"
+                        spellcheck="false"
+                        placeholder='{"grades":[{"courseId":"CS101","learnerId":"canvas:12345","finalScore":92}]}'
+                      ></textarea>
+                    </label>
+                  </details>
                 </div>
-                <button
-                  id="rule-builder-test"
-                  type="button"
-                  class="ct-admin__button ct-admin__button--tiny"
-                >
-                  Test rule
-                </button>
-              </fieldset>
+              </div>
               <pre id="rule-builder-test-output" class="ct-admin__code-output" hidden></pre>
             </section>
 
@@ -426,46 +532,56 @@ export const institutionAdminRuleBuilderPage = (input: {
               <header class="ct-admin__step-head ct-stack">
                 <p class="ct-admin__step-kicker">Step 4</p>
                 <h3>Governance and release settings</h3>
-                <p>Set approval chain and issuance timing before creating the draft version.</p>
+                <p>Package the rule the way approvers expect to see it: timing, approval chain, and one short change summary.</p>
               </header>
-              <label>
-                Approval roles (comma separated)
-                <input name="approvalRoles" type="text" value="admin,owner" />
-              </label>
-              <label>
-                Issuance timing
-                <select name="issuanceTiming">
-                  <option value="immediate">Immediate</option>
-                  <option value="manual">Manual review trigger</option>
-                  <option value="end_of_term">End of term batch</option>
-                </select>
-              </label>
-              <label>
-                Change summary (optional)
-                <input
-                  name="changeSummary"
-                  type="text"
-                  placeholder="Initial draft for committee review."
-                />
-              </label>
+              <div class="ct-admin__builder-review-layout ct-grid">
+                <div class="ct-stack">
+                  <label>
+                    Approval roles (comma separated)
+                    <input name="approvalRoles" type="text" value="admin,owner" />
+                  </label>
+                  <label>
+                    Issuance timing
+                    <select name="issuanceTiming">
+                      <option value="immediate">Immediate</option>
+                      <option value="manual">Manual review trigger</option>
+                      <option value="end_of_term">End of term batch</option>
+                    </select>
+                  </label>
+                  <label>
+                    Change summary (optional)
+                    <input
+                      name="changeSummary"
+                      type="text"
+                      placeholder="Initial draft for committee review."
+                    />
+                  </label>
+                </div>
+
+                <aside id="rule-builder-review-surface" class="ct-admin__builder-checklist-panel ct-stack">
+                  <h4>Release checklist</h4>
+                  <ul class="ct-admin__builder-checklist">
+                    <li>Rule name, badge template, and LMS source are finalized.</li>
+                    <li>Condition canvas reflects the JSON you intend to submit.</li>
+                    <li>Latest dry run reflects representative learner facts.</li>
+                    <li>Approval roles match the governance path reviewers expect.</li>
+                  </ul>
+                  <p class="ct-admin__hint">
+                    Create the draft only when the last test summary and readiness rail are both clean.
+                  </p>
+                </aside>
+              </div>
             </section>
-
-            <div class="ct-admin__builder-step-nav ct-cluster">
-              <button id="rule-builder-step-prev" type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary">
-                Previous step
-              </button>
-              <button id="rule-builder-step-next" type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary">
-                Next step
-              </button>
-              <button id="rule-builder-submit" type="submit">Create rule draft</button>
-            </div>
           </form>
-          <p id="rule-create-status" class="ct-admin__status"></p>
-        </article>
 
-        <section class="ct-admin__panel ct-admin__builder-rail ct-stack" aria-live="polite">
-          <h2>Validation & Summary</h2>
-          <p class="ct-admin__hint">Live health checks for this draft as you edit conditions and test facts.</p>
+        </div>
+
+        <aside class="ct-admin__panel ct-admin__builder-rail ct-stack" aria-live="polite">
+          <p class="ct-admin__eyebrow">Readiness</p>
+          <h2>Draft summary</h2>
+          <p class="ct-admin__hint">
+            Keep this rail clean before you submit the rule into governance review.
+          </p>
           <dl class="ct-admin__builder-summary-list">
             <div>
               <dt>Rule name</dt>
@@ -489,11 +605,36 @@ export const institutionAdminRuleBuilderPage = (input: {
             </div>
           </dl>
           <p id="rule-builder-summary-message" class="ct-admin__status">Build at least one condition card to create a draft.</p>
-          <p class="ct-admin__hint">
-            Saved drafts are stored in this browser and scoped to
-            <strong>${escapeHtml(ruleBuilderPath)}</strong>.
-          </p>
-        </section>
+
+          <section class="ct-admin__builder-rail-card ct-stack">
+            <h3>Submission path</h3>
+            <ul class="ct-admin__builder-checklist">
+              <li>Prepare the draft in the main workspace.</li>
+              <li>Run at least one dry run in test mode.</li>
+              <li>Set approval roles and issuance timing.</li>
+              <li>Create the rule draft for review.</li>
+            </ul>
+          </section>
+
+          <section class="ct-admin__builder-rail-card ct-stack">
+            <h3>Local draft storage</h3>
+            <p class="ct-admin__hint">
+              Saved drafts are stored in this browser and scoped to
+              <strong>${escapeHtml(ruleBuilderPath)}</strong>.
+            </p>
+          </section>
+
+          <div class="ct-admin__builder-step-nav ct-cluster">
+            <button id="rule-builder-step-prev" type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary">
+              Previous step
+            </button>
+            <button id="rule-builder-step-next" type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary">
+              Next step
+            </button>
+            <button id="rule-builder-submit" type="submit" form="rule-create-form">Create rule draft</button>
+          </div>
+          <p id="rule-create-status" class="ct-admin__status"></p>
+        </aside>
       </section>
 
       <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>

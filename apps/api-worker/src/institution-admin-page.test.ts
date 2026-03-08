@@ -306,6 +306,10 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Rule Builder Workspace');
     expect(body).toContain('Evaluate Rule');
     expect(body).toContain('Issued Badges Ledger');
+    expect(body).toContain('Institution admin workstreams');
+    expect(body).toContain('Credential operations');
+    expect(body).toContain('Rule design');
+    expect(body).toContain('Access and structure');
     expect(body).toContain('Badge Rules (1)');
     expect(body).toContain('CS101 Excellence Rule');
     expect(body).toContain('TypeScript Foundations');
@@ -330,12 +334,8 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('/admin/audit-logs?tenantId=tenant_123');
     expect(body).toContain('href="#manual-issue-panel"');
     expect(body).toContain('href="/tenants/tenant_123/admin/rules/new"');
-    expect(body).toContain('href="#template-image-panel"');
-    expect(body).toContain('href="#org-unit-panel"');
     expect(body).toContain('href="#api-key-panel"');
-    expect(body).toContain('href="#governance-panel"');
     expect(body).toContain('href="#issued-badges-panel"');
-    expect(body).toContain('href="#lifecycle-panel"');
     expect(body).toContain('id="issued-badges-filter-form"');
     expect(body).toContain('id="issued-badges-body"');
     expect(body).toContain('id="issued-badges-status"');
@@ -419,6 +419,9 @@ describe('GET /tenants/:tenantId/admin/rules/new', () => {
     expect(body).toContain('id="rule-builder-test-preset"');
     expect(body).toContain('id="rule-builder-apply-test-preset"');
     expect(body).toContain('id="rule-builder-test-output"');
+    expect(body).toContain('Build in four passes');
+    expect(body).toContain('Reuse proven patterns');
+    expect(body).toContain('Draft summary');
     expect(body).toContain('Five-minute walkthrough');
     expect(body).toContain('Condition help');
     expect(body).toContain('RULE_BUILDER_TUTORIAL_EMBED_URL');
