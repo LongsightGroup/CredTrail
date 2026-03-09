@@ -52,6 +52,9 @@ export const institutionAdminRuleBuilderPage = (input: {
   const createOrgUnitPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/org-units`;
   const badgeTemplateApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-templates`;
   const badgeRuleApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-rules`;
+  const badgeRuleValueListApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-rule-value-lists`;
+  const badgeRulePreviewSimulationApiPath = `${badgeRuleApiPath}/preview-simulate`;
+  const badgeRuleReviewQueueApiPath = `${badgeRuleApiPath}/review-queue`;
   const assertionsApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/assertions`;
   const tenantUsersApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/users`;
   const showcasePath = `/showcase/${encodeURIComponent(input.tenant.id)}`;
@@ -96,6 +99,9 @@ export const institutionAdminRuleBuilderPage = (input: {
     createOrgUnitPath,
     badgeTemplateApiPathPrefix,
     badgeRuleApiPath,
+    badgeRuleValueListApiPath,
+    badgeRulePreviewSimulationApiPath,
+    badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
   });
@@ -283,6 +289,30 @@ export const institutionAdminRuleBuilderPage = (input: {
               Local drafts stay in this browser. Use export/import when you want a portable review artifact.
             </p>
           </details>
+
+          <article class="ct-admin__panel ct-stack">
+            <p class="ct-admin__eyebrow">Reusable lists</p>
+            <h2>Current list library</h2>
+            <p class="ct-admin__hint">
+              Course and badge-template lists appear here and can be used inside condition cards.
+            </p>
+            <div class="ct-admin__table-wrap">
+              <table class="ct-admin__table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Kind</th>
+                    <th>Values</th>
+                  </tr>
+                </thead>
+                <tbody id="rule-builder-value-list-body">
+                  <tr>
+                    <td colspan="3" class="ct-admin__empty">No reusable lists loaded yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
 
           <article class="ct-admin__panel ct-stack">
             <h2>Five-minute walkthrough</h2>
@@ -556,6 +586,10 @@ export const institutionAdminRuleBuilderPage = (input: {
                       placeholder="Initial draft for committee review."
                     />
                   </label>
+                  <label class="ct-admin__checkbox-row ct-checkbox-row">
+                    <input name="reviewOnMissingFacts" type="checkbox" />
+                    Route missing-data cases to human review instead of treating them as a simple no-match
+                  </label>
                 </div>
 
                 <aside id="rule-builder-review-surface" class="ct-admin__builder-checklist-panel ct-stack">
@@ -571,6 +605,31 @@ export const institutionAdminRuleBuilderPage = (input: {
                   </p>
                 </aside>
               </div>
+
+              <section class="ct-admin__builder-simulation ct-stack">
+                <header class="ct-admin__step-head ct-stack">
+                  <p class="ct-admin__step-kicker">Historical simulation</p>
+                  <h4>Project impact before activation</h4>
+                  <p>Replay this draft against recent rule evaluations for the same badge template.</p>
+                </header>
+                <div class="ct-admin__builder-inline ct-cluster">
+                  <label class="ct-admin__inline-control">
+                    Sample limit
+                    <input id="rule-builder-simulate-limit" type="number" min="1" max="100" step="1" value="25" />
+                  </label>
+                  <button
+                    id="rule-builder-simulate"
+                    type="button"
+                    class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+                  >
+                    Run simulation
+                  </button>
+                </div>
+                <p id="rule-builder-simulate-status" class="ct-admin__status">
+                  No historical simulation has been run yet.
+                </p>
+                <pre id="rule-builder-simulate-output" class="ct-admin__code-output" hidden></pre>
+              </section>
             </section>
           </form>
 

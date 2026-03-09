@@ -15,14 +15,18 @@ import {
   parseAdminCanvasOAuthExchangeRequest,
   parseTenantCanvasGradebookSnapshotQuery,
   parseCreateBadgeIssuanceRuleRequest,
+  parseCreateBadgeIssuanceRuleValueListRequest,
   parseCreateBadgeIssuanceRuleVersionRequest,
+  parseBadgeIssuanceRuleReviewQueueQuery,
   parseDecideBadgeIssuanceRuleVersionRequest,
   parseEvaluateBadgeIssuanceRuleRequest,
   parsePreviewEvaluateBadgeIssuanceRuleRequest,
+  parsePreviewSimulateBadgeIssuanceRuleRequest,
   parseBadgeIssuanceRulePathParams,
   parseBadgeIssuanceRuleAuditLogQuery,
   parseBadgeIssuanceRuleVersionDiffQuery,
   parseBadgeIssuanceRuleVersionPathParams,
+  parseResolveBadgeIssuanceRuleReviewRequest,
   parseAdminAuditLogListQuery,
   parseAdminDeleteLtiIssuerRegistrationRequest,
   parseAdminUpsertLtiIssuerRegistrationRequest,
@@ -828,9 +832,60 @@ describe('badge issuance rule parsers', () => {
     const auditLogQuery = parseBadgeIssuanceRuleAuditLogQuery({
       limit: '150',
     });
+    const reviewQueueQuery = parseBadgeIssuanceRuleReviewQueueQuery({
+      status: 'resolved',
+      limit: '25',
+    });
 
     expect(diffQuery.baseVersionId).toBe('brv_122');
     expect(auditLogQuery.limit).toBe(150);
+    expect(reviewQueueQuery.status).toBe('resolved');
+    expect(reviewQueueQuery.limit).toBe(25);
+  });
+
+  it('accepts reusable-list rule conditions and simulation payloads', () => {
+    const createRequest = parseCreateBadgeIssuanceRuleRequest({
+      name: 'Program path rule',
+      badgeTemplateId: 'badge_template_program',
+      lmsProviderKind: 'canvas',
+      definition: {
+        conditions: {
+          all: [
+            {
+              type: 'program_completion',
+              courseListId: 'brvl_courses',
+              minimumCompleted: 3,
+            },
+            {
+              type: 'prerequisite_badge',
+              badgeTemplateListId: 'brvl_badges',
+            },
+          ],
+        },
+        options: {
+          reviewOnMissingFacts: true,
+        },
+      },
+    });
+    const valueListRequest = parseCreateBadgeIssuanceRuleValueListRequest({
+      label: 'Core CS sequence',
+      kind: 'course_ids',
+      values: ['course_101', 'course_102', 'course_103'],
+    });
+    const simulationRequest = parsePreviewSimulateBadgeIssuanceRuleRequest({
+      badgeTemplateId: 'badge_template_program',
+      sampleLimit: 20,
+      definition: createRequest.definition,
+    });
+    const resolveReviewRequest = parseResolveBadgeIssuanceRuleReviewRequest({
+      decision: 'issue',
+      comment: 'Registrar review approved issuance.',
+    });
+
+    expect(createRequest.definition.options?.reviewOnMissingFacts).toBe(true);
+    expect(valueListRequest.kind).toBe('course_ids');
+    expect(simulationRequest.sampleLimit).toBe(20);
+    expect(resolveReviewRequest.decision).toBe('issue');
   });
 
   it('rejects grade threshold conditions without a score boundary', () => {
@@ -855,6 +910,23 @@ describe('badge issuance rule parsers', () => {
         definition: {
           conditions: {
             type: 'time_window',
+          },
+        },
+      });
+    }).toThrowError();
+  });
+
+  it('rejects rule conditions that provide both direct IDs and reusable list IDs', () => {
+    expect(() => {
+      parseCreateBadgeIssuanceRuleRequest({
+        name: 'Invalid list combination',
+        badgeTemplateId: 'badge_template_cs101',
+        lmsProviderKind: 'canvas',
+        definition: {
+          conditions: {
+            type: 'course_completion',
+            courseId: 'course_101',
+            courseListId: 'brvl_courses',
           },
         },
       });

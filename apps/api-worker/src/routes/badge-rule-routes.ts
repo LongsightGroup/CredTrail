@@ -3,21 +3,28 @@ import {
   createAuditLog,
   createBadgeIssuanceRule,
   createBadgeIssuanceRuleEvaluation,
+  createBadgeIssuanceRuleValueList,
   createBadgeIssuanceRuleVersion,
   decideBadgeIssuanceRuleVersion,
   findActiveBadgeIssuanceRuleVersion,
+  findBadgeIssuanceRuleEvaluationById,
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
   findTenantCanvasGradebookIntegration,
   listAuditLogs,
+  listBadgeIssuanceRuleEvaluations,
   listBadgeIssuanceRules,
+  listBadgeIssuanceRuleValueLists,
   listBadgeIssuanceRuleVersionApprovalEvents,
   listBadgeIssuanceRuleVersionApprovalSteps,
   listBadgeIssuanceRuleVersions,
   listIssuedBadgeTemplateIdsForRecipient,
+  resolveBadgeIssuanceRuleEvaluationReview,
   submitBadgeIssuanceRuleVersionForApproval,
   updateTenantCanvasGradebookIntegrationTokens,
+  type BadgeIssuanceRuleEvaluationRecord,
   type BadgeIssuanceRuleLmsProviderKind,
+  type BadgeIssuanceRuleValueListRecord,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
@@ -26,15 +33,22 @@ import type { Hono } from 'hono';
 import {
   parseBadgeIssuanceRuleAuditLogQuery,
   parseBadgeIssuanceRuleDefinition,
+  parseBadgeIssuanceRuleEvaluationPathParams,
   parseBadgeIssuanceRulePathParams,
+  parseBadgeIssuanceRuleReviewQueueQuery,
+  parseBadgeIssuanceRuleValueListQuery,
   parseBadgeIssuanceRuleVersionDiffQuery,
   parseBadgeIssuanceRuleVersionPathParams,
   parseCreateBadgeIssuanceRuleRequest,
+  parseCreateBadgeIssuanceRuleValueListRequest,
   parseCreateBadgeIssuanceRuleVersionRequest,
   parseDecideBadgeIssuanceRuleVersionRequest,
   parseEvaluateBadgeIssuanceRuleRequest,
   parsePreviewEvaluateBadgeIssuanceRuleRequest,
+  parsePreviewSimulateBadgeIssuanceRuleRequest,
+  parseResolveBadgeIssuanceRuleReviewRequest,
   parseTenantPathParams,
+  type BadgeIssuanceRuleDefinition,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import { refreshCanvasAccessToken } from '../lms/canvas-oauth';
@@ -42,6 +56,7 @@ import { createGradebookProvider } from '../lms/gradebook-provider';
 import {
   evaluateBadgeIssuanceRuleDefinition,
   extractBadgeIssuanceRuleRequirements,
+  summarizeBadgeIssuanceRuleEvaluation,
   type BadgeIssuanceRuleCompletionFact,
   type BadgeIssuanceRuleEvaluationFacts,
   type BadgeIssuanceRuleGradeFact,
@@ -268,6 +283,241 @@ const resolveRuleDefinition = (
   return parseBadgeIssuanceRuleDefinition(parsed);
 };
 
+type BadgeRuleEvaluationOutcome = 'matched' | 'no_match' | 'review_required';
+
+function collectRuleValueListReferences(
+  condition: BadgeIssuanceRuleDefinition['conditions'],
+  output: Set<string>,
+): void {
+  if ('all' in condition) {
+    for (const child of condition.all) {
+      collectRuleValueListReferences(child, output);
+    }
+
+    return;
+  }
+
+  if ('any' in condition) {
+    for (const child of condition.any) {
+      collectRuleValueListReferences(child, output);
+    }
+
+    return;
+  }
+
+  if ('not' in condition) {
+    collectRuleValueListReferences(condition.not, output);
+    return;
+  }
+
+  if ('courseListId' in condition && typeof condition.courseListId === 'string') {
+    output.add(condition.courseListId);
+  }
+
+  if ('badgeTemplateListId' in condition && typeof condition.badgeTemplateListId === 'string') {
+    output.add(condition.badgeTemplateListId);
+  }
+}
+
+function valueListById(
+  valueLists: readonly BadgeIssuanceRuleValueListRecord[],
+): Map<string, BadgeIssuanceRuleValueListRecord> {
+  return new Map(valueLists.map((valueList) => [valueList.id, valueList]));
+}
+
+function resolveCourseListCondition(
+  condition:
+    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'grade_threshold' }>
+    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'course_completion' }>
+    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'program_completion' }>,
+  valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
+): BadgeIssuanceRuleDefinition['conditions'] {
+  if (condition.courseListId === undefined) {
+    return condition;
+  }
+
+  const valueList = valueLists.get(condition.courseListId);
+
+  if (valueList === undefined) {
+    throw new Error(`Rule value list ${condition.courseListId} was not found`);
+  }
+
+  if (valueList.kind !== 'course_ids') {
+    throw new Error(`Rule value list ${condition.courseListId} is not a course list`);
+  }
+
+  if (condition.type === 'program_completion') {
+    return {
+      type: 'program_completion',
+      courseIds: valueList.values,
+      ...(condition.minimumCompleted === undefined
+        ? {}
+        : { minimumCompleted: condition.minimumCompleted }),
+    };
+  }
+
+  const expandedConditions = valueList.values.map((courseId) => {
+    if (condition.type === 'grade_threshold') {
+      return {
+        type: 'grade_threshold' as const,
+        courseId,
+        ...(condition.scoreField === undefined ? {} : { scoreField: condition.scoreField }),
+        ...(condition.minScore === undefined ? {} : { minScore: condition.minScore }),
+        ...(condition.maxScore === undefined ? {} : { maxScore: condition.maxScore }),
+      };
+    }
+
+    return {
+      type: 'course_completion' as const,
+      courseId,
+      ...(condition.requireCompleted === undefined
+        ? {}
+        : { requireCompleted: condition.requireCompleted }),
+      ...(condition.minCompletionPercent === undefined
+        ? {}
+        : { minCompletionPercent: condition.minCompletionPercent }),
+    };
+  });
+
+  return {
+    any: expandedConditions,
+  };
+}
+
+function resolveBadgeTemplateListCondition(
+  condition: Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'prerequisite_badge' }>,
+  valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
+): BadgeIssuanceRuleDefinition['conditions'] {
+  if (condition.badgeTemplateListId === undefined) {
+    return condition;
+  }
+
+  const valueList = valueLists.get(condition.badgeTemplateListId);
+
+  if (valueList === undefined) {
+    throw new Error(`Rule value list ${condition.badgeTemplateListId} was not found`);
+  }
+
+  if (valueList.kind !== 'badge_template_ids') {
+    throw new Error(`Rule value list ${condition.badgeTemplateListId} is not a badge-template list`);
+  }
+
+  return {
+    any: valueList.values.map((badgeTemplateId) => ({
+      type: 'prerequisite_badge' as const,
+      badgeTemplateId,
+    })),
+  };
+}
+
+function resolveRuleConditionValueLists(
+  condition: BadgeIssuanceRuleDefinition['conditions'],
+  valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
+): BadgeIssuanceRuleDefinition['conditions'] {
+  if ('all' in condition) {
+    return {
+      all: condition.all.map((child) => resolveRuleConditionValueLists(child, valueLists)),
+    };
+  }
+
+  if ('any' in condition) {
+    return {
+      any: condition.any.map((child) => resolveRuleConditionValueLists(child, valueLists)),
+    };
+  }
+
+  if ('not' in condition) {
+    return {
+      not: resolveRuleConditionValueLists(condition.not, valueLists),
+    };
+  }
+
+  switch (condition.type) {
+    case 'grade_threshold':
+    case 'course_completion':
+    case 'program_completion':
+      return resolveCourseListCondition(condition, valueLists);
+    case 'prerequisite_badge':
+      return resolveBadgeTemplateListCondition(condition, valueLists);
+    case 'assignment_submission':
+    case 'time_window':
+      return condition;
+  }
+}
+
+async function resolveBadgeIssuanceRuleDefinitionValueLists(
+  db: SqlDatabase,
+  tenantId: string,
+  definition: BadgeIssuanceRuleDefinition,
+): Promise<BadgeIssuanceRuleDefinition> {
+  const referencedValueListIds = new Set<string>();
+  collectRuleValueListReferences(definition.conditions, referencedValueListIds);
+
+  if (referencedValueListIds.size === 0) {
+    return definition;
+  }
+
+  const valueLists = await listBadgeIssuanceRuleValueLists(db, {
+    tenantId,
+    includeArchived: false,
+  });
+  const selectedValueLists = valueLists.filter((valueList) => referencedValueListIds.has(valueList.id));
+  const resolvedDefinition = {
+    ...definition,
+    conditions: resolveRuleConditionValueLists(definition.conditions, valueListById(selectedValueLists)),
+  };
+
+  return parseBadgeIssuanceRuleDefinition(resolvedDefinition);
+}
+
+function badgeRuleEvaluationOutcome(
+  definition: BadgeIssuanceRuleDefinition,
+  evaluation: ReturnType<typeof evaluateBadgeIssuanceRuleDefinition>,
+): BadgeRuleEvaluationOutcome {
+  if (evaluation.matched) {
+    return 'matched';
+  }
+
+  const summary = summarizeBadgeIssuanceRuleEvaluation(evaluation);
+
+  if (definition.options?.reviewOnMissingFacts === true && summary.missingDataCount > 0) {
+    return 'review_required';
+  }
+
+  return 'no_match';
+}
+
+function parseFactsFromEvaluationRecord(
+  evaluationRecord: BadgeIssuanceRuleEvaluationRecord,
+): BadgeIssuanceRuleEvaluationFacts | null {
+  try {
+    const parsed = JSON.parse(evaluationRecord.evaluationJson) as unknown;
+
+    if (parsed === null || typeof parsed !== 'object' || !('facts' in parsed)) {
+      return null;
+    }
+
+    const facts = parsed.facts as Partial<BadgeIssuanceRuleEvaluationFacts>;
+
+    if (typeof facts.learnerId !== 'string' || typeof facts.nowIso !== 'string') {
+      return null;
+    }
+
+    return {
+      learnerId: facts.learnerId,
+      nowIso: facts.nowIso,
+      grades: Array.isArray(facts.grades) ? facts.grades : [],
+      completions: Array.isArray(facts.completions) ? facts.completions : [],
+      submissions: Array.isArray(facts.submissions) ? facts.submissions : [],
+      earnedBadgeTemplateIds: Array.isArray(facts.earnedBadgeTemplateIds)
+        ? facts.earnedBadgeTemplateIds
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 const loadRuleFacts = async (input: {
   db: SqlDatabase;
   tenantId: string;
@@ -455,6 +705,91 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     TENANT_MEMBER_ROLES,
   } = input;
 
+  app.get('/v1/tenants/:tenantId/badge-rule-value-lists', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseBadgeIssuanceRuleValueListQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid badge rule value-list query',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const valueLists = await listBadgeIssuanceRuleValueLists(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      ...(query.kind === undefined ? {} : { kind: query.kind }),
+      includeArchived: false,
+    });
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      valueLists,
+    });
+  });
+
+  app.post('/v1/tenants/:tenantId/badge-rule-value-lists', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request;
+
+    try {
+      request = parseCreateBadgeIssuanceRuleValueListRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid badge rule value-list payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const valueList = await createBadgeIssuanceRuleValueList(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      label: request.label,
+      kind: request.kind,
+      values: request.values,
+      createdByUserId: session.userId,
+    });
+
+    await createAuditLog(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'badge_rule.value_list_created',
+      targetType: 'badge_rule_value_list',
+      targetId: valueList.id,
+      metadata: {
+        role: membershipRole,
+        kind: valueList.kind,
+        valueCount: valueList.values.length,
+      },
+    });
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        valueList,
+      },
+      201,
+    );
+  });
+
   app.get('/v1/tenants/:tenantId/badge-rules', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
@@ -558,6 +893,23 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
 
     const db = resolveDatabase(c.env);
     const nowIso = new Date().toISOString();
+    let definition: BadgeIssuanceRuleDefinition;
+
+    try {
+      definition = await resolveBadgeIssuanceRuleDefinitionValueLists(
+        db,
+        pathParams.tenantId,
+        request.definition,
+      );
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+        },
+        422,
+      );
+    }
+
     let facts: BadgeIssuanceRuleEvaluationFacts;
 
     try {
@@ -568,7 +920,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         learnerId: request.learnerId,
         recipientIdentity: request.recipientIdentity,
         recipientIdentityType: request.recipientIdentityType,
-        definition: request.definition,
+        definition,
         requestedFacts: request.facts,
         nowIso,
       });
@@ -581,13 +933,333 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       );
     }
 
-    const evaluation = evaluateBadgeIssuanceRuleDefinition(request.definition, facts);
+    const evaluation = evaluateBadgeIssuanceRuleDefinition(definition, facts);
+    const evaluationSummary = summarizeBadgeIssuanceRuleEvaluation(evaluation);
+    const outcome = badgeRuleEvaluationOutcome(definition, evaluation);
 
     return c.json({
       tenantId: pathParams.tenantId,
+      definition,
       evaluation,
+      evaluationSummary,
+      outcome,
       facts,
       dryRun: true,
+    });
+  });
+
+  app.post('/v1/tenants/:tenantId/badge-rules/preview-simulate', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request;
+
+    try {
+      request = parsePreviewSimulateBadgeIssuanceRuleRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid badge rule simulation payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    let definition: BadgeIssuanceRuleDefinition;
+
+    try {
+      definition = await resolveBadgeIssuanceRuleDefinitionValueLists(
+        db,
+        pathParams.tenantId,
+        request.definition,
+      );
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+        },
+        422,
+      );
+    }
+
+    const sampleLimit = request.sampleLimit ?? 25;
+    const historicalEvaluations = await listBadgeIssuanceRuleEvaluations(db, {
+      tenantId: pathParams.tenantId,
+      badgeTemplateId: request.badgeTemplateId,
+      limit: sampleLimit,
+    });
+    const samples = historicalEvaluations
+      .map((evaluationRecord) => {
+        const facts = parseFactsFromEvaluationRecord(evaluationRecord);
+
+        if (facts === null) {
+          return null;
+        }
+
+        const projectedEvaluation = evaluateBadgeIssuanceRuleDefinition(definition, facts);
+        const projectedOutcome = badgeRuleEvaluationOutcome(definition, projectedEvaluation);
+        const projectedSummary = summarizeBadgeIssuanceRuleEvaluation(projectedEvaluation);
+
+        return {
+          evaluationId: evaluationRecord.id,
+          learnerId: evaluationRecord.learnerId,
+          recipientIdentity: evaluationRecord.recipientIdentity,
+          historicalMatched: evaluationRecord.matched,
+          historicalIssuanceStatus: evaluationRecord.issuanceStatus,
+          projectedMatched: projectedEvaluation.matched,
+          projectedOutcome,
+          projectedSummary,
+          changed:
+            projectedEvaluation.matched !== evaluationRecord.matched ||
+            projectedOutcome !==
+              (evaluationRecord.issuanceStatus === 'review_required' ? 'review_required' : evaluationRecord.matched ? 'matched' : 'no_match'),
+        };
+      })
+      .filter((sample): sample is NonNullable<typeof sample> => sample !== null);
+
+    const matchedCount = samples.filter((sample) => sample.projectedOutcome === 'matched').length;
+    const reviewRequiredCount = samples.filter(
+      (sample) => sample.projectedOutcome === 'review_required',
+    ).length;
+    const changedCount = samples.filter((sample) => sample.changed).length;
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      sampleCount: samples.length,
+      summary: {
+        matchedCount,
+        reviewRequiredCount,
+        noMatchCount: samples.length - matchedCount - reviewRequiredCount,
+        changedCount,
+        historicalMatchedCount: samples.filter((sample) => sample.historicalMatched).length,
+        historicalReviewRequiredCount: samples.filter(
+          (sample) => sample.historicalIssuanceStatus === 'review_required',
+        ).length,
+      },
+      samples,
+    });
+  });
+
+  app.get('/v1/tenants/:tenantId/badge-rules/review-queue', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseBadgeIssuanceRuleReviewQueueQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid review queue query',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const reviewStatus = query.status ?? 'pending';
+    const db = resolveDatabase(c.env);
+    const evaluations = await listBadgeIssuanceRuleEvaluations(db, {
+      tenantId: pathParams.tenantId,
+      issuanceStatus: 'review_required',
+      reviewStatus,
+      limit: query.limit ?? 50,
+    });
+    const ruleCache = new Map<string, Awaited<ReturnType<typeof findBadgeIssuanceRuleById>>>();
+    const queue = await Promise.all(
+      evaluations.map(async (evaluationRecord) => {
+        let rule = ruleCache.get(evaluationRecord.ruleId);
+
+        if (rule === undefined) {
+          rule = await findBadgeIssuanceRuleById(db, pathParams.tenantId, evaluationRecord.ruleId);
+          ruleCache.set(evaluationRecord.ruleId, rule);
+        }
+
+        const facts = parseFactsFromEvaluationRecord(evaluationRecord);
+        const parsedPayload = (() => {
+          try {
+            return JSON.parse(evaluationRecord.evaluationJson) as unknown;
+          } catch {
+            return null;
+          }
+        })();
+        const evaluation =
+          parsedPayload !== null &&
+          typeof parsedPayload === 'object' &&
+          'evaluation' in parsedPayload &&
+          parsedPayload.evaluation !== null &&
+          typeof parsedPayload.evaluation === 'object'
+            ? parsedPayload.evaluation
+            : null;
+        const summary =
+          evaluation !== null &&
+          'matched' in evaluation &&
+          'tree' in evaluation &&
+          typeof evaluation.matched === 'boolean' &&
+          evaluation.tree !== null &&
+          typeof evaluation.tree === 'object'
+            ? summarizeBadgeIssuanceRuleEvaluation(
+                evaluation as ReturnType<typeof evaluateBadgeIssuanceRuleDefinition>,
+              )
+            : null;
+
+        return {
+          ...evaluationRecord,
+          ruleName: rule?.name ?? null,
+          badgeTemplateId: rule?.badgeTemplateId ?? null,
+          facts,
+          evaluation,
+          evaluationSummary: summary,
+        };
+      }),
+    );
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      reviewStatus,
+      queue,
+    });
+  });
+
+  app.post('/v1/tenants/:tenantId/badge-rules/review-queue/:evaluationId/resolve', async (c) => {
+    const pathParams = parseBadgeIssuanceRuleEvaluationPathParams(c.req.param());
+    let request;
+
+    try {
+      request = parseResolveBadgeIssuanceRuleReviewRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid review queue resolution payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const evaluationRecord = await findBadgeIssuanceRuleEvaluationById(db, {
+      tenantId: pathParams.tenantId,
+      evaluationId: pathParams.evaluationId,
+    });
+
+    if (evaluationRecord === null) {
+      return c.json(
+        {
+          error: 'Review queue entry not found',
+        },
+        404,
+      );
+    }
+
+    if (evaluationRecord.reviewStatus !== 'pending') {
+      return c.json(
+        {
+          error: 'Review queue entry is no longer pending',
+        },
+        409,
+      );
+    }
+
+    const rule = await findBadgeIssuanceRuleById(db, pathParams.tenantId, evaluationRecord.ruleId);
+
+    if (rule === null) {
+      return c.json(
+        {
+          error: 'Badge rule not found for review queue entry',
+        },
+        404,
+      );
+    }
+
+    let issuance: DirectIssueBadgeResult | null = null;
+
+    if (request.decision === 'issue') {
+      try {
+        issuance = await issueBadgeForTenant(
+          c,
+          pathParams.tenantId,
+          {
+            badgeTemplateId: rule.badgeTemplateId,
+            recipientIdentity: evaluationRecord.recipientIdentity,
+            recipientIdentityType: evaluationRecord.recipientIdentityType,
+            idempotencyKey: `rule-review:${evaluationRecord.id}`,
+          },
+          session.userId,
+        );
+      } catch (error) {
+        if (isIssueBadgeHttpError(error)) {
+          return c.json(error.payload, error.statusCode);
+        }
+
+        return c.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Failed to issue badge from review queue',
+          },
+          502,
+        );
+      }
+    }
+
+    const resolved = await resolveBadgeIssuanceRuleEvaluationReview(db, {
+      tenantId: pathParams.tenantId,
+      evaluationId: evaluationRecord.id,
+      reviewDecision: request.decision,
+      reviewComment: request.comment,
+      reviewedByUserId: session.userId,
+      issuanceStatus:
+        request.decision === 'issue'
+          ? issuance?.status ?? 'issued'
+          : 'review_dismissed',
+      assertionId: request.decision === 'issue' ? issuance?.assertionId : undefined,
+    });
+
+    if (resolved === null) {
+      return c.json(
+        {
+          error: 'Review queue entry is no longer pending',
+        },
+        409,
+      );
+    }
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'badge_rule.review_resolved',
+      targetType: 'badge_rule_evaluation',
+      targetId: evaluationRecord.id,
+      metadata: {
+        role: membershipRole,
+        ruleId: evaluationRecord.ruleId,
+        versionId: evaluationRecord.versionId,
+        decision: request.decision,
+        issuanceStatus: resolved.issuanceStatus,
+      },
+    });
+
+    return c.json({
+      tenantId: pathParams.tenantId,
+      review: resolved,
+      issuance,
     });
   });
 
@@ -1213,7 +1885,22 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       );
     }
 
-    const definition = resolveRuleDefinition(selectedVersion.ruleJson);
+    let definition: BadgeIssuanceRuleDefinition;
+
+    try {
+      definition = await resolveBadgeIssuanceRuleDefinitionValueLists(
+        db,
+        pathParams.tenantId,
+        resolveRuleDefinition(selectedVersion.ruleJson),
+      );
+    } catch (error) {
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+        },
+        422,
+      );
+    }
     const nowIso = new Date().toISOString();
 
     let facts: BadgeIssuanceRuleEvaluationFacts;
@@ -1240,6 +1927,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     }
 
     const evaluation = evaluateBadgeIssuanceRuleDefinition(definition, facts);
+    const evaluationSummary = summarizeBadgeIssuanceRuleEvaluation(evaluation);
+    const outcome = badgeRuleEvaluationOutcome(definition, evaluation);
     const dryRun = request.dryRun ?? false;
     let issuance: DirectIssueBadgeResult | null = null;
 
@@ -1278,13 +1967,17 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       recipientIdentity: request.recipientIdentity,
       recipientIdentityType: request.recipientIdentityType,
       matched: evaluation.matched,
-      issuanceStatus: issuance?.status,
+      issuanceStatus:
+        outcome === 'review_required' && !dryRun ? 'review_required' : issuance?.status,
       assertionId: issuance?.assertionId,
       evaluationJson: JSON.stringify({
         dryRun,
+        outcome,
         evaluation,
+        evaluationSummary,
         facts,
       }),
+      ...(outcome === 'review_required' && !dryRun ? { reviewStatus: 'pending' as const } : {}),
       evaluatedAt: facts.nowIso,
     });
 
@@ -1301,6 +1994,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         learnerId: request.learnerId,
         dryRun,
         matched: evaluation.matched,
+        outcome,
         issuanceStatus: issuance?.status ?? null,
         assertionId: issuance?.assertionId ?? null,
       },
@@ -1310,7 +2004,10 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       tenantId: pathParams.tenantId,
       rule,
       version: selectedVersion,
+      definition,
       evaluation,
+      evaluationSummary,
+      outcome,
       dryRun,
       issuance,
       evaluationRecord,

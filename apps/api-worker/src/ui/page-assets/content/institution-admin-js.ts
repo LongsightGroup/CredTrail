@@ -38,6 +38,18 @@ export const INSTITUTION_ADMIN_JS = `
     parsedContext && typeof parsedContext.badgeRuleApiPath === 'string'
       ? parsedContext.badgeRuleApiPath
       : '';
+  const badgeRuleValueListApiPath =
+    parsedContext && typeof parsedContext.badgeRuleValueListApiPath === 'string'
+      ? parsedContext.badgeRuleValueListApiPath
+      : '';
+  const badgeRulePreviewSimulationApiPath =
+    parsedContext && typeof parsedContext.badgeRulePreviewSimulationApiPath === 'string'
+      ? parsedContext.badgeRulePreviewSimulationApiPath
+      : '';
+  const badgeRuleReviewQueueApiPath =
+    parsedContext && typeof parsedContext.badgeRuleReviewQueueApiPath === 'string'
+      ? parsedContext.badgeRuleReviewQueueApiPath
+      : '';
   const assertionsApiPathPrefix =
     parsedContext && typeof parsedContext.assertionsApiPathPrefix === 'string'
       ? parsedContext.assertionsApiPathPrefix
@@ -54,6 +66,9 @@ export const INSTITUTION_ADMIN_JS = `
     createOrgUnitPath.length === 0 ||
     badgeTemplateApiPathPrefix.length === 0 ||
     badgeRuleApiPath.length === 0 ||
+    badgeRuleValueListApiPath.length === 0 ||
+    badgeRulePreviewSimulationApiPath.length === 0 ||
+    badgeRuleReviewQueueApiPath.length === 0 ||
     assertionsApiPathPrefix.length === 0 ||
     tenantUsersApiPathPrefix.length === 0
   ) {
@@ -106,12 +121,23 @@ export const INSTITUTION_ADMIN_JS = `
   const ruleBuilderSummaryRootLogic = document.getElementById('rule-builder-summary-root-logic');
   const ruleBuilderSummaryValidity = document.getElementById('rule-builder-summary-validity');
   const ruleBuilderSummaryLastTest = document.getElementById('rule-builder-summary-last-test');
+  const ruleBuilderValueListBody = document.getElementById('rule-builder-value-list-body');
+  const ruleBuilderSimulateButton = document.getElementById('rule-builder-simulate');
+  const ruleBuilderSimulateLimit = document.getElementById('rule-builder-simulate-limit');
+  const ruleBuilderSimulateStatus = document.getElementById('rule-builder-simulate-status');
+  const ruleBuilderSimulateOutput = document.getElementById('rule-builder-simulate-output');
   const ruleBuilderStepButtons = Array.from(
     document.querySelectorAll('[data-rule-step-target]'),
   ).filter((candidate) => candidate instanceof HTMLButtonElement);
   const ruleEvaluateForm = document.getElementById('rule-evaluate-form');
   const ruleEvaluateStatus = document.getElementById('rule-evaluate-status');
   const ruleActionStatus = document.getElementById('rule-action-status');
+  const ruleValueListForm = document.getElementById('rule-value-list-form');
+  const ruleValueListStatus = document.getElementById('rule-value-list-status');
+  const ruleValueListBody = document.getElementById('rule-value-list-body');
+  const ruleReviewQueueRefreshButton = document.getElementById('rule-review-queue-refresh');
+  const ruleReviewQueueStatus = document.getElementById('rule-review-queue-status');
+  const ruleReviewQueueBody = document.getElementById('rule-review-queue-body');
   const issuedBadgesFilterForm = document.getElementById('issued-badges-filter-form');
   const issuedBadgesStatus = document.getElementById('issued-badges-status');
   const issuedBadgesBody = document.getElementById('issued-badges-body');
@@ -136,6 +162,8 @@ export const INSTITUTION_ADMIN_JS = `
   const ruleGovernanceForm = document.getElementById('rule-governance-form');
   const ruleGovernanceStatus = document.getElementById('rule-governance-status');
   const ruleGovernanceOutput = document.getElementById('rule-governance-output');
+  let ruleValueLists = [];
+  let refreshIssuedBadges = null;
 
   const setStatus = (el, text, isError, tone = 'info') => {
     el.textContent = text;
@@ -238,6 +266,386 @@ export const INSTITUTION_ADMIN_JS = `
     issuedBadgesBody.innerHTML =
       '<tr><td colspan="6" class="ct-admin__empty">' + escapeHtml(message) + '</td></tr>';
   };
+
+  function formatRuleValueListKind(kind) {
+    if (kind === 'course_ids') {
+      return 'Course IDs';
+    }
+
+    if (kind === 'badge_template_ids') {
+      return 'Badge template IDs';
+    }
+
+    return 'Unknown';
+  }
+
+  function setRuleValueListEmptyState(message) {
+    const markup =
+      '<tr><td colspan="3" class="ct-admin__empty">' + escapeHtml(message) + '</td></tr>';
+
+    if (ruleValueListBody instanceof HTMLElement) {
+      ruleValueListBody.innerHTML = markup;
+    }
+
+    if (ruleBuilderValueListBody instanceof HTMLElement) {
+      ruleBuilderValueListBody.innerHTML = markup;
+    }
+  }
+
+  function renderRuleValueListRows() {
+    const markup =
+      !Array.isArray(ruleValueLists) || ruleValueLists.length === 0
+        ? '<tr><td colspan="3" class="ct-admin__empty">No reusable lists available yet.</td></tr>'
+        : ruleValueLists
+            .map((valueList) => {
+              const label =
+                valueList && typeof valueList.label === 'string'
+                  ? valueList.label
+                  : 'Untitled list';
+              const kind =
+                valueList && typeof valueList.kind === 'string'
+                  ? valueList.kind
+                  : 'unknown';
+              const values =
+                valueList && Array.isArray(valueList.values) ? valueList.values : [];
+              const valueCount = values.length;
+              const valueSummary = valueCount === 0 ? 'No values' : values.join(', ');
+
+              return (
+                '<tr>' +
+                '<td><strong>' +
+                escapeHtml(label) +
+                '</strong><div class="ct-admin__meta">' +
+                escapeHtml(
+                  valueList && typeof valueList.id === 'string' ? valueList.id : 'unknown',
+                ) +
+                '</div></td>' +
+                '<td>' +
+                escapeHtml(formatRuleValueListKind(kind)) +
+                '</td>' +
+                '<td>' +
+                escapeHtml(valueSummary) +
+                '<div class="ct-admin__meta">' +
+                escapeHtml(String(valueCount)) +
+                ' value' +
+                (valueCount === 1 ? '' : 's') +
+                '</div></td>' +
+                '</tr>'
+              );
+            })
+            .join('');
+
+    if (ruleValueListBody instanceof HTMLElement) {
+      ruleValueListBody.innerHTML = markup;
+    }
+
+    if (ruleBuilderValueListBody instanceof HTMLElement) {
+      ruleBuilderValueListBody.innerHTML = markup;
+    }
+  }
+
+  async function loadRuleValueLists(statusElement, options = {}) {
+    const quietSuccess = options && options.quietSuccess === true;
+
+    if (statusElement instanceof HTMLElement && !quietSuccess) {
+      setStatus(statusElement, 'Loading reusable lists...', false);
+    }
+
+    if (ruleValueListBody instanceof HTMLElement || ruleBuilderValueListBody instanceof HTMLElement) {
+      setRuleValueListEmptyState('Loading reusable lists...');
+    }
+
+    try {
+      const response = await fetch(badgeRuleValueListApiPath);
+      const payload = await parseJsonBody(response);
+
+      if (!response.ok) {
+        const detail = errorDetailFromPayload(payload);
+
+        if (statusElement instanceof HTMLElement) {
+          setStatus(statusElement, detail, true);
+        } else if (ruleCreateStatus instanceof HTMLElement) {
+          setStatus(ruleCreateStatus, detail, true);
+        }
+
+        setRuleValueListEmptyState('Unable to load reusable lists.');
+        return [];
+      }
+
+      ruleValueLists =
+        payload && Array.isArray(payload.valueLists) ? payload.valueLists : [];
+      renderRuleValueListRows();
+
+      if (statusElement instanceof HTMLElement && !quietSuccess) {
+        setStatus(
+          statusElement,
+          'Loaded ' +
+            String(ruleValueLists.length) +
+            ' reusable list' +
+            (ruleValueLists.length === 1 ? '' : 's') +
+            '.',
+          false,
+          'success',
+        );
+      }
+
+      return ruleValueLists;
+    } catch {
+      if (statusElement instanceof HTMLElement) {
+        setStatus(statusElement, 'Unable to load reusable lists from this browser session.', true);
+      } else if (ruleCreateStatus instanceof HTMLElement) {
+        setStatus(ruleCreateStatus, 'Unable to load reusable lists from this browser session.', true);
+      }
+
+      setRuleValueListEmptyState('Unable to load reusable lists.');
+      return [];
+    }
+  }
+
+  function summarizeReviewQueueEntry(entry) {
+    const summary =
+      entry &&
+      entry.evaluationSummary &&
+      typeof entry.evaluationSummary === 'object'
+        ? entry.evaluationSummary
+        : null;
+    const parts = [];
+
+    if (summary && typeof summary.matchedLeafCount === 'number') {
+      parts.push(String(summary.matchedLeafCount) + ' matched');
+    }
+
+    if (summary && typeof summary.failedConditionCount === 'number') {
+      parts.push(String(summary.failedConditionCount) + ' failed');
+    }
+
+    if (summary && typeof summary.missingDataCount === 'number') {
+      parts.push(String(summary.missingDataCount) + ' missing');
+    }
+
+    if (parts.length === 0) {
+      return 'Awaiting manual review';
+    }
+
+    return parts.join(' · ');
+  }
+
+  function setRuleReviewQueueEmptyState(message) {
+    if (!(ruleReviewQueueBody instanceof HTMLElement)) {
+      return;
+    }
+
+    ruleReviewQueueBody.innerHTML =
+      '<tr><td colspan="5" class="ct-admin__empty">' + escapeHtml(message) + '</td></tr>';
+  }
+
+  function renderRuleReviewQueueRows(queue) {
+    if (!(ruleReviewQueueBody instanceof HTMLElement)) {
+      return;
+    }
+
+    if (!Array.isArray(queue) || queue.length === 0) {
+      setRuleReviewQueueEmptyState('No pending review queue entries.');
+      return;
+    }
+
+    ruleReviewQueueBody.innerHTML = queue
+      .map((entry) => {
+        const evaluationId =
+          entry && typeof entry.id === 'string' ? entry.id : '';
+        const evaluatedAt =
+          entry && typeof entry.evaluatedAt === 'string' ? entry.evaluatedAt : '';
+        const recipientIdentity =
+          entry && typeof entry.recipientIdentity === 'string'
+            ? entry.recipientIdentity
+            : 'unknown';
+        const learnerId =
+          entry && typeof entry.learnerId === 'string' ? entry.learnerId : 'unknown';
+        const ruleId =
+          entry && typeof entry.ruleId === 'string' ? entry.ruleId : 'unknown rule';
+        const ruleName =
+          entry && typeof entry.ruleName === 'string' && entry.ruleName.length > 0
+            ? entry.ruleName
+            : ruleId;
+        const versionId =
+          entry && typeof entry.versionId === 'string' ? entry.versionId : '';
+        const badgeTemplateId =
+          entry && typeof entry.badgeTemplateId === 'string' ? entry.badgeTemplateId : '';
+        const summary = summarizeReviewQueueEntry(entry);
+        const reviewStatus =
+          entry && typeof entry.reviewStatus === 'string' ? entry.reviewStatus : 'pending';
+        const canResolve = reviewStatus === 'pending' && evaluationId.length > 0;
+
+        return (
+          '<tr>' +
+          '<td>' +
+          escapeHtml(formatTimestamp(evaluatedAt)) +
+          '</td>' +
+          '<td><strong>' +
+          escapeHtml(recipientIdentity) +
+          '</strong><div class="ct-admin__meta">' +
+          escapeHtml(learnerId) +
+          '</div></td>' +
+          '<td><strong>' +
+          escapeHtml(ruleName) +
+          '</strong><div class="ct-admin__meta">' +
+          escapeHtml(ruleId) +
+          (badgeTemplateId.length > 0
+            ? ' · template ' + escapeHtml(badgeTemplateId)
+            : '') +
+          (versionId.length > 0 ? ' · ' + escapeHtml(versionId) : '') +
+          '</div></td>' +
+          '<td>' +
+          escapeHtml(summary) +
+          '</td>' +
+          '<td><div class="ct-admin__actions">' +
+          (canResolve
+            ? '<button type="button" class="ct-admin__button ct-admin__button--tiny" data-review-queue-action="issue" data-evaluation-id="' +
+              escapeHtml(evaluationId) +
+              '" data-recipient-identity="' +
+              escapeHtml(recipientIdentity) +
+              '">Issue badge</button>' +
+              '<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary" data-review-queue-action="dismiss" data-evaluation-id="' +
+              escapeHtml(evaluationId) +
+              '" data-recipient-identity="' +
+              escapeHtml(recipientIdentity) +
+              '">Dismiss</button>'
+            : '<span class="ct-admin__meta">Resolved</span>') +
+          '</div></td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+  }
+
+  async function loadRuleReviewQueue() {
+    if (!(ruleReviewQueueStatus instanceof HTMLElement)) {
+      return [];
+    }
+
+    setStatus(ruleReviewQueueStatus, 'Loading review queue...', false);
+    setRuleReviewQueueEmptyState('Loading review queue...');
+
+    try {
+      const query = new URLSearchParams({
+        status: 'pending',
+        limit: '50',
+      });
+      const response = await fetch(badgeRuleReviewQueueApiPath + '?' + query.toString());
+      const payload = await parseJsonBody(response);
+
+      if (!response.ok) {
+        setStatus(ruleReviewQueueStatus, errorDetailFromPayload(payload), true);
+        setRuleReviewQueueEmptyState('Unable to load review queue.');
+        return [];
+      }
+
+      const queue = payload && Array.isArray(payload.queue) ? payload.queue : [];
+      renderRuleReviewQueueRows(queue);
+      setStatus(
+        ruleReviewQueueStatus,
+        queue.length === 0
+          ? 'No pending review queue entries.'
+          : 'Loaded ' +
+              String(queue.length) +
+              ' pending review entr' +
+              (queue.length === 1 ? 'y' : 'ies') +
+              '.',
+        false,
+        queue.length === 0 ? 'info' : 'success',
+      );
+      return queue;
+    } catch {
+      setStatus(ruleReviewQueueStatus, 'Unable to load review queue from this browser session.', true);
+      setRuleReviewQueueEmptyState('Unable to load review queue.');
+      return [];
+    }
+  }
+
+  async function resolveReviewQueueEntry(decision, evaluationId, recipientIdentity) {
+    if (!(ruleReviewQueueStatus instanceof HTMLElement)) {
+      return;
+    }
+
+    if (
+      (decision !== 'issue' && decision !== 'dismiss') ||
+      typeof evaluationId !== 'string' ||
+      evaluationId.trim().length === 0
+    ) {
+      setStatus(ruleReviewQueueStatus, 'Invalid review queue action.', true);
+      return;
+    }
+
+    const trimmedEvaluationId = evaluationId.trim();
+    const trimmedRecipientIdentity =
+      typeof recipientIdentity === 'string' ? recipientIdentity.trim() : 'recipient';
+    const actionLabel = decision === 'issue' ? 'issue' : 'dismiss';
+    const commentPrompt = window.prompt(
+      'Optional comment for ' +
+        actionLabel +
+        ' decision on ' +
+        trimmedRecipientIdentity +
+        ':',
+      decision === 'issue' ? 'Manual review approved by issuer' : 'Missing facts confirmed; no issue',
+    );
+
+    if (commentPrompt === null) {
+      return;
+    }
+
+    setStatus(
+      ruleReviewQueueStatus,
+      (decision === 'issue' ? 'Issuing' : 'Dismissing') +
+        ' review queue entry ' +
+        trimmedEvaluationId +
+        '...',
+      false,
+    );
+
+    try {
+      const response = await fetch(
+        badgeRuleReviewQueueApiPath + '/' + encodeURIComponent(trimmedEvaluationId) + '/resolve',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            decision,
+            ...(commentPrompt.trim().length > 0 ? { comment: commentPrompt.trim() } : {}),
+          }),
+        },
+      );
+      const payload = await parseJsonBody(response);
+
+      if (!response.ok) {
+        setStatus(ruleReviewQueueStatus, errorDetailFromPayload(payload), true);
+        return;
+      }
+
+      setStatus(
+        ruleReviewQueueStatus,
+        (decision === 'issue' ? 'Issued badge' : 'Dismissed review') +
+          ' for ' +
+          trimmedRecipientIdentity +
+          '.',
+        false,
+        decision === 'issue' ? 'success' : 'warning',
+      );
+      await loadRuleReviewQueue();
+
+      if (typeof refreshIssuedBadges === 'function') {
+        await refreshIssuedBadges();
+      }
+    } catch {
+      setStatus(
+        ruleReviewQueueStatus,
+        'Unable to resolve review queue entry from this browser session.',
+        true,
+      );
+    }
+  }
+
   const loadAssertionLifecycle = async (assertionId, statusElement) => {
     const normalizedAssertionId =
       typeof assertionId === 'string' ? assertionId.trim() : '';
@@ -299,6 +707,106 @@ export const INSTITUTION_ADMIN_JS = `
       return null;
     }
   };
+
+  if (ruleValueListForm instanceof HTMLFormElement && ruleValueListStatus instanceof HTMLElement) {
+    ruleValueListForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setStatus(ruleValueListStatus, 'Creating reusable list...', false);
+      const data = new FormData(ruleValueListForm);
+      const labelRaw = data.get('label');
+      const kindRaw = data.get('kind');
+      const valuesRaw = data.get('values');
+      const label = typeof labelRaw === 'string' ? labelRaw.trim() : '';
+      const kind = typeof kindRaw === 'string' ? kindRaw.trim() : '';
+      const values = toCommaSeparatedList(valuesRaw);
+
+      if (label.length === 0 || kind.length === 0 || values.length === 0) {
+        setStatus(ruleValueListStatus, 'Label, kind, and at least one value are required.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(badgeRuleValueListApiPath, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            label,
+            kind,
+            values,
+          }),
+        });
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(ruleValueListStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        ruleValueListForm.reset();
+        setStatus(ruleValueListStatus, 'Reusable list created.', false, 'success');
+        await loadRuleValueLists(ruleValueListStatus, {
+          quietSuccess: true,
+        });
+      } catch {
+        setStatus(ruleValueListStatus, 'Unable to create reusable list from this browser session.', true);
+      }
+    });
+  }
+
+  if (ruleReviewQueueRefreshButton instanceof HTMLButtonElement) {
+    ruleReviewQueueRefreshButton.addEventListener('click', async () => {
+      await loadRuleReviewQueue();
+    });
+  }
+
+  if (ruleReviewQueueBody instanceof HTMLElement) {
+    ruleReviewQueueBody.addEventListener('click', async (event) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const actionButton = target.closest('button[data-review-queue-action]');
+
+      if (!(actionButton instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      const decision = actionButton.dataset.reviewQueueAction;
+      const evaluationId = actionButton.dataset.evaluationId ?? '';
+      const recipientIdentity = actionButton.dataset.recipientIdentity ?? '';
+
+      if (decision !== 'issue' && decision !== 'dismiss') {
+        setStatus(ruleReviewQueueStatus, 'Invalid review queue action.', true);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        (decision === 'issue' ? 'Issue badge for ' : 'Dismiss review for ') +
+          (recipientIdentity.length > 0 ? recipientIdentity : evaluationId) +
+          '?',
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      await resolveReviewQueueEntry(decision, evaluationId, recipientIdentity);
+    });
+  }
+
+  if (ruleValueListBody instanceof HTMLElement || ruleBuilderValueListBody instanceof HTMLElement) {
+    void loadRuleValueLists(ruleValueListStatus, {
+      quietSuccess: !(ruleValueListStatus instanceof HTMLElement),
+    });
+  }
+
+  if (ruleReviewQueueBody instanceof HTMLElement) {
+    void loadRuleReviewQueue();
+  }
 
   if (manualIssueForm instanceof HTMLFormElement && manualIssueStatus instanceof HTMLElement) {
     manualIssueForm.addEventListener('submit', async (event) => {
@@ -1105,6 +1613,8 @@ export const INSTITUTION_ADMIN_JS = `
       }
     };
 
+    refreshIssuedBadges = loadIssuedBadges;
+
     const revokeAssertion = async (assertionId) => {
       const reasonPrompt = window.prompt(
         'Optional revocation reason for ' + assertionId + ':',
@@ -1360,6 +1870,89 @@ export const INSTITUTION_ADMIN_JS = `
       prerequisite_badge:
         'Requires the learner to already hold a specific badge template.',
     };
+
+    function listOptionsMarkup(kind, selectedValue, emptyLabel) {
+      const matchingValueLists = ruleValueLists.filter((valueList) => valueList.kind === kind);
+      const options = matchingValueLists
+        .map((valueList) => {
+          const label =
+            typeof valueList.label === 'string' && valueList.label.length > 0
+              ? valueList.label
+              : valueList.id;
+          return (
+            '<option value="' +
+            escapeHtml(valueList.id) +
+            '"' +
+            (valueList.id === selectedValue ? ' selected' : '') +
+            '>' +
+            escapeHtml(
+              label +
+                ' · ' +
+                String(Array.isArray(valueList.values) ? valueList.values.length : 0) +
+                ' values',
+            ) +
+            '</option>'
+          );
+        })
+        .join('');
+
+      return (
+        '<option value="">' +
+        escapeHtml(emptyLabel) +
+        '</option>' +
+        options
+      );
+    }
+
+    function syncExclusiveFieldPair(card, valueFieldName, listFieldName) {
+      const valueField = card.querySelector('[data-field="' + valueFieldName + '"]');
+      const listField = card.querySelector('[data-field="' + listFieldName + '"]');
+      const valueFieldText =
+        valueField instanceof HTMLInputElement || valueField instanceof HTMLTextAreaElement
+          ? valueField.value.trim()
+          : '';
+      const listFieldText = listField instanceof HTMLSelectElement ? listField.value.trim() : '';
+
+      if (
+        !(
+          valueField instanceof HTMLInputElement || valueField instanceof HTMLTextAreaElement
+        ) ||
+        !(listField instanceof HTMLSelectElement)
+      ) {
+        return;
+      }
+
+      if (valueFieldText.length > 0 && listFieldText.length > 0) {
+        valueField.disabled = false;
+        listField.disabled = false;
+        return;
+      }
+
+      valueField.disabled = listFieldText.length > 0;
+      listField.disabled = valueFieldText.length > 0;
+    }
+
+    function bindExclusiveFieldPair(card, valueFieldName, listFieldName) {
+      const valueField = card.querySelector('[data-field="' + valueFieldName + '"]');
+      const listField = card.querySelector('[data-field="' + listFieldName + '"]');
+
+      if (
+        !(
+          valueField instanceof HTMLInputElement || valueField instanceof HTMLTextAreaElement
+        ) ||
+        !(listField instanceof HTMLSelectElement)
+      ) {
+        return;
+      }
+
+      const syncPair = () => {
+        syncExclusiveFieldPair(card, valueFieldName, listFieldName);
+      };
+
+      valueField.addEventListener('input', syncPair);
+      listField.addEventListener('change', syncPair);
+      syncPair();
+    }
 
     const defaultTemplateDefinitions = {
       blank: {
@@ -1666,6 +2259,7 @@ export const INSTITUTION_ADMIN_JS = `
       card.classList.remove(
         'ct-admin__condition-card--result-pass',
         'ct-admin__condition-card--result-fail',
+        'ct-admin__condition-card--result-review',
         'ct-admin__condition-card--result-idle',
       );
       card.classList.add('ct-admin__condition-card--result-' + state);
@@ -1693,10 +2287,18 @@ export const INSTITUTION_ADMIN_JS = `
       if (conditionType === 'course_completion') {
         fieldsContainer.innerHTML =
           '<label>Course ID<input type="text" data-field="courseId" placeholder="CS101" /></label>' +
+          '<label>Reusable course list<select data-field="courseListId">' +
+          listOptionsMarkup('course_ids', typeof seed.courseListId === 'string' ? seed.courseListId : '', 'Use single course ID') +
+          '</select></label>' +
           '<label>Min completion % (optional)<input type="number" data-field="minCompletionPercent" min="0" max="100" step="0.01" /></label>' +
           '<label class="ct-admin__checkbox-row ct-checkbox-row"><input type="checkbox" data-field="requireCompleted" checked />Require completed</label>';
 
         setFieldOnCard(card, 'courseId', typeof seed.courseId === 'string' ? seed.courseId : '');
+        setFieldOnCard(
+          card,
+          'courseListId',
+          typeof seed.courseListId === 'string' ? seed.courseListId : '',
+        );
         setFieldOnCard(
           card,
           'minCompletionPercent',
@@ -1707,12 +2309,16 @@ export const INSTITUTION_ADMIN_JS = `
           'requireCompleted',
           seed.requireCompleted === undefined ? true : Boolean(seed.requireCompleted),
         );
+        bindExclusiveFieldPair(card, 'courseId', 'courseListId');
         return;
       }
 
       if (conditionType === 'grade_threshold') {
         fieldsContainer.innerHTML =
           '<label>Course ID<input type="text" data-field="courseId" placeholder="CS101" /></label>' +
+          '<label>Reusable course list<select data-field="courseListId">' +
+          listOptionsMarkup('course_ids', typeof seed.courseListId === 'string' ? seed.courseListId : '', 'Use single course ID') +
+          '</select></label>' +
           '<label>Score field<select data-field="scoreField"><option value="final_score">Final score</option><option value="current_score">Current score</option></select></label>' +
           '<label>Min score (optional)<input type="number" data-field="minScore" min="0" max="100" step="0.01" /></label>' +
           '<label>Max score (optional)<input type="number" data-field="maxScore" min="0" max="100" step="0.01" /></label>';
@@ -1720,17 +2326,26 @@ export const INSTITUTION_ADMIN_JS = `
         setFieldOnCard(card, 'courseId', typeof seed.courseId === 'string' ? seed.courseId : '');
         setFieldOnCard(
           card,
+          'courseListId',
+          typeof seed.courseListId === 'string' ? seed.courseListId : '',
+        );
+        setFieldOnCard(
+          card,
           'scoreField',
           seed.scoreField === 'current_score' ? 'current_score' : 'final_score',
         );
         setFieldOnCard(card, 'minScore', typeof seed.minScore === 'number' ? String(seed.minScore) : '');
         setFieldOnCard(card, 'maxScore', typeof seed.maxScore === 'number' ? String(seed.maxScore) : '');
+        bindExclusiveFieldPair(card, 'courseId', 'courseListId');
         return;
       }
 
       if (conditionType === 'program_completion') {
         fieldsContainer.innerHTML =
           '<label>Course IDs (comma separated)<input type="text" data-field="courseIds" placeholder="CS101,CS102,CS103" /></label>' +
+          '<label>Reusable course list<select data-field="courseListId">' +
+          listOptionsMarkup('course_ids', typeof seed.courseListId === 'string' ? seed.courseListId : '', 'Use explicit course IDs') +
+          '</select></label>' +
           '<label>Minimum completed (optional)<input type="number" data-field="minimumCompleted" min="1" max="200" step="1" /></label>';
 
         setFieldOnCard(
@@ -1740,9 +2355,15 @@ export const INSTITUTION_ADMIN_JS = `
         );
         setFieldOnCard(
           card,
+          'courseListId',
+          typeof seed.courseListId === 'string' ? seed.courseListId : '',
+        );
+        setFieldOnCard(
+          card,
           'minimumCompleted',
           typeof seed.minimumCompleted === 'number' ? String(seed.minimumCompleted) : '',
         );
+        bindExclusiveFieldPair(card, 'courseIds', 'courseListId');
         return;
       }
 
@@ -1785,12 +2406,25 @@ export const INSTITUTION_ADMIN_JS = `
       }
 
       fieldsContainer.innerHTML =
-        '<label>Required badge template ID<input type="text" data-field="badgeTemplateId" placeholder="badge_template_foundations" /></label>';
+        '<label>Required badge template ID<input type="text" data-field="badgeTemplateId" placeholder="badge_template_foundations" /></label>' +
+        '<label>Reusable badge-template list<select data-field="badgeTemplateListId">' +
+        listOptionsMarkup(
+          'badge_template_ids',
+          typeof seed.badgeTemplateListId === 'string' ? seed.badgeTemplateListId : '',
+          'Use single badge template',
+        ) +
+        '</select></label>';
       setFieldOnCard(
         card,
         'badgeTemplateId',
         typeof seed.badgeTemplateId === 'string' ? seed.badgeTemplateId : '',
       );
+      setFieldOnCard(
+        card,
+        'badgeTemplateListId',
+        typeof seed.badgeTemplateListId === 'string' ? seed.badgeTemplateListId : '',
+      );
+      bindExclusiveFieldPair(card, 'badgeTemplateId', 'badgeTemplateListId');
     };
 
     const readConditionFromCard = (card, strict) => {
@@ -1806,16 +2440,25 @@ export const INSTITUTION_ADMIN_JS = `
 
       if (conditionType === 'course_completion') {
         const courseId = readFieldFromCard(card, 'courseId');
+        const courseListId = readFieldFromCard(card, 'courseListId');
         const minCompletionPercent = parseNumberInput(readFieldFromCard(card, 'minCompletionPercent'));
 
-        if (strict && courseId.length === 0) {
-          throw new Error('Course completion condition requires course ID.');
+        if (strict && courseId.length === 0 && courseListId.length === 0) {
+          throw new Error('Course completion condition requires course ID or reusable course list.');
+        }
+
+        if (strict && courseId.length > 0 && courseListId.length > 0) {
+          throw new Error('Course completion condition can use course ID or reusable course list, not both.');
         }
 
         condition = {
           type: 'course_completion',
-          courseId: courseId.length > 0 ? courseId : 'COURSE_ID',
           requireCompleted: readCheckboxFromCard(card, 'requireCompleted'),
+          ...(courseListId.length > 0
+            ? { courseListId }
+            : {
+                courseId: courseId.length > 0 ? courseId : 'COURSE_ID',
+              }),
         };
 
         if (minCompletionPercent !== null) {
@@ -1823,11 +2466,16 @@ export const INSTITUTION_ADMIN_JS = `
         }
       } else if (conditionType === 'grade_threshold') {
         const courseId = readFieldFromCard(card, 'courseId');
+        const courseListId = readFieldFromCard(card, 'courseListId');
         const minScore = parseNumberInput(readFieldFromCard(card, 'minScore'));
         const maxScore = parseNumberInput(readFieldFromCard(card, 'maxScore'));
 
-        if (strict && courseId.length === 0) {
-          throw new Error('Grade threshold condition requires course ID.');
+        if (strict && courseId.length === 0 && courseListId.length === 0) {
+          throw new Error('Grade threshold condition requires course ID or reusable course list.');
+        }
+
+        if (strict && courseId.length > 0 && courseListId.length > 0) {
+          throw new Error('Grade threshold condition can use course ID or reusable course list, not both.');
         }
 
         if (strict && minScore === null && maxScore === null) {
@@ -1836,8 +2484,12 @@ export const INSTITUTION_ADMIN_JS = `
 
         condition = {
           type: 'grade_threshold',
-          courseId: courseId.length > 0 ? courseId : 'COURSE_ID',
           scoreField: readFieldFromCard(card, 'scoreField') === 'current_score' ? 'current_score' : 'final_score',
+          ...(courseListId.length > 0
+            ? { courseListId }
+            : {
+                courseId: courseId.length > 0 ? courseId : 'COURSE_ID',
+              }),
         };
 
         if (minScore !== null) {
@@ -1849,15 +2501,24 @@ export const INSTITUTION_ADMIN_JS = `
         }
       } else if (conditionType === 'program_completion') {
         const courseIds = parseCsv(readFieldFromCard(card, 'courseIds'));
+        const courseListId = readFieldFromCard(card, 'courseListId');
         const minimumCompleted = parseNumberInput(readFieldFromCard(card, 'minimumCompleted'));
 
-        if (strict && courseIds.length === 0) {
-          throw new Error('Program completion requires at least one course ID.');
+        if (strict && courseIds.length === 0 && courseListId.length === 0) {
+          throw new Error('Program completion requires course IDs or reusable course list.');
+        }
+
+        if (strict && courseIds.length > 0 && courseListId.length > 0) {
+          throw new Error('Program completion can use explicit course IDs or reusable course list, not both.');
         }
 
         condition = {
           type: 'program_completion',
-          courseIds: courseIds.length > 0 ? courseIds : ['COURSE_ID'],
+          ...(courseListId.length > 0
+            ? { courseListId }
+            : {
+                courseIds: courseIds.length > 0 ? courseIds : ['COURSE_ID'],
+              }),
         };
 
         if (minimumCompleted !== null) {
@@ -1916,14 +2577,24 @@ export const INSTITUTION_ADMIN_JS = `
         }
       } else {
         const badgeTemplateId = readFieldFromCard(card, 'badgeTemplateId');
+        const badgeTemplateListId = readFieldFromCard(card, 'badgeTemplateListId');
 
-        if (strict && badgeTemplateId.length === 0) {
-          throw new Error('Prerequisite badge condition requires badge template ID.');
+        if (strict && badgeTemplateId.length === 0 && badgeTemplateListId.length === 0) {
+          throw new Error('Prerequisite badge condition requires badge template ID or reusable badge list.');
+        }
+
+        if (strict && badgeTemplateId.length > 0 && badgeTemplateListId.length > 0) {
+          throw new Error('Prerequisite badge condition can use badge template ID or reusable badge list, not both.');
         }
 
         condition = {
           type: 'prerequisite_badge',
-          badgeTemplateId: badgeTemplateId.length > 0 ? badgeTemplateId : 'badge_template_required',
+          ...(badgeTemplateListId.length > 0
+            ? { badgeTemplateListId }
+            : {
+                badgeTemplateId:
+                  badgeTemplateId.length > 0 ? badgeTemplateId : 'badge_template_required',
+              }),
         };
       }
 
@@ -1940,9 +2611,17 @@ export const INSTITUTION_ADMIN_JS = `
       const conditions = cards.map((card) => readConditionFromCard(card, strict));
       const rootLogic = ruleBuilderRootLogic.value === 'any' ? 'any' : 'all';
 
-      return {
+      const definition = {
         conditions: rootLogic === 'any' ? { any: conditions } : { all: conditions },
       };
+
+      if (getCheckboxFieldValue('reviewOnMissingFacts')) {
+        definition.options = {
+          reviewOnMissingFacts: true,
+        };
+      }
+
+      return definition;
     };
 
     let ruleBuilderLastTestSummary = 'Not run';
@@ -2016,10 +2695,17 @@ export const INSTITUTION_ADMIN_JS = `
         const node = mappedNodes[index];
         const matched = node && typeof node.matched === 'boolean' ? node.matched : null;
         const detail = node && typeof node.detail === 'string' ? node.detail : 'No evaluation detail.';
+        const resultKind =
+          node && typeof node.resultKind === 'string' ? node.resultKind : null;
 
         if (matched === true) {
           matchedCount += 1;
           setConditionResultState(card, 'pass', 'Pass: ' + detail);
+          return;
+        }
+
+        if (resultKind === 'missing_data') {
+          setConditionResultState(card, 'review', 'Missing data: ' + detail);
           return;
         }
 
@@ -2101,7 +2787,8 @@ export const INSTITUTION_ADMIN_JS = `
         getTextFieldValue('lmsProviderKind').length > 0;
       const testReady =
         ruleBuilderLastTestSummary.startsWith('Matched') ||
-        ruleBuilderLastTestSummary.startsWith('No match');
+        ruleBuilderLastTestSummary.startsWith('No match') ||
+        ruleBuilderLastTestSummary.startsWith('Review required');
       let reviewReady = getTextFieldValue('issuanceTiming').length > 0;
 
       try {
@@ -2188,6 +2875,8 @@ export const INSTITUTION_ADMIN_JS = `
 
       if (ruleBuilderLastTestSummary.startsWith('Matched')) {
         lastTestTone = 'success';
+      } else if (ruleBuilderLastTestSummary.startsWith('Review required')) {
+        lastTestTone = 'warning';
       } else if (ruleBuilderLastTestSummary.startsWith('No match')) {
         lastTestTone = 'warning';
       } else if (
@@ -2386,6 +3075,30 @@ export const INSTITUTION_ADMIN_JS = `
       syncDefinitionJsonFromBuilder();
     };
 
+    const refreshConditionCardValueListOptions = () => {
+      getConditionCards().forEach((card) => {
+        try {
+          const currentCondition = readConditionFromCard(card, false);
+          const normalizedCondition = normalizeLeafConditionForBuilder(currentCondition);
+
+          if (normalizedCondition === null) {
+            return;
+          }
+
+          const typeSelect = card.querySelector('.ct-admin__condition-type');
+
+          if (typeSelect instanceof HTMLSelectElement) {
+            typeSelect.value = normalizedCondition.type;
+          }
+
+          setCheckboxOnCard(card, 'negate', Boolean(normalizedCondition.negate));
+          renderConditionFields(card, normalizedCondition);
+        } catch {
+          // Ignore partially edited cards while refreshing reusable-list options.
+        }
+      });
+    };
+
     const normalizeLeafConditionForBuilder = (condition) => {
       if (condition === null || typeof condition !== 'object' || Array.isArray(condition)) {
         return null;
@@ -2417,6 +3130,16 @@ export const INSTITUTION_ADMIN_JS = `
     const applyDefinitionToBuilder = (definition, sourceLabel) => {
       if (definition === null || typeof definition !== 'object' || !('conditions' in definition)) {
         throw new Error('Rule definition must include a conditions object.');
+      }
+
+      const reviewOnMissingFacts =
+        definition.options &&
+        typeof definition.options === 'object' &&
+        definition.options.reviewOnMissingFacts === true;
+      const reviewOnMissingFactsField = getRuleCreateField('reviewOnMissingFacts');
+
+      if (reviewOnMissingFactsField instanceof HTMLInputElement) {
+        reviewOnMissingFactsField.checked = reviewOnMissingFacts;
       }
 
       const rootConditions = definition.conditions;
@@ -2657,6 +3380,14 @@ export const INSTITUTION_ADMIN_JS = `
     ruleCreateForm.addEventListener('change', () => {
       syncRuleBuilderSummary();
     });
+
+    const reviewOnMissingFactsField = getRuleCreateField('reviewOnMissingFacts');
+
+    if (reviewOnMissingFactsField instanceof HTMLInputElement) {
+      reviewOnMissingFactsField.addEventListener('change', () => {
+        syncDefinitionJsonFromBuilder();
+      });
+    }
 
     if (ruleBuilderAddConditionButton instanceof HTMLButtonElement) {
       ruleBuilderAddConditionButton.addEventListener('click', () => {
@@ -3089,6 +3820,21 @@ export const INSTITUTION_ADMIN_JS = `
 
           const matched =
             payload && payload.evaluation && payload.evaluation.matched === true;
+          let outcome = 'no_match';
+
+          if (payload && typeof payload.outcome === 'string') {
+            outcome = payload.outcome;
+          } else if (matched) {
+            outcome = 'matched';
+          }
+          const evaluationSummary =
+            payload && payload.evaluationSummary && typeof payload.evaluationSummary === 'object'
+              ? payload.evaluationSummary
+              : null;
+          const missingDataCount =
+            evaluationSummary && typeof evaluationSummary.missingDataCount === 'number'
+              ? evaluationSummary.missingDataCount
+              : 0;
           const conditionSummary = applyConditionEvaluationResults(
             payload && payload.evaluation ? payload.evaluation : null,
           );
@@ -3100,26 +3846,50 @@ export const INSTITUTION_ADMIN_JS = `
                 '/' +
                 String(conditionSummary.total) +
                 '.';
+          let outcomeLabel = 'no_match';
+
+          if (outcome === 'review_required') {
+            outcomeLabel = 'review_required';
+          } else if (outcome === 'matched') {
+            outcomeLabel = 'matched';
+          }
           setStatus(
             ruleCreateStatus,
-            'Test evaluation complete. matched=' +
-              String(Boolean(matched)) +
+            'Test evaluation complete. outcome=' +
+              outcomeLabel +
               '.' +
+              (missingDataCount > 0
+                ? ' Missing data=' + String(missingDataCount) + '.'
+                : '') +
               conditionSummaryText,
             false,
-            matched ? 'success' : 'warning',
+            outcome === 'matched' ? 'success' : 'warning',
           );
-          ruleBuilderLastTestSummary =
-            (matched ? 'Matched' : 'No match') +
-            ' (' +
-            String(conditionSummary.matched) +
-            '/' +
-            String(conditionSummary.total) +
-            ' conditions)';
+          if (outcome === 'review_required') {
+            ruleBuilderLastTestSummary =
+              'Review required (' +
+              String(missingDataCount) +
+              ' missing, ' +
+              String(conditionSummary.matched) +
+              '/' +
+              String(conditionSummary.total) +
+              ' matched)';
+          } else {
+            ruleBuilderLastTestSummary =
+              (matched ? 'Matched' : 'No match') +
+              ' (' +
+              String(conditionSummary.matched) +
+              '/' +
+              String(conditionSummary.total) +
+              ' conditions)';
+          }
           syncRuleBuilderSummary(
-            'Test evaluation complete. matched=' +
-              String(Boolean(matched)) +
+            'Test evaluation complete. outcome=' +
+              outcomeLabel +
               '.' +
+              (missingDataCount > 0
+                ? ' Missing data=' + String(missingDataCount) + '.'
+                : '') +
               conditionSummaryText,
           );
           setCodeOutput(ruleBuilderTestOutput, JSON.stringify(payload, null, 2));
@@ -3127,6 +3897,101 @@ export const INSTITUTION_ADMIN_JS = `
           setStatus(ruleCreateStatus, 'Unable to run rule test from this browser session.', true);
           ruleBuilderLastTestSummary = 'Failed';
           syncRuleBuilderSummary('Unable to run rule test from this browser session.');
+        }
+      });
+    }
+
+    if (
+      ruleBuilderSimulateButton instanceof HTMLButtonElement &&
+      ruleBuilderSimulateLimit instanceof HTMLInputElement &&
+      ruleBuilderSimulateStatus instanceof HTMLElement
+    ) {
+      ruleBuilderSimulateButton.addEventListener('click', async () => {
+        setStatus(ruleBuilderSimulateStatus, 'Running historical simulation...', false);
+        setCodeOutput(ruleBuilderSimulateOutput, '');
+
+        let definition;
+
+        try {
+          definition = parseDefinitionJson();
+        } catch (error) {
+          setStatus(
+            ruleBuilderSimulateStatus,
+            error instanceof Error ? error.message : 'Rule definition is invalid.',
+            true,
+          );
+          return;
+        }
+
+        const badgeTemplateId = getTextFieldValue('badgeTemplateId');
+        const parsedSampleLimit = Number(ruleBuilderSimulateLimit.value.trim());
+        const sampleLimit =
+          Number.isFinite(parsedSampleLimit) && parsedSampleLimit >= 1 && parsedSampleLimit <= 100
+            ? Math.trunc(parsedSampleLimit)
+            : 25;
+
+        if (badgeTemplateId.length === 0) {
+          setStatus(ruleBuilderSimulateStatus, 'Badge template is required for simulation.', true);
+          return;
+        }
+
+        try {
+          const response = await fetch(badgeRulePreviewSimulationApiPath, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              definition,
+              badgeTemplateId,
+              sampleLimit,
+            }),
+          });
+          const payload = await parseJsonBody(response);
+
+          if (!response.ok) {
+            setStatus(ruleBuilderSimulateStatus, errorDetailFromPayload(payload), true);
+            return;
+          }
+
+          const sampleCount =
+            payload && typeof payload.sampleCount === 'number' ? payload.sampleCount : 0;
+          const summary =
+            payload && payload.summary && typeof payload.summary === 'object'
+              ? payload.summary
+              : null;
+          const changedCount =
+            summary && typeof summary.changedCount === 'number' ? summary.changedCount : 0;
+          const reviewRequiredCount =
+            summary && typeof summary.reviewRequiredCount === 'number'
+              ? summary.reviewRequiredCount
+              : 0;
+          const matchedCount =
+            summary && typeof summary.matchedCount === 'number' ? summary.matchedCount : 0;
+
+          setStatus(
+            ruleBuilderSimulateStatus,
+            sampleCount === 0
+              ? 'No historical evaluations are available for this badge template yet.'
+              : 'Simulation complete. Samples=' +
+                  String(sampleCount) +
+                  ', matched=' +
+                  String(matchedCount) +
+                  ', review_required=' +
+                  String(reviewRequiredCount) +
+                  ', changed=' +
+                  String(changedCount) +
+                  '.',
+            false,
+            sampleCount === 0 ? 'warning' : 'success',
+          );
+          setCodeOutput(ruleBuilderSimulateOutput, JSON.stringify(payload, null, 2));
+        } catch {
+          setStatus(
+            ruleBuilderSimulateStatus,
+            'Unable to run historical simulation from this browser session.',
+            true,
+          );
         }
       });
     }
@@ -3245,6 +4110,11 @@ export const INSTITUTION_ADMIN_JS = `
 
     setBuilderStepState(0);
     applyTemplatePreset();
+    void loadRuleValueLists(null, {
+      quietSuccess: true,
+    }).then(() => {
+      refreshConditionCardValueListOptions();
+    });
     syncRuleBuilderSummary();
   }
 

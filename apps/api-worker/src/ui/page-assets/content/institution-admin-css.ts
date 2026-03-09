@@ -354,6 +354,16 @@ export const INSTITUTION_ADMIN_CSS = `
   grid-template-columns: minmax(0, 1.45fr) minmax(15rem, 0.95fr);
   align-items: start;
 }
+.ct-admin__builder-simulation {
+  padding: 0.82rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-border-soft);
+  background: linear-gradient(
+    180deg,
+    var(--ct-theme-surface-card-strong),
+    var(--ct-theme-surface-soft)
+  );
+}
 .ct-admin__builder-test-rail,
 .ct-admin__builder-checklist-panel,
 .ct-admin__builder-rail-card {
@@ -418,6 +428,14 @@ export const INSTITUTION_ADMIN_CSS = `
   background: linear-gradient(
     160deg,
     var(--ct-theme-surface-danger),
+    var(--ct-theme-surface-card-strong)
+  );
+}
+.ct-admin__condition-card--result-review {
+  border-right: 3px solid var(--ct-theme-state-warning);
+  background: linear-gradient(
+    160deg,
+    var(--ct-theme-surface-warning),
     var(--ct-theme-surface-card-strong)
   );
 }
@@ -491,6 +509,9 @@ export const INSTITUTION_ADMIN_CSS = `
 }
 .ct-admin__condition-result[data-state='fail'] {
   color: var(--ct-theme-state-danger);
+}
+.ct-admin__condition-result[data-state='review'] {
+  color: var(--ct-theme-state-warning);
 }
 .ct-admin__checkbox-row {
   font-size: 0.92rem;

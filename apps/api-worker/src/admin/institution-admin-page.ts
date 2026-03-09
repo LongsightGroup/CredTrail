@@ -231,6 +231,9 @@ export const institutionAdminDashboardPage = (input: {
   const createOrgUnitPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/org-units`;
   const badgeTemplateApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-templates`;
   const badgeRuleApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-rules`;
+  const badgeRuleValueListApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-rule-value-lists`;
+  const badgeRulePreviewSimulationApiPath = `${badgeRuleApiPath}/preview-simulate`;
+  const badgeRuleReviewQueueApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/badge-rules/review-queue`;
   const assertionsApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/assertions`;
   const tenantUsersApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/users`;
   const adminAuditLogPath = `/admin/audit-logs?tenantId=${encodeURIComponent(input.tenant.id)}`;
@@ -303,6 +306,9 @@ export const institutionAdminDashboardPage = (input: {
     createOrgUnitPath,
     badgeTemplateApiPathPrefix,
     badgeRuleApiPath,
+    badgeRuleValueListApiPath,
+    badgeRulePreviewSimulationApiPath,
+    badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
   });
@@ -589,6 +595,51 @@ export const institutionAdminDashboardPage = (input: {
               evaluation.
             </p>
           </article>
+          <article id="rule-value-lists-panel" class="ct-admin__panel ct-stack">
+            <h2>Rule Value Lists</h2>
+            <p>Create reusable course and badge-template lists so authors stop copying long IDs into every rule.</p>
+            <form id="rule-value-list-form" class="ct-admin__form ct-stack">
+              <label>
+                Label
+                <input name="label" type="text" required placeholder="Core CS sequence" />
+              </label>
+              <label>
+                List kind
+                <select name="kind" required>
+                  <option value="course_ids">Course IDs</option>
+                  <option value="badge_template_ids">Badge template IDs</option>
+                </select>
+              </label>
+              <label>
+                Values (comma separated)
+                <textarea
+                  name="values"
+                  rows="4"
+                  required
+                  spellcheck="false"
+                  placeholder="CS101, CS102, CS103"
+                ></textarea>
+              </label>
+              <button type="submit">Create value list</button>
+            </form>
+            <p id="rule-value-list-status" class="ct-admin__status"></p>
+            <div class="ct-admin__table-wrap">
+              <table class="ct-admin__table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Kind</th>
+                    <th>Values</th>
+                  </tr>
+                </thead>
+                <tbody id="rule-value-list-body">
+                  <tr>
+                    <td colspan="3" class="ct-admin__empty">No rule value lists loaded yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
           <article class="ct-admin__panel ct-stack">
             <h2>Evaluate Rule</h2>
             <p>Run rule evaluation (dry run by default) and optionally issue now.</p>
@@ -694,6 +745,38 @@ export const institutionAdminDashboardPage = (input: {
           </article>
         </div>
         <div class="ct-admin__grid ct-stack">
+          <article id="rule-review-queue-panel" class="ct-admin__panel ct-admin__panel--table ct-stack">
+            <h2>Rule Review Queue</h2>
+            <p>Missing-data evaluations that require a human issue-or-dismiss decision before a badge is created.</p>
+            <div class="ct-admin__actions">
+              <button
+                id="rule-review-queue-refresh"
+                type="button"
+                class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary"
+              >
+                Refresh review queue
+              </button>
+            </div>
+            <p id="rule-review-queue-status" class="ct-admin__status">No review queue entries loaded yet.</p>
+            <div class="ct-admin__table-wrap">
+              <table class="ct-admin__table">
+                <thead>
+                  <tr>
+                    <th>Evaluated</th>
+                    <th>Recipient</th>
+                    <th>Rule</th>
+                    <th>Summary</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rule-review-queue-body">
+                  <tr>
+                    <td colspan="5" class="ct-admin__empty">No review queue entries loaded yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
           <article id="issued-badges-panel" class="ct-admin__panel ct-admin__panel--table ct-stack">
             <h2>Issued Badges Ledger</h2>
             <p>Tenant-wide assertion log with direct audit and revocation actions.</p>

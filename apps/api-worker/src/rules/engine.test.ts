@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   evaluateBadgeIssuanceRuleDefinition,
   extractBadgeIssuanceRuleRequirements,
+  summarizeBadgeIssuanceRuleEvaluation,
 } from './engine';
 import { parseCreateBadgeIssuanceRuleRequest } from '@credtrail/validation';
 
@@ -122,5 +123,28 @@ describe('badge issuance rule engine', () => {
 
     expect(result.matched).toBe(false);
     expect(JSON.stringify(result.tree)).toContain('Prerequisite badge badge_template_foundations is missing');
+  });
+
+  it('summarizes missing-data evaluations for review workflows', () => {
+    const result = evaluateBadgeIssuanceRuleDefinition(baseDefinition, {
+      learnerId: 'learner_123',
+      nowIso: '2026-02-17T00:00:00.000Z',
+      grades: [],
+      completions: [
+        {
+          courseId: 'course_101',
+          learnerId: 'learner_123',
+          completed: true,
+          completionPercent: 100,
+        },
+      ],
+      submissions: [],
+      earnedBadgeTemplateIds: ['badge_template_foundations'],
+    });
+    const summary = summarizeBadgeIssuanceRuleEvaluation(result);
+
+    expect(result.matched).toBe(false);
+    expect(summary.missingDataCount).toBeGreaterThan(0);
+    expect(summary.failedConditionCount).toBe(0);
   });
 });

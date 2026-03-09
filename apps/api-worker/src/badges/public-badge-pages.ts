@@ -285,8 +285,10 @@ export const createPublicBadgePageRenderers = (
             : condition.minScore !== undefined
               ? `at least ${String(condition.minScore)}`
               : `at most ${String(condition.maxScore)}`;
+        const courseLabel =
+          condition.courseId ?? (condition.courseListId === undefined ? 'the selected course' : `course list ${condition.courseListId}`);
         return `<li>For course ${escapeHtml(
-          condition.courseId,
+          courseLabel,
         )}, ${escapeHtml(scoreField)} must be ${escapeHtml(range)}.</li>`;
       }
       case 'course_completion': {
@@ -296,17 +298,24 @@ export const createPublicBadgePageRenderers = (
             : ` and reach at least ${String(condition.minCompletionPercent)}% completion`;
         const completionRequirement =
           condition.requireCompleted === false ? 'Completion does not need to be marked complete' : 'The course must be marked complete';
-        return `<li>For course ${escapeHtml(condition.courseId)}, ${escapeHtml(
+        const courseLabel =
+          condition.courseId ?? (condition.courseListId === undefined ? 'the selected course' : `course list ${condition.courseListId}`);
+        return `<li>For course ${escapeHtml(courseLabel)}, ${escapeHtml(
           completionRequirement,
         )}${escapeHtml(completionTarget)}.</li>`;
       }
       case 'program_completion': {
+        const programLabel =
+          condition.courseIds === undefined
+            ? `complete the courses in list ${condition.courseListId ?? 'selected'}`
+            : condition.minimumCompleted === undefined
+              ? `complete all ${String(condition.courseIds.length)} listed courses`
+              : `complete ${String(condition.minimumCompleted)} of ${String(condition.courseIds.length)} listed courses`;
+        const courseList = condition.courseIds === undefined ? condition.courseListId ?? 'configured list' : condition.courseIds.join(', ');
         const minimumCompleted =
-          condition.minimumCompleted === undefined
-            ? `complete all ${String(condition.courseIds.length)} listed courses`
-            : `complete ${String(condition.minimumCompleted)} of ${String(condition.courseIds.length)} listed courses`;
+          programLabel;
         return `<li>Program requirement: ${escapeHtml(minimumCompleted)} (${escapeHtml(
-          condition.courseIds.join(', '),
+          courseList,
         )}).</li>`;
       }
       case 'assignment_submission': {
@@ -337,7 +346,7 @@ export const createPublicBadgePageRenderers = (
       }
       case 'prerequisite_badge':
         return `<li>Requires earning this badge first: ${escapeHtml(
-          condition.badgeTemplateId,
+          condition.badgeTemplateId ?? `badge template list ${condition.badgeTemplateListId ?? 'selected'}`,
         )}.</li>`;
     }
   };

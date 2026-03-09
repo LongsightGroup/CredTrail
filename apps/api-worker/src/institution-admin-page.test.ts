@@ -322,6 +322,9 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('/v1/tenants/tenant_123/badge-templates');
     expect(body).toContain('/v1/tenants/tenant_123/users');
     expect(body).toContain('/v1/tenants/tenant_123/badge-rules');
+    expect(body).toContain('/v1/tenants/tenant_123/badge-rule-value-lists');
+    expect(body).toContain('/v1/tenants/tenant_123/badge-rules/preview-simulate');
+    expect(body).toContain('/v1/tenants/tenant_123/badge-rules/review-queue');
     expect(body).toContain('id="badge-template-image-upload-form"');
     expect(body).toContain('id="badge-template-image-upload-status"');
     expect(body).toContain('name="file"');
@@ -344,6 +347,10 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('id="assertion-lifecycle-transition-form"');
     expect(body).toContain('id="rule-governance-form"');
     expect(body).toContain('id="rule-builder-panel"');
+    expect(body).toContain('id="rule-value-list-form"');
+    expect(body).toContain('id="rule-value-list-body"');
+    expect(body).toContain('id="rule-review-queue-refresh"');
+    expect(body).toContain('id="rule-review-queue-body"');
     expect(body).toContain('Open rule builder');
     expect(body).toContain('id="assertion-lifecycle-output"');
     expect(body).toContain('id="rule-governance-output"');
@@ -419,6 +426,10 @@ describe('GET /tenants/:tenantId/admin/rules/new', () => {
     expect(body).toContain('id="rule-builder-test-preset"');
     expect(body).toContain('id="rule-builder-apply-test-preset"');
     expect(body).toContain('id="rule-builder-test-output"');
+    expect(body).toContain('id="rule-builder-value-list-body"');
+    expect(body).toContain('name="reviewOnMissingFacts"');
+    expect(body).toContain('id="rule-builder-simulate"');
+    expect(body).toContain('id="rule-builder-simulate-output"');
     expect(body).toContain('Build in four passes');
     expect(body).toContain('Reuse proven patterns');
     expect(body).toContain('Draft summary');
