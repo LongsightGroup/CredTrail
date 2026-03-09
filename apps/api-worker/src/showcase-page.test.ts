@@ -129,6 +129,8 @@ describe('GET /showcase/:tenantId', () => {
     expect(body).toContain('Sakai 1000+ Commits Contributor');
     expect(body).toContain('Sakai Distinguished Contributor');
     expect(body).toContain('github.com/ottenhoff.png');
+    expect(body).toContain('Show public URL');
+    expect(body).not.toContain('Show raw badge URL');
     expect(body).toContain('.badge-wall__hero-link:hover');
     expect(body).toContain('.badge-wall__button--primary:hover');
     expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {

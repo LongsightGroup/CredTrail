@@ -1382,11 +1382,13 @@ export const createPublicBadgePageRenderers = (
   
               return `<li class="badge-wall__item">
                 <div class="badge-wall__summary">
-                  ${badgeImageMarkup}
-                  <div class="badge-wall__recipient">
-                    ${avatarMarkup}
+                  <div class="badge-wall__identity">
+                    ${badgeImageMarkup}
                     <div class="badge-wall__stack">
-                      <p class="badge-wall__name">${escapeHtml(recipientLabel)}</p>
+                      <div class="badge-wall__recipient">
+                        ${avatarMarkup}
+                        <p class="badge-wall__name">${escapeHtml(recipientLabel)}</p>
+                      </div>
                       <p class="badge-wall__badge-title">${escapeHtml(entry.badgeTitle)}</p>
                       <p class="badge-wall__meta badge-wall__meta--${escapeHtml(statusClass)}">${escapeHtml(
                         statusLabel,
@@ -1395,18 +1397,18 @@ export const createPublicBadgePageRenderers = (
                       ${reasonLine}
                     </div>
                   </div>
+                  <div class="badge-wall__actions">
+                    <a class="badge-wall__button badge-wall__button--primary" href="${escapeHtml(badgePath)}">View badge</a>
+                    <button class="badge-wall__button" type="button" data-copy-value="${escapeHtml(
+                      badgeUrl,
+                    )}">Copy link</button>
+                    <details class="badge-wall__url-details">
+                      <summary>Show public URL</summary>
+                      <p class="badge-wall__url" title="${escapeHtml(badgeUrl)}">${escapeHtml(badgeUrl)}</p>
+                    </details>
+                    <p class="badge-wall__copy-status" aria-live="polite"></p>
+                  </div>
                 </div>
-                <div class="badge-wall__actions">
-                  <a class="badge-wall__button badge-wall__button--primary" href="${escapeHtml(badgePath)}">View badge</a>
-                  <button class="badge-wall__button" type="button" data-copy-value="${escapeHtml(
-                    badgeUrl,
-                  )}">Copy link</button>
-                  <p class="badge-wall__copy-status" aria-live="polite"></p>
-                </div>
-                <details class="badge-wall__url-details">
-                  <summary>Show raw badge URL</summary>
-                  <p class="badge-wall__url" title="${escapeHtml(badgeUrl)}">${escapeHtml(badgeUrl)}</p>
-                </details>
               </li>`;
             })
             .join('');
@@ -1485,49 +1487,60 @@ export const createPublicBadgePageRenderers = (
           margin: 0;
           padding: 0;
           list-style: none;
-          display: grid;
-          gap: 0.75rem;
-        }
-  
-        .badge-wall__item {
           border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 0.9rem;
-          background: linear-gradient(
-            165deg,
-            var(--ct-theme-surface-card-strong),
+          border-radius: 1rem;
+          background: color-mix(
+            in srgb,
+            var(--ct-theme-surface-card-strong) 92%,
             var(--ct-theme-surface-soft)
           );
           box-shadow: var(--ct-theme-shadow-soft);
-          padding: 0.78rem;
-          display: grid;
-          gap: 0.5rem;
+          overflow: hidden;
+        }
+  
+        .badge-wall__item {
+          padding: 0.95rem 1rem;
+          background: transparent;
           animation: badge-wall-item-enter 420ms ease-out both;
+        }
+
+        .badge-wall__item + .badge-wall__item {
+          border-top: 1px solid var(--ct-theme-border-soft);
         }
 
         .badge-wall__item:nth-child(2n) {
           animation-delay: 60ms;
         }
+
+        .badge-wall__identity {
+          display: flex;
+          align-items: center;
+          gap: 0.8rem;
+          min-width: 0;
+        }
   
         .badge-wall__recipient {
           display: flex;
-          gap: 0.75rem;
+          gap: 0.55rem;
           align-items: center;
+          min-width: 0;
         }
 
         .badge-wall__summary {
-          display: grid;
-          gap: 0.62rem;
-          grid-template-columns: auto 1fr;
+          display: flex;
+          gap: 1rem;
           align-items: center;
+          justify-content: space-between;
         }
 
         .badge-wall__badge-image {
-          width: 3rem;
-          height: 3rem;
-          border-radius: 0.52rem;
+          width: 2.9rem;
+          height: 2.9rem;
+          border-radius: 0.65rem;
           border: 1px solid var(--ct-theme-border-default);
           object-fit: cover;
           background: var(--ct-theme-surface-info);
+          flex: 0 0 auto;
         }
 
         .badge-wall__badge-image--placeholder {
@@ -1544,33 +1557,38 @@ export const createPublicBadgePageRenderers = (
         }
   
         .badge-wall__avatar {
-          width: 2.25rem;
-          height: 2.25rem;
+          width: 1.75rem;
+          height: 1.75rem;
           border-radius: 999px;
-          border: 2px solid var(--ct-theme-border-soft);
+          border: 1px solid var(--ct-theme-border-soft);
           object-fit: cover;
           background: var(--ct-theme-surface-info);
+          flex: 0 0 auto;
         }
   
         .badge-wall__stack {
           display: grid;
-          gap: 0.2rem;
+          gap: 0.14rem;
+          min-width: 0;
         }
   
         .badge-wall__name {
           margin: 0;
           font-weight: 700;
+          font-size: 1rem;
+          min-width: 0;
         }
   
         .badge-wall__badge-title {
           margin: 0;
           color: var(--ct-theme-text-body);
+          font-size: 0.96rem;
         }
   
         .badge-wall__meta {
           margin: 0;
           color: var(--ct-theme-text-muted);
-          font-size: 0.88rem;
+          font-size: 0.84rem;
         }
 
         .badge-wall__meta--verified {
@@ -1608,24 +1626,26 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.42rem;
+          display: grid;
+          grid-template-columns: repeat(2, auto);
+          gap: 0.35rem 0.5rem;
           align-items: center;
+          justify-items: end;
+          flex: 0 0 auto;
         }
 
         .badge-wall__button {
           display: inline-flex;
-          flex: 0 0 8.75rem;
-          inline-size: 8.75rem;
+          flex: 0 0 auto;
+          inline-size: 7.75rem;
           align-items: center;
           justify-content: center;
           appearance: none;
           border: 1px solid var(--ct-theme-border-default);
           border-radius: 0.62rem;
-          min-height: 2.75rem;
-          height: 2.75rem;
-          padding: 0 0.72rem;
+          min-height: 2.5rem;
+          height: 2.5rem;
+          padding: 0 0.7rem;
           font-size: 0.78rem;
           font-weight: 700;
           line-height: 1.2;
@@ -1666,27 +1686,29 @@ export const createPublicBadgePageRenderers = (
 
         .badge-wall__copy-status {
           margin: 0;
-          flex-basis: 100%;
+          grid-column: 1 / -1;
           font-size: 0.78rem;
           color: var(--ct-theme-text-subtle);
           min-height: 1rem;
+          text-align: right;
         }
 
         .badge-wall__url-details {
-          border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 0.58rem;
-          padding: 0.34rem 0.5rem;
-          background: var(--ct-theme-surface-soft);
+          grid-column: 1 / -1;
+          width: fit-content;
+          justify-self: end;
         }
 
         .badge-wall__url-details summary {
-          display: flex;
-          align-items: center;
-          min-height: 2.75rem;
           cursor: pointer;
           font-size: 0.78rem;
           font-weight: 700;
           color: var(--ct-theme-text-muted);
+          list-style: none;
+        }
+
+        .badge-wall__url-details summary::-webkit-details-marker {
+          display: none;
         }
   
         .badge-wall__empty {
@@ -1713,17 +1735,26 @@ export const createPublicBadgePageRenderers = (
 
         @media (max-width: 640px) {
           .badge-wall__summary {
-            grid-template-columns: 1fr;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
             align-items: start;
           }
 
           .badge-wall__actions {
             display: grid;
             grid-template-columns: minmax(0, 1fr);
+            justify-items: stretch;
           }
 
           .badge-wall__button {
             width: 100%;
+            inline-size: 100%;
+          }
+
+          .badge-wall__copy-status,
+          .badge-wall__url-details {
+            justify-self: start;
+            text-align: left;
           }
         }
       </style>
