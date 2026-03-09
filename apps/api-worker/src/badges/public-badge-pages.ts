@@ -720,7 +720,20 @@ export const createPublicBadgePageRenderers = (
         }
   
         .public-badge__status--verified {
-          background: var(--ct-theme-gradient-success);
+          border-color: color-mix(in srgb, var(--ct-brand-lake-500) 26%, var(--ct-theme-border-soft));
+          background:
+            radial-gradient(
+              circle at 88% 18%,
+              color-mix(in srgb, var(--ct-brand-sun-400) 32%, transparent),
+              transparent 34%
+            ),
+            linear-gradient(
+              118deg,
+              var(--ct-brand-midnight-900) 0%,
+              var(--ct-brand-lake-700) 74%,
+              var(--ct-brand-lake-500) 100%
+            );
+          box-shadow: 0 18px 32px rgba(8, 38, 74, 0.18);
         }
   
         .public-badge__status--revoked {
