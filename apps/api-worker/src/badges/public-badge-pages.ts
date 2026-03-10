@@ -1311,6 +1311,7 @@ export const createPublicBadgePageRenderers = (
         )}" />
       <link rel="alternate" type="application/json" href="${escapeHtml(summaryUrl)}" />`,
       }),
+      'open',
     );
   };
 
@@ -1445,29 +1446,28 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__hero {
-          border: 1px solid var(--ct-theme-border-default);
-          border-radius: 1rem;
-          padding: 1rem;
-          background:
-            radial-gradient(circle at 88% 8%, var(--ct-theme-accent-glow-1), transparent 42%),
-            var(--ct-theme-gradient-hero);
-          color: var(--ct-theme-text-on-brand);
-          box-shadow: var(--ct-theme-shadow-card);
+          border: none;
+          border-left: 4px solid var(--ct-brand-lake-700);
+          border-radius: 0;
+          padding: 1rem 1.25rem;
+          background: var(--ct-theme-surface-soft);
+          color: var(--ct-theme-text-title);
+          box-shadow: var(--ct-theme-shadow-soft);
         }
 
         .badge-wall__hero h1 {
-          color: var(--ct-theme-text-on-brand);
+          color: var(--ct-theme-text-title);
         }
-  
+
         .badge-wall__lead {
           margin: 0;
-          color: var(--ct-theme-text-inverse);
+          color: var(--ct-theme-text-muted);
         }
-  
+
         .badge-wall__count {
           margin: 0;
           font-weight: 600;
-          color: var(--ct-brand-sun-400);
+          color: var(--ct-brand-lake-700);
         }
 
         .badge-wall__hero-link {
@@ -1475,14 +1475,14 @@ export const createPublicBadgePageRenderers = (
           align-items: center;
           justify-content: center;
           width: fit-content;
-          border: 1px solid var(--ct-theme-surface-brand-chip-strong);
+          border: 1px solid var(--ct-theme-border-default);
           border-radius: 0.65rem;
           min-height: 2.75rem;
           padding: 0.5rem 0.9rem;
-          color: var(--ct-theme-text-on-brand);
+          color: var(--ct-brand-lake-700);
           text-decoration: none;
           font-weight: 700;
-          background: var(--ct-theme-surface-brand-chip);
+          background: var(--ct-theme-surface-card-strong);
           transition:
             background-color var(--ct-duration-fast) var(--ct-ease-standard),
             border-color var(--ct-duration-fast) var(--ct-ease-standard),
@@ -1491,9 +1491,9 @@ export const createPublicBadgePageRenderers = (
 
         .badge-wall__hero-link:hover,
         .badge-wall__hero-link:focus-visible {
-          color: var(--ct-theme-text-on-brand);
-          background: var(--ct-theme-surface-brand-chip-strong);
-          border-color: var(--ct-theme-text-inverse);
+          color: var(--ct-theme-link-hover);
+          background: var(--ct-theme-surface-soft);
+          border-color: var(--ct-theme-border-strong);
         }
   
         .badge-wall__list {
@@ -1816,6 +1816,7 @@ export const createPublicBadgePageRenderers = (
         ogType: 'website',
         imageUrl: socialImageUrl,
       }),
+      'open',
     );
   };
 
@@ -2087,25 +2088,25 @@ export const createPublicBadgePageRenderers = (
         }
 
         .criteria-registry__hero {
-          border: 1px solid var(--ct-theme-border-default);
-          border-radius: 1rem;
-          padding: 1rem;
-          background:
-            radial-gradient(circle at 90% 8%, var(--ct-theme-accent-glow-1), transparent 42%),
-            var(--ct-theme-gradient-hero);
-          color: var(--ct-theme-text-on-brand);
-          box-shadow: var(--ct-theme-shadow-card);
+          border: none;
+          border-bottom: 1px solid var(--ct-theme-border-default);
+          border-radius: 0;
+          padding: 0 0 1rem 0;
+          background: transparent;
+          color: var(--ct-theme-text-title);
+          box-shadow: none;
           display: grid;
           gap: 0.45rem;
         }
 
         .criteria-registry__hero h1 {
           margin: 0;
-          color: var(--ct-theme-text-on-brand);
+          color: var(--ct-theme-text-title);
         }
 
         .criteria-registry__hero p {
           margin: 0;
+          color: var(--ct-theme-text-muted);
         }
 
         .criteria-registry__hero-link {
@@ -2113,14 +2114,13 @@ export const createPublicBadgePageRenderers = (
           align-items: center;
           min-height: 2.75rem;
           width: fit-content;
-          color: var(--ct-theme-text-on-brand);
-          font-weight: 700;
+          color: var(--ct-theme-link);
+          font-weight: 600;
         }
 
         .criteria-registry__hero-link:hover,
         .criteria-registry__hero-link:focus-visible {
-          color: var(--ct-theme-text-on-brand);
-          text-decoration-color: var(--ct-brand-sun-400);
+          color: var(--ct-theme-link-hover);
         }
 
         .criteria-registry__template-grid {
@@ -2371,6 +2371,7 @@ export const createPublicBadgePageRenderers = (
         ogType: 'website',
         imageUrl: socialImageUrl,
       }),
+      'open',
     );
   };
 

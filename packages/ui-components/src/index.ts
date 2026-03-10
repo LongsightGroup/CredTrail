@@ -11,6 +11,7 @@ export const renderPageShell = (
   title: string,
   bodyContent: string,
   headContent = '',
+  variant: 'shell' | 'open' = 'shell',
 ): string => {
   const safeTitle = escapeHtml(title);
 
@@ -228,9 +229,25 @@ export const renderPageShell = (
           animation: none;
         }
       }
+
+      body[data-variant="open"] {
+        background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      }
+
+      body[data-variant="open"] main {
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        backdrop-filter: none;
+        box-shadow: none;
+        animation: none;
+        margin: 0 auto;
+        padding: clamp(1.5rem, 3vw, 3rem) clamp(1rem, 2.5vw, 2rem);
+        max-width: 1120px;
+      }
     </style>
   </head>
-  <body>
+  <body data-variant="${variant}">
     <main>${bodyContent}</main>
   </body>
 </html>`;

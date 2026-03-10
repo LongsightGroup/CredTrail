@@ -691,6 +691,8 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
         ${badgesMarkup}
         ${didSettingsSection}
       </section>`,
+      '',
+      'open',
     );
   };
 };
