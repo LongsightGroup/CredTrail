@@ -88,6 +88,41 @@ describe('marketing landing proxy', () => {
 
     fetchSpy.mockRestore();
   });
+
+  it('proxies landing font assets to MARKETING_SITE_ORIGIN when configured', async () => {
+    const env = {
+      ...createEnv(),
+      MARKETING_SITE_ORIGIN: 'https://marketing.credtrail.test',
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('font-bytes', {
+        status: 200,
+        headers: {
+          'content-type': 'font/woff2',
+        },
+      }),
+    );
+
+    const response = await app.fetch(
+      new Request('https://credtrail.test/fonts/space-grotesk-latin.woff2'),
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toBe('font-bytes');
+
+    const firstCall = fetchSpy.mock.calls[0];
+    const firstRequest = firstCall?.[0];
+
+    expect(firstRequest).toBeInstanceOf(Request);
+    if (!(firstRequest instanceof Request)) {
+      throw new Error('Expected first fetch argument to be a Request');
+    }
+    expect(firstRequest.url).toBe('https://marketing.credtrail.test/fonts/space-grotesk-latin.woff2');
+
+    fetchSpy.mockRestore();
+  });
 });
 
 describe('canonical host redirects', () => {

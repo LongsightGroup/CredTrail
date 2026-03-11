@@ -198,7 +198,7 @@ const LEARNER_IDENTITY_LINK_TTL_SECONDS = 10 * 60;
 const OID4VCI_PRE_AUTH_CODE_TTL_SECONDS = 10 * 60;
 const OID4VCI_ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
 const SESSION_COOKIE_NAME = 'credtrail_session';
-const LANDING_ASSET_PATH_PREFIX = '/_astro/';
+const LANDING_ASSET_PATH_PREFIXES = ['/_astro/', '/fonts/'];
 const LANDING_STATIC_PATHS = new Set(['/credtrail-logo.png', '/favicon.svg', '/favicon.ico']);
 const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
 const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
@@ -567,7 +567,7 @@ const publicBadgeSummaryPayload = (
 
 registerCommonMiddleware({
   app,
-  landingAssetPathPrefix: LANDING_ASSET_PATH_PREFIX,
+  landingAssetPathPrefixes: LANDING_ASSET_PATH_PREFIXES,
   landingStaticPaths: LANDING_STATIC_PATHS,
   observabilityContext,
 });

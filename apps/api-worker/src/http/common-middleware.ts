@@ -9,7 +9,7 @@ import type { AppBindings, AppEnv } from '../app';
 
 interface RegisterCommonMiddlewareInput {
   app: Hono<AppEnv>;
-  landingAssetPathPrefix: string;
+  landingAssetPathPrefixes: string[];
   landingStaticPaths: Set<string>;
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
 }
@@ -49,7 +49,7 @@ const prettifyJsonResponse = async (response: Response): Promise<Response> => {
 };
 
 export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): void => {
-  const { app, landingAssetPathPrefix, landingStaticPaths, observabilityContext } = input;
+  const { app, landingAssetPathPrefixes, landingStaticPaths, observabilityContext } = input;
 
   app.use('*', async (c, next) => {
     const startedAt = Date.now();
@@ -68,7 +68,9 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
         requestUrl.pathname === '/' ||
         requestUrl.pathname === '/docs' ||
         requestUrl.pathname.startsWith('/docs/') ||
-        requestUrl.pathname.startsWith(landingAssetPathPrefix) ||
+        landingAssetPathPrefixes.some((assetPathPrefix) =>
+          requestUrl.pathname.startsWith(assetPathPrefix),
+        ) ||
         landingStaticPaths.has(requestUrl.pathname);
 
       if (isLandingRequest) {
