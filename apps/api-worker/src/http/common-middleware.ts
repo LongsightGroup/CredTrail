@@ -14,6 +14,40 @@ interface RegisterCommonMiddlewareInput {
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
 }
 
+const JSON_PRETTY_PRINT_SPACES = 2;
+
+const prettifyJsonResponse = async (response: Response): Promise<Response> => {
+  const contentType = response.headers.get('content-type');
+
+  if (!contentType?.toLowerCase().includes('json')) {
+    return response;
+  }
+
+  const responseClone = response.clone();
+  const responseBody = await responseClone.text();
+
+  if (responseBody.length === 0) {
+    return response;
+  }
+
+  let parsedBody: unknown;
+
+  try {
+    parsedBody = JSON.parse(responseBody);
+  } catch {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+
+  return new Response(JSON.stringify(parsedBody, null, JSON_PRETTY_PRINT_SPACES), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
 export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): void => {
   const { app, landingAssetPathPrefix, landingStaticPaths, observabilityContext } = input;
 
@@ -47,6 +81,7 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
     }
 
     await next();
+    c.res = await prettifyJsonResponse(c.res);
     const elapsedMs = Date.now() - startedAt;
 
     logInfo(observabilityContext(c.env), 'http_request', {
