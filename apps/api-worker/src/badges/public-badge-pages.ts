@@ -665,6 +665,19 @@ export const createPublicBadgePageRenderers = (
           display: grid;
           gap: 1rem;
           color: var(--ct-theme-text-title);
+          --public-badge-card-radius: 1.45rem;
+          --public-badge-card-padding: 1.1rem;
+          --public-badge-status-radius: 1.35rem;
+          --public-badge-frame-padding: 0.72rem;
+          --public-badge-frame-inner-radius: 1rem;
+          --public-badge-frame-radius: calc(
+            var(--public-badge-frame-inner-radius) + var(--public-badge-frame-padding)
+          );
+          --public-badge-panel-padding: 0.56rem;
+          --public-badge-panel-inner-radius: 0.8rem;
+          --public-badge-panel-radius: calc(
+            var(--public-badge-panel-inner-radius) + var(--public-badge-panel-padding)
+          );
         }
   
         .public-badge__card {
@@ -676,9 +689,9 @@ export const createPublicBadgePageRenderers = (
             var(--ct-theme-surface-soft)
           );
           border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 1rem;
+          border-radius: var(--public-badge-card-radius);
           box-shadow: var(--ct-theme-shadow-soft);
-          padding: 1.25rem;
+          padding: var(--public-badge-card-padding);
           animation: public-badge-enter 420ms ease-out both;
         }
 
@@ -714,6 +727,7 @@ export const createPublicBadgePageRenderers = (
           justify-content: space-between;
           gap: 1rem;
           align-items: center;
+          border-radius: var(--public-badge-status-radius);
           color: var(--ct-theme-text-on-brand);
           font-weight: 700;
           letter-spacing: 0.015em;
@@ -733,7 +747,9 @@ export const createPublicBadgePageRenderers = (
               var(--ct-brand-lake-700) 74%,
               var(--ct-brand-lake-500) 100%
             );
-          box-shadow: 0 18px 32px rgba(8, 38, 74, 0.18);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.14),
+            0 10px 20px rgba(8, 38, 74, 0.12);
         }
   
         .public-badge__status--revoked {
@@ -773,36 +789,47 @@ export const createPublicBadgePageRenderers = (
 
         .public-badge__hero-image-frame {
           position: relative;
+          display: grid;
+          place-items: center;
           width: 100%;
           max-width: 420px;
-        }
-
-        .public-badge__hero-image-frame::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 1rem;
           border: 1px solid var(--ct-theme-border-soft);
-          box-shadow: var(--ct-theme-shadow-card);
-          pointer-events: none;
+          border-radius: var(--public-badge-frame-radius);
+          padding: var(--public-badge-frame-padding);
+          box-sizing: border-box;
+          background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--ct-theme-surface-card-strong) 94%, var(--ct-theme-surface-soft)),
+            color-mix(in srgb, var(--ct-theme-surface-soft) 88%, var(--ct-theme-surface-card-strong))
+          );
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.8),
+            0 1px 0 rgba(13, 46, 84, 0.04);
         }
   
         .public-badge__hero-image {
           display: block;
           width: 100%;
-          border-radius: 1rem;
+          box-sizing: border-box;
+          border-radius: var(--public-badge-frame-inner-radius);
           aspect-ratio: 21 / 16;
-          object-fit: cover;
-          background: var(--ct-theme-surface-info);
+          padding: clamp(0.8rem, 2.8vw, 1.1rem);
+          object-fit: contain;
+          object-position: center;
+          background: linear-gradient(
+            180deg,
+            var(--ct-theme-surface-card-strong),
+            color-mix(in srgb, var(--ct-theme-surface-soft) 84%, var(--ct-theme-surface-card-strong))
+          );
         }
 
         .public-badge__hero-image-fallback {
           position: absolute;
-          inset: 0;
+          inset: var(--public-badge-frame-padding);
           display: none;
           align-items: center;
           justify-content: center;
-          border-radius: 1rem;
+          border-radius: var(--public-badge-frame-inner-radius);
           background:
             radial-gradient(circle at 88% 12%, var(--ct-theme-accent-glow-1), transparent 45%),
             var(--ct-theme-gradient-hero);
@@ -958,9 +985,13 @@ export const createPublicBadgePageRenderers = (
 
         .public-badge__actions-details {
           border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 0.74rem;
-          padding: 0.56rem 0.66rem;
-          background: var(--ct-theme-surface-info);
+          border-radius: var(--public-badge-panel-radius);
+          padding: var(--public-badge-panel-padding) calc(var(--public-badge-panel-padding) + 0.1rem);
+          background: linear-gradient(
+            180deg,
+            var(--ct-theme-surface-card-strong),
+            var(--ct-theme-surface-info)
+          );
         }
 
         .public-badge__actions-details[open] {
@@ -1002,17 +1033,24 @@ export const createPublicBadgePageRenderers = (
           justify-items: start;
           gap: 0.4rem;
           border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 0.8rem;
-          padding: 0.62rem;
-          background: var(--ct-theme-surface-soft);
+          border-radius: var(--public-badge-panel-radius);
+          padding: var(--public-badge-panel-padding);
+          background: linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--ct-theme-surface-card-strong) 92%, var(--ct-theme-surface-soft)),
+            var(--ct-theme-surface-soft)
+          );
         }
   
         .public-badge__qr-image {
+          box-sizing: border-box;
           width: 11.5rem;
           height: 11.5rem;
-          border-radius: 0.9rem;
+          padding: 0.55rem;
+          border-radius: var(--public-badge-panel-inner-radius);
           border: 1px solid var(--ct-theme-border-default);
           background: var(--ct-theme-surface-card-strong);
+          object-fit: contain;
         }
   
         .public-badge__qr-caption {
