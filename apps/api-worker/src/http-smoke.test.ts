@@ -123,6 +123,38 @@ describe('marketing landing proxy', () => {
 
     fetchSpy.mockRestore();
   });
+
+  it('proxies privacy page requests to MARKETING_SITE_ORIGIN when configured', async () => {
+    const env = {
+      ...createEnv(),
+      MARKETING_SITE_ORIGIN: 'https://marketing.credtrail.test',
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>privacy</html>', {
+        status: 200,
+        headers: {
+          'content-type': 'text/html; charset=UTF-8',
+        },
+      }),
+    );
+
+    const response = await app.fetch(new Request('https://credtrail.test/privacy/'), env);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('privacy');
+
+    const firstCall = fetchSpy.mock.calls[0];
+    const firstRequest = firstCall?.[0];
+
+    expect(firstRequest).toBeInstanceOf(Request);
+    if (!(firstRequest instanceof Request)) {
+      throw new Error('Expected first fetch argument to be a Request');
+    }
+    expect(firstRequest.url).toBe('https://marketing.credtrail.test/privacy/');
+
+    fetchSpy.mockRestore();
+  });
 });
 
 describe('canonical host redirects', () => {

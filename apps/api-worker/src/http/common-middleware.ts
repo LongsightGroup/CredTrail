@@ -67,6 +67,8 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
       const isLandingRequest =
         requestUrl.pathname === '/' ||
         requestUrl.pathname === '/docs' ||
+        requestUrl.pathname === '/privacy' ||
+        requestUrl.pathname === '/privacy/' ||
         requestUrl.pathname.startsWith('/docs/') ||
         landingAssetPathPrefixes.some((assetPathPrefix) =>
           requestUrl.pathname.startsWith(assetPathPrefix),
