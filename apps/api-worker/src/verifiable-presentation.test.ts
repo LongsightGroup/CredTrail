@@ -77,7 +77,6 @@ const createEnv = (): {
   DATABASE_URL: string;
   BADGE_OBJECTS: R2Bucket;
   PLATFORM_DOMAIN: string;
-  MARKETING_SITE_ORIGIN?: string;
   TENANT_SIGNING_KEY_HISTORY_JSON?: string;
   TENANT_REMOTE_SIGNER_REGISTRY_JSON?: string;
   JOB_PROCESSOR_TOKEN?: string;

@@ -5,7 +5,6 @@ type EnvSource = Record<string, string | undefined>;
 
 const OPTIONAL_BINDING_KEYS = [
   'DATABASE_URL',
-  'MARKETING_SITE_ORIGIN',
   'SENTRY_DSN',
   'TENANT_SIGNING_REGISTRY_JSON',
   'TENANT_SIGNING_KEY_HISTORY_JSON',

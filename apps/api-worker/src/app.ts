@@ -155,7 +155,6 @@ export interface AppBindings {
   DATABASE_URL?: string;
   BADGE_OBJECTS: ImmutableCredentialStore;
   PLATFORM_DOMAIN: string;
-  MARKETING_SITE_ORIGIN?: string;
   SENTRY_DSN?: string;
   TENANT_SIGNING_REGISTRY_JSON?: string;
   TENANT_SIGNING_KEY_HISTORY_JSON?: string;
@@ -198,8 +197,6 @@ const LEARNER_IDENTITY_LINK_TTL_SECONDS = 10 * 60;
 const OID4VCI_PRE_AUTH_CODE_TTL_SECONDS = 10 * 60;
 const OID4VCI_ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
 const SESSION_COOKIE_NAME = 'credtrail_session';
-const LANDING_ASSET_PATH_PREFIXES = ['/_astro/', '/fonts/'];
-const LANDING_STATIC_PATHS = new Set(['/credtrail-logo.png', '/favicon.svg', '/favicon.ico']);
 const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
 const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
 const databasesByUrl = new Map<string, SqlDatabase>();
@@ -567,8 +564,6 @@ const publicBadgeSummaryPayload = (
 
 registerCommonMiddleware({
   app,
-  landingAssetPathPrefixes: LANDING_ASSET_PATH_PREFIXES,
-  landingStaticPaths: LANDING_STATIC_PATHS,
   observabilityContext,
 });
 

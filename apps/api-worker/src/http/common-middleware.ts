@@ -9,8 +9,6 @@ import type { AppBindings, AppEnv } from '../app';
 
 interface RegisterCommonMiddlewareInput {
   app: Hono<AppEnv>;
-  landingAssetPathPrefixes: string[];
-  landingStaticPaths: Set<string>;
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
 }
 
@@ -49,7 +47,7 @@ const prettifyJsonResponse = async (response: Response): Promise<Response> => {
 };
 
 export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): void => {
-  const { app, landingAssetPathPrefixes, landingStaticPaths, observabilityContext } = input;
+  const { app, observabilityContext } = input;
 
   app.use('*', async (c, next) => {
     const startedAt = Date.now();
@@ -61,27 +59,6 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
       requestUrl.hostname = canonicalHost;
       requestUrl.port = '';
       return c.redirect(requestUrl.toString(), 308);
-    }
-
-    if (c.req.method === 'GET' && c.env.MARKETING_SITE_ORIGIN !== undefined) {
-      const isLandingRequest =
-        requestUrl.pathname === '/' ||
-        requestUrl.pathname === '/docs' ||
-        requestUrl.pathname === '/privacy' ||
-        requestUrl.pathname === '/privacy/' ||
-        requestUrl.pathname.startsWith('/docs/') ||
-        landingAssetPathPrefixes.some((assetPathPrefix) =>
-          requestUrl.pathname.startsWith(assetPathPrefix),
-        ) ||
-        landingStaticPaths.has(requestUrl.pathname);
-
-      if (isLandingRequest) {
-        const marketingUrl = new URL(
-          `${requestUrl.pathname}${requestUrl.search}`,
-          c.env.MARKETING_SITE_ORIGIN,
-        );
-        return fetch(new Request(marketingUrl.toString(), c.req.raw));
-      }
     }
 
     await next();
