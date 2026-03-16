@@ -9,6 +9,7 @@ import {
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
 } from '@credtrail/db';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
 
 export const ISSUER_ROLES: TenantMembershipRole[] = ['owner', 'admin', 'issuer'];
 export const TENANT_MEMBER_ROLES: TenantMembershipRole[] = ['owner', 'admin', 'issuer', 'viewer'];
@@ -26,12 +27,20 @@ export const defaultInstitutionOrgUnitId = (tenantId: string): string => {
   return `${tenantId}:org:institution`;
 };
 
-interface TenantAccessContext<BindingsType extends { BOOTSTRAP_ADMIN_TOKEN?: string | undefined }> {
+export interface TenantAccessContext<
+  BindingsType extends { BOOTSTRAP_ADMIN_TOKEN?: string | undefined },
+> {
   env: BindingsType;
   req: {
     header(name: string): string | undefined;
   };
   json(payload: unknown, status?: number): Response;
+}
+
+export interface PrincipalTenantRoleResult {
+  principal: AuthenticatedPrincipal;
+  requestedTenant: RequestedTenantContext;
+  membershipRole: TenantMembershipRole;
 }
 
 interface CreateTenantAccessHelpersInput<
@@ -90,6 +99,56 @@ const hasRequiredRole = (
   allowedRoles: readonly TenantMembershipRole[],
 ): boolean => {
   return allowedRoles.includes(membershipRole);
+};
+
+export const requirePrincipalTenantRole = async <
+  ContextType extends TenantAccessContext<BindingsType>,
+  BindingsType extends { BOOTSTRAP_ADMIN_TOKEN?: string | undefined },
+>(input: {
+  context: ContextType;
+  principal: AuthenticatedPrincipal | null;
+  requestedTenant: RequestedTenantContext;
+  allowedRoles: readonly TenantMembershipRole[];
+  resolveDatabase: (bindings: BindingsType) => SqlDatabase;
+}): Promise<PrincipalTenantRoleResult | Response> => {
+  if (input.principal === null) {
+    return input.context.json(
+      {
+        error: 'Not authenticated',
+      },
+      401,
+    );
+  }
+
+  const membership = await findTenantMembership(
+    input.resolveDatabase(input.context.env),
+    input.requestedTenant.tenantId,
+    input.principal.userId,
+  );
+
+  if (membership === null) {
+    return input.context.json(
+      {
+        error: 'Membership not found for requested tenant',
+      },
+      403,
+    );
+  }
+
+  if (!hasRequiredRole(membership.role, input.allowedRoles)) {
+    return input.context.json(
+      {
+        error: 'Insufficient role for requested action',
+      },
+      403,
+    );
+  }
+
+  return {
+    principal: input.principal,
+    requestedTenant: input.requestedTenant,
+    membershipRole: membership.role,
+  };
 };
 
 const canBypassOrgScopeChecks = (membershipRole: TenantMembershipRole): boolean => {
