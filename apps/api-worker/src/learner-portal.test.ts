@@ -8,6 +8,7 @@ vi.mock('@credtrail/db', async () => {
     addLearnerIdentityAlias: vi.fn(),
     findActiveSessionByHash: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
+    findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
     listLearnerBadgeSummaries: vi.fn(),
     listLearnerIdentitiesByProfile: vi.fn(),
@@ -27,6 +28,7 @@ import {
   addLearnerIdentityAlias,
   findActiveSessionByHash,
   findLearnerProfileByIdentity,
+  findTenantMembership,
   findUserById,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
@@ -37,6 +39,7 @@ import {
   type LearnerProfileRecord,
   type SessionRecord,
   type SqlDatabase,
+  type TenantMembershipRecord,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
 
@@ -49,6 +52,7 @@ interface ErrorResponse {
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
+const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
 const mockedListLearnerIdentitiesByProfile = vi.mocked(listLearnerIdentitiesByProfile);
@@ -125,9 +129,24 @@ const sampleLearnerBadge = (
   };
 };
 
+const sampleTenantMembership = (
+  overrides?: Partial<TenantMembershipRecord>,
+): TenantMembershipRecord => {
+  return {
+    tenantId: 'tenant_123',
+    userId: 'usr_123',
+    role: 'viewer',
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedFindTenantMembership.mockReset();
+  mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
 });
 
 describe('GET /tenants/:tenantId/learner/dashboard', () => {
@@ -153,9 +172,36 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
 
-  it('returns 403 for tenant mismatch between session and path', async () => {
+  it('authorizes learner dashboard from requested tenant membership even when session tenant differs', async () => {
     const env = createEnv();
 
+    mockedFindActiveSessionByHash.mockResolvedValue(
+      sampleSession({
+        tenantId: 'tenant_other',
+      }),
+    );
+    mockedTouchSession.mockResolvedValue();
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/dashboard',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Your credential collection');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+  });
+
+  it('returns 403 when the authenticated user lacks membership for the requested tenant', async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(null);
     mockedFindActiveSessionByHash.mockResolvedValue(
       sampleSession({
         tenantId: 'tenant_other',
@@ -175,7 +221,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe('Forbidden for requested tenant');
+    expect(body.error).toBe('Membership not found for requested tenant');
     expect(mockedListLearnerBadgeSummaries).not.toHaveBeenCalled();
   });
 

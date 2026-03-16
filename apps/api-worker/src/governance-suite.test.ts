@@ -461,6 +461,35 @@ describe('org unit and badge ownership governance endpoints', () => {
     });
   });
 
+  it('authorizes requested tenant governance routes even when the legacy session tenant differs', async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'issuer' }));
+    mockedFindActiveSessionByHash.mockResolvedValue(
+      sampleSession({
+        tenantId: 'tenant_other',
+      }),
+    );
+    mockedTouchSession.mockResolvedValue();
+    mockedListTenantOrgUnits.mockResolvedValue([sampleTenantOrgUnit()]);
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/org-units',
+      {
+        method: 'GET',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.tenantId).toBe('tenant_123');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+  });
+
   it('creates a tenant org unit for admin roles and writes audit log', async () => {
     const env = createEnv();
 
