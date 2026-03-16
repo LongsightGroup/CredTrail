@@ -10,6 +10,7 @@ vi.mock('@credtrail/db', async () => {
     findActiveSessionByHash: vi.fn(),
     findLearnerIdentityLinkProofByHash: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
+    findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
     markLearnerIdentityLinkProofUsed: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
@@ -29,6 +30,7 @@ import {
   findActiveSessionByHash,
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileByIdentity,
+  findTenantMembership,
   findUserById,
   markLearnerIdentityLinkProofUsed,
   resolveLearnerProfileForIdentity,
@@ -37,6 +39,7 @@ import {
   type LearnerProfileRecord,
   type SessionRecord,
   type SqlDatabase,
+  type TenantMembershipRecord,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
 
@@ -69,6 +72,7 @@ const mockedCreateLearnerIdentityLinkProof = vi.mocked(createLearnerIdentityLink
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindLearnerIdentityLinkProofByHash = vi.mocked(findLearnerIdentityLinkProofByHash);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
+const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedMarkLearnerIdentityLinkProofUsed = vi.mocked(markLearnerIdentityLinkProofUsed);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
@@ -135,9 +139,24 @@ const sampleIdentityLinkProof = (
   };
 };
 
+const sampleTenantMembership = (
+  overrides?: Partial<TenantMembershipRecord>,
+): TenantMembershipRecord => {
+  return {
+    tenantId: 'tenant_123',
+    userId: 'usr_123',
+    role: 'viewer',
+    createdAt: '2026-02-10T22:00:00.000Z',
+    updatedAt: '2026-02-10T22:00:00.000Z',
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedFindTenantMembership.mockReset();
+  mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
 });
 
 describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
