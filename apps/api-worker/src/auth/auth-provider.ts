@@ -5,7 +5,26 @@ export interface LtiSessionInput {
   userId: string;
 }
 
+export interface RequestMagicLinkInput {
+  tenantId: string;
+  email: string;
+  nextPath?: string | undefined;
+}
+
+export interface RequestMagicLinkResult {
+  tenantId: string;
+  email: string;
+  deliveryStatus: 'sent' | 'skipped' | 'failed';
+  expiresAt?: string | undefined;
+  debugMagicLinkToken?: string | undefined;
+  debugMagicLinkUrl?: string | undefined;
+}
+
 export interface InternalAuthProvider<ContextType> {
+  requestMagicLink(
+    context: ContextType,
+    input: RequestMagicLinkInput,
+  ): Promise<RequestMagicLinkResult>;
   createMagicLinkSession(
     context: ContextType,
     token: string,

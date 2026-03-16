@@ -10,7 +10,12 @@ import {
   type SqlDatabase,
 } from '@credtrail/db';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
-import type { InternalAuthProvider, LtiSessionInput } from './auth-provider';
+import type {
+  InternalAuthProvider,
+  LtiSessionInput,
+  RequestMagicLinkInput,
+  RequestMagicLinkResult,
+} from './auth-provider';
 
 export interface LegacyAuthAdapterContext<BindingsType> {
   env: BindingsType;
@@ -256,6 +261,17 @@ export const revokeCurrentSession = async <
   cacheResolvedAuth(context, input, null, input.authMethod ?? 'legacy_magic_link');
 };
 
+export const requestMagicLink = async <
+  ContextType extends LegacyAuthAdapterContext<BindingsType>,
+  BindingsType,
+>(
+  _context: ContextType,
+  _request: RequestMagicLinkInput,
+  _input: LegacyAuthAdapterInput<ContextType, BindingsType>,
+): Promise<RequestMagicLinkResult> => {
+  throw new Error('Legacy auth provider does not own hosted magic-link requests');
+};
+
 export const createLegacyAuthProvider = <
   ContextType extends LegacyAuthAdapterContext<BindingsType>,
   BindingsType,
@@ -263,6 +279,9 @@ export const createLegacyAuthProvider = <
   input: LegacyAuthAdapterInput<ContextType, BindingsType>,
 ): InternalAuthProvider<ContextType> => {
   return {
+    requestMagicLink: (context, request) => {
+      return requestMagicLink(context, request, input);
+    },
     createMagicLinkSession: (context, token) => {
       return createMagicLinkSession(context, token, input);
     },
