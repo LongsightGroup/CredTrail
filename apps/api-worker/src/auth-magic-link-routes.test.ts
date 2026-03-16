@@ -92,6 +92,14 @@ const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
   };
 };
 
+interface MockedLegacyAuthProvider {
+  createMagicLinkSession: ReturnType<typeof vi.fn>;
+  createLtiSession: ReturnType<typeof vi.fn>;
+  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
+  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
+  revokeCurrentSession: ReturnType<typeof vi.fn>;
+}
+
 const loadAppWithMockedLegacyAuthProvider = async (options?: {
   principal?: {
     userId: string;
@@ -104,7 +112,10 @@ const loadAppWithMockedLegacyAuthProvider = async (options?: {
     source: 'route' | 'legacy_session';
     authoritative: boolean;
   };
-}) => {
+}): Promise<{
+  app: typeof app;
+  provider: MockedLegacyAuthProvider;
+}> => {
   vi.resetModules();
   const principal = options?.principal ?? {
     userId: 'usr_adapter',
@@ -117,22 +128,23 @@ const loadAppWithMockedLegacyAuthProvider = async (options?: {
     source: 'legacy_session' as const,
     authoritative: false,
   };
-  const provider = {
-    createMagicLinkSession: vi.fn(async (context: Parameters<typeof setCookie>[0]) => {
+  const provider: MockedLegacyAuthProvider = {
+    createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
       setCookie(context, 'credtrail_session', 'adapter-session', {
         httpOnly: true,
         sameSite: 'Lax',
         path: '/',
       });
-      return principal;
+      return Promise.resolve(principal);
     }),
     createLtiSession: vi.fn(),
-    resolveAuthenticatedPrincipal: vi.fn(async () => principal),
-    resolveRequestedTenantContext: vi.fn(async () => requestedTenant),
-    revokeCurrentSession: vi.fn(async (context: Parameters<typeof deleteCookie>[0]) => {
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(principal)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(requestedTenant)),
+    revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
       deleteCookie(context, 'credtrail_session', {
         path: '/',
       });
+      return Promise.resolve();
     }),
   };
 
@@ -145,7 +157,7 @@ const loadAppWithMockedLegacyAuthProvider = async (options?: {
     return {
       ...actual,
       createLegacyAuthProvider: vi.fn(() => provider),
-      resolveLegacySessionRecord: vi.fn(async () => null),
+      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
     };
   });
 

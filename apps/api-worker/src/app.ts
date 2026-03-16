@@ -8,6 +8,7 @@ import {
   findTenantSigningRegistrationByDid,
   listLtiIssuerRegistrations,
   upsertTenantMembershipRole,
+  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -82,7 +83,11 @@ import {
   defaultInstitutionOrgUnitId,
   isUniqueConstraintError,
 } from './auth/tenant-access';
-import type { AuthContextVariables } from './auth/auth-context';
+import type {
+  AuthContextVariables,
+  AuthenticatedPrincipal,
+  RequestedTenantContext,
+} from './auth/auth-context';
 import {
   createLegacyAuthProvider,
   resolveLegacySessionRecord,
@@ -273,7 +278,9 @@ const legacyAuthAdapterInput = {
 
 const legacyAuthProvider = createLegacyAuthProvider<AppContext, AppBindings>(legacyAuthAdapterInput);
 
-const resolveAuthenticatedPrincipal = async (c: AppContext) => {
+const resolveAuthenticatedPrincipal = async (
+  c: AppContext,
+): Promise<AuthenticatedPrincipal | null> => {
   const cachedPrincipal = c.get('authenticatedPrincipal');
 
   if (cachedPrincipal !== undefined) {
@@ -285,7 +292,9 @@ const resolveAuthenticatedPrincipal = async (c: AppContext) => {
   return principal;
 };
 
-const resolveRequestedTenantContext = async (c: AppContext) => {
+const resolveRequestedTenantContext = async (
+  c: AppContext,
+): Promise<RequestedTenantContext | null> => {
   const cachedRequestedTenant = c.get('requestedTenantContext');
 
   if (cachedRequestedTenant !== undefined) {
@@ -297,7 +306,7 @@ const resolveRequestedTenantContext = async (c: AppContext) => {
   return requestedTenant;
 };
 
-const resolveSessionFromCookie = async (c: AppContext) => {
+const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | null> => {
   return resolveLegacySessionRecord(c, legacyAuthAdapterInput);
 };
 

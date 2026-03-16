@@ -60,14 +60,19 @@ const createContext = (sessionToken?: string): FakeContext => {
   };
 };
 
-const createAdapterInput = () => {
+const createAdapterInput = (): {
+  resolveDatabase: () => SqlDatabase;
+  readSessionToken: (context: FakeContext) => string | undefined;
+  clearSessionCookie: (context: FakeContext) => void;
+  sha256Hex: (value: string) => Promise<string>;
+} => {
   return {
     resolveDatabase: () => fakeDb,
     readSessionToken: (context: FakeContext) => context.sessionToken,
     clearSessionCookie: (context: FakeContext) => {
       context.clearedSessionCookie = true;
     },
-    sha256Hex: vi.fn(async (value: string) => `hashed:${value}`),
+    sha256Hex: vi.fn((value: string) => Promise.resolve(`hashed:${value}`)),
   };
 };
 

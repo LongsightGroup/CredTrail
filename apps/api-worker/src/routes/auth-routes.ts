@@ -5,6 +5,7 @@ import {
   upsertUserByEmail,
   type SqlDatabase,
 } from '@credtrail/db';
+import { renderPageShell } from '@credtrail/ui-components';
 import type { Hono } from 'hono';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';

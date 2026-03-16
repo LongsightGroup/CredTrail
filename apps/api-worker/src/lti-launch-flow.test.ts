@@ -144,28 +144,39 @@ const sampleSession = (overrides?: { tenantId?: string; userId?: string }): Sess
   };
 };
 
-const loadAppWithMockedLegacyAuthProvider = async () => {
+interface MockedLegacyAuthProvider {
+  createMagicLinkSession: ReturnType<typeof vi.fn>;
+  createLtiSession: ReturnType<typeof vi.fn>;
+  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
+  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
+  revokeCurrentSession: ReturnType<typeof vi.fn>;
+}
+
+const loadAppWithMockedLegacyAuthProvider = async (): Promise<{
+  app: typeof app;
+  provider: MockedLegacyAuthProvider;
+}> => {
   vi.resetModules();
-  const provider = {
+  const provider: MockedLegacyAuthProvider = {
     createMagicLinkSession: vi.fn(),
     createLtiSession: vi.fn(
-      async (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
+      (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
         setCookie(context, 'credtrail_session', 'adapter-session', {
           httpOnly: true,
           sameSite: 'Lax',
           path: '/',
         });
-        return {
+        return Promise.resolve({
           userId: input.userId,
           authSessionId: 'ses_adapter',
           authMethod: 'legacy_lti' as const,
           expiresAt: '2026-02-11T22:00:00.000Z',
-        };
+        });
       },
     ),
-    resolveAuthenticatedPrincipal: vi.fn(async () => null),
-    resolveRequestedTenantContext: vi.fn(async () => null),
-    revokeCurrentSession: vi.fn(async () => undefined),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
   vi.doMock('./auth/legacy-auth-adapter', async () => {
