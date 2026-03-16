@@ -28,8 +28,9 @@ import {
   type LtiLaunchClaims,
 } from '@credtrail/lti';
 import type { Hono } from 'hono';
-import { setCookie } from 'hono/cookie';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal } from '../auth/auth-context';
+import type { LtiSessionInput } from '../auth/auth-provider';
 import {
   LTI_LAUNCH_PATH,
   LTI_OIDC_LOGIN_PATH,
@@ -92,21 +93,10 @@ interface RegisterLtiRoutesInput {
     };
   }>;
   sha256Hex: (value: string) => Promise<string>;
-  createSession: (
-    db: SqlDatabase,
-    input: {
-      tenantId: string;
-      userId: string;
-      sessionTokenHash: string;
-      expiresAt: string;
-    },
-  ) => Promise<{
-    tenantId: string;
-    userId: string;
-  }>;
-  sessionCookieSecure: (environment: string) => boolean;
-  SESSION_TTL_SECONDS: number;
-  SESSION_COOKIE_NAME: string;
+  createLtiSession: (
+    context: AppContext,
+    input: LtiSessionInput,
+  ) => Promise<AuthenticatedPrincipal>;
 }
 
 interface LtiDeepLinkingSettings {
@@ -226,10 +216,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     resolveDatabase,
     upsertTenantMembershipRole: upsertTenantMembershipRoleWithInput,
     sha256Hex,
-    createSession: createSessionWithInput,
-    sessionCookieSecure,
-    SESSION_TTL_SECONDS,
-    SESSION_COOKIE_NAME,
+    createLtiSession,
   } = input;
 
   const ltiOidcLoginHandler = async (c: AppContext): Promise<Response> => {
@@ -704,24 +691,12 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       );
     }
 
-    const sessionToken = generateOpaqueToken();
-    const sessionTokenHash = await sha256Hex(sessionToken);
-    const session = await createSessionWithInput(db, {
+    await createLtiSession(c, {
       tenantId,
       userId: linkedUserId,
-      sessionTokenHash,
-      expiresAt: addSecondsToIso(nowIso, SESSION_TTL_SECONDS),
     });
 
-    setCookie(c, SESSION_COOKIE_NAME, sessionToken, {
-      httpOnly: true,
-      secure: sessionCookieSecure(c.env.APP_ENV),
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: SESSION_TTL_SECONDS,
-    });
-
-    const dashboardPath = ltiLearnerDashboardPath(session.tenantId);
+    const dashboardPath = ltiLearnerDashboardPath(tenantId);
     c.header('Cache-Control', 'no-store');
     let bulkIssuanceView: LtiBulkIssuanceView | null = null;
 
@@ -804,7 +779,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
             },
             extra: {
               issuer: launchClaims.iss,
-              tenantId: session.tenantId,
+              tenantId,
               deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
               contextMembershipsUrl: nrpsClaim.contextMembershipsUrl,
             },
@@ -873,8 +848,8 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
 
       return c.html(
         ltiDeepLinkSelectionPage({
-          tenantId: session.tenantId,
-          userId: session.userId,
+          tenantId,
+          userId: linkedUserId,
           membershipRole: linkedMembershipRole,
           issuer: launchClaims.iss,
           deploymentId: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
@@ -889,8 +864,8 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     return c.html(
       ltiLaunchResultPage({
         roleKind,
-        tenantId: session.tenantId,
-        userId: session.userId,
+        tenantId,
+        userId: linkedUserId,
         membershipRole: linkedMembershipRole,
         learnerProfileId: linkedLearnerProfileId,
         issuer: launchClaims.iss,

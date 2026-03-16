@@ -1,34 +1,35 @@
 import {
   createAuditLog,
   createMagicLinkToken,
-  createSession,
   ensureTenantMembership,
-  findMagicLinkTokenByHash,
-  isMagicLinkTokenValid,
-  markMagicLinkTokenUsed,
-  revokeSessionByHash,
   upsertUserByEmail,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { Hono } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
 import { magicLinkLoginPage } from '../auth/pages';
 import type { SendMagicLinkEmailNotificationInput } from '../notifications/send-magic-link-email';
 
 interface RegisterAuthRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
-  resolveSessionFromCookie: (c: AppContext) => Promise<SessionRecord | null>;
+  createMagicLinkSession: (
+    c: AppContext,
+    token: string,
+  ) => Promise<AuthenticatedPrincipal | null>;
+  resolveAuthenticatedPrincipal: (
+    c: AppContext,
+  ) => Promise<AuthenticatedPrincipal | null>;
+  resolveRequestedTenantContext: (
+    c: AppContext,
+  ) => Promise<RequestedTenantContext | null>;
+  revokeCurrentSession: (c: AppContext) => Promise<void>;
   addSecondsToIso: (isoTimestamp: string, seconds: number) => string;
   generateOpaqueToken: () => string;
   sha256Hex: (value: string) => Promise<string>;
-  sessionCookieSecure: (appEnv: string) => boolean;
   MAGIC_LINK_TTL_SECONDS: number;
-  SESSION_TTL_SECONDS: number;
-  SESSION_COOKIE_NAME: string;
   sendMagicLinkEmailNotification: (input: SendMagicLinkEmailNotificationInput) => Promise<void>;
 }
 
@@ -36,51 +37,16 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   const {
     app,
     resolveDatabase,
-    resolveSessionFromCookie,
+    createMagicLinkSession,
+    resolveAuthenticatedPrincipal,
+    resolveRequestedTenantContext,
+    revokeCurrentSession,
     addSecondsToIso,
     generateOpaqueToken,
     sha256Hex,
-    sessionCookieSecure,
     MAGIC_LINK_TTL_SECONDS,
-    SESSION_TTL_SECONDS,
-    SESSION_COOKIE_NAME,
     sendMagicLinkEmailNotification,
   } = input;
-
-  const consumeMagicLinkToken = async (
-    c: AppContext,
-    rawToken: string,
-  ): Promise<
-    | {
-        sessionToken: string;
-        session: SessionRecord;
-      }
-    | null
-  > => {
-    const nowIso = new Date().toISOString();
-    const magicTokenHash = await sha256Hex(rawToken);
-    const token = await findMagicLinkTokenByHash(resolveDatabase(c.env), magicTokenHash);
-
-    if (token === null || !isMagicLinkTokenValid(token, nowIso)) {
-      return null;
-    }
-
-    await markMagicLinkTokenUsed(resolveDatabase(c.env), token.id, nowIso);
-
-    const sessionToken = generateOpaqueToken();
-    const sessionTokenHash = await sha256Hex(sessionToken);
-    const session = await createSession(resolveDatabase(c.env), {
-      tenantId: token.tenantId,
-      userId: token.userId,
-      sessionTokenHash,
-      expiresAt: addSecondsToIso(nowIso, SESSION_TTL_SECONDS),
-    });
-
-    return {
-      sessionToken,
-      session,
-    };
-  };
 
   app.get('/', (c) => {
     return c.redirect('/login', 302);
@@ -188,9 +154,9 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   app.post('/v1/auth/magic-link/verify', async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseMagicLinkVerifyRequest(payload);
-    const consumed = await consumeMagicLinkToken(c, request.token);
+    const principal = await createMagicLinkSession(c, request.token);
 
-    if (consumed === null) {
+    if (principal === null) {
       return c.json(
         {
           error: 'Invalid or expired magic link token',
@@ -199,19 +165,22 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       );
     }
 
-    setCookie(c, SESSION_COOKIE_NAME, consumed.sessionToken, {
-      httpOnly: true,
-      secure: sessionCookieSecure(c.env.APP_ENV),
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: SESSION_TTL_SECONDS,
-    });
+    const requestedTenant = await resolveRequestedTenantContext(c);
+
+    if (requestedTenant === null) {
+      return c.json(
+        {
+          error: 'Unable to resolve tenant context for authenticated session',
+        },
+        500,
+      );
+    }
 
     return c.json({
       status: 'authenticated',
-      tenantId: consumed.session.tenantId,
-      userId: consumed.session.userId,
-      expiresAt: consumed.session.expiresAt,
+      tenantId: requestedTenant.tenantId,
+      userId: principal.userId,
+      expiresAt: principal.expiresAt,
     });
   });
 
@@ -228,9 +197,9 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       );
     }
 
-    const consumed = await consumeMagicLinkToken(c, tokenRaw.trim());
+    const principal = await createMagicLinkSession(c, tokenRaw.trim());
 
-    if (consumed === null) {
+    if (principal === null) {
       return c.html(
         renderPageShell(
           'Expired Magic Link',
@@ -240,25 +209,40 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       );
     }
 
-    setCookie(c, SESSION_COOKIE_NAME, consumed.sessionToken, {
-      httpOnly: true,
-      secure: sessionCookieSecure(c.env.APP_ENV),
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: SESSION_TTL_SECONDS,
-    });
+    const requestedTenant = await resolveRequestedTenantContext(c);
+
+    if (requestedTenant === null) {
+      return c.html(
+        renderPageShell(
+          'Sign-in Error',
+          '<h1>Unable to complete sign-in</h1><p>Please request a new sign-in link.</p>',
+        ),
+        500,
+      );
+    }
 
     const nextPathRaw = c.req.query('next');
-    const fallbackPath = `/tenants/${encodeURIComponent(consumed.session.tenantId)}/admin`;
+    const fallbackPath = `/tenants/${encodeURIComponent(requestedTenant.tenantId)}/admin`;
     const nextPath = nextPathRaw?.startsWith('/') === true ? nextPathRaw : fallbackPath;
 
     return c.redirect(nextPath, 302);
   });
 
   app.get('/v1/auth/session', async (c) => {
-    const session = await resolveSessionFromCookie(c);
+    const principal = await resolveAuthenticatedPrincipal(c);
 
-    if (session === null) {
+    if (principal === null) {
+      return c.json(
+        {
+          error: 'Not authenticated',
+        },
+        401,
+      );
+    }
+
+    const requestedTenant = await resolveRequestedTenantContext(c);
+
+    if (requestedTenant === null) {
       return c.json(
         {
           error: 'Not authenticated',
@@ -269,23 +253,14 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
 
     return c.json({
       status: 'authenticated',
-      tenantId: session.tenantId,
-      userId: session.userId,
-      expiresAt: session.expiresAt,
+      tenantId: requestedTenant.tenantId,
+      userId: principal.userId,
+      expiresAt: principal.expiresAt,
     });
   });
 
   app.post('/v1/auth/logout', async (c) => {
-    const sessionToken = getCookie(c, SESSION_COOKIE_NAME);
-
-    if (sessionToken !== undefined) {
-      const sessionTokenHash = await sha256Hex(sessionToken);
-      await revokeSessionByHash(resolveDatabase(c.env), sessionTokenHash, new Date().toISOString());
-    }
-
-    deleteCookie(c, SESSION_COOKIE_NAME, {
-      path: '/',
-    });
+    await revokeCurrentSession(c);
 
     return c.json({
       status: 'signed_out',

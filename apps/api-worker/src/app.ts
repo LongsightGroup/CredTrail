@@ -5,7 +5,6 @@ import {
   type ObservabilityContext,
 } from '@credtrail/core-domain';
 import {
-  createSession,
   findTenantSigningRegistrationByDid,
   listLtiIssuerRegistrations,
   upsertTenantMembershipRole,
@@ -13,7 +12,7 @@ import {
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
 import { Hono, type Context } from 'hono';
-import { deleteCookie, getCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import {
   credentialDownloadFilename,
   credentialPdfDownloadFilename,
@@ -240,10 +239,34 @@ const legacyAuthAdapterInput = {
   readSessionToken: (context: AppContext): string | undefined => {
     return getCookie(context, SESSION_COOKIE_NAME);
   },
+  setSessionCookie: (context: AppContext, sessionToken: string): void => {
+    setCookie(context, SESSION_COOKIE_NAME, sessionToken, {
+      httpOnly: true,
+      secure: sessionCookieSecure(context.env.APP_ENV),
+      sameSite: 'Lax',
+      path: '/',
+      maxAge: SESSION_TTL_SECONDS,
+    });
+  },
   clearSessionCookie: (context: AppContext): void => {
     deleteCookie(context, SESSION_COOKIE_NAME, {
       path: '/',
     });
+  },
+  generateOpaqueToken,
+  addSecondsToIso,
+  sessionTtlSeconds: SESSION_TTL_SECONDS,
+  cacheAuthenticatedPrincipal: (
+    context: AppContext,
+    principal: AppEnv['Variables']['authenticatedPrincipal'],
+  ): void => {
+    context.set('authenticatedPrincipal', principal);
+  },
+  cacheRequestedTenantContext: (
+    context: AppContext,
+    requestedTenant: AppEnv['Variables']['requestedTenantContext'],
+  ): void => {
+    context.set('requestedTenantContext', requestedTenant);
   },
   sha256Hex,
 };
@@ -762,10 +785,9 @@ registerLtiRoutes({
   resolveDatabase,
   upsertTenantMembershipRole,
   sha256Hex,
-  createSession,
-  sessionCookieSecure,
-  SESSION_TTL_SECONDS,
-  SESSION_COOKIE_NAME,
+  createLtiSession: (context, input) => {
+    return legacyAuthProvider.createLtiSession(context, input);
+  },
 });
 
 registerMigrationRoutes({
@@ -778,14 +800,18 @@ registerMigrationRoutes({
 registerAuthRoutes({
   app,
   resolveDatabase,
-  resolveSessionFromCookie,
+  createMagicLinkSession: (context, token) => {
+    return legacyAuthProvider.createMagicLinkSession(context, token);
+  },
+  resolveAuthenticatedPrincipal,
+  resolveRequestedTenantContext,
+  revokeCurrentSession: (context) => {
+    return legacyAuthProvider.revokeCurrentSession(context);
+  },
   addSecondsToIso,
   generateOpaqueToken,
   sha256Hex,
-  sessionCookieSecure,
   MAGIC_LINK_TTL_SECONDS,
-  SESSION_TTL_SECONDS,
-  SESSION_COOKIE_NAME,
   sendMagicLinkEmailNotification,
 });
 
