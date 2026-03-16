@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setCookie } from 'hono/cookie';
 
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
@@ -143,6 +144,50 @@ const sampleSession = (overrides?: { tenantId?: string; userId?: string }): Sess
   };
 };
 
+const loadAppWithMockedLegacyAuthProvider = async () => {
+  vi.resetModules();
+  const provider = {
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(
+      async (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
+        setCookie(context, 'credtrail_session', 'adapter-session', {
+          httpOnly: true,
+          sameSite: 'Lax',
+          path: '/',
+        });
+        return {
+          userId: input.userId,
+          authSessionId: 'ses_adapter',
+          authMethod: 'legacy_lti' as const,
+          expiresAt: '2026-02-11T22:00:00.000Z',
+        };
+      },
+    ),
+    resolveAuthenticatedPrincipal: vi.fn(async () => null),
+    resolveRequestedTenantContext: vi.fn(async () => null),
+    revokeCurrentSession: vi.fn(async () => undefined),
+  };
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider: vi.fn(() => provider),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    provider,
+  };
+};
+
 const sampleBadgeTemplate = (overrides?: {
   id?: string;
   title?: string;
@@ -209,6 +254,10 @@ const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unkno
 
   return JSON.parse(decoded) as Record<string, unknown>;
 };
+
+afterEach(() => {
+  vi.doUnmock('./auth/legacy-auth-adapter');
+});
 
 describe('LTI 1.3 core launch flow', () => {
   const issuer = 'https://canvas.example.edu';
@@ -282,6 +331,81 @@ describe('LTI 1.3 core launch flow', () => {
     env.LTI_STATE_SIGNING_SECRET = 'test-lti-state-secret';
     return env;
   };
+
+  it('delegates LTI session issuance to the internal auth provider', async () => {
+    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+    const env = createLtiEnv();
+    const loginResponse = await isolatedApp.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        'opaque-login-hint',
+      )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+        deploymentId,
+      )}`,
+      undefined,
+      env,
+    );
+    const loginLocation = loginResponse.headers.get('location');
+    const loginUrl = new URL(loginLocation ?? '');
+    const state = loginUrl.searchParams.get('state') ?? '';
+    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: 'RS256',
+        typ: 'JWT',
+      },
+      payload: {
+        iss: issuer,
+        sub: 'user-123',
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce,
+        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
+        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
+        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
+        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
+        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
+          id: 'resource-link-123',
+        },
+        'https://purl.imsglobal.org/spec/lti/claim/roles': [
+          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        ],
+        'https://purl.imsglobal.org/spec/lti/claim/context': {
+          id: 'course-123',
+          label: 'TS101',
+          title: 'TypeScript 101',
+        },
+        name: 'Instructor Example',
+      },
+    });
+
+    const response = await isolatedApp.request(
+      '/v1/lti/launch',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state,
+        }).toString(),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
+    expect(provider.createLtiSession).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId,
+        userId: linkedUserId,
+      }),
+    );
+    expect(mockedCreateSession).not.toHaveBeenCalled();
+  });
 
   it('redirects OIDC login initiation to issuer authorization endpoint with required parameters', async () => {
     const env = createLtiEnv();

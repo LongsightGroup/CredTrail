@@ -118,6 +118,15 @@ beforeEach(() => {
   mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
 });
 
+describe('GET /', () => {
+  it('redirects to /login', async () => {
+    const response = await app.request('/', undefined, createEnv());
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/login');
+  });
+});
+
 describe('PUT /v1/admin/tenants/:tenantId', () => {
   beforeEach(() => {
     mockedUpsertTenant.mockReset();

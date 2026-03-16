@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deleteCookie, setCookie } from 'hono/cookie';
 
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
@@ -91,6 +92,71 @@ const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
   };
 };
 
+const loadAppWithMockedLegacyAuthProvider = async (options?: {
+  principal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'legacy_magic_link' | 'legacy_lti';
+    expiresAt: string;
+  };
+  requestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  };
+}) => {
+  vi.resetModules();
+  const principal = options?.principal ?? {
+    userId: 'usr_adapter',
+    authSessionId: 'ses_adapter',
+    authMethod: 'legacy_magic_link' as const,
+    expiresAt: '2026-02-18T22:00:00.000Z',
+  };
+  const requestedTenant = options?.requestedTenant ?? {
+    tenantId: 'tenant_123',
+    source: 'legacy_session' as const,
+    authoritative: false,
+  };
+  const provider = {
+    createMagicLinkSession: vi.fn(async (context: Parameters<typeof setCookie>[0]) => {
+      setCookie(context, 'credtrail_session', 'adapter-session', {
+        httpOnly: true,
+        sameSite: 'Lax',
+        path: '/',
+      });
+      return principal;
+    }),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(async () => principal),
+    resolveRequestedTenantContext: vi.fn(async () => requestedTenant),
+    revokeCurrentSession: vi.fn(async (context: Parameters<typeof deleteCookie>[0]) => {
+      deleteCookie(context, 'credtrail_session', {
+        path: '/',
+      });
+    }),
+  };
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider: vi.fn(() => provider),
+      resolveLegacySessionRecord: vi.fn(async () => null),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    provider,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -142,6 +208,119 @@ beforeEach(() => {
   mockedUpsertUserByEmail.mockResolvedValue({
     id: 'usr_123',
     email: 'learner@example.edu',
+  });
+});
+
+afterEach(() => {
+  vi.doUnmock('./auth/legacy-auth-adapter');
+});
+
+describe('hosted auth adapter wiring', () => {
+  it('delegates JSON magic-link verification to the internal auth provider', async () => {
+    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+
+    const response = await isolatedApp.request(
+      '/v1/auth/magic-link/verify',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: 'adapter-token-1234567890',
+        }),
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_123',
+      userId: 'usr_adapter',
+      expiresAt: '2026-02-18T22:00:00.000Z',
+    });
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
+    expect(provider.createMagicLinkSession).toHaveBeenCalledTimes(1);
+    expect(mockedCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('delegates browser magic-link verification to the internal auth provider', async () => {
+    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+
+    const response = await isolatedApp.request(
+      '/auth/magic-link/verify?token=adapter-token-1234567890',
+      undefined,
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
+    expect(provider.createMagicLinkSession).toHaveBeenCalledTimes(1);
+    expect(mockedCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('delegates session inspection to the internal auth provider', async () => {
+    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+
+    const response = await isolatedApp.request(
+      '/v1/auth/session',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_123',
+      userId: 'usr_adapter',
+      expiresAt: '2026-02-18T22:00:00.000Z',
+    });
+    expect(provider.resolveAuthenticatedPrincipal).toHaveBeenCalledTimes(1);
+    expect(provider.resolveRequestedTenantContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('delegates logout to the internal auth provider', async () => {
+    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+
+    const response = await isolatedApp.request(
+      '/v1/auth/logout',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'signed_out',
+    });
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
+    expect(provider.revokeCurrentSession).toHaveBeenCalledTimes(1);
+    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
   });
 });
 
