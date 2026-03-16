@@ -1,16 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { mockedFindTenantAuthPolicy, mockedListTenantAuthProviders } = vi.hoisted(() => {
+  return {
+    mockedFindTenantAuthPolicy: vi.fn(),
+    mockedListTenantAuthProviders: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
   return {
     ...actual,
     findActiveSessionByHash: vi.fn(),
+    findTenantAuthPolicy: mockedFindTenantAuthPolicy,
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
+    listTenantAuthProviders: mockedListTenantAuthProviders,
     listBadgeTemplates: vi.fn(),
     listTenantApiKeys: vi.fn(),
     listTenantOrgUnits: vi.fn(),
@@ -112,6 +121,17 @@ beforeEach(() => {
     issuerDomain: 'tenant-123.credtrail.test',
     didWeb: 'did:web:credtrail.test:tenant_123',
     isActive: true,
+    createdAt: '2026-02-18T12:00:00.000Z',
+    updatedAt: '2026-02-18T12:00:00.000Z',
+  });
+  mockedFindTenantAuthPolicy.mockReset();
+  mockedFindTenantAuthPolicy.mockResolvedValue({
+    tenantId: 'tenant_123',
+    loginMode: 'hybrid',
+    breakGlassEnabled: true,
+    localMfaRequired: true,
+    defaultProviderId: 'tap_oidc',
+    enforceForRoles: 'all_users',
     createdAt: '2026-02-18T12:00:00.000Z',
     updatedAt: '2026-02-18T12:00:00.000Z',
   });
@@ -218,6 +238,21 @@ beforeEach(() => {
       updatedAt: '2026-02-18T12:30:00.000Z',
     },
   ]);
+  mockedListTenantAuthProviders.mockReset();
+  mockedListTenantAuthProviders.mockResolvedValue([
+    {
+      id: 'tap_oidc',
+      tenantId: 'tenant_123',
+      protocol: 'oidc',
+      label: 'Campus OIDC',
+      enabled: true,
+      isDefault: true,
+      configJson:
+        '{"issuer":"https://idp.example.edu","clientId":"credtrail","clientSecret":"secret"}',
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:00:00.000Z',
+    },
+  ]);
 });
 
 describe('GET /tenants/:tenantId/admin', () => {
@@ -310,6 +345,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Credential operations');
     expect(body).toContain('Rule design');
     expect(body).toContain('Access and structure');
+    expect(body).not.toContain('Enterprise Auth');
     expect(body).toContain('Badge Rules (1)');
     expect(body).toContain('CS101 Excellence Rule');
     expect(body).toContain('TypeScript Foundations');
@@ -377,6 +413,43 @@ describe('GET /tenants/:tenantId/admin', () => {
       tenantId: 'tenant_123',
       ruleId: 'brl_123',
     });
+  });
+
+  it('renders enterprise auth settings for enterprise tenants', async () => {
+    const env = createEnv();
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedFindTenantById.mockResolvedValue({
+      id: 'tenant_123',
+      slug: 'tenant-123',
+      displayName: 'Tenant 123',
+      planTier: 'enterprise',
+      issuerDomain: 'tenant-123.credtrail.test',
+      didWeb: 'did:web:credtrail.test:tenant_123',
+      isActive: true,
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:00:00.000Z',
+    });
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Enterprise Auth');
+    expect(body).toContain('Login mode');
+    expect(body).toContain('Campus OIDC');
+    expect(body).toContain('id="enterprise-auth-policy-form"');
+    expect(body).toContain('id="enterprise-auth-provider-form"');
+    expect(body).toContain('/v1/tenants/tenant_123/auth-policy');
+    expect(body).toContain('/v1/tenants/tenant_123/auth-providers');
   });
 });
 
