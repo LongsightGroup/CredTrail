@@ -93,6 +93,7 @@ const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
 };
 
 interface MockedLegacyAuthProvider {
+  requestMagicLink: ReturnType<typeof vi.fn>;
   createMagicLinkSession: ReturnType<typeof vi.fn>;
   createLtiSession: ReturnType<typeof vi.fn>;
   resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
@@ -129,6 +130,7 @@ const loadAppWithMockedLegacyAuthProvider = async (options?: {
     authoritative: false,
   };
   const provider: MockedLegacyAuthProvider = {
+    requestMagicLink: vi.fn(),
     createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
       setCookie(context, 'credtrail_session', 'adapter-session', {
         httpOnly: true,
@@ -166,6 +168,155 @@ const loadAppWithMockedLegacyAuthProvider = async (options?: {
   return {
     app: isolatedApp,
     provider,
+  };
+};
+
+interface MockedInternalAuthProvider {
+  requestMagicLink: ReturnType<typeof vi.fn>;
+  createMagicLinkSession: ReturnType<typeof vi.fn>;
+  createLtiSession: ReturnType<typeof vi.fn>;
+  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
+  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
+  revokeCurrentSession: ReturnType<typeof vi.fn>;
+}
+
+const loadAppWithMockedHostedAuthProviders = async (options?: {
+  requestMagicLinkResult?: {
+    tenantId: string;
+    email: string;
+    deliveryStatus: 'sent' | 'skipped' | 'failed';
+    expiresAt?: string | undefined;
+    debugMagicLinkToken?: string | undefined;
+    debugMagicLinkUrl?: string | undefined;
+  };
+  betterAuthInitiallyAuthenticated?: boolean;
+  betterAuthPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'better_auth';
+    expiresAt: string;
+  };
+  betterAuthRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  };
+}): Promise<{
+  app: typeof app;
+  betterAuthProvider: MockedInternalAuthProvider;
+  legacyAuthProvider: MockedInternalAuthProvider;
+}> => {
+  vi.resetModules();
+
+  const betterAuthPrincipal = options?.betterAuthPrincipal ?? {
+    userId: 'usr_better',
+    authSessionId: 'ba_ses_123',
+    authMethod: 'better_auth' as const,
+    expiresAt: '2026-02-18T22:00:00.000Z',
+  };
+  const betterAuthRequestedTenant = options?.betterAuthRequestedTenant ?? {
+    tenantId: 'tenant_123',
+    source: 'route' as const,
+    authoritative: true,
+  };
+  let betterAuthAuthenticated = options?.betterAuthInitiallyAuthenticated ?? false;
+
+  const betterAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(() =>
+      Promise.resolve(
+        options?.requestMagicLinkResult ?? {
+          tenantId: 'tenant_123',
+          email: 'learner@example.edu',
+          deliveryStatus: 'sent' as const,
+          expiresAt: '2026-02-18T12:10:00.000Z',
+          debugMagicLinkToken: 'better-token-1234567890',
+          debugMagicLinkUrl:
+            'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        },
+      ),
+    ),
+    createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
+      betterAuthAuthenticated = true;
+      setCookie(context, 'better-auth.session_token', 'better-session', {
+        httpOnly: true,
+        sameSite: 'Lax',
+        path: '/',
+      });
+      return Promise.resolve(betterAuthPrincipal);
+    }),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() =>
+      Promise.resolve(betterAuthAuthenticated ? betterAuthPrincipal : null),
+    ),
+    resolveRequestedTenantContext: vi.fn(() =>
+      Promise.resolve(betterAuthAuthenticated ? betterAuthRequestedTenant : null),
+    ),
+    revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
+      betterAuthAuthenticated = false;
+      deleteCookie(context, 'better-auth.session_token', {
+        path: '/',
+      });
+      return Promise.resolve();
+    }),
+  };
+
+  const legacyAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
+      setCookie(context, 'credtrail_session', 'legacy-session', {
+        httpOnly: true,
+        sameSite: 'Lax',
+        path: '/',
+      });
+      return Promise.resolve({
+        userId: 'usr_legacy',
+        authSessionId: 'ses_legacy',
+        authMethod: 'legacy_magic_link' as const,
+        expiresAt: '2026-02-18T20:00:00.000Z',
+      });
+    }),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
+    revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
+      deleteCookie(context, 'credtrail_session', {
+        path: '/',
+      });
+      return Promise.resolve();
+    }),
+  };
+
+  vi.doMock('./auth/better-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+        './auth/better-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createBetterAuthProvider: vi.fn(() => betterAuthProvider),
+    };
+  });
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
+      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    betterAuthProvider,
+    legacyAuthProvider,
   };
 };
 
@@ -224,6 +375,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.doUnmock('./auth/better-auth-adapter');
   vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
@@ -407,6 +559,203 @@ describe('magic-link auth routes', () => {
     expect(body.magicLinkToken.length).toBeGreaterThan(0);
     expect(body.magicLinkUrl).toContain('/auth/magic-link/verify?token=');
     expect(body.magicLinkUrl).toContain('next=');
+  });
+
+  it('delegates hosted magic-link requests to Better Auth while preserving user and membership upserts', async () => {
+    mockedEnsureTenantMembership.mockResolvedValue({
+      membership: {
+        tenantId: 'tenant_123',
+        userId: 'usr_123',
+        role: 'viewer',
+        createdAt: '2026-02-18T12:00:00.000Z',
+        updatedAt: '2026-02-18T12:00:00.000Z',
+      },
+      created: true,
+    });
+
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedHostedAuthProviders();
+
+    const response = await isolatedApp.request(
+      '/v1/auth/magic-link/request',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          email: 'learner@example.edu',
+        }),
+      },
+      createEnv('development'),
+    );
+    const body = await response.json<{
+      status: string;
+      deliveryStatus: string;
+      tenantId: string;
+      email: string;
+      expiresAt: string;
+      magicLinkToken: string;
+      magicLinkUrl: string;
+    }>();
+
+    expect(response.status).toBe(202);
+    expect(body).toEqual({
+      status: 'sent',
+      deliveryStatus: 'sent',
+      tenantId: 'tenant_123',
+      email: 'learner@example.edu',
+      expiresAt: '2026-02-18T12:10:00.000Z',
+      magicLinkToken: 'better-token-1234567890',
+      magicLinkUrl:
+        'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    });
+    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, 'learner@example.edu');
+    expect(mockedEnsureTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(mockedCreateAuditLog).toHaveBeenCalledTimes(1);
+    expect(betterAuthProvider.requestMagicLink).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        email: 'learner@example.edu',
+      }),
+    );
+    expect(legacyAuthProvider.requestMagicLink).not.toHaveBeenCalled();
+    expect(mockedCreateMagicLinkToken).not.toHaveBeenCalled();
+  });
+
+  it('delegates JSON verify to Better Auth-backed session creation instead of legacy token tables', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedHostedAuthProviders();
+
+    const response = await isolatedApp.request(
+      '/v1/auth/magic-link/verify',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: 'better-token-1234567890',
+        }),
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_123',
+      userId: 'usr_better',
+      expiresAt: '2026-02-18T22:00:00.000Z',
+    });
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
+    expect(legacyAuthProvider.createMagicLinkSession).not.toHaveBeenCalled();
+    expect(mockedCreateSession).not.toHaveBeenCalled();
+    expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
+    expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
+  });
+
+  it('delegates browser GET verify to Better Auth-backed session creation instead of legacy token tables', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedHostedAuthProviders();
+
+    const response = await isolatedApp.request(
+      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
+    expect(legacyAuthProvider.createMagicLinkSession).not.toHaveBeenCalled();
+    expect(mockedCreateSession).not.toHaveBeenCalled();
+    expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
+    expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
+  });
+
+  it('uses Better Auth-backed session inspection and logout without falling back to legacy session tables', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedHostedAuthProviders({
+        betterAuthInitiallyAuthenticated: true,
+      });
+
+    const sessionResponse = await isolatedApp.request(
+      '/v1/auth/session',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+    const sessionBody = await sessionResponse.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(sessionResponse.status).toBe(200);
+    expect(sessionBody).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_123',
+      userId: 'usr_better',
+      expiresAt: '2026-02-18T22:00:00.000Z',
+    });
+    expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
+
+    const logoutResponse = await isolatedApp.request(
+      '/v1/auth/logout',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+    const logoutBody = await logoutResponse.json<{
+      status: string;
+    }>();
+
+    expect(logoutResponse.status).toBe(200);
+    expect(logoutBody).toEqual({
+      status: 'signed_out',
+    });
+    expect(logoutResponse.headers.get('set-cookie')).toContain('better-auth.session_token=');
+    expect(betterAuthProvider.revokeCurrentSession).toHaveBeenCalledTimes(1);
+    expect(legacyAuthProvider.revokeCurrentSession).not.toHaveBeenCalled();
+    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
+
+    const afterLogoutResponse = await isolatedApp.request(
+      '/v1/auth/session',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+    const afterLogoutBody = await afterLogoutResponse.json<{
+      error: string;
+    }>();
+
+    expect(afterLogoutResponse.status).toBe(401);
+    expect(afterLogoutBody).toEqual({
+      error: 'Not authenticated',
+    });
   });
 
   it('supports browser GET verify and sets session cookie before redirect', async () => {
