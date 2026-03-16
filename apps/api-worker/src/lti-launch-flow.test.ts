@@ -144,7 +144,8 @@ const sampleSession = (overrides?: { tenantId?: string; userId?: string }): Sess
   };
 };
 
-interface MockedLegacyAuthProvider {
+interface MockedInternalAuthProvider {
+  requestMagicLink: ReturnType<typeof vi.fn>;
   createMagicLinkSession: ReturnType<typeof vi.fn>;
   createLtiSession: ReturnType<typeof vi.fn>;
   resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
@@ -152,12 +153,24 @@ interface MockedLegacyAuthProvider {
   revokeCurrentSession: ReturnType<typeof vi.fn>;
 }
 
-const loadAppWithMockedLegacyAuthProvider = async (): Promise<{
+const loadAppWithMockedAuthProviders = async (): Promise<{
   app: typeof app;
-  provider: MockedLegacyAuthProvider;
+  betterAuthProvider: MockedInternalAuthProvider;
+  legacyAuthProvider: MockedInternalAuthProvider;
 }> => {
   vi.resetModules();
-  const provider: MockedLegacyAuthProvider = {
+  const betterAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(async () => {
+      throw new Error('Better Auth should not create LTI sessions');
+    }),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+  const legacyAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
     createMagicLinkSession: vi.fn(),
     createLtiSession: vi.fn(
       (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
@@ -179,6 +192,18 @@ const loadAppWithMockedLegacyAuthProvider = async (): Promise<{
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
+  vi.doMock('./auth/better-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+        './auth/better-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createBetterAuthProvider: vi.fn(() => betterAuthProvider),
+    };
+  });
+
   vi.doMock('./auth/legacy-auth-adapter', async () => {
     const actual =
       await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
@@ -187,7 +212,7 @@ const loadAppWithMockedLegacyAuthProvider = async (): Promise<{
 
     return {
       ...actual,
-      createLegacyAuthProvider: vi.fn(() => provider),
+      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
     };
   });
 
@@ -195,7 +220,8 @@ const loadAppWithMockedLegacyAuthProvider = async (): Promise<{
 
   return {
     app: isolatedApp,
-    provider,
+    betterAuthProvider,
+    legacyAuthProvider,
   };
 };
 
@@ -267,6 +293,7 @@ const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unkno
 };
 
 afterEach(() => {
+  vi.doUnmock('./auth/better-auth-adapter');
   vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
@@ -343,8 +370,9 @@ describe('LTI 1.3 core launch flow', () => {
     return env;
   };
 
-  it('delegates LTI session issuance to the internal auth provider', async () => {
-    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
+  it('keeps LTI session issuance on the legacy auth provider while Better Auth stays primary for hosted auth', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedAuthProviders();
     const env = createLtiEnv();
     const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
@@ -408,13 +436,14 @@ describe('LTI 1.3 core launch flow', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
-    expect(provider.createLtiSession).toHaveBeenCalledWith(
+    expect(legacyAuthProvider.createLtiSession).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         tenantId,
         userId: linkedUserId,
       }),
     );
+    expect(betterAuthProvider.createLtiSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 

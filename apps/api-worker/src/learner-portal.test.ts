@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
@@ -64,6 +64,15 @@ const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
 
+interface MockedInternalAuthProvider {
+  requestMagicLink: ReturnType<typeof vi.fn>;
+  createMagicLinkSession: ReturnType<typeof vi.fn>;
+  createLtiSession: ReturnType<typeof vi.fn>;
+  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
+  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
+  revokeCurrentSession: ReturnType<typeof vi.fn>;
+}
+
 const createEnv = (): {
   APP_ENV: string;
   DATABASE_URL: string;
@@ -75,6 +84,87 @@ const createEnv = (): {
     DATABASE_URL: 'postgres://credtrail-test.local/db',
     BADGE_OBJECTS: {} as R2Bucket,
     PLATFORM_DOMAIN: 'credtrail.test',
+  };
+};
+
+const loadAppWithMockedAuthProviders = async (input: {
+  betterAuthPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'better_auth';
+    expiresAt: string;
+  } | null;
+  betterAuthRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+  legacyPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'legacy_magic_link' | 'legacy_lti';
+    expiresAt: string;
+  } | null;
+  legacyRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+}): Promise<{
+  app: typeof app;
+  betterAuthProvider: MockedInternalAuthProvider;
+  legacyAuthProvider: MockedInternalAuthProvider;
+}> => {
+  vi.resetModules();
+
+  const betterAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+  const legacyAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.legacyPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.legacyRequestedTenant ?? null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+
+  vi.doMock('./auth/better-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+        './auth/better-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createBetterAuthProvider: vi.fn(() => betterAuthProvider),
+    };
+  });
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
+      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    betterAuthProvider,
+    legacyAuthProvider,
   };
 };
 
@@ -149,6 +239,11 @@ beforeEach(() => {
   mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
 });
 
+afterEach(() => {
+  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock('./auth/legacy-auth-adapter');
+});
+
 describe('GET /tenants/:tenantId/learner/dashboard', () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
@@ -197,6 +292,31 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(response.status).toBe(200);
     expect(body).toContain('Your credential collection');
     expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+  });
+
+  it('authorizes learner dashboard from Better Auth without a legacy session cookie', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedAuthProviders({
+        betterAuthPrincipal: {
+          userId: 'usr_123',
+          authSessionId: 'ba_ses_123',
+          authMethod: 'better_auth',
+          expiresAt: '2026-03-17T22:00:00.000Z',
+        },
+      });
+    const env = createEnv();
+
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
+
+    const response = await isolatedApp.request('/tenants/tenant_123/learner/dashboard', undefined, env);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Your credential collection');
+    expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the authenticated user lacks membership for the requested tenant', async () => {
