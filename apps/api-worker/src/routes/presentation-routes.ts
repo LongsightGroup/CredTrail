@@ -8,12 +8,12 @@ import {
   findAssertionById,
   listLearnerBadgeSummaries,
   type AssertionRecord,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { Hono } from 'hono';
 import { parsePresentationCreateRequest, parsePresentationVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
 
 interface PresentationHolderProofSummary {
   status: 'valid' | 'invalid' | 'unchecked';
@@ -26,7 +26,10 @@ interface PresentationCredentialVerificationResult {
 interface RegisterPresentationRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
-  resolveSessionFromCookie: (context: AppContext) => Promise<SessionRecord | null>;
+  resolveAuthenticatedPrincipal: (context: AppContext) => Promise<AuthenticatedPrincipal | null>;
+  resolveRequestedTenantContext: (
+    context: AppContext,
+  ) => Promise<RequestedTenantContext | null>;
   parseTenantScopedCredentialId: (
     credentialId: string,
   ) => {
@@ -67,7 +70,8 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
   const {
     app,
     resolveDatabase,
-    resolveSessionFromCookie,
+    resolveAuthenticatedPrincipal,
+    resolveRequestedTenantContext,
     parseTenantScopedCredentialId,
     loadCredentialForAssertion,
     ed25519PublicJwkFromDidKey,
@@ -83,14 +87,25 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
   } = input;
 
   app.post('/v1/presentations/create', async (c): Promise<Response> => {
-    const session = await resolveSessionFromCookie(c);
+    const principal = await resolveAuthenticatedPrincipal(c);
 
-    if (session === null) {
+    if (principal === null) {
       return c.json(
         {
           error: 'Not authenticated',
         },
         401,
+      );
+    }
+
+    const requestedTenant = await resolveRequestedTenantContext(c);
+
+    if (requestedTenant === null) {
+      return c.json(
+        {
+          error: 'Active tenant context is unavailable for this presentation request',
+        },
+        403,
       );
     }
 
@@ -145,8 +160,8 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     };
     const db = resolveDatabase(c.env);
     const learnerBadges = await listLearnerBadgeSummaries(db, {
-      tenantId: session.tenantId,
-      userId: session.userId,
+      tenantId: requestedTenant.tenantId,
+      userId: principal.userId,
     });
     const learnerAssertionIds = new Set<string>(learnerBadges.map((badge) => badge.assertionId));
     const selectedCredentials: JsonObject[] = [];
@@ -154,11 +169,11 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     for (const credentialId of request.credentialIds) {
       const tenantScopedCredentialId = parseTenantScopedCredentialId(credentialId);
 
-      if (tenantScopedCredentialId?.tenantId !== session.tenantId) {
+      if (tenantScopedCredentialId?.tenantId !== requestedTenant.tenantId) {
         return c.json(
           {
             error:
-              'credentialIds must contain tenant-scoped assertion identifiers for the active session tenant',
+              'credentialIds must contain tenant-scoped assertion identifiers for the active tenant context',
             credentialId,
           },
           422,
@@ -175,7 +190,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
         );
       }
 
-      const assertion = await findAssertionById(db, session.tenantId, credentialId);
+      const assertion = await findAssertionById(db, requestedTenant.tenantId, credentialId);
 
       if (assertion === null) {
         return c.json(

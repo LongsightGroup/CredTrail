@@ -633,7 +633,8 @@ registerAdminRoutes({
 registerOb3Routes({
   app,
   resolveDatabase,
-  resolveSessionFromCookie,
+  resolveAuthenticatedPrincipal,
+  resolveRequestedTenantContext,
   observabilityContext,
   ob3ServiceDescriptionDocument,
   oauthErrorJson,
@@ -703,7 +704,8 @@ registerOid4vciRoutes({
 registerPresentationRoutes({
   app,
   resolveDatabase,
-  resolveSessionFromCookie,
+  resolveAuthenticatedPrincipal,
+  resolveRequestedTenantContext,
   parseTenantScopedCredentialId,
   loadCredentialForAssertion,
   ed25519PublicJwkFromDidKey,
@@ -800,12 +802,12 @@ registerTenantGovernanceRoutes({
 registerBadgeTemplateRoutes({
   app,
   resolveDatabase,
-  resolveSessionFromCookie,
   requireTenantRole,
   requireScopedOrgUnitPermission,
   defaultInstitutionOrgUnitId,
   ADMIN_ROLES,
   ISSUER_ROLES,
+  TENANT_MEMBER_ROLES,
 });
 
 const issueBadgeForTenant = createIssueBadgeForTenant<AppContext, AppBindings>({

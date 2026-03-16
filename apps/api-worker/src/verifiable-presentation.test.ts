@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
@@ -71,6 +71,56 @@ const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
+const originalFetch = globalThis.fetch;
+const VC_V2_CONTEXT_URL = 'https://www.w3.org/ns/credentials/v2';
+const VC_V2_CONTEXT_DOCUMENT = {
+  '@context': {
+    '@protected': true,
+    id: '@id',
+    type: '@type',
+    VerifiableCredential: 'https://www.w3.org/2018/credentials#VerifiableCredential',
+    VerifiablePresentation: 'https://www.w3.org/2018/credentials#VerifiablePresentation',
+    OpenBadgeCredential: 'https://purl.imsglobal.org/spec/ob/v3p0#OpenBadgeCredential',
+    Achievement: 'https://purl.imsglobal.org/spec/ob/v3p0#Achievement',
+    credentialSubject: 'https://www.w3.org/2018/credentials#credentialSubject',
+    issuer: {
+      '@id': 'https://www.w3.org/2018/credentials#issuer',
+      '@type': '@id',
+    },
+    validFrom: {
+      '@id': 'https://www.w3.org/2018/credentials#validFrom',
+      '@type': 'http://www.w3.org/2001/XMLSchema#dateTime',
+    },
+    holder: {
+      '@id': 'https://www.w3.org/2018/credentials#holder',
+      '@type': '@id',
+    },
+    verifiableCredential: {
+      '@id': 'https://www.w3.org/2018/credentials#verifiableCredential',
+      '@container': '@set',
+    },
+    proof: 'https://w3id.org/security#proof',
+    proofPurpose: {
+      '@id': 'https://w3id.org/security#proofPurpose',
+      '@type': '@vocab',
+    },
+    assertionMethod: 'https://w3id.org/security#assertionMethod',
+    verificationMethod: {
+      '@id': 'https://w3id.org/security#verificationMethod',
+      '@type': '@id',
+    },
+    created: {
+      '@id': 'http://purl.org/dc/terms/created',
+      '@type': 'http://www.w3.org/2001/XMLSchema#dateTime',
+    },
+    proofValue: 'https://w3id.org/security#proofValue',
+    cryptosuite: 'https://w3id.org/security#cryptosuite',
+    DataIntegrityProof: 'https://w3id.org/security#DataIntegrityProof',
+    Ed25519Signature2020: 'https://w3id.org/security#Ed25519Signature2020',
+    name: 'http://schema.org/name',
+    achievement: 'https://purl.imsglobal.org/spec/ob/v3p0#achievement',
+  },
+};
 
 const createEnv = (): {
   APP_ENV: string;
@@ -93,6 +143,29 @@ const createEnv = (): {
 };
 
 beforeEach(() => {
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+
+    if (url === VC_V2_CONTEXT_URL) {
+      return new Response(JSON.stringify(VC_V2_CONTEXT_DOCUMENT), {
+        status: 200,
+        headers: {
+          'content-type': 'application/ld+json',
+        },
+      });
+    }
+
+    if (originalFetch === undefined) {
+      throw new Error(`Unexpected fetch in presentation test: ${url}`);
+    }
+
+    return originalFetch(input, init);
+  });
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindUserById.mockReset();
@@ -107,6 +180,10 @@ beforeEach(() => {
   mockedListLearnerBadgeSummaries.mockReset();
   mockedFindAssertionById.mockReset();
   mockedGetImmutableCredentialObject.mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 const sampleAssertion = (overrides?: {

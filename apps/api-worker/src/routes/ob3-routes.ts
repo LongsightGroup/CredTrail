@@ -12,11 +12,11 @@ import {
   revokeOAuthRefreshTokenByHash,
   upsertOb3SubjectCredential,
   upsertOb3SubjectProfile,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { Hono } from 'hono';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
 import {
   OB3_BASE_PATH,
   OB3_DISCOVERY_CACHE_CONTROL,
@@ -64,7 +64,10 @@ interface OAuthAccessTokenContext {
 interface RegisterOb3RoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
-  resolveSessionFromCookie: (context: AppContext) => Promise<SessionRecord | null>;
+  resolveAuthenticatedPrincipal: (context: AppContext) => Promise<AuthenticatedPrincipal | null>;
+  resolveRequestedTenantContext: (
+    context: AppContext,
+  ) => Promise<RequestedTenantContext | null>;
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
   ob3ServiceDescriptionDocument: (context: AppContext) => JsonObject;
   oauthErrorJson: (
@@ -132,7 +135,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
   const {
     app,
     resolveDatabase,
-    resolveSessionFromCookie,
+    resolveAuthenticatedPrincipal,
+    resolveRequestedTenantContext,
     observabilityContext,
     ob3ServiceDescriptionDocument,
     oauthErrorJson,
@@ -388,13 +392,26 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       );
     }
 
-    const session = await resolveSessionFromCookie(c);
+    const principal = await resolveAuthenticatedPrincipal(c);
 
-    if (session === null) {
+    if (principal === null) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
           error: 'access_denied',
           error_description: 'Resource owner is not authenticated',
+          state,
+        }),
+        302,
+      );
+    }
+
+    const requestedTenant = await resolveRequestedTenantContext(c);
+
+    if (requestedTenant === null) {
+      return c.redirect(
+        oauthRedirectUriWithParams(redirectUri, {
+          error: 'access_denied',
+          error_description: 'Resource owner does not have an active tenant context',
           state,
         }),
         302,
@@ -406,8 +423,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
 
     await createOAuthAuthorizationCode(db, {
       clientId: clientMetadata.clientId,
-      userId: session.userId,
-      tenantId: session.tenantId,
+      userId: principal.userId,
+      tenantId: requestedTenant.tenantId,
       codeHash: authorizationCodeHash,
       redirectUri,
       scope: requestedScopeTokens.join(' '),

@@ -2,7 +2,6 @@ import {
   createAuditLog,
   createBadgeTemplate,
   findBadgeTemplateById,
-  findTenantMembership,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
   listBadgeTemplateOwnershipEvents,
@@ -10,7 +9,6 @@ import {
   setBadgeTemplateArchivedState,
   transferBadgeTemplateOwnership,
   updateBadgeTemplate,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
@@ -25,6 +23,7 @@ import {
   parseUpdateBadgeTemplateRequest,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal } from '../auth/auth-context';
 import {
   BADGE_TEMPLATE_IMAGE_MAX_BYTES,
   badgeTemplateImageMimeTypeFromBytes,
@@ -36,14 +35,13 @@ import {
 interface RegisterBadgeTemplateRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
-  resolveSessionFromCookie: (c: AppContext) => Promise<SessionRecord | null>;
   requireTenantRole: (
     c: AppContext,
     tenantId: string,
     allowedRoles: readonly TenantMembershipRole[],
   ) => Promise<
     | {
-        session: SessionRecord;
+        principal: AuthenticatedPrincipal;
         membershipRole: TenantMembershipRole;
       }
     | Response
@@ -63,18 +61,19 @@ interface RegisterBadgeTemplateRoutesInput {
   defaultInstitutionOrgUnitId: (tenantId: string) => string;
   ADMIN_ROLES: readonly TenantMembershipRole[];
   ISSUER_ROLES: readonly TenantMembershipRole[];
+  TENANT_MEMBER_ROLES: readonly TenantMembershipRole[];
 }
 
 export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesInput): void => {
   const {
     app,
     resolveDatabase,
-    resolveSessionFromCookie,
     requireTenantRole,
     requireScopedOrgUnitPermission,
     defaultInstitutionOrgUnitId,
     ADMIN_ROLES,
     ISSUER_ROLES,
+    TENANT_MEMBER_ROLES,
   } = input;
 
   app.get('/badges/assets/:tenantId/:badgeTemplateId/:assetId', async (c) => {
@@ -111,48 +110,24 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     const query = parseBadgeTemplateListQuery({
       includeArchived: c.req.query('includeArchived'),
     });
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
-    }
-
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
-    const membership = await findTenantMembership(db, pathParams.tenantId, session.userId);
-
-    if (membership === null) {
-      return c.json(
-        {
-          error: 'Membership not found for requested tenant',
-        },
-        403,
-      );
-    }
-
     let templates = await listBadgeTemplates(db, {
       tenantId: pathParams.tenantId,
       includeArchived: query.includeArchived,
     });
 
-    if (membership.role === 'issuer') {
+    if (membershipRole === 'issuer') {
       const hasScopedAssignments = await hasTenantMembershipOrgUnitScopeAssignments(
         db,
         pathParams.tenantId,
-        session.userId,
+        principal.userId,
       );
 
       if (hasScopedAssignments) {
@@ -161,7 +136,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
         for (const template of templates) {
           const canViewTemplate = await hasTenantMembershipOrgUnitAccess(db, {
             tenantId: pathParams.tenantId,
-            userId: session.userId,
+            userId: principal.userId,
             orgUnitId: template.ownerOrgUnitId,
             requiredRole: 'viewer',
           });
@@ -191,7 +166,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
     const targetOwnerOrgUnitId =
       request.ownerOrgUnitId ?? defaultInstitutionOrgUnitId(pathParams.tenantId);
@@ -199,7 +174,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     const scopeCheck = await requireScopedOrgUnitPermission(c, {
       db,
       tenantId: pathParams.tenantId,
-      userId: session.userId,
+      userId: principal.userId,
       membershipRole,
       orgUnitId: targetOwnerOrgUnitId,
       requiredRole: 'issuer',
@@ -219,12 +194,12 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
         criteriaUri: request.criteriaUri,
         imageUri: request.imageUri,
         ownerOrgUnitId: request.ownerOrgUnitId,
-        createdByUserId: session.userId,
+        createdByUserId: principal.userId,
       });
 
       await createAuditLog(db, {
         tenantId: pathParams.tenantId,
-        actorUserId: session.userId,
+        actorUserId: principal.userId,
         action: 'badge_template.created',
         targetType: 'badge_template',
         targetId: template.id,
@@ -272,38 +247,14 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
   app.get('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
-    }
-
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
-    const membership = await findTenantMembership(db, pathParams.tenantId, session.userId);
-
-    if (membership === null) {
-      return c.json(
-        {
-          error: 'Membership not found for requested tenant',
-        },
-        403,
-      );
-    }
-
     const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
 
     if (template === null) {
@@ -315,17 +266,17 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       );
     }
 
-    if (membership.role === 'issuer') {
+    if (membershipRole === 'issuer') {
       const hasScopedAssignments = await hasTenantMembershipOrgUnitScopeAssignments(
         db,
         pathParams.tenantId,
-        session.userId,
+        principal.userId,
       );
 
       if (hasScopedAssignments) {
         const canViewTemplate = await hasTenantMembershipOrgUnitAccess(db, {
           tenantId: pathParams.tenantId,
-          userId: session.userId,
+          userId: principal.userId,
           orgUnitId: template.ownerOrgUnitId,
           requiredRole: 'viewer',
         });
@@ -355,7 +306,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
     const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
 
@@ -371,7 +322,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     const scopeCheck = await requireScopedOrgUnitPermission(c, {
       db,
       tenantId: pathParams.tenantId,
-      userId: session.userId,
+      userId: principal.userId,
       membershipRole,
       orgUnitId: template.ownerOrgUnitId,
       requiredRole: 'viewer',
@@ -415,7 +366,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
 
     try {
       const transition = await transferBadgeTemplateOwnership(resolveDatabase(c.env), {
@@ -428,13 +379,13 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
           request.governanceMetadata === undefined
             ? undefined
             : JSON.stringify(request.governanceMetadata),
-        transferredByUserId: session.userId,
+        transferredByUserId: principal.userId,
         transferredAt: request.transferredAt ?? new Date().toISOString(),
       });
 
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
-        actorUserId: session.userId,
+        actorUserId: principal.userId,
         action: 'badge_template.ownership_transferred',
         targetType: 'badge_template',
         targetId: pathParams.badgeTemplateId,
@@ -495,7 +446,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
     const existingTemplate = await findBadgeTemplateById(
       db,
@@ -515,7 +466,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     const scopeCheck = await requireScopedOrgUnitPermission(c, {
       db,
       tenantId: pathParams.tenantId,
-      userId: session.userId,
+      userId: principal.userId,
       membershipRole,
       orgUnitId: existingTemplate.ownerOrgUnitId,
       requiredRole: 'issuer',
@@ -548,7 +499,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
       await createAuditLog(db, {
         tenantId: pathParams.tenantId,
-        actorUserId: session.userId,
+        actorUserId: principal.userId,
         action: 'badge_template.updated',
         targetType: 'badge_template',
         targetId: template.id,
@@ -585,7 +536,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
     const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
 
@@ -601,7 +552,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     const scopeCheck = await requireScopedOrgUnitPermission(c, {
       db,
       tenantId: pathParams.tenantId,
-      userId: session.userId,
+      userId: principal.userId,
       membershipRole,
       orgUnitId: template.ownerOrgUnitId,
       requiredRole: 'issuer',
@@ -708,7 +659,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     await createAuditLog(db, {
       tenantId: pathParams.tenantId,
-      actorUserId: session.userId,
+      actorUserId: principal.userId,
       action: 'badge_template.image_uploaded',
       targetType: 'badge_template',
       targetId: updatedTemplate.id,
@@ -745,7 +696,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
 
     const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
@@ -764,7 +715,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      actorUserId: session.userId,
+      actorUserId: principal.userId,
       action: 'badge_template.archived_state_changed',
       targetType: 'badge_template',
       targetId: template.id,
@@ -788,7 +739,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return roleCheck;
     }
 
-    const { session, membershipRole } = roleCheck;
+    const { principal, membershipRole } = roleCheck;
 
     const template = await setBadgeTemplateArchivedState(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
@@ -807,7 +758,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      actorUserId: session.userId,
+      actorUserId: principal.userId,
       action: 'badge_template.archived_state_changed',
       targetType: 'badge_template',
       targetId: template.id,
