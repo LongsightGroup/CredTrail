@@ -1,0 +1,24 @@
+export type AuthMethod = 'legacy_magic_link' | 'legacy_lti';
+
+export interface AuthenticatedPrincipal {
+  userId: string;
+  authSessionId: string;
+  authMethod: AuthMethod;
+  expiresAt: string;
+}
+
+export interface RequestedTenantContext {
+  tenantId: string;
+  source: 'route' | 'legacy_session';
+  authoritative: boolean;
+}
+
+export interface RequestAuthContext {
+  principal: AuthenticatedPrincipal | null;
+  requestedTenant: RequestedTenantContext | null;
+}
+
+export interface AuthContextVariables {
+  authenticatedPrincipal: AuthenticatedPrincipal | null;
+  requestedTenantContext: RequestedTenantContext | null;
+}

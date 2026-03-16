@@ -30,9 +30,12 @@ import {
   createMagicLinkToken,
   createSession,
   ensureTenantMembership,
+  findActiveSessionByHash,
   findMagicLinkTokenByHash,
   isMagicLinkTokenValid,
   markMagicLinkTokenUsed,
+  revokeSessionByHash,
+  touchSession,
   upsertUserByEmail,
   type SessionRecord,
   type SqlDatabase,
@@ -45,9 +48,12 @@ const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedCreateMagicLinkToken = vi.mocked(createMagicLinkToken);
 const mockedCreateSession = vi.mocked(createSession);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
+const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindMagicLinkTokenByHash = vi.mocked(findMagicLinkTokenByHash);
 const mockedIsMagicLinkTokenValid = vi.mocked(isMagicLinkTokenValid);
 const mockedMarkMagicLinkTokenUsed = vi.mocked(markMagicLinkTokenUsed);
+const mockedRevokeSessionByHash = vi.mocked(revokeSessionByHash);
+const mockedTouchSession = vi.mocked(touchSession);
 const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 
@@ -123,10 +129,15 @@ beforeEach(() => {
     },
     created: false,
   });
+  mockedFindActiveSessionByHash.mockReset();
   mockedFindMagicLinkTokenByHash.mockReset();
   mockedIsMagicLinkTokenValid.mockReset();
   mockedMarkMagicLinkTokenUsed.mockReset();
   mockedMarkMagicLinkTokenUsed.mockResolvedValue();
+  mockedRevokeSessionByHash.mockReset();
+  mockedRevokeSessionByHash.mockResolvedValue();
+  mockedTouchSession.mockReset();
+  mockedTouchSession.mockResolvedValue();
   mockedUpsertUserByEmail.mockReset();
   mockedUpsertUserByEmail.mockResolvedValue({
     id: 'usr_123',
@@ -230,5 +241,61 @@ describe('magic-link auth routes', () => {
     expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
     expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
     expect(mockedMarkMagicLinkTokenUsed).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns authenticated session details for the current session cookie', async () => {
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+
+    const response = await app.request(
+      '/v1/auth/session',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_123',
+      userId: 'usr_123',
+      expiresAt: '2026-02-18T22:00:00.000Z',
+    });
+    expect(mockedTouchSession).toHaveBeenCalledWith(fakeDb, 'ses_123', expect.any(String));
+  });
+
+  it('revokes the current session on logout and clears the session cookie', async () => {
+    const response = await app.request(
+      '/v1/auth/logout',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      status: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'signed_out',
+    });
+    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
+    expect(mockedRevokeSessionByHash).toHaveBeenCalledWith(
+      fakeDb,
+      expect.any(String),
+      expect.any(String),
+    );
   });
 });
