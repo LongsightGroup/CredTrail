@@ -11,6 +11,7 @@ vi.mock('@credtrail/db', async () => {
     findTenantMembership: vi.fn(),
     hasTenantMembershipOrgUnitAccess: vi.fn(),
     hasTenantMembershipOrgUnitScopeAssignments: vi.fn(),
+    listBadgeTemplates: vi.fn(),
     touchSession: vi.fn(),
     updateBadgeTemplate: vi.fn(),
   };
@@ -29,6 +30,7 @@ import {
   findTenantMembership,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
+  listBadgeTemplates,
   touchSession,
   updateBadgeTemplate,
   type BadgeTemplateRecord,
@@ -48,6 +50,7 @@ const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgU
 const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
+const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedTouchSession = vi.mocked(touchSession);
 const mockedUpdateBadgeTemplate = vi.mocked(updateBadgeTemplate);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -80,6 +83,13 @@ const sampleSession = (): SessionRecord => {
     lastSeenAt: '2026-02-23T12:00:00.000Z',
     revokedAt: null,
     createdAt: '2026-02-23T12:00:00.000Z',
+  };
+};
+
+const sampleSessionForTenant = (tenantId: string): SessionRecord => {
+  return {
+    ...sampleSession(),
+    tenantId,
   };
 };
 
@@ -191,6 +201,8 @@ beforeEach(() => {
   mockedHasTenantMembershipOrgUnitScopeAssignments.mockResolvedValue(false);
   mockedHasTenantMembershipOrgUnitAccess.mockReset();
   mockedHasTenantMembershipOrgUnitAccess.mockResolvedValue(true);
+  mockedListBadgeTemplates.mockReset();
+  mockedListBadgeTemplates.mockResolvedValue([sampleTemplate()]);
   mockedUpdateBadgeTemplate.mockReset();
   mockedUpdateBadgeTemplate.mockImplementation((_db, request) => {
     return Promise.resolve(
@@ -214,6 +226,38 @@ beforeEach(() => {
 });
 
 describe('badge template image upload routes', () => {
+  it('lists badge templates from requested tenant membership even when session tenant differs', async () => {
+    const { store } = createBadgeObjectStore();
+    const env = createEnv(store);
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSessionForTenant('tenant_other'));
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/badge-templates',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.json<{
+      tenantId: string;
+      templates: Array<{
+        id: string;
+      }>;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.tenantId).toBe('tenant_123');
+    expect(body.templates).toHaveLength(1);
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_admin');
+    expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
+      tenantId: 'tenant_123',
+      includeArchived: false,
+    });
+  });
+
   it('uploads a PNG image, stores it in object storage, and serves it publicly', async () => {
     const { store, entries } = createBadgeObjectStore();
     const env = createEnv(store);
