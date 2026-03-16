@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addLearnerIdentityAlias,
+  createAuthIdentityLink,
   createLearnerProfile,
   findLearnerProfileByIdentity,
+  findAuthIdentityLinkByAuthUserId,
+  findAuthIdentityLinkByCredtrailUserId,
+  findUserByEmail,
   listLearnerIdentitiesByProfile,
   normalizeLearnerIdentityValue,
   resolveLearnerProfileForIdentity,
   resolveLearnerProfileFromSaml,
+  upsertUserByEmail,
   type LearnerIdentityType,
   type SqlDatabase,
   type SqlExecutionMeta,
@@ -32,6 +37,22 @@ interface FakeLearnerIdentityRow {
   identity_value: string;
   is_primary: number;
   is_verified: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeUserRow {
+  id: string;
+  email: string;
+}
+
+interface FakeAuthIdentityLinkRow {
+  id: string;
+  auth_system: string;
+  auth_user_id: string;
+  auth_account_id: string | null;
+  credtrail_user_id: string;
+  email_snapshot: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -443,6 +464,241 @@ const createFakeDb = (): SqlDatabase => {
   return new FakeSqlDatabase() as unknown as SqlDatabase;
 };
 
+class FakeAuthIdentityStatement {
+  private readonly sql: string;
+  private readonly db: FakeAuthIdentitySqlDatabase;
+  private boundParams: unknown[] = [];
+
+  constructor(db: FakeAuthIdentitySqlDatabase, sql: string) {
+    this.db = db;
+    this.sql = sql;
+  }
+
+  bind(...params: unknown[]): this {
+    this.boundParams = params;
+    return this;
+  }
+
+  run(): Promise<SqlRunResult> {
+    const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('INSERT INTO users')) {
+      this.insertUser();
+      return Promise.resolve(this.successResult());
+    }
+
+    if (normalizedSql.includes('INSERT INTO auth_identity_links')) {
+      this.insertAuthIdentityLink();
+      return Promise.resolve(this.successResult());
+    }
+
+    throw new Error(`Unsupported run SQL in fake auth DB: ${normalizedSql}`);
+  }
+
+  first<T>(): Promise<T | null> {
+    const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('FROM users WHERE email = ?')) {
+      return Promise.resolve(this.selectUserByEmail() as T | null);
+    }
+
+    if (normalizedSql.includes('FROM users WHERE id = ?')) {
+      return Promise.resolve(this.selectUserById() as T | null);
+    }
+
+    if (
+      normalizedSql.includes('FROM auth_identity_links') &&
+      normalizedSql.includes('auth_system = ?') &&
+      normalizedSql.includes('auth_user_id = ?')
+    ) {
+      return Promise.resolve(this.selectAuthIdentityLinkByAuthUserId() as T | null);
+    }
+
+    if (
+      normalizedSql.includes('FROM auth_identity_links') &&
+      normalizedSql.includes('auth_system = ?') &&
+      normalizedSql.includes('credtrail_user_id = ?')
+    ) {
+      return Promise.resolve(this.selectAuthIdentityLinkByCredtrailUserId() as T | null);
+    }
+
+    throw new Error(`Unsupported first SQL in fake auth DB: ${normalizedSql}`);
+  }
+
+  all<T>(): Promise<SqlQueryResult<T>> {
+    throw new Error(`Unsupported all SQL in fake auth DB: ${this.normalizedSql()}`);
+  }
+
+  private normalizedSql(): string {
+    return this.sql.replace(/\s+/g, ' ').trim();
+  }
+
+  private insertUser(): void {
+    const [id, email] = this.boundParams;
+
+    if (typeof id !== 'string' || typeof email !== 'string') {
+      throw new Error('Invalid bound parameters for user insert');
+    }
+
+    const existingUser = this.db.users.find((row) => row.email === email);
+
+    if (existingUser === undefined) {
+      this.db.users.push({
+        id,
+        email,
+      });
+    }
+  }
+
+  private insertAuthIdentityLink(): void {
+    const [
+      id,
+      authSystem,
+      authUserId,
+      authAccountId,
+      credtrailUserId,
+      emailSnapshot,
+      createdAt,
+      updatedAt,
+    ] = this.boundParams;
+
+    if (
+      typeof id !== 'string' ||
+      typeof authSystem !== 'string' ||
+      typeof authUserId !== 'string' ||
+      (authAccountId !== null && typeof authAccountId !== 'string') ||
+      typeof credtrailUserId !== 'string' ||
+      (emailSnapshot !== null && typeof emailSnapshot !== 'string') ||
+      typeof createdAt !== 'string' ||
+      typeof updatedAt !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for auth identity link insert');
+    }
+
+    const existingLink = this.db.authIdentityLinks.find((row) => {
+      return row.auth_system === authSystem && row.auth_user_id === authUserId;
+    });
+
+    if (existingLink !== undefined) {
+      throw new Error(
+        'UNIQUE constraint failed: auth_identity_links.auth_system, auth_identity_links.auth_user_id',
+      );
+    }
+
+    this.db.authIdentityLinks.push({
+      id,
+      auth_system: authSystem,
+      auth_user_id: authUserId,
+      auth_account_id: authAccountId,
+      credtrail_user_id: credtrailUserId,
+      email_snapshot: emailSnapshot,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    });
+  }
+
+  private selectUserByEmail(): Record<string, unknown> | null {
+    const [email] = this.boundParams;
+
+    if (typeof email !== 'string') {
+      throw new Error('Invalid bound parameters for user select by email');
+    }
+
+    const row = this.db.users.find((candidate) => candidate.email === email);
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      email: row.email,
+    };
+  }
+
+  private selectUserById(): Record<string, unknown> | null {
+    const [userId] = this.boundParams;
+
+    if (typeof userId !== 'string') {
+      throw new Error('Invalid bound parameters for user select by id');
+    }
+
+    const row = this.db.users.find((candidate) => candidate.id === userId);
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      email: row.email,
+    };
+  }
+
+  private selectAuthIdentityLinkByAuthUserId(): Record<string, unknown> | null {
+    const [authSystem, authUserId] = this.boundParams;
+
+    if (typeof authSystem !== 'string' || typeof authUserId !== 'string') {
+      throw new Error('Invalid bound parameters for auth identity link select by auth user id');
+    }
+
+    const row = this.db.authIdentityLinks.find((candidate) => {
+      return candidate.auth_system === authSystem && candidate.auth_user_id === authUserId;
+    });
+
+    return row === undefined ? null : this.mapAuthIdentityLink(row);
+  }
+
+  private selectAuthIdentityLinkByCredtrailUserId(): Record<string, unknown> | null {
+    const [authSystem, credtrailUserId] = this.boundParams;
+
+    if (typeof authSystem !== 'string' || typeof credtrailUserId !== 'string') {
+      throw new Error(
+        'Invalid bound parameters for auth identity link select by CredTrail user id',
+      );
+    }
+
+    const row = this.db.authIdentityLinks.find((candidate) => {
+      return candidate.auth_system === authSystem && candidate.credtrail_user_id === credtrailUserId;
+    });
+
+    return row === undefined ? null : this.mapAuthIdentityLink(row);
+  }
+
+  private mapAuthIdentityLink(row: FakeAuthIdentityLinkRow): Record<string, unknown> {
+    return {
+      id: row.id,
+      authSystem: row.auth_system,
+      authUserId: row.auth_user_id,
+      authAccountId: row.auth_account_id,
+      credtrailUserId: row.credtrail_user_id,
+      emailSnapshot: row.email_snapshot,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private successResult(): SqlRunResult {
+    return {
+      success: true,
+      meta: {} as SqlExecutionMeta,
+    };
+  }
+}
+
+class FakeAuthIdentitySqlDatabase {
+  users: FakeUserRow[] = [];
+  authIdentityLinks: FakeAuthIdentityLinkRow[] = [];
+
+  prepare(sql: string): FakeAuthIdentityStatement {
+    return new FakeAuthIdentityStatement(this, sql);
+  }
+}
+
+const createFakeAuthIdentityDb = (): SqlDatabase => {
+  return new FakeAuthIdentitySqlDatabase() as unknown as SqlDatabase;
+};
+
 describe('normalizeLearnerIdentityValue', () => {
   it('normalizes email and email_sha256 identity values', () => {
     expect(normalizeLearnerIdentityValue('email', '  Student@Umich.edu ')).toBe('student@umich.edu');
@@ -625,5 +881,37 @@ describe('resolveLearnerProfileFromSaml', () => {
         tenantId: 'tenant_umich',
       }),
     ).rejects.toThrow('Cannot resolve learner profile without SAML subject or email');
+  });
+});
+
+describe('auth identity links', () => {
+  it('persists and resolves Better Auth links by auth system and auth user id', async () => {
+    const db = createFakeAuthIdentityDb();
+    const user = await upsertUserByEmail(db, ' Student@Example.edu ');
+
+    const link = await createAuthIdentityLink(db, {
+      authSystem: 'better_auth',
+      authUserId: 'ba_usr_123',
+      authAccountId: 'ba_account_123',
+      credtrailUserId: user.id,
+      emailSnapshot: 'student@example.edu',
+    });
+
+    const resolvedByAuthUser = await findAuthIdentityLinkByAuthUserId(
+      db,
+      'better_auth',
+      'ba_usr_123',
+    );
+    const resolvedByCredtrailUser = await findAuthIdentityLinkByCredtrailUserId(
+      db,
+      'better_auth',
+      user.id,
+    );
+    const resolvedUser = await findUserByEmail(db, 'student@example.edu');
+
+    expect(resolvedByAuthUser).toEqual(link);
+    expect(resolvedByCredtrailUser).toEqual(link);
+    expect(resolvedUser).toEqual(user);
+    expect(link.emailSnapshot).toBe('student@example.edu');
   });
 });
