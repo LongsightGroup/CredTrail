@@ -2,6 +2,7 @@ import {
   findActiveSessionByHash,
   revokeSessionByHash,
   touchSession,
+  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
@@ -22,18 +23,13 @@ export interface LegacyAuthAdapterInput<
   authMethod?: AuthenticatedPrincipal['authMethod'];
 }
 
-const resolveLegacySession = async <
+export const resolveLegacySessionRecord = async <
   ContextType extends LegacyAuthAdapterContext<BindingsType>,
   BindingsType,
 >(
   context: ContextType,
   input: LegacyAuthAdapterInput<ContextType, BindingsType>,
-): Promise<{
-  id: string;
-  tenantId: string;
-  userId: string;
-  expiresAt: string;
-} | null> => {
+): Promise<SessionRecord | null> => {
   const sessionToken = input.readSessionToken(context)?.trim();
 
   if (sessionToken === undefined || sessionToken.length === 0) {
@@ -64,7 +60,7 @@ export const resolveAuthenticatedPrincipal = async <
   context: ContextType,
   input: LegacyAuthAdapterInput<ContextType, BindingsType>,
 ): Promise<AuthenticatedPrincipal | null> => {
-  const session = await resolveLegacySession(context, input);
+  const session = await resolveLegacySessionRecord(context, input);
 
   if (session === null) {
     return null;
@@ -85,7 +81,7 @@ export const resolveRequestedTenantContext = async <
   context: ContextType,
   input: LegacyAuthAdapterInput<ContextType, BindingsType>,
 ): Promise<RequestedTenantContext | null> => {
-  const session = await resolveLegacySession(context, input);
+  const session = await resolveLegacySessionRecord(context, input);
 
   if (session === null) {
     return null;

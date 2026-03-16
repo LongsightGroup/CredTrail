@@ -1,10 +1,10 @@
 import {
   findActiveDelegatedIssuingAuthorityGrantForAction,
   findTenantMembership,
+  type SessionRecord,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
   type DelegatedIssuingAuthorityAction,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
@@ -47,7 +47,8 @@ interface CreateTenantAccessHelpersInput<
   ContextType extends TenantAccessContext<BindingsType>,
   BindingsType extends { BOOTSTRAP_ADMIN_TOKEN?: string | undefined },
 > {
-  resolveSessionFromCookie: (context: ContextType) => Promise<SessionRecord | null>;
+  resolveAuthenticatedPrincipal: (context: ContextType) => Promise<AuthenticatedPrincipal | null>;
+  resolveLegacySessionRecord: (context: ContextType) => Promise<SessionRecord | null>;
   resolveDatabase: (bindings: BindingsType) => SqlDatabase;
 }
 
@@ -63,6 +64,8 @@ interface TenantAccessHelpers<
     allowedRoles: readonly TenantMembershipRole[],
   ) => Promise<
     | {
+        principal: AuthenticatedPrincipal;
+        requestedTenant: RequestedTenantContext;
         session: SessionRecord;
         membershipRole: TenantMembershipRole;
       }
@@ -153,6 +156,22 @@ export const requirePrincipalTenantRole = async <
 
 const canBypassOrgScopeChecks = (membershipRole: TenantMembershipRole): boolean => {
   return membershipRole === 'owner' || membershipRole === 'admin';
+};
+
+const sessionCompatibilityFromPrincipal = (
+  principal: AuthenticatedPrincipal,
+  requestedTenant: RequestedTenantContext,
+): SessionRecord => {
+  return {
+    id: principal.authSessionId,
+    tenantId: requestedTenant.tenantId,
+    userId: principal.userId,
+    sessionTokenHash: '',
+    expiresAt: principal.expiresAt,
+    lastSeenAt: principal.expiresAt,
+    revokedAt: null,
+    createdAt: principal.expiresAt,
+  };
 };
 
 const hasScopedOrgUnitPermission = async (input: {
@@ -256,58 +275,37 @@ export const createTenantAccessHelpers = <
     allowedRoles: readonly TenantMembershipRole[],
   ): Promise<
     | {
+        principal: AuthenticatedPrincipal;
+        requestedTenant: RequestedTenantContext;
         session: SessionRecord;
         membershipRole: TenantMembershipRole;
       }
     | Response
   > => {
-    const session = await input.resolveSessionFromCookie(context);
-
-    if (session === null) {
-      return context.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
-    }
-
-    if (session.tenantId !== tenantId) {
-      return context.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
-    }
-
-    const membership = await findTenantMembership(
-      input.resolveDatabase(context.env),
+    const requestedTenant: RequestedTenantContext = {
       tenantId,
-      session.userId,
-    );
+      source: 'route',
+      authoritative: true,
+    };
+    const result = await requirePrincipalTenantRole({
+      context,
+      principal: await input.resolveAuthenticatedPrincipal(context),
+      requestedTenant,
+      allowedRoles,
+      resolveDatabase: input.resolveDatabase,
+    });
 
-    if (membership === null) {
-      return context.json(
-        {
-          error: 'Membership not found for requested tenant',
-        },
-        403,
-      );
+    if (result instanceof Response) {
+      return result;
     }
 
-    if (!hasRequiredRole(membership.role, allowedRoles)) {
-      return context.json(
-        {
-          error: 'Insufficient role for requested action',
-        },
-        403,
-      );
-    }
+    const legacySession = await input.resolveLegacySessionRecord(context);
 
     return {
-      session,
-      membershipRole: membership.role,
+      principal: result.principal,
+      requestedTenant: result.requestedTenant,
+      session: legacySession ?? sessionCompatibilityFromPrincipal(result.principal, requestedTenant),
+      membershipRole: result.membershipRole,
     };
   };
 

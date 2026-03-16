@@ -7,11 +7,8 @@ import {
 import {
   createSession,
   findTenantSigningRegistrationByDid,
-  findActiveSessionByHash,
   listLtiIssuerRegistrations,
-  touchSession,
   upsertTenantMembershipRole,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -86,6 +83,11 @@ import {
   defaultInstitutionOrgUnitId,
   isUniqueConstraintError,
 } from './auth/tenant-access';
+import type { AuthContextVariables } from './auth/auth-context';
+import {
+  createLegacyAuthProvider,
+  resolveLegacySessionRecord,
+} from './auth/legacy-auth-adapter';
 import { createOAuthTokenHelpers } from './ob3/oauth-token-helpers';
 import { createOb3ErrorResponses } from './ob3/error-responses';
 import { createOb3AccessTokenAuthenticator } from './ob3/access-token-auth';
@@ -183,6 +185,7 @@ export interface AppBindings {
 
 export interface AppEnv {
   Bindings: AppBindings;
+  Variables: AuthContextVariables;
 }
 
 export type AppContext = Context<AppEnv>;
@@ -232,27 +235,47 @@ const observabilityContext = (bindings: AppBindings): ObservabilityContext => {
   };
 };
 
-const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | null> => {
-  const db = resolveDatabase(c.env);
-  const sessionToken = getCookie(c, SESSION_COOKIE_NAME);
-
-  if (sessionToken === undefined) {
-    return null;
-  }
-
-  const sessionTokenHash = await sha256Hex(sessionToken);
-  const nowIso = new Date().toISOString();
-  const session = await findActiveSessionByHash(db, sessionTokenHash, nowIso);
-
-  if (session === null) {
-    deleteCookie(c, SESSION_COOKIE_NAME, {
+const legacyAuthAdapterInput = {
+  resolveDatabase,
+  readSessionToken: (context: AppContext): string | undefined => {
+    return getCookie(context, SESSION_COOKIE_NAME);
+  },
+  clearSessionCookie: (context: AppContext): void => {
+    deleteCookie(context, SESSION_COOKIE_NAME, {
       path: '/',
     });
-    return null;
+  },
+  sha256Hex,
+};
+
+const legacyAuthProvider = createLegacyAuthProvider<AppContext, AppBindings>(legacyAuthAdapterInput);
+
+const resolveAuthenticatedPrincipal = async (c: AppContext) => {
+  const cachedPrincipal = c.get('authenticatedPrincipal');
+
+  if (cachedPrincipal !== undefined) {
+    return cachedPrincipal ?? null;
   }
 
-  await touchSession(db, session.id, nowIso);
-  return session;
+  const principal = await legacyAuthProvider.resolveAuthenticatedPrincipal(c);
+  c.set('authenticatedPrincipal', principal);
+  return principal;
+};
+
+const resolveRequestedTenantContext = async (c: AppContext) => {
+  const cachedRequestedTenant = c.get('requestedTenantContext');
+
+  if (cachedRequestedTenant !== undefined) {
+    return cachedRequestedTenant ?? null;
+  }
+
+  const requestedTenant = await legacyAuthProvider.resolveRequestedTenantContext(c);
+  c.set('requestedTenantContext', requestedTenant);
+  return requestedTenant;
+};
+
+const resolveSessionFromCookie = async (c: AppContext) => {
+  return resolveLegacySessionRecord(c, legacyAuthAdapterInput);
 };
 
 const resolveLtiIssuerRegistry = async (c: AppContext): Promise<LtiIssuerRegistry> => {
@@ -281,7 +304,8 @@ const {
   requireScopedOrgUnitPermission,
   requireDelegatedIssuingAuthorityPermission,
 } = createTenantAccessHelpers<AppContext, AppBindings>({
-  resolveSessionFromCookie,
+  resolveAuthenticatedPrincipal,
+  resolveLegacySessionRecord: resolveSessionFromCookie,
   resolveDatabase,
 });
 
@@ -711,7 +735,8 @@ registerPublicBadgeRoutes({
 registerLearnerRoutes({
   app,
   resolveDatabase,
-  resolveSessionFromCookie,
+  requireTenantRole,
+  TENANT_MEMBER_ROLES,
   addSecondsToIso,
   generateOpaqueToken,
   sha256Hex,

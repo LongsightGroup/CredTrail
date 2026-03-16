@@ -181,6 +181,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       }),
     );
     mockedTouchSession.mockResolvedValue();
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
 
     const response = await app.request(
       '/tenants/tenant_123/learner/dashboard',

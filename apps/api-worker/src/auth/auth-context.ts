@@ -19,6 +19,6 @@ export interface RequestAuthContext {
 }
 
 export interface AuthContextVariables {
-  authenticatedPrincipal: AuthenticatedPrincipal | null;
-  requestedTenantContext: RequestedTenantContext | null;
+  authenticatedPrincipal: AuthenticatedPrincipal | null | undefined;
+  requestedTenantContext: RequestedTenantContext | null | undefined;
 }

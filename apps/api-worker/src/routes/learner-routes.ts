@@ -10,8 +10,8 @@ import {
   markLearnerIdentityLinkProofUsed,
   removeLearnerIdentityAliasesByType,
   resolveLearnerProfileForIdentity,
-  type SessionRecord,
   type SqlDatabase,
+  type TenantMembershipRole,
 } from '@credtrail/db';
 import type { Hono } from 'hono';
 import {
@@ -21,11 +21,24 @@ import {
   parseTenantPathParams,
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
 
 interface RegisterLearnerRoutesInput<DidNotice> {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
-  resolveSessionFromCookie: (c: AppContext) => Promise<SessionRecord | null>;
+  requireTenantRole: (
+    context: AppContext,
+    tenantId: string,
+    allowedRoles: readonly TenantMembershipRole[],
+  ) => Promise<
+    | {
+        principal: AuthenticatedPrincipal;
+        requestedTenant: RequestedTenantContext;
+        membershipRole: TenantMembershipRole;
+      }
+    | Response
+  >;
+  TENANT_MEMBER_ROLES: readonly TenantMembershipRole[];
   addSecondsToIso: (isoTimestamp: string, seconds: number) => string;
   generateOpaqueToken: () => string;
   sha256Hex: (value: string) => Promise<string>;
@@ -46,7 +59,8 @@ export const registerLearnerRoutes = <DidNotice>(
   const {
     app,
     resolveDatabase,
-    resolveSessionFromCookie,
+    requireTenantRole,
+    TENANT_MEMBER_ROLES,
     addSecondsToIso,
     generateOpaqueToken,
     sha256Hex,
@@ -57,28 +71,14 @@ export const registerLearnerRoutes = <DidNotice>(
 
   app.get('/tenants/:tenantId/learner/dashboard', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
-    }
-
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
     const db = resolveDatabase(c.env);
-    const user = await findUserById(db, session.userId);
+    const user = await findUserById(db, roleCheck.principal.userId);
 
     if (user === null) {
       return c.json(
@@ -103,7 +103,7 @@ export const registerLearnerRoutes = <DidNotice>(
       learnerIdentities.find((identity) => identity.identityType === 'did')?.identityValue ?? null;
     const badges = await listLearnerBadgeSummaries(db, {
       tenantId: pathParams.tenantId,
-      userId: session.userId,
+      userId: roleCheck.principal.userId,
     });
     const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query('didStatus'));
 
@@ -113,24 +113,10 @@ export const registerLearnerRoutes = <DidNotice>(
 
   app.post('/tenants/:tenantId/learner/settings/did', async (c): Promise<Response> => {
     const pathParams = parseTenantPathParams(c.req.param());
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
-    }
-
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
     const dashboardUrl = new URL(
@@ -159,7 +145,7 @@ export const registerLearnerRoutes = <DidNotice>(
     }
 
     const db = resolveDatabase(c.env);
-    const user = await findUserById(db, session.userId);
+    const user = await findUserById(db, roleCheck.principal.userId);
 
     if (user === null) {
       return c.json(
@@ -220,28 +206,14 @@ export const registerLearnerRoutes = <DidNotice>(
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseLearnerIdentityLinkRequest(payload);
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
-    }
-
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
     const db = resolveDatabase(c.env);
-    const user = await findUserById(db, session.userId);
+    const user = await findUserById(db, roleCheck.principal.userId);
 
     if (user === null) {
       return c.json(
@@ -291,7 +263,7 @@ export const registerLearnerRoutes = <DidNotice>(
     await createLearnerIdentityLinkProof(db, {
       tenantId: pathParams.tenantId,
       learnerProfileId: learnerProfile.id,
-      requestedByUserId: session.userId,
+      requestedByUserId: roleCheck.principal.userId,
       identityType: 'email',
       identityValue: normalizedEmail,
       tokenHash,
@@ -328,24 +300,10 @@ export const registerLearnerRoutes = <DidNotice>(
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseLearnerIdentityLinkVerifyRequest(payload);
-    const session = await resolveSessionFromCookie(c);
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
-    if (session === null) {
-      return c.json(
-        {
-          error: 'Not authenticated',
-        },
-        401,
-      );
-    }
-
-    if (session.tenantId !== pathParams.tenantId) {
-      return c.json(
-        {
-          error: 'Forbidden for requested tenant',
-        },
-        403,
-      );
+    if (roleCheck instanceof Response) {
+      return roleCheck;
     }
 
     const db = resolveDatabase(c.env);
@@ -361,7 +319,10 @@ export const registerLearnerRoutes = <DidNotice>(
       );
     }
 
-    if (proof.tenantId !== pathParams.tenantId || proof.requestedByUserId !== session.userId) {
+    if (
+      proof.tenantId !== pathParams.tenantId ||
+      proof.requestedByUserId !== roleCheck.principal.userId
+    ) {
       return c.json(
         {
           error: 'Forbidden identity link token',
