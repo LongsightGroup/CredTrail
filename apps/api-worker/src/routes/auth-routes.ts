@@ -11,7 +11,6 @@ import {
   type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
 import type { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
@@ -84,14 +83,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   };
 
   app.get('/', (c) => {
-    return c.html(
-      renderPageShell(
-        'CredTrail',
-        `<h1>CredTrail</h1>
-        <p>Cloudflare Worker API + server-rendered interface scaffold for ${c.env.PLATFORM_DOMAIN}.</p>
-        <p><a href="/login">Sign in with magic link</a></p>`,
-      ),
-    );
+    return c.redirect('/login', 302);
   });
 
   app.get('/login', (c) => {
