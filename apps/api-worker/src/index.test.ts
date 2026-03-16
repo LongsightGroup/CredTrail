@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
@@ -41,6 +41,15 @@ const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
+
+interface MockedInternalAuthProvider {
+  requestMagicLink: ReturnType<typeof vi.fn>;
+  createMagicLinkSession: ReturnType<typeof vi.fn>;
+  createLtiSession: ReturnType<typeof vi.fn>;
+  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
+  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
+  revokeCurrentSession: ReturnType<typeof vi.fn>;
+}
 
 const createEnv = (): {
   APP_ENV: string;
@@ -118,12 +127,181 @@ beforeEach(() => {
   mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
 });
 
+afterEach(() => {
+  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock('./auth/legacy-auth-adapter');
+});
+
+const loadAppWithMockedAuthProviders = async (input: {
+  betterAuthPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'better_auth';
+    expiresAt: string;
+  } | null;
+  betterAuthRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+  legacyPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'legacy_magic_link' | 'legacy_lti';
+    expiresAt: string;
+  } | null;
+  legacyRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+}): Promise<{
+  app: typeof app;
+  betterAuthProvider: MockedInternalAuthProvider;
+  legacyAuthProvider: MockedInternalAuthProvider;
+}> => {
+  vi.resetModules();
+
+  const betterAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+  const legacyAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.legacyPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.legacyRequestedTenant ?? null)),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+
+  vi.doMock('./auth/better-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+        './auth/better-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createBetterAuthProvider: vi.fn(() => betterAuthProvider),
+    };
+  });
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
+      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    betterAuthProvider,
+    legacyAuthProvider,
+  };
+};
+
 describe('GET /', () => {
   it('redirects to /login', async () => {
     const response = await app.request('/', undefined, createEnv());
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/login');
+  });
+
+  it('prefers Better Auth session resolution over legacy fallback in the composition root', async () => {
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedAuthProviders({
+        betterAuthPrincipal: {
+          userId: 'usr_better',
+          authSessionId: 'ba_ses_123',
+          authMethod: 'better_auth',
+          expiresAt: '2026-03-17T22:00:00.000Z',
+        },
+        betterAuthRequestedTenant: {
+          tenantId: 'tenant_better',
+          source: 'route',
+          authoritative: true,
+        },
+        legacyPrincipal: {
+          userId: 'usr_legacy',
+          authSessionId: 'ses_legacy',
+          authMethod: 'legacy_magic_link',
+          expiresAt: '2026-03-17T20:00:00.000Z',
+        },
+        legacyRequestedTenant: {
+          tenantId: 'tenant_legacy',
+          source: 'legacy_session',
+          authoritative: false,
+        },
+      });
+
+    const response = await isolatedApp.request('/v1/auth/session', undefined, createEnv());
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_better',
+      userId: 'usr_better',
+      expiresAt: '2026-03-17T22:00:00.000Z',
+    });
+    expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveRequestedTenantContext).not.toHaveBeenCalled();
+  });
+
+  it('falls back to legacy session resolution when Better Auth is absent', async () => {
+    const { app: isolatedApp, legacyAuthProvider } = await loadAppWithMockedAuthProviders({
+      betterAuthPrincipal: null,
+      betterAuthRequestedTenant: null,
+      legacyPrincipal: {
+        userId: 'usr_legacy',
+        authSessionId: 'ses_legacy',
+        authMethod: 'legacy_magic_link',
+        expiresAt: '2026-03-17T20:00:00.000Z',
+      },
+      legacyRequestedTenant: {
+        tenantId: 'tenant_legacy',
+        source: 'legacy_session',
+        authoritative: false,
+      },
+    });
+
+    const response = await isolatedApp.request('/v1/auth/session', undefined, createEnv());
+    const body = await response.json<{
+      status: string;
+      tenantId: string;
+      userId: string;
+      expiresAt: string;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({
+      status: 'authenticated',
+      tenantId: 'tenant_legacy',
+      userId: 'usr_legacy',
+      expiresAt: '2026-03-17T20:00:00.000Z',
+    });
+    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveRequestedTenantContext).toHaveBeenCalled();
   });
 });
 

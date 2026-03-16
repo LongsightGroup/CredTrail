@@ -89,6 +89,11 @@ import type {
   RequestedTenantContext,
 } from './auth/auth-context';
 import {
+  createBetterAuthProvider,
+  createCompositeAuthProvider,
+} from './auth/better-auth-adapter';
+import { createBetterAuthRuntimeConfig } from './auth/better-auth-config';
+import {
   createLegacyAuthProvider,
   resolveLegacySessionRecord,
 } from './auth/legacy-auth-adapter';
@@ -170,6 +175,8 @@ export interface AppBindings {
   MAILTRAP_API_BASE_URL?: string;
   MAILTRAP_FROM_EMAIL?: string;
   MAILTRAP_FROM_NAME?: string;
+  BETTER_AUTH_SECRET?: string;
+  BETTER_AUTH_TRUSTED_ORIGINS?: string;
   GITHUB_TOKEN?: string;
   JOB_PROCESSOR_TOKEN?: string;
   BOOTSTRAP_ADMIN_TOKEN?: string;
@@ -278,6 +285,48 @@ const legacyAuthAdapterInput = {
 
 const legacyAuthProvider = createLegacyAuthProvider<AppContext, AppBindings>(legacyAuthAdapterInput);
 
+const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
+  resolveDatabase,
+  requestMagicLink: async (context, input) => {
+    const config = createBetterAuthRuntimeConfig(context.env);
+
+    return {
+      tenantId: input.tenantId,
+      email: input.email,
+      deliveryStatus: config.secret === null ? 'skipped' : 'failed',
+    };
+  },
+  resolveSession: async (context) => {
+    void createBetterAuthRuntimeConfig(context.env);
+    return null;
+  },
+  revokeSession: async (context) => {
+    void createBetterAuthRuntimeConfig(context.env);
+  },
+  resolveRequestedTenantContext: async (context) => {
+    return context.get('requestedTenantContext') ?? null;
+  },
+  cacheAuthenticatedPrincipal: (
+    context: AppContext,
+    principal: AppEnv['Variables']['authenticatedPrincipal'],
+  ): void => {
+    context.set('authenticatedPrincipal', principal);
+  },
+  cacheRequestedTenantContext: (
+    context: AppContext,
+    requestedTenant: AppEnv['Variables']['requestedTenantContext'],
+  ): void => {
+    context.set('requestedTenantContext', requestedTenant);
+  },
+});
+
+const authProvider = createCompositeAuthProvider<AppContext>({
+  primary: betterAuthProvider,
+  fallback: legacyAuthProvider,
+  createMagicLinkSessionProvider: 'fallback',
+  createLtiSessionProvider: 'fallback',
+});
+
 const resolveAuthenticatedPrincipal = async (
   c: AppContext,
 ): Promise<AuthenticatedPrincipal | null> => {
@@ -287,7 +336,7 @@ const resolveAuthenticatedPrincipal = async (
     return cachedPrincipal ?? null;
   }
 
-  const principal = await legacyAuthProvider.resolveAuthenticatedPrincipal(c);
+  const principal = await authProvider.resolveAuthenticatedPrincipal(c);
   c.set('authenticatedPrincipal', principal);
   return principal;
 };
@@ -301,7 +350,7 @@ const resolveRequestedTenantContext = async (
     return cachedRequestedTenant ?? null;
   }
 
-  const requestedTenant = await legacyAuthProvider.resolveRequestedTenantContext(c);
+  const requestedTenant = await authProvider.resolveRequestedTenantContext(c);
   c.set('requestedTenantContext', requestedTenant);
   return requestedTenant;
 };
@@ -795,7 +844,7 @@ registerLtiRoutes({
   upsertTenantMembershipRole,
   sha256Hex,
   createLtiSession: (context, input) => {
-    return legacyAuthProvider.createLtiSession(context, input);
+    return authProvider.createLtiSession(context, input);
   },
 });
 
@@ -815,7 +864,7 @@ registerAuthRoutes({
   resolveAuthenticatedPrincipal,
   resolveRequestedTenantContext,
   revokeCurrentSession: (context) => {
-    return legacyAuthProvider.revokeCurrentSession(context);
+    return authProvider.revokeCurrentSession(context);
   },
   addSecondsToIso,
   generateOpaqueToken,
