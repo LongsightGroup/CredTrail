@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -913,5 +915,23 @@ describe('auth identity links', () => {
     expect(resolvedByCredtrailUser).toEqual(link);
     expect(resolvedUser).toEqual(user);
     expect(link.emailSnapshot).toBe('student@example.edu');
+  });
+});
+
+describe('better auth core migration', () => {
+  it('keeps Better Auth tables in an auth schema and preserves CredTrail-owned tables', () => {
+    const sql = readFileSync(
+      new URL('../migrations/0025_better_auth_core.sql', import.meta.url),
+      'utf8',
+    );
+
+    expect(sql).toContain('CREATE SCHEMA IF NOT EXISTS auth');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.user');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.session');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.account');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.verification');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth_identity_links');
+    expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS users');
+    expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS sessions');
   });
 });

@@ -19,7 +19,8 @@ import {
   findUserByEmail,
   type SqlDatabase,
 } from '@credtrail/db';
-import { resolveAuthenticatedPrincipal } from './better-auth-adapter';
+import { createBetterAuthRuntimeConfig } from './better-auth-config';
+import { createBetterAuthProvider, resolveAuthenticatedPrincipal } from './better-auth-adapter';
 
 interface FakeBindings {
   APP_ENV?: string;
@@ -78,6 +79,7 @@ const createInput = (sessionOverride?: {
   emailVerified?: boolean;
 }): {
   resolveDatabase: () => SqlDatabase;
+  requestMagicLink: ReturnType<typeof vi.fn>;
   resolveSession: () => Promise<{
     sessionId: string;
     accountId: string | null;
@@ -88,9 +90,18 @@ const createInput = (sessionOverride?: {
       emailVerified: boolean;
     } | null;
   }>;
+  revokeSession: ReturnType<typeof vi.fn>;
 } => {
   return {
     resolveDatabase: () => fakeDb,
+    requestMagicLink: vi.fn(() =>
+      Promise.resolve({
+        tenantId: 'tenant_123',
+        email: 'student@example.edu',
+        deliveryStatus: 'sent' as const,
+        expiresAt: '2026-03-17T20:10:00.000Z',
+      }),
+    ),
     resolveSession: () =>
       Promise.resolve({
         sessionId: sessionOverride?.sessionId ?? 'ba_ses_123',
@@ -102,6 +113,7 @@ const createInput = (sessionOverride?: {
           emailVerified: sessionOverride?.emailVerified ?? true,
         },
       }),
+    revokeSession: vi.fn(() => Promise.resolve()),
   };
 };
 
@@ -113,6 +125,43 @@ beforeEach(() => {
 });
 
 describe('better auth adapter', () => {
+  it('builds explicit Better Auth runtime config and keeps hosted request flow behind the provider seam', async () => {
+    const config = createBetterAuthRuntimeConfig({
+      APP_ENV: 'test',
+      PLATFORM_DOMAIN: 'credtrail.test',
+      BETTER_AUTH_SECRET: 'test-secret',
+      BETTER_AUTH_TRUSTED_ORIGINS:
+        'https://credtrail.test, https://admin.credtrail.test , https://credtrail.test',
+    });
+    const input = createInput();
+    const provider = createBetterAuthProvider(input);
+
+    const result = await provider.requestMagicLink(
+      { env: {} } satisfies FakeContext,
+      {
+        tenantId: 'tenant_123',
+        email: 'student@example.edu',
+      },
+    );
+
+    expect(config.baseURL).toBe('https://credtrail.test');
+    expect(config.trustedOrigins).toEqual([
+      'https://credtrail.test',
+      'https://admin.credtrail.test',
+    ]);
+    expect(config.secret).toBe('test-secret');
+    expect(config.session.expiresInSeconds).toBe(7 * 24 * 60 * 60);
+    expect(config.database.schema).toBe('auth');
+    expect(input.requestMagicLink).toHaveBeenCalledWith(
+      { env: {} },
+      {
+        tenantId: 'tenant_123',
+        email: 'student@example.edu',
+      },
+    );
+    expect(result.deliveryStatus).toBe('sent');
+  });
+
   it('links unlinked Better Auth users to existing CredTrail users by normalized verified email', async () => {
     mockedFindAuthIdentityLinkByAuthUserId.mockResolvedValue(null);
     mockedFindUserByEmail.mockResolvedValue(sampleUser());
