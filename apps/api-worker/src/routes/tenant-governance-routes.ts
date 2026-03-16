@@ -7,6 +7,7 @@ import {
   deleteTenantAuthProvider,
   deleteTenantSsoSamlConfiguration,
   findDelegatedIssuingAuthorityGrantById,
+  findTenantAuthPolicy,
   findTenantAuthProviderById,
   findTenantById,
   findUserById,
@@ -187,7 +188,8 @@ export const registerTenantGovernanceRoutes = (
       );
     }
 
-    const [currentUser, badgeTemplates, orgUnits, apiKeys, badgeRules] = await Promise.all([
+    const [currentUser, badgeTemplates, orgUnits, apiKeys, badgeRules, authPolicy, authProviders] =
+      await Promise.all([
       findUserById(db, session.userId),
       listBadgeTemplates(db, {
         tenantId: pathParams.tenantId,
@@ -204,6 +206,10 @@ export const registerTenantGovernanceRoutes = (
       listBadgeIssuanceRules(db, {
         tenantId: pathParams.tenantId,
       }),
+      tenant.planTier === 'enterprise' ? findTenantAuthPolicy(db, pathParams.tenantId) : Promise.resolve(null),
+      tenant.planTier === 'enterprise'
+        ? listTenantAuthProviders(db, pathParams.tenantId)
+        : Promise.resolve([]),
     ]);
     const badgeRuleVersionLists = await Promise.all(
       badgeRules.map(async (rule) =>
@@ -231,6 +237,8 @@ export const registerTenantGovernanceRoutes = (
         revokedApiKeyCount,
         badgeRules,
         badgeRuleVersions,
+        enterpriseAuthPolicy: authPolicy,
+        enterpriseAuthProviders: authProviders,
       }),
     );
   });

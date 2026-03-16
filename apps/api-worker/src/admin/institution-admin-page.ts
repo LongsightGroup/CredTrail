@@ -3,6 +3,8 @@ import type {
   BadgeIssuanceRuleVersionRecord,
   BadgeTemplateRecord,
   TenantApiKeyRecord,
+  TenantAuthPolicyRecord,
+  TenantAuthProviderRecord,
   TenantMembershipRole,
   TenantOrgUnitRecord,
   TenantRecord,
@@ -37,6 +39,14 @@ const serializeJsonScriptContent = (value: unknown): string => {
     .replaceAll('\u2029', '\\u2029');
 };
 
+const formatJsonTextareaValue = (value: string): string => {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+};
+
 export const institutionAdminDashboardPage = (input: {
   tenant: TenantRecord;
   userId: string;
@@ -48,6 +58,8 @@ export const institutionAdminDashboardPage = (input: {
   revokedApiKeyCount: number;
   badgeRules: readonly BadgeIssuanceRuleRecord[];
   badgeRuleVersions: readonly BadgeIssuanceRuleVersionRecord[];
+  enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
+  enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
 }): string => {
   const templateById = new Map(input.badgeTemplates.map((template) => [template.id, template]));
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
@@ -299,6 +311,186 @@ export const institutionAdminDashboardPage = (input: {
       : '<option value="">No active org units available</option>';
   const ruleSelectOptions =
     ruleOptions.length > 0 ? ruleOptions : '<option value="">No rules available</option>';
+  const authPolicyApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-policy`;
+  const authProvidersApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-providers`;
+  const enterpriseAuthPolicy = input.enterpriseAuthPolicy ?? {
+    tenantId: input.tenant.id,
+    loginMode: 'local' as const,
+    breakGlassEnabled: false,
+    localMfaRequired: false,
+    defaultProviderId: null,
+    enforceForRoles: 'all_users' as const,
+    createdAt: '',
+    updatedAt: '',
+  };
+  const enterpriseAuthProviders = input.enterpriseAuthProviders ?? [];
+  const enterpriseAuthProviderOptions = enterpriseAuthProviders
+    .map((provider) => {
+      const providerLabel = `${provider.label} (${provider.protocol})`;
+      return `<option value="${escapeHtml(provider.id)}"${
+        enterpriseAuthPolicy.defaultProviderId === provider.id ? ' selected' : ''
+      }>${escapeHtml(providerLabel)}</option>`;
+    })
+    .join('\n');
+  const enterpriseAuthProviderRows =
+    enterpriseAuthProviders.length === 0
+      ? `<tr><td colspan="6" class="ct-admin__empty">No enterprise auth providers configured yet.</td></tr>`
+      : enterpriseAuthProviders
+          .map((provider) => {
+            return `<tr>
+              <td><strong>${escapeHtml(provider.label)}</strong><div class="ct-admin__meta">${escapeHtml(
+                provider.id,
+              )}</div></td>
+              <td>${escapeHtml(provider.protocol)}</td>
+              <td>${provider.isDefault ? 'Default' : 'Secondary'}</td>
+              <td>${provider.enabled ? 'Enabled' : 'Disabled'}</td>
+              <td>${escapeHtml(formatIsoTimestamp(provider.updatedAt))}</td>
+              <td>
+                <button
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny"
+                  data-enterprise-auth-edit-provider="true"
+                  data-provider-id="${escapeHtml(provider.id)}"
+                  data-provider-protocol="${escapeHtml(provider.protocol)}"
+                  data-provider-label="${escapeHtml(provider.label)}"
+                  data-provider-enabled="${provider.enabled ? 'true' : 'false'}"
+                  data-provider-is-default="${provider.isDefault ? 'true' : 'false'}"
+                  data-provider-config-json="${escapeHtml(provider.configJson)}"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger"
+                  data-enterprise-auth-delete-provider-id="${escapeHtml(provider.id)}"
+                  data-provider-label="${escapeHtml(provider.label)}"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>`;
+          })
+          .join('\n');
+  const enterpriseAuthPanelMarkup =
+    input.tenant.planTier !== 'enterprise'
+      ? ''
+      : `<article id="enterprise-auth-panel" class="ct-admin__panel ct-stack">
+          <h2>Enterprise Auth</h2>
+          <p>Manage tenant login mode, default provider selection, and provider-neutral OIDC or SAML connection metadata.</p>
+          <form id="enterprise-auth-policy-form" class="ct-admin__form ct-stack">
+            <label>
+              Login mode
+              <select name="loginMode" required>
+                <option value="local"${enterpriseAuthPolicy.loginMode === 'local' ? ' selected' : ''}>Local only</option>
+                <option value="hybrid"${enterpriseAuthPolicy.loginMode === 'hybrid' ? ' selected' : ''}>Hybrid</option>
+                <option value="sso_required"${enterpriseAuthPolicy.loginMode === 'sso_required' ? ' selected' : ''}>SSO required</option>
+              </select>
+            </label>
+            <label>
+              Default provider
+              <select name="defaultProviderId">
+                <option value="">No default provider</option>
+                ${enterpriseAuthProviderOptions}
+              </select>
+            </label>
+            <label>
+              Enforcement scope
+              <select name="enforceForRoles" required>
+                <option value="all_users"${
+                  enterpriseAuthPolicy.enforceForRoles === 'all_users' ? ' selected' : ''
+                }>All users</option>
+                <option value="admins_only"${
+                  enterpriseAuthPolicy.enforceForRoles === 'admins_only' ? ' selected' : ''
+                }>Admins only</option>
+              </select>
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="breakGlassEnabled" type="checkbox"${
+                enterpriseAuthPolicy.breakGlassEnabled ? ' checked' : ''
+              } />
+              Break-glass local access enabled
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="localMfaRequired" type="checkbox"${
+                enterpriseAuthPolicy.localMfaRequired ? ' checked' : ''
+              } />
+              Require MFA for local access
+            </label>
+            <button type="submit">Save auth policy</button>
+          </form>
+          <p id="enterprise-auth-policy-status" class="ct-admin__status"></p>
+          <form id="enterprise-auth-provider-form" class="ct-admin__form ct-stack">
+            <input type="hidden" name="providerId" value="" />
+            <label>
+              Provider protocol
+              <select name="protocol" required>
+                <option value="oidc">OIDC</option>
+                <option value="saml">SAML</option>
+              </select>
+            </label>
+            <label>
+              Provider label
+              <input name="label" type="text" required placeholder="Campus OIDC" />
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="enabled" type="checkbox" checked />
+              Provider enabled
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="isDefault" type="checkbox" />
+              Set as default provider
+            </label>
+            <label>
+              Provider config JSON
+              <textarea
+                id="enterprise-auth-provider-config-json"
+                name="configJson"
+                rows="8"
+                required
+                spellcheck="false"
+                placeholder='{"issuer":"https://idp.example.edu","clientId":"credtrail"}'
+              ></textarea>
+            </label>
+            <div class="ct-cluster">
+              <button type="submit">Save provider</button>
+              <button
+                id="enterprise-auth-provider-reset"
+                type="button"
+                class="ct-admin__button ct-admin__button--secondary"
+              >
+                Clear form
+              </button>
+            </div>
+          </form>
+          <p id="enterprise-auth-provider-status" class="ct-admin__status"></p>
+          <div class="ct-admin__table-wrap">
+            <table class="ct-admin__table">
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Protocol</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="enterprise-auth-provider-body">
+                ${enterpriseAuthProviderRows}
+              </tbody>
+            </table>
+          </div>
+          ${
+            enterpriseAuthProviders.length > 0
+              ? `<details class="ct-admin__panel ct-admin__panel--nested">
+                  <summary>Selected provider config preview</summary>
+                  <pre class="ct-admin__code-output">${escapeHtml(
+                    formatJsonTextareaValue(enterpriseAuthProviders[0]?.configJson ?? '{}'),
+                  )}</pre>
+                </details>`
+              : ''
+          }
+        </article>`;
   const adminPageContextJson = serializeJsonScriptContent({
     tenantAdminPath,
     manualIssueApiPath,
@@ -311,6 +503,8 @@ export const institutionAdminDashboardPage = (input: {
     badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
+    authPolicyApiPath: input.tenant.planTier === 'enterprise' ? authPolicyApiPath : '',
+    authProvidersApiPath: input.tenant.planTier === 'enterprise' ? authProvidersApiPath : '',
   });
   const workspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Institution admin workstreams">
     <article class="ct-admin__workspace-card ct-stack">
@@ -358,6 +552,11 @@ export const institutionAdminDashboardPage = (input: {
         <a class="ct-admin__cta-link" href="#api-key-panel">API keys</a>
         <a class="ct-admin__button ct-admin__button--secondary" href="#org-unit-panel">Org units</a>
         <a class="ct-admin__button ct-admin__button--secondary" href="#governance-panel">Delegation</a>
+        ${
+          input.tenant.planTier === 'enterprise'
+            ? '<a class="ct-admin__button ct-admin__button--secondary" href="#enterprise-auth-panel">Enterprise Auth</a>'
+            : ''
+        }
       </div>
     </article>
   </section>`;
@@ -581,6 +780,7 @@ export const institutionAdminDashboardPage = (input: {
             </form>
             <p id="delegated-revoke-status" class="ct-admin__status"></p>
           </article>
+          ${enterpriseAuthPanelMarkup}
           <article id="rule-builder-panel" class="ct-admin__panel ct-stack">
             <h2>Rule Builder Workspace</h2>
             <p>

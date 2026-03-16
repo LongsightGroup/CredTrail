@@ -58,6 +58,14 @@ export const INSTITUTION_ADMIN_JS = `
     parsedContext && typeof parsedContext.tenantUsersApiPathPrefix === 'string'
       ? parsedContext.tenantUsersApiPathPrefix
       : '';
+  const authPolicyApiPath =
+    parsedContext && typeof parsedContext.authPolicyApiPath === 'string'
+      ? parsedContext.authPolicyApiPath
+      : '';
+  const authProvidersApiPath =
+    parsedContext && typeof parsedContext.authProvidersApiPath === 'string'
+      ? parsedContext.authProvidersApiPath
+      : '';
 
   if (
     tenantAdminPath.length === 0 ||
@@ -162,6 +170,12 @@ export const INSTITUTION_ADMIN_JS = `
   const ruleGovernanceForm = document.getElementById('rule-governance-form');
   const ruleGovernanceStatus = document.getElementById('rule-governance-status');
   const ruleGovernanceOutput = document.getElementById('rule-governance-output');
+  const enterpriseAuthPolicyForm = document.getElementById('enterprise-auth-policy-form');
+  const enterpriseAuthPolicyStatus = document.getElementById('enterprise-auth-policy-status');
+  const enterpriseAuthProviderForm = document.getElementById('enterprise-auth-provider-form');
+  const enterpriseAuthProviderStatus = document.getElementById('enterprise-auth-provider-status');
+  const enterpriseAuthProviderBody = document.getElementById('enterprise-auth-provider-body');
+  const enterpriseAuthProviderResetButton = document.getElementById('enterprise-auth-provider-reset');
   let ruleValueLists = [];
   let refreshIssuedBadges = null;
 
@@ -256,6 +270,75 @@ export const INSTITUTION_ADMIN_JS = `
       if (transitionInput instanceof HTMLInputElement) {
         transitionInput.value = assertionId;
       }
+    }
+  };
+  const fillEnterpriseAuthProviderForm = (provider) => {
+    if (!(enterpriseAuthProviderForm instanceof HTMLFormElement) || provider === null) {
+      return;
+    }
+
+    const providerIdInput = enterpriseAuthProviderForm.elements.namedItem('providerId');
+    const protocolInput = enterpriseAuthProviderForm.elements.namedItem('protocol');
+    const labelInput = enterpriseAuthProviderForm.elements.namedItem('label');
+    const enabledInput = enterpriseAuthProviderForm.elements.namedItem('enabled');
+    const isDefaultInput = enterpriseAuthProviderForm.elements.namedItem('isDefault');
+    const configJsonInput = enterpriseAuthProviderForm.elements.namedItem('configJson');
+
+    if (providerIdInput instanceof HTMLInputElement) {
+      providerIdInput.value = typeof provider.id === 'string' ? provider.id : '';
+    }
+
+    if (protocolInput instanceof HTMLSelectElement) {
+      protocolInput.value = typeof provider.protocol === 'string' ? provider.protocol : 'oidc';
+    }
+
+    if (labelInput instanceof HTMLInputElement) {
+      labelInput.value = typeof provider.label === 'string' ? provider.label : '';
+    }
+
+    if (enabledInput instanceof HTMLInputElement) {
+      enabledInput.checked = provider.enabled === true;
+    }
+
+    if (isDefaultInput instanceof HTMLInputElement) {
+      isDefaultInput.checked = provider.isDefault === true;
+    }
+
+    if (configJsonInput instanceof HTMLTextAreaElement) {
+      configJsonInput.value = typeof provider.configJson === 'string' ? provider.configJson : '{}';
+    }
+  };
+  const resetEnterpriseAuthProviderForm = () => {
+    if (!(enterpriseAuthProviderForm instanceof HTMLFormElement)) {
+      return;
+    }
+
+    enterpriseAuthProviderForm.reset();
+
+    const providerIdInput = enterpriseAuthProviderForm.elements.namedItem('providerId');
+    const protocolInput = enterpriseAuthProviderForm.elements.namedItem('protocol');
+    const enabledInput = enterpriseAuthProviderForm.elements.namedItem('enabled');
+    const isDefaultInput = enterpriseAuthProviderForm.elements.namedItem('isDefault');
+    const configJsonInput = enterpriseAuthProviderForm.elements.namedItem('configJson');
+
+    if (providerIdInput instanceof HTMLInputElement) {
+      providerIdInput.value = '';
+    }
+
+    if (protocolInput instanceof HTMLSelectElement) {
+      protocolInput.value = 'oidc';
+    }
+
+    if (enabledInput instanceof HTMLInputElement) {
+      enabledInput.checked = true;
+    }
+
+    if (isDefaultInput instanceof HTMLInputElement) {
+      isDefaultInput.checked = false;
+    }
+
+    if (configJsonInput instanceof HTMLTextAreaElement) {
+      configJsonInput.value = '';
     }
   };
   const setIssuedBadgesEmptyState = (message) => {
@@ -926,6 +1009,203 @@ export const INSTITUTION_ADMIN_JS = `
         }, 900);
       } catch {
         setStatus(apiKeyStatus, 'Unable to create API key from this browser session.', true);
+      }
+    });
+  }
+
+  if (
+    enterpriseAuthPolicyForm instanceof HTMLFormElement &&
+    enterpriseAuthPolicyStatus instanceof HTMLElement &&
+    authPolicyApiPath.length > 0
+  ) {
+    enterpriseAuthPolicyForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setStatus(enterpriseAuthPolicyStatus, 'Saving auth policy...', false);
+
+      const data = new FormData(enterpriseAuthPolicyForm);
+      const loginModeRaw = data.get('loginMode');
+      const defaultProviderIdRaw = data.get('defaultProviderId');
+      const enforceForRolesRaw = data.get('enforceForRoles');
+      const loginMode = typeof loginModeRaw === 'string' ? loginModeRaw.trim() : '';
+      const defaultProviderId =
+        typeof defaultProviderIdRaw === 'string' ? defaultProviderIdRaw.trim() : '';
+      const enforceForRoles =
+        typeof enforceForRolesRaw === 'string' ? enforceForRolesRaw.trim() : '';
+
+      if (loginMode.length === 0 || enforceForRoles.length === 0) {
+        setStatus(enterpriseAuthPolicyStatus, 'Login mode and enforcement scope are required.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(authPolicyApiPath, {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            loginMode,
+            breakGlassEnabled: data.get('breakGlassEnabled') !== null,
+            localMfaRequired: data.get('localMfaRequired') !== null,
+            defaultProviderId: defaultProviderId.length > 0 ? defaultProviderId : null,
+            enforceForRoles,
+          }),
+        });
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(enterpriseAuthPolicyStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(enterpriseAuthPolicyStatus, 'Enterprise auth policy saved.', false);
+        setTimeout(() => {
+          window.location.assign(tenantAdminPath);
+        }, 900);
+      } catch {
+        setStatus(enterpriseAuthPolicyStatus, 'Unable to save enterprise auth policy.', true);
+      }
+    });
+  }
+
+  if (
+    enterpriseAuthProviderForm instanceof HTMLFormElement &&
+    enterpriseAuthProviderStatus instanceof HTMLElement &&
+    authProvidersApiPath.length > 0
+  ) {
+    enterpriseAuthProviderForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setStatus(enterpriseAuthProviderStatus, 'Saving auth provider...', false);
+
+      const data = new FormData(enterpriseAuthProviderForm);
+      const providerIdRaw = data.get('providerId');
+      const protocolRaw = data.get('protocol');
+      const labelRaw = data.get('label');
+      const configJsonRaw = data.get('configJson');
+      const providerId = typeof providerIdRaw === 'string' ? providerIdRaw.trim() : '';
+      const protocol = typeof protocolRaw === 'string' ? protocolRaw.trim() : '';
+      const label = typeof labelRaw === 'string' ? labelRaw.trim() : '';
+      const configJson = typeof configJsonRaw === 'string' ? configJsonRaw.trim() : '';
+
+      if (protocol.length === 0 || label.length === 0 || configJson.length === 0) {
+        setStatus(enterpriseAuthProviderStatus, 'Protocol, label, and config JSON are required.', true);
+        return;
+      }
+
+      const method = providerId.length > 0 ? 'PUT' : 'POST';
+      const requestPath =
+        method === 'PUT'
+          ? authProvidersApiPath + '/' + encodeURIComponent(providerId)
+          : authProvidersApiPath;
+
+      try {
+        const response = await fetch(requestPath, {
+          method,
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            protocol,
+            label,
+            enabled: data.get('enabled') !== null,
+            isDefault: data.get('isDefault') !== null,
+            configJson,
+          }),
+        });
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(enterpriseAuthProviderStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(
+          enterpriseAuthProviderStatus,
+          providerId.length > 0 ? 'Enterprise auth provider updated.' : 'Enterprise auth provider created.',
+          false,
+        );
+        setTimeout(() => {
+          window.location.assign(tenantAdminPath);
+        }, 900);
+      } catch {
+        setStatus(enterpriseAuthProviderStatus, 'Unable to save enterprise auth provider.', true);
+      }
+    });
+  }
+
+  if (
+    enterpriseAuthProviderResetButton instanceof HTMLButtonElement &&
+    enterpriseAuthProviderForm instanceof HTMLFormElement
+  ) {
+    enterpriseAuthProviderResetButton.addEventListener('click', () => {
+      resetEnterpriseAuthProviderForm();
+    });
+  }
+
+  if (
+    enterpriseAuthProviderBody instanceof HTMLElement &&
+    enterpriseAuthProviderStatus instanceof HTMLElement &&
+    authProvidersApiPath.length > 0
+  ) {
+    enterpriseAuthProviderBody.addEventListener('click', async (event) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const editButton = target.closest('[data-enterprise-auth-edit-provider]');
+
+      if (editButton instanceof HTMLElement) {
+        fillEnterpriseAuthProviderForm({
+          id: editButton.dataset.providerId ?? '',
+          protocol: editButton.dataset.providerProtocol ?? 'oidc',
+          label: editButton.dataset.providerLabel ?? '',
+          enabled: editButton.dataset.providerEnabled === 'true',
+          isDefault: editButton.dataset.providerIsDefault === 'true',
+          configJson: editButton.dataset.providerConfigJson ?? '{}',
+        });
+        setStatus(enterpriseAuthProviderStatus, 'Loaded provider into edit form.', false);
+        return;
+      }
+
+      const deleteButton = target.closest('[data-enterprise-auth-delete-provider-id]');
+
+      if (!(deleteButton instanceof HTMLElement)) {
+        return;
+      }
+
+      const providerId = deleteButton.dataset.enterpriseAuthDeleteProviderId ?? '';
+      const providerLabel = deleteButton.dataset.providerLabel ?? 'this provider';
+
+      if (providerId.length === 0) {
+        setStatus(enterpriseAuthProviderStatus, 'Provider ID missing from delete action.', true);
+        return;
+      }
+
+      if (!window.confirm('Delete ' + providerLabel + '?')) {
+        return;
+      }
+
+      setStatus(enterpriseAuthProviderStatus, 'Deleting auth provider...', false);
+
+      try {
+        const response = await fetch(authProvidersApiPath + '/' + encodeURIComponent(providerId), {
+          method: 'DELETE',
+        });
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(enterpriseAuthProviderStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(enterpriseAuthProviderStatus, 'Enterprise auth provider deleted.', false);
+        setTimeout(() => {
+          window.location.assign(tenantAdminPath);
+        }, 900);
+      } catch {
+        setStatus(enterpriseAuthProviderStatus, 'Unable to delete enterprise auth provider.', true);
       }
     });
   }
