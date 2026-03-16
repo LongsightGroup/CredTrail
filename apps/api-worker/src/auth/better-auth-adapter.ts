@@ -38,6 +38,10 @@ export interface BetterAuthAdapterInput<
     context: ContextType,
     input: RequestMagicLinkInput,
   ) => Promise<RequestMagicLinkResult>;
+  createMagicLinkSession?: (
+    context: ContextType,
+    token: string,
+  ) => Promise<BetterAuthResolvedSession | null>;
   resolveSession: (context: ContextType) => Promise<BetterAuthResolvedSession | null>;
   revokeSession: (context: ContextType) => Promise<void>;
   resolveRequestedTenantContext?: (
@@ -179,6 +183,54 @@ export const revokeCurrentSession = async <
   input.cacheRequestedTenantContext?.(context, null);
 };
 
+export const createMagicLinkSession = async <
+  ContextType extends BetterAuthAdapterContext<BindingsType>,
+  BindingsType,
+>(
+  context: ContextType,
+  token: string,
+  input: BetterAuthAdapterInput<ContextType, BindingsType>,
+): Promise<AuthenticatedPrincipal | null> => {
+  if (input.createMagicLinkSession === undefined) {
+    throw new Error('Better Auth magic-link verification is not wired yet');
+  }
+
+  const session = await input.createMagicLinkSession(context, token);
+
+  if (session === null) {
+    input.cacheAuthenticatedPrincipal?.(context, null);
+    return null;
+  }
+
+  const authSessionId = session.sessionId.trim();
+
+  if (authSessionId.length === 0) {
+    input.cacheAuthenticatedPrincipal?.(context, null);
+    return null;
+  }
+
+  const userId = await resolveCredtrailUserId(
+    input.resolveDatabase(context.env),
+    session,
+    input.authSystem ?? 'better_auth',
+  );
+
+  if (userId === null) {
+    input.cacheAuthenticatedPrincipal?.(context, null);
+    return null;
+  }
+
+  const principal: AuthenticatedPrincipal = {
+    userId,
+    authSessionId,
+    authMethod: 'better_auth',
+    expiresAt: session.expiresAt,
+  };
+
+  input.cacheAuthenticatedPrincipal?.(context, principal);
+  return principal;
+};
+
 export const createBetterAuthProvider = <
   ContextType extends BetterAuthAdapterContext<BindingsType>,
   BindingsType,
@@ -189,8 +241,8 @@ export const createBetterAuthProvider = <
     requestMagicLink: (context, request) => {
       return input.requestMagicLink(context, request);
     },
-    createMagicLinkSession: async () => {
-      throw new Error('Better Auth magic-link verification is not wired yet');
+    createMagicLinkSession: (context, token) => {
+      return createMagicLinkSession(context, token, input);
     },
     createLtiSession: async () => {
       throw new Error('Better Auth provider does not create LTI sessions');

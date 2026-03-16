@@ -92,7 +92,17 @@ import {
   createBetterAuthProvider,
   createCompositeAuthProvider,
 } from './auth/better-auth-adapter';
+import { applyBetterAuthResponseHeaders } from './auth/better-auth-bridge';
 import { createBetterAuthRuntimeConfig } from './auth/better-auth-config';
+import {
+  BETTER_AUTH_BASE_PATH,
+  REQUESTED_TENANT_COOKIE_NAME,
+  buildHostedMagicLinkToken,
+  buildHostedMagicLinkUrl,
+  createCredtrailBetterAuth,
+  findBetterAuthSessionByToken,
+  parseHostedMagicLinkToken,
+} from './auth/better-auth-runtime';
 import {
   createLegacyAuthProvider,
   resolveLegacySessionRecord,
@@ -285,26 +295,272 @@ const legacyAuthAdapterInput = {
 
 const legacyAuthProvider = createLegacyAuthProvider<AppContext, AppBindings>(legacyAuthAdapterInput);
 
+const requestedTenantFromCookie = (context: AppContext): RequestedTenantContext | null => {
+  const tenantId = getCookie(context, REQUESTED_TENANT_COOKIE_NAME)?.trim();
+
+  if (tenantId === undefined || tenantId.length === 0) {
+    return null;
+  }
+
+  return {
+    tenantId,
+    source: 'route',
+    authoritative: true,
+  };
+};
+
+const rememberRequestedTenant = (context: AppContext, tenantId: string): RequestedTenantContext => {
+  const requestedTenant: RequestedTenantContext = {
+    tenantId,
+    source: 'route',
+    authoritative: true,
+  };
+
+  setCookie(context, REQUESTED_TENANT_COOKIE_NAME, tenantId, {
+    httpOnly: true,
+    secure: sessionCookieSecure(context.env.APP_ENV),
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: SESSION_TTL_SECONDS,
+  });
+  context.set('requestedTenantContext', requestedTenant);
+  return requestedTenant;
+};
+
+const clearRequestedTenant = (context: AppContext): void => {
+  deleteCookie(context, REQUESTED_TENANT_COOKIE_NAME, {
+    path: '/',
+  });
+  context.set('requestedTenantContext', null);
+};
+
+const createBetterAuthRequest = (
+  context: AppContext,
+  path: string,
+  init?: RequestInit,
+): Request => {
+  const runtimeConfig = createBetterAuthRuntimeConfig(context.env);
+  const url = new URL(`${BETTER_AUTH_BASE_PATH}${path}`, runtimeConfig.baseURL);
+  const headers = new Headers(context.req.raw.headers);
+
+  if (init?.headers !== undefined) {
+    const overrideHeaders = new Headers(init.headers);
+
+    for (const [key, value] of overrideHeaders.entries()) {
+      headers.set(key, value);
+    }
+  }
+
+  return new Request(url.toString(), {
+    method: init?.method,
+    headers,
+    body: init?.body,
+    redirect: init?.redirect,
+  });
+};
+
+const createBetterAuthRuntime = (
+  context: AppContext,
+  options?: {
+    generateMagicLinkToken?: (() => string) | undefined;
+    sendMagicLink?:
+      | ((data: {
+          email: string;
+          token: string;
+          url: string;
+        }) => Promise<void>)
+      | undefined;
+  },
+) => {
+  const runtimeConfig = createBetterAuthRuntimeConfig(context.env);
+
+  return {
+    runtimeConfig,
+    auth: createCredtrailBetterAuth({
+      db: resolveDatabase(context.env),
+      runtimeConfig,
+      magicLinkTtlSeconds: MAGIC_LINK_TTL_SECONDS,
+      generateMagicLinkToken: options?.generateMagicLinkToken,
+      sendMagicLink:
+        options?.sendMagicLink ??
+        (async () => {
+          return Promise.resolve();
+        }),
+    }),
+  };
+};
+
 const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   resolveDatabase,
   requestMagicLink: async (context, input) => {
-    const config = createBetterAuthRuntimeConfig(context.env);
+    const defaultNextPath = `/tenants/${encodeURIComponent(input.tenantId)}/admin`;
+    const nextPath =
+      input.nextPath !== undefined && input.nextPath.startsWith('/')
+        ? input.nextPath
+        : defaultNextPath;
+    const expiresAt = addSecondsToIso(new Date().toISOString(), MAGIC_LINK_TTL_SECONDS);
+    let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
+    let debugMagicLinkToken: string | undefined;
+    let debugMagicLinkUrl: string | undefined;
+    const { auth, runtimeConfig } = createBetterAuthRuntime(context, {
+      generateMagicLinkToken: () => buildHostedMagicLinkToken(input.tenantId),
+      sendMagicLink: async ({ email, token }) => {
+        debugMagicLinkToken = token;
+        debugMagicLinkUrl = buildHostedMagicLinkUrl({
+          baseURL: runtimeConfig.baseURL,
+          token,
+          nextPath,
+        });
+
+        try {
+          await sendMagicLinkEmailNotification({
+            mailtrapApiToken: context.env.MAILTRAP_API_TOKEN,
+            mailtrapInboxId: context.env.MAILTRAP_INBOX_ID,
+            mailtrapApiBaseUrl: context.env.MAILTRAP_API_BASE_URL,
+            mailtrapFromEmail: context.env.MAILTRAP_FROM_EMAIL,
+            mailtrapFromName: context.env.MAILTRAP_FROM_NAME,
+            recipientEmail: email,
+            tenantId: input.tenantId,
+            magicLinkUrl: debugMagicLinkUrl,
+            expiresAtIso: expiresAt,
+          });
+          deliveryStatus = 'sent';
+        } catch {
+          deliveryStatus = 'failed';
+        }
+      },
+    });
+    const response = await auth.handler(
+      createBetterAuthRequest(context, '/sign-in/magic-link', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: input.email,
+          callbackURL: nextPath,
+        }),
+      }),
+    );
+
+    if (!response.ok) {
+      throw new Error('Better Auth magic-link request failed');
+    }
 
     return {
       tenantId: input.tenantId,
       email: input.email,
-      deliveryStatus: config.secret === null ? 'skipped' : 'failed',
+      deliveryStatus,
+      expiresAt,
+      debugMagicLinkToken,
+      debugMagicLinkUrl,
+    };
+  },
+  createMagicLinkSession: async (context, token) => {
+    const tokenTenant = parseHostedMagicLinkToken(token);
+
+    if (tokenTenant !== null) {
+      rememberRequestedTenant(context, tokenTenant.tenantId);
+    }
+
+    const { auth } = createBetterAuthRuntime(context);
+    const response = await auth.handler(
+      createBetterAuthRequest(context, `/magic-link/verify?token=${encodeURIComponent(token)}`, {
+        method: 'GET',
+      }),
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    applyBetterAuthResponseHeaders(context, response);
+
+    const payload = await response.json<{
+      token?: string | undefined;
+      user?: {
+        id: string;
+        email: string | null;
+        emailVerified: boolean;
+      } | undefined;
+    }>();
+    const sessionToken = payload.token?.trim();
+
+    if (sessionToken === undefined || sessionToken.length === 0) {
+      return null;
+    }
+
+    const session = await findBetterAuthSessionByToken(resolveDatabase(context.env), sessionToken);
+
+    if (session === null) {
+      return null;
+    }
+
+    return {
+      sessionId: session.sessionId,
+      accountId: null,
+      expiresAt: session.expiresAt,
+      user: {
+        id: payload.user?.id ?? session.userId,
+        email: payload.user?.email ?? session.userEmail,
+        emailVerified: payload.user?.emailVerified ?? session.userEmailVerified,
+      },
     };
   },
   resolveSession: async (context) => {
-    void createBetterAuthRuntimeConfig(context.env);
-    return null;
+    const { auth } = createBetterAuthRuntime(context);
+    const response = await auth.handler(
+      createBetterAuthRequest(context, '/get-session', {
+        method: 'GET',
+      }),
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    applyBetterAuthResponseHeaders(context, response);
+
+    const payload = await response.json<{
+      session: {
+        id: string;
+        expiresAt: string;
+      };
+      user: {
+        id: string;
+        email: string | null;
+        emailVerified: boolean;
+      };
+    } | null>();
+
+    if (payload === null) {
+      return null;
+    }
+
+    return {
+      sessionId: payload.session.id,
+      accountId: null,
+      expiresAt: payload.session.expiresAt,
+      user: {
+        id: payload.user.id,
+        email: payload.user.email,
+        emailVerified: payload.user.emailVerified,
+      },
+    };
   },
   revokeSession: async (context) => {
-    void createBetterAuthRuntimeConfig(context.env);
+    const { auth } = createBetterAuthRuntime(context);
+    const response = await auth.handler(
+      createBetterAuthRequest(context, '/sign-out', {
+        method: 'POST',
+      }),
+    );
+
+    applyBetterAuthResponseHeaders(context, response);
+    clearRequestedTenant(context);
   },
   resolveRequestedTenantContext: async (context) => {
-    return context.get('requestedTenantContext') ?? null;
+    return context.get('requestedTenantContext') ?? requestedTenantFromCookie(context);
   },
   cacheAuthenticatedPrincipal: (
     context: AppContext,
@@ -323,7 +579,7 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
 const authProvider = createCompositeAuthProvider<AppContext>({
   primary: betterAuthProvider,
   fallback: legacyAuthProvider,
-  createMagicLinkSessionProvider: 'fallback',
+  createMagicLinkSessionProvider: 'primary',
   createLtiSessionProvider: 'fallback',
 });
 
@@ -858,19 +1114,17 @@ registerMigrationRoutes({
 registerAuthRoutes({
   app,
   resolveDatabase,
+  requestMagicLink: (context, input) => {
+    return authProvider.requestMagicLink(context, input);
+  },
   createMagicLinkSession: (context, token) => {
-    return legacyAuthProvider.createMagicLinkSession(context, token);
+    return authProvider.createMagicLinkSession(context, token);
   },
   resolveAuthenticatedPrincipal,
   resolveRequestedTenantContext,
   revokeCurrentSession: (context) => {
     return authProvider.revokeCurrentSession(context);
   },
-  addSecondsToIso,
-  generateOpaqueToken,
-  sha256Hex,
-  MAGIC_LINK_TTL_SECONDS,
-  sendMagicLinkEmailNotification,
 });
 
 registerTenantGovernanceRoutes({

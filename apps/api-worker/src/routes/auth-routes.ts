@@ -1,6 +1,5 @@
 import {
   createAuditLog,
-  createMagicLinkToken,
   ensureTenantMembership,
   upsertUserByEmail,
   type SqlDatabase,
@@ -10,12 +9,16 @@ import type { Hono } from 'hono';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
+import type { RequestMagicLinkInput, RequestMagicLinkResult } from '../auth/auth-provider';
 import { magicLinkLoginPage } from '../auth/pages';
-import type { SendMagicLinkEmailNotificationInput } from '../notifications/send-magic-link-email';
 
 interface RegisterAuthRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
+  requestMagicLink: (
+    c: AppContext,
+    input: RequestMagicLinkInput,
+  ) => Promise<RequestMagicLinkResult>;
   createMagicLinkSession: (
     c: AppContext,
     token: string,
@@ -27,26 +30,17 @@ interface RegisterAuthRoutesInput {
     c: AppContext,
   ) => Promise<RequestedTenantContext | null>;
   revokeCurrentSession: (c: AppContext) => Promise<void>;
-  addSecondsToIso: (isoTimestamp: string, seconds: number) => string;
-  generateOpaqueToken: () => string;
-  sha256Hex: (value: string) => Promise<string>;
-  MAGIC_LINK_TTL_SECONDS: number;
-  sendMagicLinkEmailNotification: (input: SendMagicLinkEmailNotificationInput) => Promise<void>;
 }
 
 export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   const {
     app,
     resolveDatabase,
+    requestMagicLink,
     createMagicLinkSession,
     resolveAuthenticatedPrincipal,
     resolveRequestedTenantContext,
     revokeCurrentSession,
-    addSecondsToIso,
-    generateOpaqueToken,
-    sha256Hex,
-    MAGIC_LINK_TTL_SECONDS,
-    sendMagicLinkEmailNotification,
   } = input;
 
   app.get('/', (c) => {
@@ -70,8 +64,6 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   app.post('/v1/auth/magic-link/request', async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseMagicLinkRequest(payload);
-    const nowIso = new Date().toISOString();
-    const expiresAt = addSecondsToIso(nowIso, MAGIC_LINK_TTL_SECONDS);
     const user = await upsertUserByEmail(resolveDatabase(c.env), request.email);
     const membershipResult = await ensureTenantMembership(
       resolveDatabase(c.env),
@@ -93,48 +85,21 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
       });
     }
 
-    const magicLinkToken = generateOpaqueToken();
-    const magicTokenHash = await sha256Hex(magicLinkToken);
-
-    await createMagicLinkToken(resolveDatabase(c.env), {
+    const magicLinkResult = await requestMagicLink(c, {
       tenantId: request.tenantId,
-      userId: user.id,
-      magicTokenHash,
-      expiresAt,
+      email: request.email,
     });
-    const tenantAdminPath = `/tenants/${encodeURIComponent(request.tenantId)}/admin`;
-    const verifyUrl = new URL('/auth/magic-link/verify', c.req.url);
-    verifyUrl.searchParams.set('token', magicLinkToken);
-    verifyUrl.searchParams.set('next', tenantAdminPath);
-    let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
-
-    try {
-      await sendMagicLinkEmailNotification({
-        mailtrapApiToken: c.env.MAILTRAP_API_TOKEN,
-        mailtrapInboxId: c.env.MAILTRAP_INBOX_ID,
-        mailtrapApiBaseUrl: c.env.MAILTRAP_API_BASE_URL,
-        mailtrapFromEmail: c.env.MAILTRAP_FROM_EMAIL,
-        mailtrapFromName: c.env.MAILTRAP_FROM_NAME,
-        recipientEmail: request.email,
-        tenantId: request.tenantId,
-        magicLinkUrl: verifyUrl.toString(),
-        expiresAtIso: expiresAt,
-      });
-      deliveryStatus = 'sent';
-    } catch {
-      deliveryStatus = 'failed';
-    }
 
     if (c.env.APP_ENV === 'development') {
       return c.json(
         {
           status: 'sent',
-          deliveryStatus,
-          tenantId: request.tenantId,
-          email: request.email,
-          expiresAt,
-          magicLinkToken,
-          magicLinkUrl: verifyUrl.toString(),
+          deliveryStatus: magicLinkResult.deliveryStatus,
+          tenantId: magicLinkResult.tenantId,
+          email: magicLinkResult.email,
+          expiresAt: magicLinkResult.expiresAt,
+          magicLinkToken: magicLinkResult.debugMagicLinkToken,
+          magicLinkUrl: magicLinkResult.debugMagicLinkUrl,
         },
         202,
       );
@@ -143,10 +108,10 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     return c.json(
       {
         status: 'sent',
-        deliveryStatus,
-        tenantId: request.tenantId,
-        email: request.email,
-        expiresAt,
+        deliveryStatus: magicLinkResult.deliveryStatus,
+        tenantId: magicLinkResult.tenantId,
+        email: magicLinkResult.email,
+        expiresAt: magicLinkResult.expiresAt,
       },
       202,
     );

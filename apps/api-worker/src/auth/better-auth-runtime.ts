@@ -1,0 +1,595 @@
+import type { SqlDatabase } from '@credtrail/db';
+import { betterAuth } from 'better-auth';
+import {
+  createAdapterFactory,
+  type CleanedWhere,
+  type CustomAdapter,
+  type DBAdapterInstance,
+  type JoinConfig,
+} from 'better-auth/adapters';
+import { magicLink } from 'better-auth/plugins';
+import type { BetterAuthRuntimeConfig } from './better-auth-config';
+
+const BETTER_AUTH_BASE_PATH = '/api/auth';
+const REQUESTED_TENANT_COOKIE_NAME = 'credtrail_requested_tenant';
+const HOSTED_MAGIC_LINK_TOKEN_PREFIX = 'ctml';
+
+type SupportedAuthModel = 'user' | 'session' | 'account' | 'verification';
+
+const MODEL_TABLES: Record<SupportedAuthModel, string> = {
+  user: 'auth.user',
+  session: 'auth.session',
+  account: 'auth.account',
+  verification: 'auth.verification',
+};
+
+const quoteIdentifier = (identifier: string): string => {
+  const parts = identifier.split('.');
+
+  for (const part of parts) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(part)) {
+      throw new Error(`Unsupported SQL identifier: ${identifier}`);
+    }
+  }
+
+  return parts.map((part) => `"${part}"`).join('.');
+};
+
+const tableNameForModel = (model: string): string => {
+  if (model in MODEL_TABLES) {
+    return quoteIdentifier(MODEL_TABLES[model as SupportedAuthModel]);
+  }
+
+  throw new Error(`Unsupported Better Auth model: ${model}`);
+};
+
+const columnName = (field: string): string => {
+  return quoteIdentifier(field);
+};
+
+const normalizeValue = (value: unknown): unknown => {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return value;
+};
+
+const filterSelectedFields = <RowType extends Record<string, unknown>>(
+  row: RowType,
+  select?: string[] | undefined,
+): RowType => {
+  if (select === undefined || select.length === 0) {
+    return row;
+  }
+
+  const filtered = Object.create(null) as RowType;
+
+  for (const key of select) {
+    if (key in row) {
+      filtered[key as keyof RowType] = row[key as keyof RowType];
+    }
+  }
+
+  return filtered;
+};
+
+const whereClauseToSql = (
+  where: CleanedWhere[] | undefined,
+): {
+  sql: string;
+  params: unknown[];
+} => {
+  if (where === undefined || where.length === 0) {
+    return {
+      sql: '',
+      params: [],
+    };
+  }
+
+  const fragments: string[] = [];
+  const params: unknown[] = [];
+
+  for (const clause of where) {
+    const connector = fragments.length === 0 ? '' : ` ${clause.connector} `;
+    const field = columnName(clause.field);
+
+    switch (clause.operator) {
+      case 'in':
+      case 'not_in': {
+        const values = Array.isArray(clause.value) ? clause.value : [clause.value];
+
+        if (values.length === 0) {
+          fragments.push(`${connector}${clause.operator === 'in' ? 'FALSE' : 'TRUE'}`);
+          continue;
+        }
+
+        const placeholders = values.map(() => '?').join(', ');
+        fragments.push(
+          `${connector}${field} ${clause.operator === 'in' ? 'IN' : 'NOT IN'} (${placeholders})`,
+        );
+        params.push(...values.map(normalizeValue));
+        continue;
+      }
+      case 'contains':
+        fragments.push(`${connector}${field} LIKE ?`);
+        params.push(`%${String(clause.value)}%`);
+        continue;
+      case 'starts_with':
+        fragments.push(`${connector}${field} LIKE ?`);
+        params.push(`${String(clause.value)}%`);
+        continue;
+      case 'ends_with':
+        fragments.push(`${connector}${field} LIKE ?`);
+        params.push(`%${String(clause.value)}`);
+        continue;
+      case 'ne':
+        if (clause.value === null) {
+          fragments.push(`${connector}${field} IS NOT NULL`);
+        } else {
+          fragments.push(`${connector}${field} <> ?`);
+          params.push(normalizeValue(clause.value));
+        }
+        continue;
+      case 'lt':
+      case 'lte':
+      case 'gt':
+      case 'gte': {
+        const operator =
+          clause.operator === 'lt'
+            ? '<'
+            : clause.operator === 'lte'
+              ? '<='
+              : clause.operator === 'gt'
+                ? '>'
+                : '>=';
+        fragments.push(`${connector}${field} ${operator} ?`);
+        params.push(normalizeValue(clause.value));
+        continue;
+      }
+      case 'eq':
+      default:
+        if (clause.value === null) {
+          fragments.push(`${connector}${field} IS NULL`);
+        } else {
+          fragments.push(`${connector}${field} = ?`);
+          params.push(normalizeValue(clause.value));
+        }
+        continue;
+    }
+  }
+
+  return {
+    sql: ` WHERE ${fragments.join('')}`,
+    params,
+  };
+};
+
+const listRows = async (
+  db: SqlDatabase,
+  input: {
+    model: string;
+    where?: CleanedWhere[] | undefined;
+    select?: string[] | undefined;
+    sortBy?: {
+      field: string;
+      direction: 'asc' | 'desc';
+    } | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  },
+): Promise<Record<string, unknown>[]> => {
+  const selectSql =
+    input.select !== undefined && input.select.length > 0
+      ? input.select.map(columnName).join(', ')
+      : '*';
+  const whereClause = whereClauseToSql(input.where);
+  const orderBySql =
+    input.sortBy === undefined
+      ? ''
+      : ` ORDER BY ${columnName(input.sortBy.field)} ${input.sortBy.direction.toUpperCase()}`;
+  const limitSql = input.limit === undefined ? '' : ' LIMIT ?';
+  const offsetSql = input.offset === undefined ? '' : ' OFFSET ?';
+  const params = [...whereClause.params];
+
+  if (input.limit !== undefined) {
+    params.push(input.limit);
+  }
+
+  if (input.offset !== undefined) {
+    params.push(input.offset);
+  }
+
+  const result = await db
+    .prepare(`SELECT ${selectSql} FROM ${tableNameForModel(input.model)}${whereClause.sql}${orderBySql}${limitSql}${offsetSql}`)
+    .bind(...params)
+    .all<Record<string, unknown>>();
+
+  return result.results;
+};
+
+const attachJoinedRows = async (
+  db: SqlDatabase,
+  rows: Record<string, unknown>[],
+  join: JoinConfig,
+): Promise<Record<string, unknown>[]> => {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const outputRows = rows.map((row) => ({ ...row }));
+
+  for (const [joinModel, joinConfig] of Object.entries(join)) {
+    const baseValues = outputRows
+      .map((row) => row[joinConfig.on.from])
+      .filter((value): value is string | number => value !== undefined && value !== null);
+
+    if (baseValues.length === 0) {
+      for (const row of outputRows) {
+        row[joinModel] = joinConfig.relation === 'one-to-one' ? null : [];
+      }
+      continue;
+    }
+
+    const joinedRows = await listRows(db, {
+      model: joinModel,
+      where: [
+        {
+          field: joinConfig.on.to,
+          operator: 'in',
+          value: [...new Set(baseValues)],
+          connector: 'AND',
+        },
+      ],
+      limit:
+        joinConfig.relation === 'one-to-one'
+          ? undefined
+          : (joinConfig.limit ?? 100) * Math.max(baseValues.length, 1),
+    });
+
+    for (const row of outputRows) {
+      const relatedRows = joinedRows.filter(
+        (joinedRow) => joinedRow[joinConfig.on.to] === row[joinConfig.on.from],
+      );
+
+      row[joinModel] =
+        joinConfig.relation === 'one-to-one'
+          ? (relatedRows[0] ?? null)
+          : relatedRows.slice(0, joinConfig.limit ?? 100);
+    }
+  }
+
+  return outputRows;
+};
+
+const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
+  return {
+    create: async ({ model, data, select }) => {
+      const keys = Object.keys(data);
+      const values = keys.map((key) => data[key]);
+      const columnsSql = keys.map(columnName).join(', ');
+      const placeholders = keys.map(() => '?').join(', ');
+
+      await db
+        .prepare(
+          `INSERT INTO ${tableNameForModel(model)} (${columnsSql}) VALUES (${placeholders})`,
+        )
+        .bind(...values.map(normalizeValue))
+        .run();
+
+      return filterSelectedFields(
+        {
+          ...data,
+        },
+        select,
+      );
+    },
+    update: async ({ model, where, update }) => {
+      const keys = Object.keys(update);
+
+      if (keys.length === 0) {
+        const rows = await listRows(db, {
+          model,
+          where,
+          limit: 1,
+        });
+
+        return rows[0] ?? null;
+      }
+
+      const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
+      const whereClause = whereClauseToSql(where);
+      const params = [...keys.map((key) => normalizeValue(update[key])), ...whereClause.params];
+
+      await db
+        .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
+        .bind(...params)
+        .run();
+
+      const rows = await listRows(db, {
+        model,
+        where,
+        limit: 1,
+      });
+
+      return rows[0] ?? null;
+    },
+    updateMany: async ({ model, where, update }) => {
+      const matchingRows = await listRows(db, {
+        model,
+        where,
+      });
+      const keys = Object.keys(update);
+
+      if (matchingRows.length === 0 || keys.length === 0) {
+        return matchingRows.length;
+      }
+
+      const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
+      const whereClause = whereClauseToSql(where);
+      const params = [...keys.map((key) => normalizeValue(update[key])), ...whereClause.params];
+
+      await db
+        .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
+        .bind(...params)
+        .run();
+
+      return matchingRows.length;
+    },
+    findOne: async ({ model, where, select, join }) => {
+      const rows = await listRows(db, {
+        model,
+        where,
+        select,
+        limit: 1,
+      });
+
+      if (rows.length === 0) {
+        return null;
+      }
+
+      if (join === undefined) {
+        return rows[0];
+      }
+
+      const joinedRows = await attachJoinedRows(db, rows, join);
+      return joinedRows[0] ?? null;
+    },
+    findMany: async ({ model, where, limit, select, sortBy, offset, join }) => {
+      const rows = await listRows(db, {
+        model,
+        where,
+        select,
+        sortBy,
+        limit,
+        offset,
+      });
+
+      if (join === undefined) {
+        return rows;
+      }
+
+      return attachJoinedRows(db, rows, join);
+    },
+    delete: async ({ model, where }) => {
+      const whereClause = whereClauseToSql(where);
+      await db
+        .prepare(`DELETE FROM ${tableNameForModel(model)}${whereClause.sql}`)
+        .bind(...whereClause.params)
+        .run();
+    },
+    deleteMany: async ({ model, where }) => {
+      const matchingRows = await listRows(db, {
+        model,
+        where,
+      });
+      const whereClause = whereClauseToSql(where);
+
+      await db
+        .prepare(`DELETE FROM ${tableNameForModel(model)}${whereClause.sql}`)
+        .bind(...whereClause.params)
+        .run();
+
+      return matchingRows.length;
+    },
+    count: async ({ model, where }) => {
+      const whereClause = whereClauseToSql(where);
+      const row = await db
+        .prepare(`SELECT COUNT(*) AS count FROM ${tableNameForModel(model)}${whereClause.sql}`)
+        .bind(...whereClause.params)
+        .first<{ count: number | string }>();
+
+      if (row === null) {
+        return 0;
+      }
+
+      return Number(row.count);
+    },
+  };
+};
+
+export const createBetterAuthDatabaseAdapter = (db: SqlDatabase): DBAdapterInstance => {
+  return createAdapterFactory({
+    config: {
+      adapterId: 'credtrail-sql',
+      adapterName: 'CredTrail SQL Better Auth Adapter',
+      usePlural: false,
+      supportsBooleans: true,
+      supportsDates: false,
+      supportsJSON: false,
+      supportsArrays: false,
+      transaction: false,
+    },
+    adapter: () => createBetterAuthCustomAdapter(db),
+  });
+};
+
+const encodeBase64Url = (value: string): string => {
+  const bytes = new TextEncoder().encode(value);
+  let raw = '';
+
+  for (const byte of bytes) {
+    raw += String.fromCharCode(byte);
+  }
+
+  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+};
+
+const decodeBase64Url = (value: string): string => {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const raw = atob(padded);
+  const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+};
+
+export const buildHostedMagicLinkToken = (tenantId: string): string => {
+  const payload = encodeBase64Url(
+    JSON.stringify({
+      tenantId,
+    }),
+  );
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+
+  return `${HOSTED_MAGIC_LINK_TOKEN_PREFIX}.${payload}.${nonce}`;
+};
+
+export const parseHostedMagicLinkToken = (
+  token: string,
+): {
+  tenantId: string;
+} | null => {
+  const [prefix, payload] = token.split('.');
+
+  if (prefix !== HOSTED_MAGIC_LINK_TOKEN_PREFIX || payload === undefined) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decodeBase64Url(payload)) as {
+      tenantId?: unknown;
+    };
+
+    if (typeof parsed.tenantId !== 'string' || parsed.tenantId.trim().length === 0) {
+      return null;
+    }
+
+    return {
+      tenantId: parsed.tenantId,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const tenantIdFromNextPath = (nextPath: string | undefined): string | null => {
+  if (nextPath === undefined || !nextPath.startsWith('/')) {
+    return null;
+  }
+
+  const match = /^\/tenants\/([^/]+)\//.exec(nextPath);
+
+  return match?.[1] ?? null;
+};
+
+export const buildHostedMagicLinkUrl = (input: {
+  baseURL: string;
+  token: string;
+  nextPath: string;
+}): string => {
+  const url = new URL('/auth/magic-link/verify', input.baseURL);
+  url.searchParams.set('token', input.token);
+  url.searchParams.set('next', input.nextPath);
+  return url.toString();
+};
+
+export interface BetterAuthDatabaseSessionRecord {
+  sessionId: string;
+  sessionToken: string;
+  userId: string;
+  expiresAt: string;
+  userEmail: string | null;
+  userEmailVerified: boolean;
+}
+
+export const findBetterAuthSessionByToken = async (
+  db: SqlDatabase,
+  sessionToken: string,
+): Promise<BetterAuthDatabaseSessionRecord | null> => {
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        session.id AS sessionId,
+        session.token AS sessionToken,
+        session.user_id AS userId,
+        session.expires_at AS expiresAt,
+        auth_user.email AS userEmail,
+        auth_user.email_verified AS userEmailVerified
+      FROM auth.session AS session
+      INNER JOIN auth.user AS auth_user
+        ON auth_user.id = session.user_id
+      WHERE session.token = ?
+      LIMIT 1
+    `,
+    )
+    .bind(sessionToken)
+    .first<BetterAuthDatabaseSessionRecord>();
+
+  return row;
+};
+
+export const createCredtrailBetterAuth = (input: {
+  db: SqlDatabase;
+  runtimeConfig: BetterAuthRuntimeConfig;
+  magicLinkTtlSeconds: number;
+  generateMagicLinkToken?: (() => string) | undefined;
+  sendMagicLink: (data: {
+    email: string;
+    token: string;
+    url: string;
+  }) => Promise<void>;
+}) => {
+  return betterAuth({
+    baseURL: input.runtimeConfig.baseURL,
+    basePath: BETTER_AUTH_BASE_PATH,
+    ...(input.runtimeConfig.secret === null ? {} : { secret: input.runtimeConfig.secret }),
+    trustedOrigins: input.runtimeConfig.trustedOrigins,
+    database: createBetterAuthDatabaseAdapter(input.db),
+    session: {
+      expiresIn: input.runtimeConfig.session.expiresInSeconds,
+      disableSessionRefresh: input.runtimeConfig.session.disableRefresh,
+      cookieCache: {
+        enabled: false,
+      },
+    },
+    cookies: {
+      session_token: {
+        name: input.runtimeConfig.session.cookieName,
+        attributes: {
+          path: '/',
+          sameSite: 'lax',
+          httpOnly: true,
+          secure: input.runtimeConfig.baseURL.startsWith('https://'),
+        },
+      },
+    },
+    plugins: [
+      magicLink({
+        expiresIn: input.magicLinkTtlSeconds,
+        generateToken: () => {
+          return input.generateMagicLinkToken?.() ?? crypto.randomUUID().replace(/-/g, '');
+        },
+        sendMagicLink: async ({ email, token, url }) => {
+          await input.sendMagicLink({
+            email,
+            token,
+            url,
+          });
+        },
+      }),
+    ],
+  });
+};
+
+export { BETTER_AUTH_BASE_PATH, REQUESTED_TENANT_COOKIE_NAME };

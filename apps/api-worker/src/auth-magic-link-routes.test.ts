@@ -92,85 +92,6 @@ const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
   };
 };
 
-interface MockedLegacyAuthProvider {
-  requestMagicLink: ReturnType<typeof vi.fn>;
-  createMagicLinkSession: ReturnType<typeof vi.fn>;
-  createLtiSession: ReturnType<typeof vi.fn>;
-  resolveAuthenticatedPrincipal: ReturnType<typeof vi.fn>;
-  resolveRequestedTenantContext: ReturnType<typeof vi.fn>;
-  revokeCurrentSession: ReturnType<typeof vi.fn>;
-}
-
-const loadAppWithMockedLegacyAuthProvider = async (options?: {
-  principal?: {
-    userId: string;
-    authSessionId: string;
-    authMethod: 'legacy_magic_link' | 'legacy_lti';
-    expiresAt: string;
-  };
-  requestedTenant?: {
-    tenantId: string;
-    source: 'route' | 'legacy_session';
-    authoritative: boolean;
-  };
-}): Promise<{
-  app: typeof app;
-  provider: MockedLegacyAuthProvider;
-}> => {
-  vi.resetModules();
-  const principal = options?.principal ?? {
-    userId: 'usr_adapter',
-    authSessionId: 'ses_adapter',
-    authMethod: 'legacy_magic_link' as const,
-    expiresAt: '2026-02-18T22:00:00.000Z',
-  };
-  const requestedTenant = options?.requestedTenant ?? {
-    tenantId: 'tenant_123',
-    source: 'legacy_session' as const,
-    authoritative: false,
-  };
-  const provider: MockedLegacyAuthProvider = {
-    requestMagicLink: vi.fn(),
-    createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
-      setCookie(context, 'credtrail_session', 'adapter-session', {
-        httpOnly: true,
-        sameSite: 'Lax',
-        path: '/',
-      });
-      return Promise.resolve(principal);
-    }),
-    createLtiSession: vi.fn(),
-    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(principal)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(requestedTenant)),
-    revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
-      deleteCookie(context, 'credtrail_session', {
-        path: '/',
-      });
-      return Promise.resolve();
-    }),
-  };
-
-  vi.doMock('./auth/legacy-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
-        './auth/legacy-auth-adapter',
-      );
-
-    return {
-      ...actual,
-      createLegacyAuthProvider: vi.fn(() => provider),
-      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
-    };
-  });
-
-  const { app: isolatedApp } = await import('./index');
-
-  return {
-    app: isolatedApp,
-    provider,
-  };
-};
-
 interface MockedInternalAuthProvider {
   requestMagicLink: ReturnType<typeof vi.fn>;
   createMagicLinkSession: ReturnType<typeof vi.fn>;
@@ -379,115 +300,6 @@ afterEach(() => {
   vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
-describe('hosted auth adapter wiring', () => {
-  it('delegates JSON magic-link verification to the internal auth provider', async () => {
-    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
-
-    const response = await isolatedApp.request(
-      '/v1/auth/magic-link/verify',
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: 'adapter-token-1234567890',
-        }),
-      },
-      createEnv('production'),
-    );
-    const body = await response.json<{
-      status: string;
-      tenantId: string;
-      userId: string;
-      expiresAt: string;
-    }>();
-
-    expect(response.status).toBe(200);
-    expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_123',
-      userId: 'usr_adapter',
-      expiresAt: '2026-02-18T22:00:00.000Z',
-    });
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
-    expect(provider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(mockedCreateSession).not.toHaveBeenCalled();
-  });
-
-  it('delegates browser magic-link verification to the internal auth provider', async () => {
-    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
-
-    const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=adapter-token-1234567890',
-      undefined,
-      createEnv('production'),
-    );
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
-    expect(provider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(mockedCreateSession).not.toHaveBeenCalled();
-  });
-
-  it('delegates session inspection to the internal auth provider', async () => {
-    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
-
-    const response = await isolatedApp.request(
-      '/v1/auth/session',
-      {
-        headers: {
-          Cookie: 'credtrail_session=session-token',
-        },
-      },
-      createEnv('production'),
-    );
-    const body = await response.json<{
-      status: string;
-      tenantId: string;
-      userId: string;
-      expiresAt: string;
-    }>();
-
-    expect(response.status).toBe(200);
-    expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_123',
-      userId: 'usr_adapter',
-      expiresAt: '2026-02-18T22:00:00.000Z',
-    });
-    expect(provider.resolveAuthenticatedPrincipal).toHaveBeenCalledTimes(1);
-    expect(provider.resolveRequestedTenantContext).toHaveBeenCalledTimes(1);
-  });
-
-  it('delegates logout to the internal auth provider', async () => {
-    const { app: isolatedApp, provider } = await loadAppWithMockedLegacyAuthProvider();
-
-    const response = await isolatedApp.request(
-      '/v1/auth/logout',
-      {
-        method: 'POST',
-        headers: {
-          Cookie: 'credtrail_session=session-token',
-        },
-      },
-      createEnv('production'),
-    );
-    const body = await response.json<{
-      status: string;
-    }>();
-
-    expect(response.status).toBe(200);
-    expect(body).toEqual({
-      status: 'signed_out',
-    });
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
-    expect(provider.revokeCurrentSession).toHaveBeenCalledTimes(1);
-    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
-  });
-});
-
 describe('magic-link auth routes', () => {
   it('renders login page with magic-link form and linked page assets', async () => {
     const env = createEnv('production');
@@ -532,7 +344,9 @@ describe('magic-link auth routes', () => {
   });
 
   it('returns token + url in development mode for magic-link request', async () => {
-    const response = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
+
+    const response = await isolatedApp.request(
       '/v1/auth/magic-link/request',
       {
         method: 'POST',
@@ -759,28 +573,17 @@ describe('magic-link auth routes', () => {
   });
 
   it('supports browser GET verify and sets session cookie before redirect', async () => {
-    mockedFindMagicLinkTokenByHash.mockResolvedValue({
-      id: 'mlt_123',
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
-      magicTokenHash: 'hash_123',
-      expiresAt: '2026-02-18T13:00:00.000Z',
-      usedAt: null,
-      createdAt: '2026-02-18T12:00:00.000Z',
-    });
-    mockedIsMagicLinkTokenValid.mockReturnValue(true);
-    mockedCreateSession.mockResolvedValue(sampleSession());
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
-    const response = await app.request(
-      '/auth/magic-link/verify?token=test-token&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    const response = await isolatedApp.request(
+      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
       undefined,
       createEnv('production'),
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
-    expect(mockedMarkMagicLinkTokenUsed).toHaveBeenCalledTimes(1);
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
   });
 
   it('returns authenticated session details for the current session cookie', async () => {
