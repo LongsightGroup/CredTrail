@@ -1,12 +1,16 @@
 import {
+  createTenantAuthProvider,
   createTenantApiKey,
   createAuditLog,
   createDelegatedIssuingAuthorityGrant,
   createTenantOrgUnit,
+  deleteTenantAuthProvider,
   deleteTenantSsoSamlConfiguration,
   findDelegatedIssuingAuthorityGrantById,
+  findTenantAuthProviderById,
   findTenantById,
   findUserById,
+  listTenantAuthProviders,
   findTenantSsoSamlConfiguration,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
@@ -19,6 +23,9 @@ import {
   removeTenantMembershipOrgUnitScope,
   revokeTenantApiKey,
   revokeDelegatedIssuingAuthorityGrant,
+  resolveTenantAuthPolicy,
+  updateTenantAuthProvider,
+  upsertTenantAuthPolicy,
   upsertTenantSsoSamlConfiguration,
   upsertTenantMembershipOrgUnitScope,
   type SessionRecord,
@@ -28,6 +35,7 @@ import {
 import type { Hono } from 'hono';
 import {
   parseCreateTenantApiKeyRequest,
+  parseTenantAuthProviderPathParams,
   parseCreateDelegatedIssuingAuthorityGrantRequest,
   parseRevokeTenantApiKeyRequest,
   parseCreateTenantOrgUnitRequest,
@@ -35,6 +43,8 @@ import {
   parseTenantApiKeyListQuery,
   parseTenantApiKeyPathParams,
   parseRevokeDelegatedIssuingAuthorityGrantRequest,
+  parseUpsertTenantAuthPolicyRequest,
+  parseUpsertTenantAuthProviderRequest,
   parseUpsertTenantSsoSamlConfigurationRequest,
   parseTenantOrgUnitListQuery,
   parseTenantPathParams,
@@ -432,6 +442,297 @@ export const registerTenantGovernanceRoutes = (
       tenantId: pathParams.tenantId,
       removed,
     });
+  });
+
+  app.get('/v1/tenants/:tenantId/auth-policy', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const policy = await resolveTenantAuthPolicy(db, pathParams.tenantId);
+    return c.json(policy);
+  });
+
+  app.put('/v1/tenants/:tenantId/auth-policy', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request: ReturnType<typeof parseUpsertTenantAuthPolicyRequest>;
+
+    try {
+      request = parseUpsertTenantAuthPolicyRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid tenant auth policy payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    if (request.defaultProviderId !== undefined && request.defaultProviderId !== null) {
+      const provider = await findTenantAuthProviderById(db, pathParams.tenantId, request.defaultProviderId);
+
+      if (provider === null) {
+        return c.json(
+          {
+            error: 'Default auth provider not found',
+          },
+          400,
+        );
+      }
+    }
+
+    const policy = await upsertTenantAuthPolicy(db, {
+      tenantId: pathParams.tenantId,
+      loginMode: request.loginMode,
+      breakGlassEnabled: request.breakGlassEnabled,
+      localMfaRequired: request.localMfaRequired,
+      defaultProviderId: request.defaultProviderId,
+      enforceForRoles: request.enforceForRoles,
+    });
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'tenant.auth_policy_upserted',
+      targetType: 'tenant_auth_policy',
+      targetId: pathParams.tenantId,
+      metadata: {
+        role: membershipRole,
+        loginMode: policy.loginMode,
+        breakGlassEnabled: policy.breakGlassEnabled,
+        localMfaRequired: policy.localMfaRequired,
+        defaultProviderId: policy.defaultProviderId,
+        enforceForRoles: policy.enforceForRoles,
+      },
+    });
+
+    return c.json(policy);
+  });
+
+  app.get('/v1/tenants/:tenantId/auth-providers', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const providers = await listTenantAuthProviders(db, pathParams.tenantId);
+    return c.json(providers);
+  });
+
+  app.post('/v1/tenants/:tenantId/auth-providers', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request: ReturnType<typeof parseUpsertTenantAuthProviderRequest>;
+
+    try {
+      request = parseUpsertTenantAuthProviderRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid tenant auth provider payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const provider = await createTenantAuthProvider(db, {
+      tenantId: pathParams.tenantId,
+      protocol: request.protocol,
+      label: request.label,
+      enabled: request.enabled,
+      isDefault: request.isDefault,
+      configJson: request.configJson,
+    });
+
+    if (provider.isDefault) {
+      const currentPolicy = await resolveTenantAuthPolicy(db, pathParams.tenantId);
+      await upsertTenantAuthPolicy(db, {
+        tenantId: pathParams.tenantId,
+        loginMode: currentPolicy.loginMode,
+        breakGlassEnabled: currentPolicy.breakGlassEnabled,
+        localMfaRequired: currentPolicy.localMfaRequired,
+        defaultProviderId: provider.id,
+        enforceForRoles: currentPolicy.enforceForRoles,
+      });
+    }
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'tenant.auth_provider_created',
+      targetType: 'tenant_auth_provider',
+      targetId: provider.id,
+      metadata: {
+        role: membershipRole,
+        protocol: provider.protocol,
+        label: provider.label,
+        enabled: provider.enabled,
+        isDefault: provider.isDefault,
+      },
+    });
+
+    return c.json(provider, 201);
+  });
+
+  app.put('/v1/tenants/:tenantId/auth-providers/:providerId', async (c) => {
+    const pathParams = parseTenantAuthProviderPathParams(c.req.param());
+    let request: ReturnType<typeof parseUpsertTenantAuthProviderRequest>;
+
+    try {
+      request = parseUpsertTenantAuthProviderRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid tenant auth provider payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const provider = await updateTenantAuthProvider(db, {
+      tenantId: pathParams.tenantId,
+      providerId: pathParams.providerId,
+      protocol: request.protocol,
+      label: request.label,
+      enabled: request.enabled,
+      isDefault: request.isDefault,
+      configJson: request.configJson,
+    });
+
+    if (provider === null) {
+      return c.json(
+        {
+          error: 'Tenant auth provider not found',
+        },
+        404,
+      );
+    }
+
+    const currentPolicy = await resolveTenantAuthPolicy(db, pathParams.tenantId);
+    await upsertTenantAuthPolicy(db, {
+      tenantId: pathParams.tenantId,
+      loginMode: currentPolicy.loginMode,
+      breakGlassEnabled: currentPolicy.breakGlassEnabled,
+      localMfaRequired: currentPolicy.localMfaRequired,
+      defaultProviderId:
+        provider.isDefault
+          ? provider.id
+          : currentPolicy.defaultProviderId === provider.id
+            ? null
+            : currentPolicy.defaultProviderId,
+      enforceForRoles: currentPolicy.enforceForRoles,
+    });
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'tenant.auth_provider_updated',
+      targetType: 'tenant_auth_provider',
+      targetId: provider.id,
+      metadata: {
+        role: membershipRole,
+        protocol: provider.protocol,
+        label: provider.label,
+        enabled: provider.enabled,
+        isDefault: provider.isDefault,
+      },
+    });
+
+    return c.json(provider);
+  });
+
+  app.delete('/v1/tenants/:tenantId/auth-providers/:providerId', async (c) => {
+    const pathParams = parseTenantAuthProviderPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const removed = await deleteTenantAuthProvider(db, pathParams.tenantId, pathParams.providerId);
+
+    if (removed) {
+      await createAuditLog(db, {
+        tenantId: pathParams.tenantId,
+        actorUserId: session.userId,
+        action: 'tenant.auth_provider_deleted',
+        targetType: 'tenant_auth_provider',
+        targetId: pathParams.providerId,
+        metadata: {
+          role: membershipRole,
+        },
+      });
+    }
+
+    return c.json({ removed });
   });
 
   app.get('/v1/tenants/:tenantId/api-keys', async (c) => {

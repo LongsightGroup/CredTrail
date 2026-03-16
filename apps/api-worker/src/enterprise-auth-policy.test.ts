@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  mockedFindTenantAuthProviderById,
   mockedFindTenantAuthPolicy,
   mockedUpsertTenantAuthPolicy,
+  mockedResolveTenantAuthPolicy,
   mockedListTenantAuthProviders,
   mockedCreateTenantAuthProvider,
   mockedUpdateTenantAuthProvider,
   mockedDeleteTenantAuthProvider,
 } = vi.hoisted(() => {
   return {
+    mockedFindTenantAuthProviderById: vi.fn(),
     mockedFindTenantAuthPolicy: vi.fn(),
     mockedUpsertTenantAuthPolicy: vi.fn(),
+    mockedResolveTenantAuthPolicy: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedCreateTenantAuthProvider: vi.fn(),
     mockedUpdateTenantAuthProvider: vi.fn(),
@@ -25,10 +29,12 @@ vi.mock('@credtrail/db', async () => {
     ...actual,
     createAuditLog: vi.fn(),
     findActiveSessionByHash: vi.fn(),
+    findTenantAuthProviderById: mockedFindTenantAuthProviderById,
     findTenantMembership: vi.fn(),
     findTenantById: vi.fn(),
     touchSession: vi.fn(),
     findTenantAuthPolicy: mockedFindTenantAuthPolicy,
+    resolveTenantAuthPolicy: mockedResolveTenantAuthPolicy,
     upsertTenantAuthPolicy: mockedUpsertTenantAuthPolicy,
     listTenantAuthProviders: mockedListTenantAuthProviders,
     createTenantAuthProvider: mockedCreateTenantAuthProvider,
@@ -183,8 +189,12 @@ beforeEach(() => {
   mockedFindTenantById.mockResolvedValue(sampleTenant());
   mockedCreateAuditLog.mockReset();
   mockedCreateAuditLog.mockResolvedValue(sampleAuditLog());
+  mockedFindTenantAuthProviderById.mockReset();
+  mockedFindTenantAuthProviderById.mockResolvedValue(sampleAuthProvider());
   mockedFindTenantAuthPolicy.mockReset();
   mockedFindTenantAuthPolicy.mockResolvedValue(sampleAuthPolicy());
+  mockedResolveTenantAuthPolicy.mockReset();
+  mockedResolveTenantAuthPolicy.mockResolvedValue(sampleAuthPolicy());
   mockedUpsertTenantAuthPolicy.mockReset();
   mockedUpsertTenantAuthPolicy.mockResolvedValue(sampleAuthPolicy({ loginMode: 'sso_required' }));
   mockedListTenantAuthProviders.mockReset();

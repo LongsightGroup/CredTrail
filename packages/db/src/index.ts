@@ -375,6 +375,64 @@ export interface FindActiveTenantApiKeyByHashInput {
   nowIso: string;
 }
 
+export type TenantLoginMode = 'local' | 'hybrid' | 'sso_required';
+
+export type TenantAuthPolicyEnforceForRoles = 'all_users' | 'admins_only';
+
+export interface TenantAuthPolicyRecord {
+  tenantId: string;
+  loginMode: TenantLoginMode;
+  breakGlassEnabled: boolean;
+  localMfaRequired: boolean;
+  defaultProviderId: string | null;
+  enforceForRoles: TenantAuthPolicyEnforceForRoles;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertTenantAuthPolicyInput {
+  tenantId: string;
+  loginMode: TenantLoginMode;
+  breakGlassEnabled?: boolean | undefined;
+  localMfaRequired?: boolean | undefined;
+  defaultProviderId?: string | null | undefined;
+  enforceForRoles?: TenantAuthPolicyEnforceForRoles | undefined;
+}
+
+export type TenantAuthProviderProtocol = 'oidc' | 'saml';
+
+export interface TenantAuthProviderRecord {
+  id: string;
+  tenantId: string;
+  protocol: TenantAuthProviderProtocol;
+  label: string;
+  enabled: boolean;
+  isDefault: boolean;
+  configJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTenantAuthProviderInput {
+  id?: string | undefined;
+  tenantId: string;
+  protocol: TenantAuthProviderProtocol;
+  label: string;
+  enabled?: boolean | undefined;
+  isDefault?: boolean | undefined;
+  configJson: string;
+}
+
+export interface UpdateTenantAuthProviderInput {
+  tenantId: string;
+  providerId: string;
+  protocol: TenantAuthProviderProtocol;
+  label: string;
+  enabled?: boolean | undefined;
+  isDefault?: boolean | undefined;
+  configJson: string;
+}
+
 export interface TenantSsoSamlConfigurationRecord {
   tenantId: string;
   idpEntityId: string;
@@ -1747,6 +1805,29 @@ interface TenantApiKeyRow {
   updatedAt: string;
 }
 
+interface TenantAuthPolicyRow {
+  tenantId: string;
+  loginMode: TenantLoginMode;
+  breakGlassEnabled: number | boolean;
+  localMfaRequired: number | boolean;
+  defaultProviderId: string | null;
+  enforceForRoles: TenantAuthPolicyEnforceForRoles;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TenantAuthProviderRow {
+  id: string;
+  tenantId: string;
+  protocol: TenantAuthProviderProtocol;
+  label: string;
+  enabled: number | boolean;
+  isDefault: number | boolean;
+  configJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface TenantSsoSamlConfigurationRow {
   tenantId: string;
   idpEntityId: string;
@@ -1958,6 +2039,32 @@ const isMissingTenantApiKeysTableError = (error: unknown): boolean => {
       error.message.includes('relation') ||
       error.message.includes('does not exist')) &&
     error.message.includes('tenant_api_keys')
+  );
+};
+
+const isMissingTenantAuthPoliciesTableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    (error.message.includes('no such table') ||
+      error.message.includes('relation') ||
+      error.message.includes('does not exist')) &&
+    error.message.includes('tenant_auth_policies')
+  );
+};
+
+const isMissingTenantAuthProvidersTableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    (error.message.includes('no such table') ||
+      error.message.includes('relation') ||
+      error.message.includes('does not exist')) &&
+    error.message.includes('tenant_auth_providers')
   );
 };
 
@@ -2336,6 +2443,79 @@ const ensureTenantSsoSamlConfigurationsTable = async (db: SqlDatabase): Promise<
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
       )
+    `,
+    )
+    .run();
+};
+
+const ensureTenantAuthPoliciesTable = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS tenant_auth_policies (
+        tenant_id TEXT PRIMARY KEY,
+        login_mode TEXT NOT NULL DEFAULT 'local'
+          CHECK (login_mode IN ('local', 'hybrid', 'sso_required')),
+        break_glass_enabled INTEGER NOT NULL DEFAULT 0
+          CHECK (break_glass_enabled IN (0, 1)),
+        local_mfa_required INTEGER NOT NULL DEFAULT 0
+          CHECK (local_mfa_required IN (0, 1)),
+        default_provider_id TEXT,
+        enforce_for_roles TEXT NOT NULL DEFAULT 'all_users'
+          CHECK (enforce_for_roles IN ('all_users', 'admins_only')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_tenant_auth_policies_default_provider
+        ON tenant_auth_policies (default_provider_id)
+    `,
+    )
+    .run();
+};
+
+const ensureTenantAuthProvidersTable = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS tenant_auth_providers (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        protocol TEXT NOT NULL CHECK (protocol IN ('oidc', 'saml')),
+        label TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+        is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+        config_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_tenant_auth_providers_tenant
+        ON tenant_auth_providers (tenant_id, created_at DESC, id DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tenant_auth_providers_default_per_tenant
+        ON tenant_auth_providers (tenant_id)
+        WHERE is_default = 1
     `,
     )
     .run();
@@ -6249,6 +6429,33 @@ const mapTenantApiKeyRow = (row: TenantApiKeyRow): TenantApiKeyRecord => {
   };
 };
 
+const mapTenantAuthPolicyRow = (row: TenantAuthPolicyRow): TenantAuthPolicyRecord => {
+  return {
+    tenantId: row.tenantId,
+    loginMode: row.loginMode,
+    breakGlassEnabled: row.breakGlassEnabled === 1 || row.breakGlassEnabled === true,
+    localMfaRequired: row.localMfaRequired === 1 || row.localMfaRequired === true,
+    defaultProviderId: row.defaultProviderId,
+    enforceForRoles: row.enforceForRoles,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapTenantAuthProviderRow = (row: TenantAuthProviderRow): TenantAuthProviderRecord => {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    protocol: row.protocol,
+    label: row.label,
+    enabled: row.enabled === 1 || row.enabled === true,
+    isDefault: row.isDefault === 1 || row.isDefault === true,
+    configJson: row.configJson,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
 const mapTenantSsoSamlConfigurationRow = (
   row: TenantSsoSamlConfigurationRow,
 ): TenantSsoSamlConfigurationRecord => {
@@ -6264,6 +6471,66 @@ const mapTenantSsoSamlConfigurationRow = (
     enforced: row.enforced === 1 || row.enforced === true,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+};
+
+const buildLegacyTenantAuthProviderId = (tenantId: string): string => {
+  return `${tenantId}:provider:saml-default`;
+};
+
+const buildDefaultTenantAuthPolicy = (
+  tenantId: string,
+  nowIso: string = new Date().toISOString(),
+): TenantAuthPolicyRecord => {
+  return {
+    tenantId,
+    loginMode: 'local',
+    breakGlassEnabled: false,
+    localMfaRequired: false,
+    defaultProviderId: null,
+    enforceForRoles: 'all_users',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+};
+
+const buildLegacyTenantAuthPolicy = (
+  configuration: TenantSsoSamlConfigurationRecord,
+): TenantAuthPolicyRecord => {
+  return {
+    tenantId: configuration.tenantId,
+    loginMode: configuration.enforced ? 'sso_required' : 'hybrid',
+    breakGlassEnabled: false,
+    localMfaRequired: false,
+    defaultProviderId: buildLegacyTenantAuthProviderId(configuration.tenantId),
+    enforceForRoles: 'all_users',
+    createdAt: configuration.createdAt,
+    updatedAt: configuration.updatedAt,
+  };
+};
+
+const buildLegacyTenantAuthProvider = (
+  configuration: TenantSsoSamlConfigurationRecord,
+): TenantAuthProviderRecord => {
+  return {
+    id: buildLegacyTenantAuthProviderId(configuration.tenantId),
+    tenantId: configuration.tenantId,
+    protocol: 'saml',
+    label: 'Legacy SAML',
+    enabled: true,
+    isDefault: true,
+    configJson: JSON.stringify({
+      idpEntityId: configuration.idpEntityId,
+      ssoLoginUrl: configuration.ssoLoginUrl,
+      idpCertificatePem: configuration.idpCertificatePem,
+      idpMetadataUrl: configuration.idpMetadataUrl,
+      spEntityId: configuration.spEntityId,
+      assertionConsumerServiceUrl: configuration.assertionConsumerServiceUrl,
+      nameIdFormat: configuration.nameIdFormat,
+      enforced: configuration.enforced,
+    }),
+    createdAt: configuration.createdAt,
+    updatedAt: configuration.updatedAt,
   };
 };
 
@@ -6731,6 +6998,479 @@ export const findTenantById = async (
     .first<TenantRow>();
 
   return row === null ? null : mapTenantRow(row);
+};
+
+export const findTenantAuthPolicy = async (
+  db: SqlDatabase,
+  tenantId: string,
+): Promise<TenantAuthPolicyRecord | null> => {
+  const lookupStatement = (): Promise<TenantAuthPolicyRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          tenant_id AS tenantId,
+          login_mode AS loginMode,
+          break_glass_enabled AS breakGlassEnabled,
+          local_mfa_required AS localMfaRequired,
+          default_provider_id AS defaultProviderId,
+          enforce_for_roles AS enforceForRoles,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM tenant_auth_policies
+        WHERE tenant_id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(tenantId)
+      .first<TenantAuthPolicyRow>();
+
+  let row: TenantAuthPolicyRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthPoliciesTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthPoliciesTable(db);
+    row = await lookupStatement();
+  }
+
+  if (row !== null) {
+    return mapTenantAuthPolicyRow(row);
+  }
+
+  const legacyConfiguration = await findTenantSsoSamlConfiguration(db, tenantId);
+  return legacyConfiguration === null ? null : buildLegacyTenantAuthPolicy(legacyConfiguration);
+};
+
+export const resolveTenantAuthPolicy = async (
+  db: SqlDatabase,
+  tenantId: string,
+): Promise<TenantAuthPolicyRecord> => {
+  const policy = await findTenantAuthPolicy(db, tenantId);
+  return policy ?? buildDefaultTenantAuthPolicy(tenantId);
+};
+
+export const upsertTenantAuthPolicy = async (
+  db: SqlDatabase,
+  input: UpsertTenantAuthPolicyInput,
+): Promise<TenantAuthPolicyRecord> => {
+  const nowIso = new Date().toISOString();
+  const upsertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO tenant_auth_policies (
+          tenant_id,
+          login_mode,
+          break_glass_enabled,
+          local_mfa_required,
+          default_provider_id,
+          enforce_for_roles,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (tenant_id)
+        DO UPDATE SET
+          login_mode = excluded.login_mode,
+          break_glass_enabled = excluded.break_glass_enabled,
+          local_mfa_required = excluded.local_mfa_required,
+          default_provider_id = excluded.default_provider_id,
+          enforce_for_roles = excluded.enforce_for_roles,
+          updated_at = excluded.updated_at
+      `,
+      )
+      .bind(
+        input.tenantId,
+        input.loginMode,
+        input.breakGlassEnabled === true ? 1 : 0,
+        input.localMfaRequired === true ? 1 : 0,
+        input.defaultProviderId ?? null,
+        input.enforceForRoles ?? 'all_users',
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    await upsertStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthPoliciesTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthPoliciesTable(db);
+    await upsertStatement();
+  }
+
+  const policy = await findTenantAuthPolicy(db, input.tenantId);
+
+  if (policy === null) {
+    throw new Error(`Unable to upsert auth policy for tenant "${input.tenantId}"`);
+  }
+
+  return policy;
+};
+
+const hydrateLegacyTenantAuthProvider = async (
+  db: SqlDatabase,
+  provider: TenantAuthProviderRecord,
+): Promise<TenantAuthProviderRecord> => {
+  if (provider.protocol !== 'saml') {
+    return provider;
+  }
+
+  if (provider.id !== buildLegacyTenantAuthProviderId(provider.tenantId)) {
+    return provider;
+  }
+
+  const legacyConfiguration = await findTenantSsoSamlConfiguration(db, provider.tenantId);
+
+  if (legacyConfiguration === null) {
+    return provider;
+  }
+
+  const hydratedProvider = buildLegacyTenantAuthProvider(legacyConfiguration);
+  return {
+    ...hydratedProvider,
+    label: provider.label,
+    enabled: provider.enabled,
+    isDefault: provider.isDefault,
+  };
+};
+
+export const listTenantAuthProviders = async (
+  db: SqlDatabase,
+  tenantId: string,
+): Promise<TenantAuthProviderRecord[]> => {
+  const listStatement = (): Promise<SqlQueryResult<TenantAuthProviderRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          protocol,
+          label,
+          enabled,
+          is_default AS isDefault,
+          config_json AS configJson,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM tenant_auth_providers
+        WHERE tenant_id = ?
+        ORDER BY is_default DESC, created_at ASC, id ASC
+      `,
+      )
+      .bind(tenantId)
+      .all<TenantAuthProviderRow>();
+
+  let result: SqlQueryResult<TenantAuthProviderRow>;
+
+  try {
+    result = await listStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthProvidersTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthProvidersTable(db);
+    result = await listStatement();
+  }
+
+  if (result.results.length === 0) {
+    const legacyConfiguration = await findTenantSsoSamlConfiguration(db, tenantId);
+    return legacyConfiguration === null ? [] : [buildLegacyTenantAuthProvider(legacyConfiguration)];
+  }
+
+  return Promise.all(
+    result.results.map(async (row) => hydrateLegacyTenantAuthProvider(db, mapTenantAuthProviderRow(row))),
+  );
+};
+
+export const findTenantAuthProviderById = async (
+  db: SqlDatabase,
+  tenantId: string,
+  providerId: string,
+): Promise<TenantAuthProviderRecord | null> => {
+  const lookupStatement = (): Promise<TenantAuthProviderRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          id,
+          tenant_id AS tenantId,
+          protocol,
+          label,
+          enabled,
+          is_default AS isDefault,
+          config_json AS configJson,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM tenant_auth_providers
+        WHERE tenant_id = ?
+          AND id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(tenantId, providerId)
+      .first<TenantAuthProviderRow>();
+
+  let row: TenantAuthProviderRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthProvidersTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthProvidersTable(db);
+    row = await lookupStatement();
+  }
+
+  if (row !== null) {
+    return hydrateLegacyTenantAuthProvider(db, mapTenantAuthProviderRow(row));
+  }
+
+  if (providerId !== buildLegacyTenantAuthProviderId(tenantId)) {
+    return null;
+  }
+
+  const legacyConfiguration = await findTenantSsoSamlConfiguration(db, tenantId);
+  return legacyConfiguration === null ? null : buildLegacyTenantAuthProvider(legacyConfiguration);
+};
+
+export const createTenantAuthProvider = async (
+  db: SqlDatabase,
+  input: CreateTenantAuthProviderInput,
+): Promise<TenantAuthProviderRecord> => {
+  const id = input.id ?? createPrefixedId('tap');
+  const nowIso = new Date().toISOString();
+  const enabled = input.enabled ?? true;
+  const isDefault = input.isDefault ?? false;
+
+  const clearDefaultStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE tenant_auth_providers
+        SET
+          is_default = 0,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND is_default = 1
+      `,
+      )
+      .bind(nowIso, input.tenantId)
+      .run();
+
+  const insertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO tenant_auth_providers (
+          id,
+          tenant_id,
+          protocol,
+          label,
+          enabled,
+          is_default,
+          config_json,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .bind(
+        id,
+        input.tenantId,
+        input.protocol,
+        input.label,
+        enabled ? 1 : 0,
+        isDefault ? 1 : 0,
+        input.configJson,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    if (isDefault) {
+      await clearDefaultStatement();
+    }
+
+    await insertStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthProvidersTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthProvidersTable(db);
+
+    if (isDefault) {
+      await clearDefaultStatement();
+    }
+
+    await insertStatement();
+  }
+
+  const provider = await findTenantAuthProviderById(db, input.tenantId, id);
+
+  if (provider === null) {
+    throw new Error(`Unable to create auth provider "${id}"`);
+  }
+
+  return provider;
+};
+
+export const updateTenantAuthProvider = async (
+  db: SqlDatabase,
+  input: UpdateTenantAuthProviderInput,
+): Promise<TenantAuthProviderRecord | null> => {
+  const nowIso = new Date().toISOString();
+  const enabled = input.enabled ?? true;
+  const isDefault = input.isDefault ?? false;
+
+  const clearDefaultStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE tenant_auth_providers
+        SET
+          is_default = 0,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND id <> ?
+          AND is_default = 1
+      `,
+      )
+      .bind(nowIso, input.tenantId, input.providerId)
+      .run();
+
+  const updateStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE tenant_auth_providers
+        SET
+          protocol = ?,
+          label = ?,
+          enabled = ?,
+          is_default = ?,
+          config_json = ?,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(
+        input.protocol,
+        input.label,
+        enabled ? 1 : 0,
+        isDefault ? 1 : 0,
+        input.configJson,
+        nowIso,
+        input.tenantId,
+        input.providerId,
+      )
+      .run();
+
+  let result: SqlRunResult;
+
+  try {
+    if (isDefault) {
+      await clearDefaultStatement();
+    }
+
+    result = await updateStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthProvidersTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthProvidersTable(db);
+
+    if (isDefault) {
+      await clearDefaultStatement();
+    }
+
+    result = await updateStatement();
+  }
+
+  if ((result.meta.rowsWritten ?? 0) === 0) {
+    return null;
+  }
+
+  return findTenantAuthProviderById(db, input.tenantId, input.providerId);
+};
+
+export const deleteTenantAuthProvider = async (
+  db: SqlDatabase,
+  tenantId: string,
+  providerId: string,
+): Promise<boolean> => {
+  const deleteStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        DELETE FROM tenant_auth_providers
+        WHERE tenant_id = ?
+          AND id = ?
+      `,
+      )
+      .bind(tenantId, providerId)
+      .run();
+
+  let result: SqlRunResult;
+
+  try {
+    result = await deleteStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthProvidersTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthProvidersTable(db);
+    result = await deleteStatement();
+  }
+
+  if ((result.meta.rowsWritten ?? 0) === 0) {
+    return false;
+  }
+
+  const clearPolicyDefaultStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        UPDATE tenant_auth_policies
+        SET
+          default_provider_id = NULL,
+          updated_at = ?
+        WHERE tenant_id = ?
+          AND default_provider_id = ?
+      `,
+      )
+      .bind(new Date().toISOString(), tenantId, providerId)
+      .run();
+
+  try {
+    await clearPolicyDefaultStatement();
+  } catch (error: unknown) {
+    if (!isMissingTenantAuthPoliciesTableError(error)) {
+      throw error;
+    }
+
+    await ensureTenantAuthPoliciesTable(db);
+    await clearPolicyDefaultStatement();
+  }
+
+  return true;
 };
 
 export const findTenantSsoSamlConfiguration = async (

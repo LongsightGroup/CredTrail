@@ -114,6 +114,9 @@ export const userIdSchema = z.string().min(1);
 export const isoTimestampSchema = z.string().datetime();
 export const tenantPlanTierSchema = z.enum(['free', 'team', 'institution', 'enterprise']);
 export const tenantMembershipRoleSchema = z.enum(['owner', 'admin', 'issuer', 'viewer']);
+export const tenantLoginModeSchema = z.enum(['local', 'hybrid', 'sso_required']);
+export const tenantAuthPolicyEnforceForRolesSchema = z.enum(['all_users', 'admins_only']);
+export const tenantAuthProviderProtocolSchema = z.enum(['oidc', 'saml']);
 export const recipientIdentityTypeSchema = z.enum(['email', 'email_sha256', 'did', 'url']);
 export const recipientIdentifierTypeSchema = z.enum([
   'emailAddress',
@@ -185,6 +188,10 @@ export const tenantUserDelegatedGrantPathParamsSchema = tenantUserPathParamsSche
 
 export const tenantApiKeyPathParamsSchema = tenantPathParamsSchema.extend({
   apiKeyId: resourceIdSchema,
+});
+
+export const tenantAuthProviderPathParamsSchema = tenantPathParamsSchema.extend({
+  providerId: resourceIdSchema,
 });
 
 export const migrationBatchPathParamsSchema = tenantPathParamsSchema.extend({
@@ -425,6 +432,42 @@ export const createTenantApiKeyRequestSchema = z.object({
 export const revokeTenantApiKeyRequestSchema = z.object({
   revokedAt: isoTimestampSchema.optional(),
 });
+
+export const upsertTenantAuthPolicyRequestSchema = z.object({
+  loginMode: tenantLoginModeSchema,
+  breakGlassEnabled: z.boolean().optional(),
+  localMfaRequired: z.boolean().optional(),
+  defaultProviderId: resourceIdSchema.nullable().optional(),
+  enforceForRoles: tenantAuthPolicyEnforceForRolesSchema.optional(),
+});
+
+export const upsertTenantAuthProviderRequestSchema = z
+  .object({
+    protocol: tenantAuthProviderProtocolSchema,
+    label: z.string().trim().min(1).max(120),
+    enabled: z.boolean().optional(),
+    isDefault: z.boolean().optional(),
+    configJson: z.string().trim().min(2).max(64000),
+  })
+  .superRefine((value, ctx) => {
+    try {
+      const parsed = JSON.parse(value.configJson) as unknown;
+
+      if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['configJson'],
+          message: 'configJson must encode a JSON object',
+        });
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['configJson'],
+        message: 'configJson must be valid JSON',
+      });
+    }
+  });
 
 export const upsertTenantSsoSamlConfigurationRequestSchema = z.object({
   idpEntityId: z.string().trim().min(1).max(512),
@@ -1196,6 +1239,7 @@ export type TenantUserDelegatedGrantPathParams = z.infer<
   typeof tenantUserDelegatedGrantPathParamsSchema
 >;
 export type TenantApiKeyPathParams = z.infer<typeof tenantApiKeyPathParamsSchema>;
+export type TenantAuthProviderPathParams = z.infer<typeof tenantAuthProviderPathParamsSchema>;
 export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
   typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
 >;
@@ -1238,6 +1282,10 @@ export type TransferBadgeTemplateOwnershipRequest = z.infer<
 >;
 export type CreateTenantApiKeyRequest = z.infer<typeof createTenantApiKeyRequestSchema>;
 export type RevokeTenantApiKeyRequest = z.infer<typeof revokeTenantApiKeyRequestSchema>;
+export type UpsertTenantAuthPolicyRequest = z.infer<typeof upsertTenantAuthPolicyRequestSchema>;
+export type UpsertTenantAuthProviderRequest = z.infer<
+  typeof upsertTenantAuthProviderRequestSchema
+>;
 export type UpsertTenantSsoSamlConfigurationRequest = z.infer<
   typeof upsertTenantSsoSamlConfigurationRequestSchema
 >;
@@ -1451,6 +1499,10 @@ export const parseTenantApiKeyPathParams = (input: unknown): TenantApiKeyPathPar
   return tenantApiKeyPathParamsSchema.parse(input);
 };
 
+export const parseTenantAuthProviderPathParams = (input: unknown): TenantAuthProviderPathParams => {
+  return tenantAuthProviderPathParamsSchema.parse(input);
+};
+
 export const parseTenantDedicatedDbProvisioningRequestPathParams = (
   input: unknown,
 ): TenantDedicatedDbProvisioningRequestPathParams => {
@@ -1527,6 +1579,18 @@ export const parseCreateTenantApiKeyRequest = (input: unknown): CreateTenantApiK
 
 export const parseRevokeTenantApiKeyRequest = (input: unknown): RevokeTenantApiKeyRequest => {
   return revokeTenantApiKeyRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantAuthPolicyRequest = (
+  input: unknown,
+): UpsertTenantAuthPolicyRequest => {
+  return upsertTenantAuthPolicyRequestSchema.parse(input);
+};
+
+export const parseUpsertTenantAuthProviderRequest = (
+  input: unknown,
+): UpsertTenantAuthProviderRequest => {
+  return upsertTenantAuthProviderRequestSchema.parse(input);
 };
 
 export const parseUpsertTenantSsoSamlConfigurationRequest = (

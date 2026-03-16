@@ -4,10 +4,13 @@ import {
   parseCreateDedicatedDbProvisioningRequest,
   parseCreateTenantApiKeyRequest,
   parseRevokeTenantApiKeyRequest,
+  parseTenantAuthProviderPathParams,
   parseResolveDedicatedDbProvisioningRequest,
   parseTenantApiKeyListQuery,
   parseTenantAssertionListQuery,
   parseTenantApiKeyPathParams,
+  parseUpsertTenantAuthPolicyRequest,
+  parseUpsertTenantAuthProviderRequest,
   parseTenantDedicatedDbProvisioningRequestPathParams,
   parseUpsertTenantSsoSamlConfigurationRequest,
   parseUpsertTenantCanvasGradebookIntegrationRequest,
@@ -1434,6 +1437,52 @@ describe('enterprise governance request parsers', () => {
     expect(createPayload.label).toBe('Integration key');
     expect(createPayload.scopes).toEqual(['queue.issue', 'queue.revoke']);
     expect(revokePayload.revokedAt).toBe('2026-03-16T00:00:00.000Z');
+  });
+
+  it('parses tenant auth policy and provider payloads', () => {
+    const providerPathParams = parseTenantAuthProviderPathParams({
+      tenantId: 'tenant_123',
+      providerId: 'tap_oidc',
+    });
+    const policyPayload = parseUpsertTenantAuthPolicyRequest({
+      loginMode: 'sso_required',
+      breakGlassEnabled: true,
+      localMfaRequired: true,
+      defaultProviderId: 'tap_oidc',
+      enforceForRoles: 'admins_only',
+    });
+    const providerPayload = parseUpsertTenantAuthProviderRequest({
+      protocol: 'oidc',
+      label: 'Campus OIDC',
+      enabled: true,
+      isDefault: true,
+      configJson:
+        '{"issuer":"https://idp.example.edu","clientId":"credtrail","clientSecret":"secret"}',
+    });
+
+    expect(providerPathParams.providerId).toBe('tap_oidc');
+    expect(policyPayload.loginMode).toBe('sso_required');
+    expect(policyPayload.enforceForRoles).toBe('admins_only');
+    expect(providerPayload.protocol).toBe('oidc');
+    expect(providerPayload.label).toBe('Campus OIDC');
+  });
+
+  it('rejects malformed tenant auth provider configuration payloads', () => {
+    expect(() => {
+      parseUpsertTenantAuthProviderRequest({
+        protocol: 'oidc',
+        label: 'Campus OIDC',
+        configJson: 'not-json',
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseUpsertTenantAuthProviderRequest({
+        protocol: 'saml',
+        label: 'Campus SAML',
+        configJson: '["array-not-object"]',
+      });
+    }).toThrowError();
   });
 
   it('parses tenant SAML SSO configuration payload', () => {

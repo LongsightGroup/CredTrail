@@ -4,16 +4,23 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addLearnerIdentityAlias,
+  createTenantAuthProvider,
   createAuthIdentityLink,
   createLearnerProfile,
+  findTenantAuthPolicy,
+  listTenantAuthProviders,
   findLearnerProfileByIdentity,
+  findTenantAuthProviderById,
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
   findUserByEmail,
   listLearnerIdentitiesByProfile,
   normalizeLearnerIdentityValue,
+  resolveTenantAuthPolicy,
   resolveLearnerProfileForIdentity,
   resolveLearnerProfileFromSaml,
+  updateTenantAuthProvider,
+  upsertTenantAuthPolicy,
   upsertUserByEmail,
   type LearnerIdentityType,
   type SqlDatabase,
@@ -55,6 +62,43 @@ interface FakeAuthIdentityLinkRow {
   auth_account_id: string | null;
   credtrail_user_id: string;
   email_snapshot: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeTenantAuthPolicyRow {
+  tenant_id: string;
+  login_mode: 'local' | 'hybrid' | 'sso_required';
+  break_glass_enabled: number;
+  local_mfa_required: number;
+  default_provider_id: string | null;
+  enforce_for_roles: 'all_users' | 'admins_only';
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeTenantAuthProviderRow {
+  id: string;
+  tenant_id: string;
+  protocol: 'oidc' | 'saml';
+  label: string;
+  enabled: number;
+  is_default: number;
+  config_json: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeLegacySamlConfigurationRow {
+  tenant_id: string;
+  idp_entity_id: string;
+  sso_login_url: string;
+  idp_certificate_pem: string;
+  idp_metadata_url: string | null;
+  sp_entity_id: string;
+  assertion_consumer_service_url: string;
+  name_id_format: string | null;
+  enforced: number;
   created_at: string;
   updated_at: string;
 }
@@ -701,6 +745,431 @@ const createFakeAuthIdentityDb = (): SqlDatabase => {
   return new FakeAuthIdentitySqlDatabase() as unknown as SqlDatabase;
 };
 
+class FakeTenantAuthStatement {
+  private readonly sql: string;
+  private readonly db: FakeTenantAuthSqlDatabase;
+  private boundParams: unknown[] = [];
+
+  constructor(db: FakeTenantAuthSqlDatabase, sql: string) {
+    this.db = db;
+    this.sql = sql;
+  }
+
+  bind(...params: unknown[]): this {
+    this.boundParams = params;
+    return this;
+  }
+
+  run(): Promise<SqlRunResult> {
+    const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('INSERT INTO tenant_auth_policies')) {
+      return Promise.resolve(this.upsertTenantAuthPolicy());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_auth_providers') &&
+      normalizedSql.includes('SET is_default = 0') &&
+      normalizedSql.includes('AND id <> ?')
+    ) {
+      return Promise.resolve(this.clearOtherDefaultProviders());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_auth_providers') &&
+      normalizedSql.includes('SET is_default = 0')
+    ) {
+      return Promise.resolve(this.clearTenantDefaultProviders());
+    }
+
+    if (normalizedSql.includes('INSERT INTO tenant_auth_providers')) {
+      return Promise.resolve(this.insertTenantAuthProvider());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_auth_providers') &&
+      normalizedSql.includes('SET protocol = ?')
+    ) {
+      return Promise.resolve(this.updateTenantAuthProvider());
+    }
+
+    if (normalizedSql.includes('DELETE FROM tenant_auth_providers')) {
+      return Promise.resolve(this.deleteTenantAuthProvider());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_auth_policies') &&
+      normalizedSql.includes('SET default_provider_id = NULL')
+    ) {
+      return Promise.resolve(this.clearPolicyDefaultProvider());
+    }
+
+    throw new Error(`Unsupported run SQL in fake tenant auth DB: ${normalizedSql}`);
+  }
+
+  first<T>(): Promise<T | null> {
+    const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('FROM tenant_auth_policies')) {
+      return Promise.resolve(this.selectTenantAuthPolicy() as T | null);
+    }
+
+    if (
+      normalizedSql.includes('FROM tenant_auth_providers') &&
+      normalizedSql.includes('AND id = ?')
+    ) {
+      return Promise.resolve(this.selectTenantAuthProviderById() as T | null);
+    }
+
+    if (normalizedSql.includes('FROM tenant_sso_saml_configurations')) {
+      return Promise.resolve(this.selectLegacySamlConfiguration() as T | null);
+    }
+
+    throw new Error(`Unsupported first SQL in fake tenant auth DB: ${normalizedSql}`);
+  }
+
+  all<T>(): Promise<SqlQueryResult<T>> {
+    const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('FROM tenant_auth_providers')) {
+      return Promise.resolve({
+        ...this.successResult(),
+        results: this.selectTenantAuthProviders() as T[],
+      });
+    }
+
+    throw new Error(`Unsupported all SQL in fake tenant auth DB: ${normalizedSql}`);
+  }
+
+  private normalizedSql(): string {
+    return this.sql.replace(/\s+/g, ' ').trim();
+  }
+
+  private upsertTenantAuthPolicy(): SqlRunResult {
+    const [
+      tenantId,
+      loginMode,
+      breakGlassEnabled,
+      localMfaRequired,
+      defaultProviderId,
+      enforceForRoles,
+      createdAt,
+      updatedAt,
+    ] = this.boundParams;
+
+    if (
+      typeof tenantId !== 'string' ||
+      (loginMode !== 'local' && loginMode !== 'hybrid' && loginMode !== 'sso_required') ||
+      typeof breakGlassEnabled !== 'number' ||
+      typeof localMfaRequired !== 'number' ||
+      (defaultProviderId !== null && typeof defaultProviderId !== 'string') ||
+      (enforceForRoles !== 'all_users' && enforceForRoles !== 'admins_only') ||
+      typeof createdAt !== 'string' ||
+      typeof updatedAt !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant auth policy upsert');
+    }
+
+    const existingPolicy = this.db.tenantAuthPolicies.find((row) => row.tenant_id === tenantId);
+
+    if (existingPolicy === undefined) {
+      this.db.tenantAuthPolicies.push({
+        tenant_id: tenantId,
+        login_mode: loginMode,
+        break_glass_enabled: breakGlassEnabled,
+        local_mfa_required: localMfaRequired,
+        default_provider_id: defaultProviderId,
+        enforce_for_roles: enforceForRoles,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      });
+      return this.successResult(1);
+    }
+
+    existingPolicy.login_mode = loginMode;
+    existingPolicy.break_glass_enabled = breakGlassEnabled;
+    existingPolicy.local_mfa_required = localMfaRequired;
+    existingPolicy.default_provider_id = defaultProviderId;
+    existingPolicy.enforce_for_roles = enforceForRoles;
+    existingPolicy.updated_at = updatedAt;
+    return this.successResult(1);
+  }
+
+  private clearOtherDefaultProviders(): SqlRunResult {
+    const [updatedAt, tenantId, providerId] = this.boundParams;
+
+    if (
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof providerId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for clearing tenant auth default providers');
+    }
+
+    let rowsWritten = 0;
+
+    for (const row of this.db.tenantAuthProviders) {
+      if (row.tenant_id === tenantId && row.id !== providerId && row.is_default === 1) {
+        row.is_default = 0;
+        row.updated_at = updatedAt;
+        rowsWritten += 1;
+      }
+    }
+
+    return this.successResult(rowsWritten);
+  }
+
+  private clearTenantDefaultProviders(): SqlRunResult {
+    const [updatedAt, tenantId] = this.boundParams;
+
+    if (typeof updatedAt !== 'string' || typeof tenantId !== 'string') {
+      throw new Error('Invalid bound parameters for clearing tenant auth defaults');
+    }
+
+    let rowsWritten = 0;
+
+    for (const row of this.db.tenantAuthProviders) {
+      if (row.tenant_id === tenantId && row.is_default === 1) {
+        row.is_default = 0;
+        row.updated_at = updatedAt;
+        rowsWritten += 1;
+      }
+    }
+
+    return this.successResult(rowsWritten);
+  }
+
+  private insertTenantAuthProvider(): SqlRunResult {
+    const [id, tenantId, protocol, label, enabled, isDefault, configJson, createdAt, updatedAt] =
+      this.boundParams;
+
+    if (
+      typeof id !== 'string' ||
+      typeof tenantId !== 'string' ||
+      (protocol !== 'oidc' && protocol !== 'saml') ||
+      typeof label !== 'string' ||
+      typeof enabled !== 'number' ||
+      typeof isDefault !== 'number' ||
+      typeof configJson !== 'string' ||
+      typeof createdAt !== 'string' ||
+      typeof updatedAt !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant auth provider insert');
+    }
+
+    this.db.tenantAuthProviders.push({
+      id,
+      tenant_id: tenantId,
+      protocol,
+      label,
+      enabled,
+      is_default: isDefault,
+      config_json: configJson,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    });
+
+    return this.successResult(1);
+  }
+
+  private updateTenantAuthProvider(): SqlRunResult {
+    const [protocol, label, enabled, isDefault, configJson, updatedAt, tenantId, providerId] =
+      this.boundParams;
+
+    if (
+      (protocol !== 'oidc' && protocol !== 'saml') ||
+      typeof label !== 'string' ||
+      typeof enabled !== 'number' ||
+      typeof isDefault !== 'number' ||
+      typeof configJson !== 'string' ||
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof providerId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant auth provider update');
+    }
+
+    const row = this.db.tenantAuthProviders.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.id === providerId;
+    });
+
+    if (row === undefined) {
+      return this.successResult(0);
+    }
+
+    row.protocol = protocol;
+    row.label = label;
+    row.enabled = enabled;
+    row.is_default = isDefault;
+    row.config_json = configJson;
+    row.updated_at = updatedAt;
+
+    return this.successResult(1);
+  }
+
+  private deleteTenantAuthProvider(): SqlRunResult {
+    const [tenantId, providerId] = this.boundParams;
+
+    if (typeof tenantId !== 'string' || typeof providerId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant auth provider delete');
+    }
+
+    const beforeCount = this.db.tenantAuthProviders.length;
+    this.db.tenantAuthProviders = this.db.tenantAuthProviders.filter((row) => {
+      return !(row.tenant_id === tenantId && row.id === providerId);
+    });
+
+    return this.successResult(beforeCount - this.db.tenantAuthProviders.length);
+  }
+
+  private clearPolicyDefaultProvider(): SqlRunResult {
+    const [updatedAt, tenantId, providerId] = this.boundParams;
+
+    if (
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof providerId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for clearing auth policy default provider');
+    }
+
+    let rowsWritten = 0;
+
+    for (const row of this.db.tenantAuthPolicies) {
+      if (row.tenant_id === tenantId && row.default_provider_id === providerId) {
+        row.default_provider_id = null;
+        row.updated_at = updatedAt;
+        rowsWritten += 1;
+      }
+    }
+
+    return this.successResult(rowsWritten);
+  }
+
+  private selectTenantAuthPolicy(): Record<string, unknown> | null {
+    const [tenantId] = this.boundParams;
+
+    if (typeof tenantId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant auth policy select');
+    }
+
+    const row = this.db.tenantAuthPolicies.find((candidate) => candidate.tenant_id === tenantId);
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      tenantId: row.tenant_id,
+      loginMode: row.login_mode,
+      breakGlassEnabled: row.break_glass_enabled,
+      localMfaRequired: row.local_mfa_required,
+      defaultProviderId: row.default_provider_id,
+      enforceForRoles: row.enforce_for_roles,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private selectTenantAuthProviders(): Record<string, unknown>[] {
+    const [tenantId] = this.boundParams;
+
+    if (typeof tenantId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant auth provider list');
+    }
+
+    return this.db.tenantAuthProviders
+      .filter((row) => row.tenant_id === tenantId)
+      .sort((left, right) => {
+        if (left.is_default !== right.is_default) {
+          return right.is_default - left.is_default;
+        }
+
+        return left.id.localeCompare(right.id);
+      })
+      .map((row) => this.mapTenantAuthProvider(row));
+  }
+
+  private selectTenantAuthProviderById(): Record<string, unknown> | null {
+    const [tenantId, providerId] = this.boundParams;
+
+    if (typeof tenantId !== 'string' || typeof providerId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant auth provider lookup');
+    }
+
+    const row = this.db.tenantAuthProviders.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.id === providerId;
+    });
+
+    return row === undefined ? null : this.mapTenantAuthProvider(row);
+  }
+
+  private selectLegacySamlConfiguration(): Record<string, unknown> | null {
+    const [tenantId] = this.boundParams;
+
+    if (typeof tenantId !== 'string') {
+      throw new Error('Invalid bound parameters for legacy SAML configuration lookup');
+    }
+
+    const row = this.db.legacySamlConfigurations.find((candidate) => candidate.tenant_id === tenantId);
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      tenantId: row.tenant_id,
+      idpEntityId: row.idp_entity_id,
+      ssoLoginUrl: row.sso_login_url,
+      idpCertificatePem: row.idp_certificate_pem,
+      idpMetadataUrl: row.idp_metadata_url,
+      spEntityId: row.sp_entity_id,
+      assertionConsumerServiceUrl: row.assertion_consumer_service_url,
+      nameIdFormat: row.name_id_format,
+      enforced: row.enforced,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private mapTenantAuthProvider(row: FakeTenantAuthProviderRow): Record<string, unknown> {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      protocol: row.protocol,
+      label: row.label,
+      enabled: row.enabled,
+      isDefault: row.is_default,
+      configJson: row.config_json,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private successResult(rowsWritten = 0): SqlRunResult {
+    return {
+      success: true,
+      meta: {
+        rowsWritten,
+      } as SqlExecutionMeta,
+    };
+  }
+}
+
+class FakeTenantAuthSqlDatabase {
+  tenantAuthPolicies: FakeTenantAuthPolicyRow[] = [];
+  tenantAuthProviders: FakeTenantAuthProviderRow[] = [];
+  legacySamlConfigurations: FakeLegacySamlConfigurationRow[] = [];
+
+  prepare(sql: string): FakeTenantAuthStatement {
+    return new FakeTenantAuthStatement(this, sql);
+  }
+}
+
+const createFakeTenantAuthDb = (): SqlDatabase => {
+  return new FakeTenantAuthSqlDatabase() as unknown as SqlDatabase;
+};
+
 describe('normalizeLearnerIdentityValue', () => {
   it('normalizes email and email_sha256 identity values', () => {
     expect(normalizeLearnerIdentityValue('email', '  Student@Umich.edu ')).toBe('student@umich.edu');
@@ -918,6 +1387,126 @@ describe('auth identity links', () => {
   });
 });
 
+describe('tenant auth policy and provider helpers', () => {
+  it('resolves local auth policy defaults when no tenant auth policy exists', async () => {
+    const db = createFakeTenantAuthDb();
+
+    const policy = await resolveTenantAuthPolicy(db, 'tenant_123');
+
+    expect(policy).toEqual({
+      tenantId: 'tenant_123',
+      loginMode: 'local',
+      breakGlassEnabled: false,
+      localMfaRequired: false,
+      defaultProviderId: null,
+      enforceForRoles: 'all_users',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+  });
+
+  it('persists and updates tenant auth policy state', async () => {
+    const db = createFakeTenantAuthDb();
+
+    const created = await upsertTenantAuthPolicy(db, {
+      tenantId: 'tenant_123',
+      loginMode: 'hybrid',
+      breakGlassEnabled: true,
+      localMfaRequired: true,
+      defaultProviderId: 'tap_oidc',
+      enforceForRoles: 'admins_only',
+    });
+    const resolved = await findTenantAuthPolicy(db, 'tenant_123');
+
+    expect(created.loginMode).toBe('hybrid');
+    expect(created.breakGlassEnabled).toBe(true);
+    expect(created.localMfaRequired).toBe(true);
+    expect(created.defaultProviderId).toBe('tap_oidc');
+    expect(created.enforceForRoles).toBe('admins_only');
+    expect(resolved).toEqual(created);
+  });
+
+  it('keeps exactly one default auth provider per tenant when providers are created or updated', async () => {
+    const db = createFakeTenantAuthDb();
+
+    await createTenantAuthProvider(db, {
+      id: 'tap_oidc',
+      tenantId: 'tenant_123',
+      protocol: 'oidc',
+      label: 'Campus OIDC',
+      enabled: true,
+      isDefault: true,
+      configJson: '{"issuer":"https://idp.example.edu"}',
+    });
+    await createTenantAuthProvider(db, {
+      id: 'tap_saml',
+      tenantId: 'tenant_123',
+      protocol: 'saml',
+      label: 'Campus SAML',
+      enabled: true,
+      isDefault: false,
+      configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+    });
+
+    const updated = await updateTenantAuthProvider(db, {
+      tenantId: 'tenant_123',
+      providerId: 'tap_saml',
+      protocol: 'saml',
+      label: 'Campus SAML',
+      enabled: false,
+      isDefault: true,
+      configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+    });
+    const providers = await listTenantAuthProviders(db, 'tenant_123');
+
+    expect(updated?.isDefault).toBe(true);
+    expect(updated?.enabled).toBe(false);
+    expect(providers).toHaveLength(2);
+    expect(providers.find((provider) => provider.id === 'tap_saml')?.isDefault).toBe(true);
+    expect(providers.find((provider) => provider.id === 'tap_oidc')?.isDefault).toBe(false);
+
+    const samlProvider = await findTenantAuthProviderById(db, 'tenant_123', 'tap_saml');
+    expect(samlProvider?.enabled).toBe(false);
+  });
+
+  it('bridges legacy SAML configuration into the provider and policy model', async () => {
+    const db = createFakeTenantAuthDb();
+    const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
+
+    tenantAuthDb.legacySamlConfigurations.push({
+      tenant_id: 'tenant_legacy',
+      idp_entity_id: 'https://idp.example.edu/entity',
+      sso_login_url: 'https://idp.example.edu/sso/login',
+      idp_certificate_pem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
+      idp_metadata_url: 'https://idp.example.edu/metadata',
+      sp_entity_id: 'https://credtrail.example.edu/saml/sp',
+      assertion_consumer_service_url: 'https://credtrail.example.edu/saml/acs',
+      name_id_format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      enforced: 1,
+      created_at: '2026-03-16T10:00:00.000Z',
+      updated_at: '2026-03-16T10:00:00.000Z',
+    });
+
+    const policy = await findTenantAuthPolicy(db, 'tenant_legacy');
+    const providers = await listTenantAuthProviders(db, 'tenant_legacy');
+
+    expect(policy?.loginMode).toBe('sso_required');
+    expect(policy?.defaultProviderId).toBe('tenant_legacy:provider:saml-default');
+    expect(providers).toEqual([
+      expect.objectContaining({
+        id: 'tenant_legacy:provider:saml-default',
+        protocol: 'saml',
+        isDefault: true,
+        enabled: true,
+      }),
+    ]);
+
+    const configJson = providers[0]?.configJson ?? '{}';
+    expect(configJson).toContain('idpEntityId');
+    expect(configJson).toContain('idpCertificatePem');
+  });
+});
+
 describe('better auth core migration', () => {
   it('keeps Better Auth tables in an auth schema and preserves CredTrail-owned tables', () => {
     const sql = readFileSync(
@@ -933,5 +1522,29 @@ describe('better auth core migration', () => {
     expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth_identity_links');
     expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS users');
     expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS sessions');
+  });
+
+  it('adds tenant auth policy and provider migrations with legacy SAML backfill', () => {
+    const policySql = readFileSync(
+      new URL('../migrations/0026_tenant_auth_policies.sql', import.meta.url),
+      'utf8',
+    );
+    const providerSql = readFileSync(
+      new URL('../migrations/0027_tenant_auth_providers.sql', import.meta.url),
+      'utf8',
+    );
+    const backfillSql = readFileSync(
+      new URL('../migrations/0028_backfill_legacy_saml_auth_providers.sql', import.meta.url),
+      'utf8',
+    );
+
+    expect(policySql).toContain('CREATE TABLE IF NOT EXISTS tenant_auth_policies');
+    expect(policySql).toContain("CHECK (login_mode IN ('local', 'hybrid', 'sso_required'))");
+    expect(providerSql).toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
+    expect(providerSql).toContain("CHECK (protocol IN ('oidc', 'saml'))");
+    expect(providerSql).toContain('idx_tenant_auth_providers_default_per_tenant');
+    expect(backfillSql).toContain('INSERT INTO tenant_auth_providers');
+    expect(backfillSql).toContain('tenant_sso_saml_configurations');
+    expect(backfillSql).toContain('tenant_auth_policies');
   });
 });
