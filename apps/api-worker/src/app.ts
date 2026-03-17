@@ -103,6 +103,7 @@ import {
   findBetterAuthSessionByToken,
   parseHostedMagicLinkToken,
 } from './auth/better-auth-runtime';
+import { createEnterpriseSsoAdapter } from './auth/enterprise-sso-adapter';
 import {
   createLegacyAuthProvider,
   resolveLegacySessionRecord,
@@ -351,18 +352,21 @@ const createBetterAuthRequest = (
     }
   }
 
-  return new Request(url.toString(), {
-    method: init?.method,
+  const requestInit: RequestInit = {
     headers,
-    body: init?.body,
-    redirect: init?.redirect,
-  });
+    ...(init?.method === undefined ? {} : { method: init.method }),
+    ...(init?.body === undefined ? {} : { body: init.body }),
+    ...(init?.redirect === undefined ? {} : { redirect: init.redirect }),
+  };
+
+  return new Request(url.toString(), requestInit);
 };
 
 const createBetterAuthRuntime = (
   context: AppContext,
   options?: {
     generateMagicLinkToken?: (() => string) | undefined;
+    oauthProviders?: readonly import('better-auth/plugins/generic-oauth').GenericOAuthConfig[] | undefined;
     sendMagicLink?:
       | ((data: {
           email: string;
@@ -371,7 +375,10 @@ const createBetterAuthRuntime = (
         }) => Promise<void>)
       | undefined;
   },
-) => {
+): {
+  runtimeConfig: ReturnType<typeof createBetterAuthRuntimeConfig>;
+  auth: ReturnType<typeof createCredtrailBetterAuth>;
+} => {
   const runtimeConfig = createBetterAuthRuntimeConfig(context.env);
 
   return {
@@ -381,6 +388,7 @@ const createBetterAuthRuntime = (
       runtimeConfig,
       magicLinkTtlSeconds: MAGIC_LINK_TTL_SECONDS,
       generateMagicLinkToken: options?.generateMagicLinkToken,
+      oauthProviders: options?.oauthProviders,
       sendMagicLink:
         options?.sendMagicLink ??
         (async () => {
@@ -394,10 +402,7 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   resolveDatabase,
   requestMagicLink: async (context, input) => {
     const defaultNextPath = `/tenants/${encodeURIComponent(input.tenantId)}/admin`;
-    const nextPath =
-      input.nextPath !== undefined && input.nextPath.startsWith('/')
-        ? input.nextPath
-        : defaultNextPath;
+    const nextPath = input.nextPath?.startsWith('/') === true ? input.nextPath : defaultNextPath;
     const expiresAt = addSecondsToIso(new Date().toISOString(), MAGIC_LINK_TTL_SECONDS);
     let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
     let debugMagicLinkToken: string | undefined;
@@ -559,8 +564,8 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
     applyBetterAuthResponseHeaders(context, response);
     clearRequestedTenant(context);
   },
-  resolveRequestedTenantContext: async (context) => {
-    return context.get('requestedTenantContext') ?? requestedTenantFromCookie(context);
+  resolveRequestedTenantContext: (context) => {
+    return Promise.resolve(context.get('requestedTenantContext') ?? requestedTenantFromCookie(context));
   },
   cacheAuthenticatedPrincipal: (
     context: AppContext,
@@ -610,6 +615,15 @@ const resolveRequestedTenantContext = async (
   c.set('requestedTenantContext', requestedTenant);
   return requestedTenant;
 };
+
+const enterpriseSsoAdapter = createEnterpriseSsoAdapter<AppContext, AppBindings>({
+  resolveDatabase,
+  createBetterAuthRuntime,
+  createBetterAuthRequest,
+  resolveAuthenticatedPrincipal,
+  resolveRequestedTenantContext,
+  rememberRequestedTenant,
+});
 
 const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | null> => {
   return resolveLegacySessionRecord(c, legacyAuthAdapterInput);
@@ -1125,6 +1139,7 @@ registerAuthRoutes({
   revokeCurrentSession: (context) => {
     return authProvider.revokeCurrentSession(context);
   },
+  enterpriseSso: enterpriseSsoAdapter,
 });
 
 registerTenantGovernanceRoutes({

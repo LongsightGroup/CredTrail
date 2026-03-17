@@ -2,7 +2,7 @@ import {
   createAuthIdentityLink,
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
-  findUserByEmail,
+  upsertUserByEmail,
   type SqlDatabase,
 } from '@credtrail/db';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
@@ -93,11 +93,7 @@ const resolveCredtrailUserId = async (
     return null;
   }
 
-  const user = await findUserByEmail(db, verifiedEmail);
-
-  if (user === null) {
-    return null;
-  }
+  const user = await upsertUserByEmail(db, verifiedEmail);
 
   const conflictingLink = await findAuthIdentityLinkByCredtrailUserId(db, authSystem, user.id);
 

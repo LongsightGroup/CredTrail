@@ -9,6 +9,8 @@ import type { Hono } from 'hono';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
+import { tenantIdFromNextPath } from '../auth/better-auth-runtime';
+import type { EnterpriseSsoAdapter } from '../auth/enterprise-sso-adapter';
 import type { RequestMagicLinkInput, RequestMagicLinkResult } from '../auth/auth-provider';
 import { magicLinkLoginPage } from '../auth/pages';
 
@@ -30,6 +32,7 @@ interface RegisterAuthRoutesInput {
     c: AppContext,
   ) => Promise<RequestedTenantContext | null>;
   revokeCurrentSession: (c: AppContext) => Promise<void>;
+  enterpriseSso?: EnterpriseSsoAdapter<AppContext, AppBindings> | undefined;
 }
 
 export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
@@ -41,16 +44,40 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     resolveAuthenticatedPrincipal,
     resolveRequestedTenantContext,
     revokeCurrentSession,
+    enterpriseSso,
   } = input;
 
   app.get('/', (c) => {
     return c.redirect('/login', 302);
   });
 
-  app.get('/login', (c) => {
-    const tenantId = (c.req.query('tenantId') ?? '').trim();
+  app.get('/login', async (c) => {
+    const tenantIdQuery = (c.req.query('tenantId') ?? '').trim();
     const nextPath = (c.req.query('next') ?? '').trim();
     const reason = (c.req.query('reason') ?? '').trim();
+    const tenantId = tenantIdQuery.length > 0 ? tenantIdQuery : (tenantIdFromNextPath(nextPath)?.trim() ?? '');
+
+    if (enterpriseSso !== undefined && tenantId.length > 0) {
+      const loginExperience = await enterpriseSso.resolveLoginExperience(c, {
+        tenantId,
+        nextPath,
+      });
+
+      if (loginExperience.autoStartPath !== null) {
+        return c.redirect(loginExperience.autoStartPath, 302);
+      }
+
+      return c.html(
+        magicLinkLoginPage({
+          tenantId,
+          nextPath,
+          ...(reason.length === 0 ? {} : { reason }),
+          localLoginAllowed: loginExperience.localLoginAllowed,
+          enterpriseProviders: loginExperience.enterpriseProviders,
+          ...(loginExperience.notice === undefined ? {} : { notice: loginExperience.notice }),
+        }),
+      );
+    }
 
     return c.html(
       magicLinkLoginPage({
@@ -64,6 +91,14 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   app.post('/v1/auth/magic-link/request', async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseMagicLinkRequest(payload);
+    const localLoginBlocked = await enterpriseSso?.enforceLocalMagicLinkRequest(c, {
+      tenantId: request.tenantId,
+    });
+
+    if (localLoginBlocked !== null && localLoginBlocked !== undefined) {
+      return localLoginBlocked;
+    }
+
     const user = await upsertUserByEmail(resolveDatabase(c.env), request.email);
     const membershipResult = await ensureTenantMembership(
       resolveDatabase(c.env),
@@ -192,6 +227,86 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     const nextPath = nextPathRaw?.startsWith('/') === true ? nextPathRaw : fallbackPath;
 
     return c.redirect(nextPath, 302);
+  });
+
+  app.get('/v1/auth/sso/:providerId/start', async (c) => {
+    if (enterpriseSso === undefined) {
+      return c.json(
+        {
+          error: 'Enterprise SSO is not configured',
+        },
+        404,
+      );
+    }
+
+    const providerId = (c.req.param('providerId') ?? '').trim();
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+
+    if (providerId.length === 0 || tenantId.length === 0) {
+      return c.json(
+        {
+          error: 'Provider ID and tenant ID are required',
+        },
+        400,
+      );
+    }
+
+    return enterpriseSso.start(c, {
+      tenantId,
+      providerId,
+      nextPath,
+    });
+  });
+
+  app.get('/auth/sso/callback/:providerId', async (c) => {
+    if (enterpriseSso === undefined) {
+      return c.json(
+        {
+          error: 'Enterprise SSO is not configured',
+        },
+        404,
+      );
+    }
+
+    const providerId = (c.req.param('providerId') ?? '').trim();
+
+    if (providerId.length === 0) {
+      return c.json(
+        {
+          error: 'Provider ID is required',
+        },
+        400,
+      );
+    }
+
+    return enterpriseSso.proxyCallback(c, {
+      providerId,
+    });
+  });
+
+  app.get('/auth/sso/finalize', async (c) => {
+    if (enterpriseSso === undefined) {
+      return c.redirect('/login?reason=sso_failed', 302);
+    }
+
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const providerIdRaw = (c.req.query('providerId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const status = (c.req.query('status') ?? '').trim();
+    const error = (c.req.query('error') ?? '').trim();
+
+    if (tenantId.length === 0) {
+      return c.redirect('/login?reason=sso_failed', 302);
+    }
+
+    return enterpriseSso.finalize(c, {
+      tenantId,
+      providerId: providerIdRaw.length > 0 ? providerIdRaw : null,
+      nextPath,
+      status: status.length > 0 ? status : null,
+      error: error.length > 0 ? error : null,
+    });
   });
 
   app.get('/v1/auth/session', async (c) => {

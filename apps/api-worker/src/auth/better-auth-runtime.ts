@@ -8,6 +8,7 @@ import {
   type JoinConfig,
 } from 'better-auth/adapters';
 import { magicLink } from 'better-auth/plugins';
+import { genericOAuth, type GenericOAuthConfig } from 'better-auth/plugins/generic-oauth';
 import type { BetterAuthRuntimeConfig } from './better-auth-config';
 
 const BETTER_AUTH_BASE_PATH = '/api/auth';
@@ -57,7 +58,7 @@ const normalizeValue = (value: unknown): unknown => {
 
 const filterSelectedFields = <RowType extends Record<string, unknown>>(
   row: RowType,
-  select?: string[] | undefined,
+  select?: string[],
 ): RowType => {
   if (select === undefined || select.length === 0) {
     return row;
@@ -91,7 +92,8 @@ const whereClauseToSql = (
   const params: unknown[] = [];
 
   for (const clause of where) {
-    const connector = fragments.length === 0 ? '' : ` ${clause.connector} `;
+    const connector =
+      fragments.length === 0 ? '' : clause.connector === 'OR' ? ' OR ' : ' AND ';
     const field = columnName(clause.field);
 
     switch (clause.operator) {
@@ -231,13 +233,14 @@ const attachJoinedRows = async (
       continue;
     }
 
+    const joinValues = [...new Set(baseValues)] as string[] | number[];
     const joinedRows = await listRows(db, {
       model: joinModel,
       where: [
         {
           field: joinConfig.on.to,
           operator: 'in',
-          value: [...new Set(baseValues)],
+          value: joinValues,
           connector: 'AND',
         },
       ],
@@ -265,8 +268,9 @@ const attachJoinedRows = async (
 const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
   return {
     create: async ({ model, data, select }) => {
-      const keys = Object.keys(data);
-      const values = keys.map((key) => data[key]);
+      const dataRecord = data as Record<string, unknown>;
+      const keys = Object.keys(dataRecord);
+      const values = keys.map((key) => dataRecord[key]);
       const columnsSql = keys.map(columnName).join(', ');
       const placeholders = keys.map(() => '?').join(', ');
 
@@ -279,13 +283,14 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
 
       return filterSelectedFields(
         {
-          ...data,
+          ...dataRecord,
         },
         select,
-      );
+      ) as never;
     },
     update: async ({ model, where, update }) => {
-      const keys = Object.keys(update);
+      const updateRecord = update as Record<string, unknown>;
+      const keys = Object.keys(updateRecord);
 
       if (keys.length === 0) {
         const rows = await listRows(db, {
@@ -294,12 +299,12 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
           limit: 1,
         });
 
-        return rows[0] ?? null;
+        return (rows[0] ?? null) as never;
       }
 
       const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
       const whereClause = whereClauseToSql(where);
-      const params = [...keys.map((key) => normalizeValue(update[key])), ...whereClause.params];
+      const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
 
       await db
         .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
@@ -312,14 +317,15 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         limit: 1,
       });
 
-      return rows[0] ?? null;
+      return (rows[0] ?? null) as never;
     },
     updateMany: async ({ model, where, update }) => {
       const matchingRows = await listRows(db, {
         model,
         where,
       });
-      const keys = Object.keys(update);
+      const updateRecord = update as Record<string, unknown>;
+      const keys = Object.keys(updateRecord);
 
       if (matchingRows.length === 0 || keys.length === 0) {
         return matchingRows.length;
@@ -327,7 +333,7 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
 
       const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
       const whereClause = whereClauseToSql(where);
-      const params = [...keys.map((key) => normalizeValue(update[key])), ...whereClause.params];
+      const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
 
       await db
         .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
@@ -349,11 +355,11 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       }
 
       if (join === undefined) {
-        return rows[0];
+        return rows[0] as never;
       }
 
       const joinedRows = await attachJoinedRows(db, rows, join);
-      return joinedRows[0] ?? null;
+      return (joinedRows[0] ?? null) as never;
     },
     findMany: async ({ model, where, limit, select, sortBy, offset, join }) => {
       const rows = await listRows(db, {
@@ -366,10 +372,10 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       });
 
       if (join === undefined) {
-        return rows;
+        return rows as never;
       }
 
-      return attachJoinedRows(db, rows, join);
+      return (await attachJoinedRows(db, rows, join)) as never;
     },
     delete: async ({ model, where }) => {
       const whereClause = whereClauseToSql(where);
@@ -544,12 +550,37 @@ export const createCredtrailBetterAuth = (input: {
   runtimeConfig: BetterAuthRuntimeConfig;
   magicLinkTtlSeconds: number;
   generateMagicLinkToken?: (() => string) | undefined;
+  oauthProviders?: readonly GenericOAuthConfig[] | undefined;
   sendMagicLink: (data: {
     email: string;
     token: string;
     url: string;
   }) => Promise<void>;
 }) => {
+  const plugins: Array<ReturnType<typeof magicLink> | ReturnType<typeof genericOAuth>> = [
+    magicLink({
+      expiresIn: input.magicLinkTtlSeconds,
+      generateToken: () => {
+        return input.generateMagicLinkToken?.() ?? crypto.randomUUID().replace(/-/g, '');
+      },
+      sendMagicLink: async ({ email, token, url }) => {
+        await input.sendMagicLink({
+          email,
+          token,
+          url,
+        });
+      },
+    }),
+  ];
+
+  if (input.oauthProviders !== undefined && input.oauthProviders.length > 0) {
+    plugins.push(
+      genericOAuth({
+        config: [...input.oauthProviders],
+      }),
+    );
+  }
+
   return betterAuth({
     baseURL: input.runtimeConfig.baseURL,
     basePath: BETTER_AUTH_BASE_PATH,
@@ -574,21 +605,7 @@ export const createCredtrailBetterAuth = (input: {
         },
       },
     },
-    plugins: [
-      magicLink({
-        expiresIn: input.magicLinkTtlSeconds,
-        generateToken: () => {
-          return input.generateMagicLinkToken?.() ?? crypto.randomUUID().replace(/-/g, '');
-        },
-        sendMagicLink: async ({ email, token, url }) => {
-          await input.sendMagicLink({
-            email,
-            token,
-            url,
-          });
-        },
-      }),
-    ],
+    plugins,
   });
 };
 
