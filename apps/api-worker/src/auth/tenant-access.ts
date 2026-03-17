@@ -49,6 +49,7 @@ interface CreateTenantAccessHelpersInput<
 > {
   resolveAuthenticatedPrincipal: (context: ContextType) => Promise<AuthenticatedPrincipal | null>;
   resolveLegacySessionRecord: (context: ContextType) => Promise<SessionRecord | null>;
+  resolvePendingBreakGlassTenantId?: (context: ContextType) => string | null;
   resolveDatabase: (bindings: BindingsType) => SqlDatabase;
 }
 
@@ -287,6 +288,18 @@ export const createTenantAccessHelpers = <
       source: 'route',
       authoritative: true,
     };
+    const pendingBreakGlassTenantId = input.resolvePendingBreakGlassTenantId?.(context);
+
+    if (pendingBreakGlassTenantId === tenantId) {
+      return context.json(
+        {
+          error: 'Local MFA enrollment must be completed before tenant access is granted',
+          reason: 'break_glass_mfa_setup_pending',
+        },
+        423,
+      );
+    }
+
     const result = await requirePrincipalTenantRole({
       context,
       principal: await input.resolveAuthenticatedPrincipal(context),

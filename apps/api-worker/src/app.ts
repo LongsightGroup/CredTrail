@@ -95,6 +95,10 @@ import {
 import { applyBetterAuthResponseHeaders } from './auth/better-auth-bridge';
 import { createBetterAuthRuntimeConfig } from './auth/better-auth-config';
 import {
+  BREAK_GLASS_PENDING_MFA_COOKIE_NAME,
+  createBreakGlassPolicyAdapter,
+} from './auth/break-glass-policy';
+import {
   BETTER_AUTH_BASE_PATH,
   REQUESTED_TENANT_COOKIE_NAME,
   buildHostedMagicLinkToken,
@@ -128,6 +132,7 @@ import {
   type SendIssuanceEmailNotificationInput,
 } from './notifications/send-issuance-email';
 import { sendMagicLinkEmailNotification } from './notifications/send-magic-link-email';
+import { sendPasswordResetEmailNotification } from './notifications/send-password-reset-email';
 import { registerAdminRoutes } from './routes/admin-routes';
 import { registerAssertionRoutes } from './routes/assertion-routes';
 import { registerAuthRoutes } from './routes/auth-routes';
@@ -335,6 +340,11 @@ const clearRequestedTenant = (context: AppContext): void => {
   context.set('requestedTenantContext', null);
 };
 
+const pendingBreakGlassTenantFromCookie = (context: AppContext): string | null => {
+  const tenantId = getCookie(context, BREAK_GLASS_PENDING_MFA_COOKIE_NAME)?.trim();
+  return tenantId === undefined || tenantId.length === 0 ? null : tenantId;
+};
+
 const createBetterAuthRequest = (
   context: AppContext,
   path: string,
@@ -374,6 +384,13 @@ const createBetterAuthRuntime = (
           url: string;
         }) => Promise<void>)
       | undefined;
+    sendResetPassword?:
+      | ((data: {
+          email: string;
+          url: string;
+          token: string;
+        }) => Promise<void>)
+      | undefined;
   },
 ): {
   runtimeConfig: ReturnType<typeof createBetterAuthRuntimeConfig>;
@@ -394,7 +411,56 @@ const createBetterAuthRuntime = (
         (async () => {
           return Promise.resolve();
         }),
+      sendResetPassword:
+        options?.sendResetPassword ??
+        (async () => {
+          return Promise.resolve();
+        }),
     }),
+  };
+};
+
+const resolveCurrentBetterAuthSession = async (
+  context: AppContext,
+): Promise<import('./auth/better-auth-adapter').BetterAuthResolvedSession | null> => {
+  const { auth } = createBetterAuthRuntime(context);
+  const response = await auth.handler(
+    createBetterAuthRequest(context, '/get-session', {
+      method: 'GET',
+    }),
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  applyBetterAuthResponseHeaders(context, response);
+
+  const payload = await response.json<{
+    session: {
+      id: string;
+      expiresAt: string;
+    };
+    user: {
+      id: string;
+      email: string | null;
+      emailVerified: boolean;
+    };
+  } | null>();
+
+  if (payload === null) {
+    return null;
+  }
+
+  return {
+    sessionId: payload.session.id,
+    accountId: null,
+    expiresAt: payload.session.expiresAt,
+    user: {
+      id: payload.user.id,
+      email: payload.user.email,
+      emailVerified: payload.user.emailVerified,
+    },
   };
 };
 
@@ -433,6 +499,18 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
         } catch {
           deliveryStatus = 'failed';
         }
+      },
+      sendResetPassword: async ({ email, url }) => {
+        await sendPasswordResetEmailNotification({
+          mailtrapApiToken: context.env.MAILTRAP_API_TOKEN,
+          mailtrapInboxId: context.env.MAILTRAP_INBOX_ID,
+          mailtrapApiBaseUrl: context.env.MAILTRAP_API_BASE_URL,
+          mailtrapFromEmail: context.env.MAILTRAP_FROM_EMAIL,
+          mailtrapFromName: context.env.MAILTRAP_FROM_NAME,
+          recipientEmail: email,
+          tenantId: input.tenantId,
+          resetUrl: url,
+        });
       },
     });
     const response = await auth.handler(
@@ -512,47 +590,7 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
       },
     };
   },
-  resolveSession: async (context) => {
-    const { auth } = createBetterAuthRuntime(context);
-    const response = await auth.handler(
-      createBetterAuthRequest(context, '/get-session', {
-        method: 'GET',
-      }),
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    applyBetterAuthResponseHeaders(context, response);
-
-    const payload = await response.json<{
-      session: {
-        id: string;
-        expiresAt: string;
-      };
-      user: {
-        id: string;
-        email: string | null;
-        emailVerified: boolean;
-      };
-    } | null>();
-
-    if (payload === null) {
-      return null;
-    }
-
-    return {
-      sessionId: payload.session.id,
-      accountId: null,
-      expiresAt: payload.session.expiresAt,
-      user: {
-        id: payload.user.id,
-        email: payload.user.email,
-        emailVerified: payload.user.emailVerified,
-      },
-    };
-  },
+  resolveSession: resolveCurrentBetterAuthSession,
   revokeSession: async (context) => {
     const { auth } = createBetterAuthRuntime(context);
     const response = await auth.handler(
@@ -563,6 +601,9 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
 
     applyBetterAuthResponseHeaders(context, response);
     clearRequestedTenant(context);
+    deleteCookie(context, BREAK_GLASS_PENDING_MFA_COOKIE_NAME, {
+      path: '/',
+    });
   },
   resolveRequestedTenantContext: (context) => {
     return Promise.resolve(context.get('requestedTenantContext') ?? requestedTenantFromCookie(context));
@@ -616,6 +657,16 @@ const resolveRequestedTenantContext = async (
   return requestedTenant;
 };
 
+const breakGlassPolicyAdapter = createBreakGlassPolicyAdapter<AppContext, AppBindings>({
+  resolveDatabase,
+  createBetterAuthRuntime,
+  createBetterAuthRequest,
+  resolveCurrentSession: resolveCurrentBetterAuthSession,
+  rememberRequestedTenant: (context, tenantId) => {
+    rememberRequestedTenant(context, tenantId);
+  },
+});
+
 const enterpriseSsoAdapter = createEnterpriseSsoAdapter<AppContext, AppBindings>({
   resolveDatabase,
   createBetterAuthRuntime,
@@ -657,6 +708,7 @@ const {
 } = createTenantAccessHelpers<AppContext, AppBindings>({
   resolveAuthenticatedPrincipal,
   resolveLegacySessionRecord: resolveSessionFromCookie,
+  resolvePendingBreakGlassTenantId: pendingBreakGlassTenantFromCookie,
   resolveDatabase,
 });
 
@@ -1140,11 +1192,19 @@ registerAuthRoutes({
     return authProvider.revokeCurrentSession(context);
   },
   enterpriseSso: enterpriseSsoAdapter,
+  breakGlassPolicy: breakGlassPolicyAdapter,
 });
 
 registerTenantGovernanceRoutes({
   app,
   resolveDatabase,
+  requestBreakGlassPasswordReset: (context, request) => {
+    return breakGlassPolicyAdapter.requestPasswordReset(context, {
+      tenantId: request.tenantId,
+      email: request.email,
+      nextPath: `/tenants/${encodeURIComponent(request.tenantId)}/admin`,
+    });
+  },
   generateOpaqueToken,
   sha256Hex,
   requireTenantRole,

@@ -66,6 +66,10 @@ export const INSTITUTION_ADMIN_JS = `
     parsedContext && typeof parsedContext.authProvidersApiPath === 'string'
       ? parsedContext.authProvidersApiPath
       : '';
+  const breakGlassAccountsApiPath =
+    parsedContext && typeof parsedContext.breakGlassAccountsApiPath === 'string'
+      ? parsedContext.breakGlassAccountsApiPath
+      : '';
 
   if (
     tenantAdminPath.length === 0 ||
@@ -176,6 +180,9 @@ export const INSTITUTION_ADMIN_JS = `
   const enterpriseAuthProviderStatus = document.getElementById('enterprise-auth-provider-status');
   const enterpriseAuthProviderBody = document.getElementById('enterprise-auth-provider-body');
   const enterpriseAuthProviderResetButton = document.getElementById('enterprise-auth-provider-reset');
+  const breakGlassAccountForm = document.getElementById('break-glass-account-form');
+  const breakGlassAccountStatus = document.getElementById('break-glass-account-status');
+  const breakGlassAccountBody = document.getElementById('break-glass-account-body');
   let ruleValueLists = [];
   let refreshIssuedBadges = null;
 
@@ -1206,6 +1213,108 @@ export const INSTITUTION_ADMIN_JS = `
         }, 900);
       } catch {
         setStatus(enterpriseAuthProviderStatus, 'Unable to delete enterprise auth provider.', true);
+      }
+    });
+  }
+
+  if (
+    breakGlassAccountForm instanceof HTMLFormElement &&
+    breakGlassAccountStatus instanceof HTMLElement &&
+    breakGlassAccountsApiPath.length > 0
+  ) {
+    breakGlassAccountForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setStatus(breakGlassAccountStatus, 'Adding break-glass account...', false);
+
+      const data = new FormData(breakGlassAccountForm);
+      const emailRaw = data.get('email');
+      const email = typeof emailRaw === 'string' ? emailRaw.trim() : '';
+
+      if (email.length === 0) {
+        setStatus(breakGlassAccountStatus, 'Institution email is required.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(breakGlassAccountsApiPath, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            sendEnrollmentEmail: data.get('sendEnrollmentEmail') !== null,
+          }),
+        });
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(breakGlassAccountStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(breakGlassAccountStatus, 'Break-glass account saved.', false);
+        setTimeout(() => {
+          window.location.assign(tenantAdminPath);
+        }, 900);
+      } catch {
+        setStatus(breakGlassAccountStatus, 'Unable to save break-glass account.', true);
+      }
+    });
+  }
+
+  if (
+    breakGlassAccountBody instanceof HTMLElement &&
+    breakGlassAccountStatus instanceof HTMLElement &&
+    breakGlassAccountsApiPath.length > 0
+  ) {
+    breakGlassAccountBody.addEventListener('click', async (event) => {
+      const target = event.target;
+
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const deleteButton = target.closest('[data-break-glass-delete-user-id]');
+
+      if (!(deleteButton instanceof HTMLElement)) {
+        return;
+      }
+
+      const userId = deleteButton.dataset.breakGlassDeleteUserId ?? '';
+      const email = deleteButton.dataset.breakGlassEmail ?? 'this account';
+
+      if (userId.length === 0) {
+        setStatus(breakGlassAccountStatus, 'Break-glass user ID missing from revoke action.', true);
+        return;
+      }
+
+      if (!window.confirm('Revoke break-glass access for ' + email + '?')) {
+        return;
+      }
+
+      setStatus(breakGlassAccountStatus, 'Revoking break-glass account...', false);
+
+      try {
+        const response = await fetch(
+          breakGlassAccountsApiPath + '/' + encodeURIComponent(userId),
+          {
+            method: 'DELETE',
+          },
+        );
+        const payload = await parseJsonBody(response);
+
+        if (!response.ok) {
+          setStatus(breakGlassAccountStatus, errorDetailFromPayload(payload), true);
+          return;
+        }
+
+        setStatus(breakGlassAccountStatus, 'Break-glass account revoked.', false);
+        setTimeout(() => {
+          window.location.assign(tenantAdminPath);
+        }, 900);
+      } catch {
+        setStatus(breakGlassAccountStatus, 'Unable to revoke break-glass account.', true);
       }
     });
   }

@@ -469,6 +469,11 @@ export const upsertTenantAuthProviderRequestSchema = z
     }
   });
 
+export const createTenantBreakGlassAccountRequestSchema = z.object({
+  email: z.string().trim().email().max(320),
+  sendEnrollmentEmail: z.boolean().optional(),
+});
+
 export const upsertTenantSsoSamlConfigurationRequestSchema = z.object({
   idpEntityId: z.string().trim().min(1).max(512),
   ssoLoginUrl: z.string().url().max(2048),
@@ -1286,6 +1291,9 @@ export type UpsertTenantAuthPolicyRequest = z.infer<typeof upsertTenantAuthPolic
 export type UpsertTenantAuthProviderRequest = z.infer<
   typeof upsertTenantAuthProviderRequestSchema
 >;
+export type CreateTenantBreakGlassAccountRequest = z.infer<
+  typeof createTenantBreakGlassAccountRequestSchema
+>;
 export type UpsertTenantSsoSamlConfigurationRequest = z.infer<
   typeof upsertTenantSsoSamlConfigurationRequestSchema
 >;
@@ -1591,6 +1599,12 @@ export const parseUpsertTenantAuthProviderRequest = (
   input: unknown,
 ): UpsertTenantAuthProviderRequest => {
   return upsertTenantAuthProviderRequestSchema.parse(input);
+};
+
+export const parseCreateTenantBreakGlassAccountRequest = (
+  input: unknown,
+): CreateTenantBreakGlassAccountRequest => {
+  return createTenantBreakGlassAccountRequestSchema.parse(input);
 };
 
 export const parseUpsertTenantSsoSamlConfigurationRequest = (

@@ -7,6 +7,7 @@ export const magicLinkLoginPage = (input: {
   nextPath: string;
   reason?: string;
   localLoginAllowed?: boolean;
+  explicitLocalLoginPath?: string | null;
   enterpriseProviders?: readonly {
     id: string;
     label: string;
@@ -49,6 +50,7 @@ export const magicLinkLoginPage = (input: {
       : `View ${escapeHtml(effectiveTenantId)} badge showcase`;
   const enterpriseProviders = input.enterpriseProviders ?? [];
   const localLoginAllowed = input.localLoginAllowed ?? true;
+  const explicitLocalLoginPath = input.explicitLocalLoginPath ?? null;
   const loginReasonNotice =
     input.reason === 'sso_failed'
       ? '<p class="ct-login__context">Institution sign-in did not complete. Try again or contact your CredTrail administrator.</p>'
@@ -101,6 +103,14 @@ export const magicLinkLoginPage = (input: {
           <p id="magic-link-login-status" class="ct-login__status" hidden></p>
           <p id="magic-link-dev-link" class="ct-login__dev"></p>
         </section>`;
+  const explicitLocalFallbackMarkup =
+    explicitLocalLoginPath === null
+      ? ''
+      : `<p class="ct-login__help">
+          Institution SSO is required for normal access.
+          If your tenant administrator designated your account for emergency fallback access, use
+          <a href="${escapeHtml(explicitLocalLoginPath)}">break-glass local sign-in</a>.
+        </p>`;
   const loginIntroText =
     enterpriseProviders.length > 0 && !localLoginAllowed
       ? 'Use your institution sign-in to continue into this CredTrail tenant.'
@@ -136,6 +146,7 @@ export const magicLinkLoginPage = (input: {
           ${input.notice === undefined || input.notice.trim().length === 0 ? '' : `<p class="ct-login__context">${escapeHtml(input.notice)}</p>`}
           ${enterpriseSignInMarkup}
           ${localLoginMarkup}
+          ${explicitLocalFallbackMarkup}
           <p class="ct-login__back">
             <a href="${tenantLinkHref}">${tenantLinkLabel}</a>
           </p>
@@ -143,5 +154,228 @@ export const magicLinkLoginPage = (input: {
       </div>
     </section>`,
     renderPageAssetTags(['foundationCss', 'authLoginCss', 'authLoginJs']),
+  );
+};
+
+const localReasonNotice = (reason: string | undefined): string => {
+  switch (reason) {
+    case 'break_glass_invalid_credentials':
+      return 'Local sign-in did not complete. Check your email, password, and break-glass eligibility.';
+    case 'break_glass_invalid_code':
+      return 'The verification code was not accepted. Try again with a fresh code.';
+    case 'break_glass_invalid_password':
+      return 'Current password was not accepted for MFA enrollment.';
+    case 'break_glass_not_authenticated':
+      return 'Sign in locally before completing MFA enrollment.';
+    case 'break_glass_not_allowlisted':
+      return 'This account is not currently approved for break-glass local access.';
+    case 'break_glass_mfa_setup_pending':
+      return 'Finish local MFA enrollment before CredTrail grants tenant access.';
+    case 'break_glass_unavailable':
+      return 'Break-glass local access is not available for this tenant.';
+    case 'password_reset_complete':
+      return 'Password updated. Sign in locally and complete MFA enrollment before using break-glass access.';
+    case 'reset_sent':
+      return 'If this email is approved for break-glass access, a setup link has been sent.';
+    default:
+      return '';
+  }
+};
+
+export const localBreakGlassLoginPage = (input: {
+  tenantId: string;
+  nextPath: string;
+  reason?: string;
+}): string => {
+  const notice = localReasonNotice(input.reason);
+
+  return renderPageShell(
+    'Break-Glass Local Access · CredTrail',
+    `<section class="ct-login ct-stack">
+      <div class="ct-login__card ct-grid">
+        <div class="ct-login__hero ct-stack">
+          <p class="ct-login__eyebrow">Emergency access</p>
+          <h1 class="ct-login__title">Break-glass local sign-in</h1>
+          <p class="ct-login__lede">
+            This path is reserved for explicit fallback accounts when institution SSO is unavailable.
+          </p>
+          <ol class="ct-login__steps">
+            <li class="ct-login__step">
+              <strong>Use your break-glass email and password.</strong>
+              Local access is not available for general tenant users.
+            </li>
+            <li class="ct-login__step">
+              <strong>Complete local MFA.</strong>
+              CredTrail requires a valid TOTP challenge before tenant access is granted.
+            </li>
+            <li class="ct-login__step">
+              <strong>Return to the requested tenant path.</strong>
+              We will send you back to the page you originally requested.
+            </li>
+          </ol>
+        </div>
+        <div class="ct-login__form-wrap ct-stack">
+          ${
+            notice.length === 0
+              ? ''
+              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
+          }
+          <section class="ct-stack" aria-labelledby="break-glass-local-title">
+            <h2 id="break-glass-local-title" class="ct-login__form-title">Local break-glass sign-in</h2>
+            <form class="ct-login__form ct-stack" method="post" action="/auth/local/sign-in">
+              <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
+              <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+              <label class="ct-login__field ct-stack">
+                <span>Institution email</span>
+                <input name="email" type="email" required placeholder="name@institution.edu" />
+              </label>
+              <label class="ct-login__field ct-stack">
+                <span>Password</span>
+                <input name="password" type="password" required placeholder="Your local break-glass password" />
+              </label>
+              <button type="submit" class="ct-login__submit">Continue with local access</button>
+            </form>
+          </section>
+          <section class="ct-stack" aria-labelledby="break-glass-reset-title">
+            <h2 id="break-glass-reset-title" class="ct-login__form-title">Set up or reset local access</h2>
+            <p class="ct-login__form-text">
+              If your account is already allowlisted, CredTrail can email you a password-setup link.
+            </p>
+            <form class="ct-login__form ct-stack" method="post" action="/auth/local/reset-password/request">
+              <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
+              <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+              <label class="ct-login__field ct-stack">
+                <span>Institution email</span>
+                <input name="email" type="email" required placeholder="name@institution.edu" />
+              </label>
+              <button type="submit" class="ct-login__submit">Email setup link</button>
+            </form>
+          </section>
+          <p class="ct-login__back">
+            <a href="/login?tenantId=${encodeURIComponent(input.tenantId)}&next=${encodeURIComponent(
+              input.nextPath,
+            )}">Back to tenant sign-in</a>
+          </p>
+        </div>
+      </div>
+    </section>`,
+    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+  );
+};
+
+export const localResetPasswordPage = (input: {
+  tenantId: string;
+  nextPath: string;
+  token: string;
+  reason?: string;
+}): string => {
+  const notice = localReasonNotice(input.reason);
+
+  return renderPageShell(
+    'Reset Local Password · CredTrail',
+    `<section class="ct-login ct-stack">
+      <div class="ct-login__card ct-grid">
+        <div class="ct-login__hero ct-stack">
+          <p class="ct-login__eyebrow">Local setup</p>
+          <h1 class="ct-login__title">Set your local password</h1>
+          <p class="ct-login__lede">
+            Finish local break-glass setup, then return to tenant sign-in and complete MFA enrollment.
+          </p>
+        </div>
+        <div class="ct-login__form-wrap ct-stack">
+          ${
+            notice.length === 0
+              ? ''
+              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
+          }
+          <form class="ct-login__form ct-stack" method="post" action="/auth/local/reset-password">
+            <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
+            <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+            <input type="hidden" name="token" value="${escapeHtml(input.token)}" />
+            <label class="ct-login__field ct-stack">
+              <span>New password</span>
+              <input name="newPassword" type="password" required minlength="8" />
+            </label>
+            <button type="submit" class="ct-login__submit">Save password</button>
+          </form>
+        </div>
+      </div>
+    </section>`,
+    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+  );
+};
+
+export const localTwoFactorPage = (input: {
+  tenantId: string;
+  nextPath: string;
+  reason?: string;
+  setup?: {
+    totpUri: string;
+    backupCodes: readonly string[];
+  } | null;
+}): string => {
+  const notice = localReasonNotice(input.reason);
+  const enrollmentMarkup =
+    input.setup === null || input.setup === undefined
+      ? `<form class="ct-login__form ct-stack" method="post" action="/auth/local/two-factor/setup">
+          <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
+          <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+          <label class="ct-login__field ct-stack">
+            <span>Current password</span>
+            <input name="password" type="password" required />
+          </label>
+          <button type="submit" class="ct-login__submit">Generate authenticator setup</button>
+        </form>`
+      : `<div class="ct-stack">
+          <p class="ct-login__form-text">
+            Add this TOTP URI to your authenticator app, then verify one current code below.
+          </p>
+          <pre class="ct-login__dev" style="white-space:pre-wrap;">${escapeHtml(
+            input.setup.totpUri,
+          )}</pre>
+          ${
+            input.setup.backupCodes.length === 0
+              ? ''
+              : `<pre class="ct-login__dev" style="white-space:pre-wrap;">${escapeHtml(
+                  input.setup.backupCodes.join('\n'),
+                )}</pre>`
+          }
+        </div>`;
+
+  return renderPageShell(
+    'Local MFA · CredTrail',
+    `<section class="ct-login ct-stack">
+      <div class="ct-login__card ct-grid">
+        <div class="ct-login__hero ct-stack">
+          <p class="ct-login__eyebrow">Local MFA</p>
+          <h1 class="ct-login__title">${
+            input.setup === null || input.setup === undefined
+              ? 'Complete local MFA enrollment'
+              : 'Verify your authenticator code'
+          }</h1>
+          <p class="ct-login__lede">
+            Break-glass local access is not active until a valid TOTP code is verified.
+          </p>
+        </div>
+        <div class="ct-login__form-wrap ct-stack">
+          ${
+            notice.length === 0
+              ? ''
+              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
+          }
+          ${enrollmentMarkup}
+          <form class="ct-login__form ct-stack" method="post" action="/auth/local/two-factor/verify">
+            <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
+            <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+            <label class="ct-login__field ct-stack">
+              <span>Authenticator code</span>
+              <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+            </label>
+            <button type="submit" class="ct-login__submit">Verify and continue</button>
+          </form>
+        </div>
+      </div>
+    </section>`,
+    renderPageAssetTags(['foundationCss', 'authLoginCss']),
   );
 };

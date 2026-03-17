@@ -6,13 +6,26 @@ import {
 } from '@credtrail/db';
 import { renderPageShell } from '@credtrail/ui-components';
 import type { Hono } from 'hono';
+import { deleteCookie, setCookie } from 'hono/cookie';
 import { parseMagicLinkRequest, parseMagicLinkVerifyRequest } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
 import { tenantIdFromNextPath } from '../auth/better-auth-runtime';
+import {
+  BREAK_GLASS_PENDING_MFA_COOKIE_NAME,
+  buildLocalLoginPath,
+  buildLocalTwoFactorPath,
+  type BreakGlassPolicyAdapter,
+} from '../auth/break-glass-policy';
 import type { EnterpriseSsoAdapter } from '../auth/enterprise-sso-adapter';
 import type { RequestMagicLinkInput, RequestMagicLinkResult } from '../auth/auth-provider';
-import { magicLinkLoginPage } from '../auth/pages';
+import {
+  localBreakGlassLoginPage,
+  localResetPasswordPage,
+  localTwoFactorPage,
+  magicLinkLoginPage,
+} from '../auth/pages';
+import { sessionCookieSecure } from '../utils/crypto';
 
 interface RegisterAuthRoutesInput {
   app: Hono<AppEnv>;
@@ -33,7 +46,13 @@ interface RegisterAuthRoutesInput {
   ) => Promise<RequestedTenantContext | null>;
   revokeCurrentSession: (c: AppContext) => Promise<void>;
   enterpriseSso?: EnterpriseSsoAdapter<AppContext, AppBindings> | undefined;
+  breakGlassPolicy?: BreakGlassPolicyAdapter<AppContext, AppBindings> | undefined;
 }
+
+const getFormValue = (formData: FormData, name: string): string => {
+  const raw = formData.get(name);
+  return typeof raw === 'string' ? raw.trim() : '';
+};
 
 export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
   const {
@@ -45,6 +64,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     resolveRequestedTenantContext,
     revokeCurrentSession,
     enterpriseSso,
+    breakGlassPolicy,
   } = input;
 
   app.get('/', (c) => {
@@ -73,6 +93,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
           nextPath,
           ...(reason.length === 0 ? {} : { reason }),
           localLoginAllowed: loginExperience.localLoginAllowed,
+          explicitLocalLoginPath: loginExperience.explicitLocalLoginPath,
           enterpriseProviders: loginExperience.enterpriseProviders,
           ...(loginExperience.notice === undefined ? {} : { notice: loginExperience.notice }),
         }),
@@ -86,6 +107,266 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
         ...(reason.length === 0 ? {} : { reason }),
       }),
     );
+  });
+
+  app.get('/login/local', async (c) => {
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const reason = (c.req.query('reason') ?? '').trim();
+
+    if (breakGlassPolicy === undefined || tenantId.length === 0) {
+      const loginUrl = new URL('/login', c.req.url);
+      if (tenantId.length > 0) {
+        loginUrl.searchParams.set('tenantId', tenantId);
+      }
+      if (nextPath.length > 0) {
+        loginUrl.searchParams.set('next', nextPath);
+      }
+      loginUrl.searchParams.set('reason', 'break_glass_unavailable');
+      return c.redirect(`${loginUrl.pathname}${loginUrl.search}`, 302);
+    }
+
+    return c.html(
+      localBreakGlassLoginPage({
+        tenantId,
+        nextPath,
+        ...(reason.length === 0 ? {} : { reason }),
+      }),
+    );
+  });
+
+  app.post('/auth/local/reset-password/request', async (c) => {
+    if (breakGlassPolicy === undefined) {
+      return c.redirect('/login?reason=break_glass_unavailable', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const email = getFormValue(formData, 'email');
+    const status = await breakGlassPolicy.requestPasswordReset(c, {
+      tenantId,
+      email,
+      nextPath,
+    });
+
+    return c.redirect(
+      buildLocalLoginPath({
+        tenantId,
+        nextPath,
+        reason: status === 'sent' ? 'reset_sent' : 'break_glass_unavailable',
+      }),
+      302,
+    );
+  });
+
+  app.post('/auth/local/sign-in', async (c) => {
+    if (breakGlassPolicy === undefined) {
+      return c.redirect('/login?reason=break_glass_unavailable', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const email = getFormValue(formData, 'email');
+    const password = getFormValue(formData, 'password');
+    const result = await breakGlassPolicy.signIn(c, {
+      tenantId,
+      email,
+      password,
+      nextPath,
+    });
+
+    if (result.status === 'authenticated') {
+      return c.redirect(nextPath.startsWith('/') ? nextPath : `/tenants/${encodeURIComponent(tenantId)}/admin`, 302);
+    }
+
+    if (result.status === 'two_factor_required') {
+      return c.redirect(
+        buildLocalTwoFactorPath({
+          tenantId,
+          nextPath,
+        }),
+        302,
+      );
+    }
+
+    if (result.status === 'setup_required') {
+      setCookie(c, BREAK_GLASS_PENDING_MFA_COOKIE_NAME, tenantId, {
+        httpOnly: true,
+        secure: sessionCookieSecure(c.env.APP_ENV),
+        sameSite: 'Lax',
+        path: '/',
+      });
+
+      return c.redirect(
+        buildLocalTwoFactorPath({
+          tenantId,
+          nextPath,
+          setup: true,
+        }),
+        302,
+      );
+    }
+
+    return c.redirect(
+      buildLocalLoginPath({
+        tenantId,
+        nextPath,
+        reason: result.reason,
+      }),
+      302,
+    );
+  });
+
+  app.get('/auth/local/reset-password', async (c) => {
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const token = (c.req.query('token') ?? '').trim();
+    const reason = (c.req.query('reason') ?? '').trim();
+
+    if (tenantId.length === 0 || token.length === 0) {
+      return c.html(
+        renderPageShell(
+          'Invalid Reset Link',
+          '<h1>Invalid reset link</h1><p>Request a new local setup link from the break-glass sign-in page.</p>',
+        ),
+        400,
+      );
+    }
+
+    return c.html(
+      localResetPasswordPage({
+        tenantId,
+        nextPath,
+        token,
+        ...(reason.length === 0 ? {} : { reason }),
+      }),
+    );
+  });
+
+  app.post('/auth/local/reset-password', async (c) => {
+    if (breakGlassPolicy === undefined) {
+      return c.redirect('/login?reason=break_glass_unavailable', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const token = getFormValue(formData, 'token');
+    const newPassword = getFormValue(formData, 'newPassword');
+    const status = await breakGlassPolicy.resetPassword(c, {
+      tenantId,
+      token,
+      newPassword,
+    });
+
+    return c.redirect(
+      buildLocalLoginPath({
+        tenantId,
+        nextPath,
+        reason: status === 'complete' ? 'password_reset_complete' : 'break_glass_unavailable',
+      }),
+      302,
+    );
+  });
+
+  app.get('/auth/local/two-factor', async (c) => {
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const reason = (c.req.query('reason') ?? '').trim();
+
+    return c.html(
+      localTwoFactorPage({
+        tenantId,
+        nextPath,
+        ...(reason.length === 0 ? {} : { reason }),
+      }),
+    );
+  });
+
+  app.get('/auth/local/two-factor/setup', async (c) => {
+    const tenantId = (c.req.query('tenantId') ?? '').trim();
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const reason = (c.req.query('reason') ?? '').trim();
+
+    return c.html(
+      localTwoFactorPage({
+        tenantId,
+        nextPath,
+        ...(reason.length === 0 ? {} : { reason }),
+      }),
+    );
+  });
+
+  app.post('/auth/local/two-factor/setup', async (c) => {
+    if (breakGlassPolicy === undefined) {
+      return c.redirect('/login?reason=break_glass_unavailable', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const password = getFormValue(formData, 'password');
+    const result = await breakGlassPolicy.enrollTwoFactor(c, {
+      tenantId,
+      password,
+    });
+
+    if (result.status === 'rejected') {
+      return c.redirect(
+        buildLocalTwoFactorPath({
+          tenantId,
+          nextPath,
+          setup: true,
+          reason: result.reason,
+        }),
+        302,
+      );
+    }
+
+    return c.html(
+      localTwoFactorPage({
+        tenantId,
+        nextPath,
+        setup: {
+          totpUri: result.totpUri,
+          backupCodes: result.backupCodes,
+        },
+      }),
+    );
+  });
+
+  app.post('/auth/local/two-factor/verify', async (c) => {
+    if (breakGlassPolicy === undefined) {
+      return c.redirect('/login?reason=break_glass_unavailable', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const code = getFormValue(formData, 'code');
+    const result = await breakGlassPolicy.verifyTwoFactor(c, {
+      tenantId,
+      code,
+    });
+
+    if (result.status === 'rejected') {
+      return c.redirect(
+        buildLocalTwoFactorPath({
+          tenantId,
+          nextPath,
+          reason: result.reason,
+        }),
+        302,
+      );
+    }
+
+    deleteCookie(c, BREAK_GLASS_PENDING_MFA_COOKIE_NAME, {
+      path: '/',
+    });
+    const fallbackPath = `/tenants/${encodeURIComponent(tenantId)}/admin`;
+    return c.redirect(nextPath.startsWith('/') ? nextPath : fallbackPath, 302);
   });
 
   app.post('/v1/auth/magic-link/request', async (c) => {

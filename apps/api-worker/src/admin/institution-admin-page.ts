@@ -2,6 +2,7 @@ import type {
   BadgeIssuanceRuleRecord,
   BadgeIssuanceRuleVersionRecord,
   BadgeTemplateRecord,
+  TenantBreakGlassAccountRecord,
   TenantApiKeyRecord,
   TenantAuthPolicyRecord,
   TenantAuthProviderRecord,
@@ -60,6 +61,7 @@ export const institutionAdminDashboardPage = (input: {
   badgeRuleVersions: readonly BadgeIssuanceRuleVersionRecord[];
   enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
+  breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
 }): string => {
   const templateById = new Map(input.badgeTemplates.map((template) => [template.id, template]));
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
@@ -324,6 +326,7 @@ export const institutionAdminDashboardPage = (input: {
     updatedAt: '',
   };
   const enterpriseAuthProviders = input.enterpriseAuthProviders ?? [];
+  const breakGlassAccounts = input.breakGlassAccounts ?? [];
   const enterpriseAuthProviderOptions = enterpriseAuthProviders
     .map((provider) => {
       const providerLabel = `${provider.label} (${provider.protocol})`;
@@ -480,6 +483,79 @@ export const institutionAdminDashboardPage = (input: {
               </tbody>
             </table>
           </div>
+          <section class="ct-stack" aria-labelledby="break-glass-accounts-title">
+            <h3 id="break-glass-accounts-title">Break-glass local accounts</h3>
+            <p>
+              Limit local fallback access to explicit accounts only. CredTrail emails setup links and records recent fallback usage.
+            </p>
+            <form id="break-glass-account-form" class="ct-admin__form ct-stack">
+              <label>
+                Institution email
+                <input name="email" type="email" required placeholder="admin@institution.edu" />
+              </label>
+              <label class="ct-admin__checkbox-row ct-checkbox-row">
+                <input name="sendEnrollmentEmail" type="checkbox" checked />
+                Email setup or password-reset link now
+              </label>
+              <button type="submit">Add break-glass account</button>
+            </form>
+            <p id="break-glass-account-status" class="ct-admin__status"></p>
+            <div class="ct-admin__table-wrap">
+              <table class="ct-admin__table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Local status</th>
+                    <th>Last used</th>
+                    <th>Enrollment email</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="break-glass-account-body">
+                  ${
+                    breakGlassAccounts.length === 0
+                      ? '<tr><td colspan="5" class="ct-admin__empty">No break-glass accounts configured yet.</td></tr>'
+                      : breakGlassAccounts
+                          .map((account) => {
+                            const localStatus = account.twoFactorEnabled
+                              ? 'MFA ready'
+                              : account.localCredentialEnabled
+                                ? 'Password ready'
+                                : 'Setup pending';
+
+                            return `<tr>
+                              <td><strong>${escapeHtml(account.email)}</strong><div class="ct-admin__meta">${escapeHtml(
+                                account.userId,
+                              )}</div></td>
+                              <td>${escapeHtml(localStatus)}</td>
+                              <td>${escapeHtml(
+                                account.lastUsedAt === null
+                                  ? 'Never'
+                                  : formatIsoTimestamp(account.lastUsedAt),
+                              )}</td>
+                              <td>${escapeHtml(
+                                account.lastEnrollmentEmailSentAt === null
+                                  ? 'Not sent'
+                                  : formatIsoTimestamp(account.lastEnrollmentEmailSentAt),
+                              )}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger"
+                                  data-break-glass-delete-user-id="${escapeHtml(account.userId)}"
+                                  data-break-glass-email="${escapeHtml(account.email)}"
+                                >
+                                  Revoke
+                                </button>
+                              </td>
+                            </tr>`;
+                          })
+                          .join('\n')
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
           ${
             enterpriseAuthProviders.length > 0
               ? `<details class="ct-admin__panel ct-admin__panel--nested">
@@ -505,6 +581,10 @@ export const institutionAdminDashboardPage = (input: {
     tenantUsersApiPathPrefix,
     authPolicyApiPath: input.tenant.planTier === 'enterprise' ? authPolicyApiPath : '',
     authProvidersApiPath: input.tenant.planTier === 'enterprise' ? authProvidersApiPath : '',
+    breakGlassAccountsApiPath:
+      input.tenant.planTier === 'enterprise'
+        ? `/v1/tenants/${encodeURIComponent(input.tenant.id)}/break-glass-accounts`
+        : '',
   });
   const workspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Institution admin workstreams">
     <article class="ct-admin__workspace-card ct-stack">

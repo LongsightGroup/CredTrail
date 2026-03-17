@@ -112,6 +112,35 @@ const resolveCredtrailUserId = async (
   return user.id;
 };
 
+export const resolveAuthenticatedPrincipalFromSession = async (input: {
+  db: SqlDatabase;
+  session: BetterAuthResolvedSession;
+  authSystem?: string | undefined;
+}): Promise<AuthenticatedPrincipal | null> => {
+  const authSessionId = input.session.sessionId.trim();
+
+  if (authSessionId.length === 0) {
+    return null;
+  }
+
+  const userId = await resolveCredtrailUserId(
+    input.db,
+    input.session,
+    input.authSystem ?? 'better_auth',
+  );
+
+  if (userId === null) {
+    return null;
+  }
+
+  return {
+    userId,
+    authSessionId,
+    authMethod: 'better_auth',
+    expiresAt: input.session.expiresAt,
+  };
+};
+
 export const resolveAuthenticatedPrincipal = async <
   ContextType extends BetterAuthAdapterContext<BindingsType>,
   BindingsType,
@@ -133,23 +162,16 @@ export const resolveAuthenticatedPrincipal = async <
     return null;
   }
 
-  const userId = await resolveCredtrailUserId(
-    input.resolveDatabase(context.env),
+  const principal = await resolveAuthenticatedPrincipalFromSession({
+    db: input.resolveDatabase(context.env),
     session,
-    input.authSystem ?? 'better_auth',
-  );
+    authSystem: input.authSystem,
+  });
 
-  if (userId === null) {
+  if (principal === null) {
     input.cacheAuthenticatedPrincipal?.(context, null);
     return null;
   }
-
-  const principal: AuthenticatedPrincipal = {
-    userId,
-    authSessionId,
-    authMethod: 'better_auth',
-    expiresAt: session.expiresAt,
-  };
 
   input.cacheAuthenticatedPrincipal?.(context, principal);
   return principal;
@@ -198,30 +220,16 @@ export const createMagicLinkSession = async <
     return null;
   }
 
-  const authSessionId = session.sessionId.trim();
-
-  if (authSessionId.length === 0) {
-    input.cacheAuthenticatedPrincipal?.(context, null);
-    return null;
-  }
-
-  const userId = await resolveCredtrailUserId(
-    input.resolveDatabase(context.env),
+  const principal = await resolveAuthenticatedPrincipalFromSession({
+    db: input.resolveDatabase(context.env),
     session,
-    input.authSystem ?? 'better_auth',
-  );
+    authSystem: input.authSystem,
+  });
 
-  if (userId === null) {
+  if (principal === null) {
     input.cacheAuthenticatedPrincipal?.(context, null);
     return null;
   }
-
-  const principal: AuthenticatedPrincipal = {
-    userId,
-    authSessionId,
-    authMethod: 'better_auth',
-    expiresAt: session.expiresAt,
-  };
 
   input.cacheAuthenticatedPrincipal?.(context, principal);
   return principal;

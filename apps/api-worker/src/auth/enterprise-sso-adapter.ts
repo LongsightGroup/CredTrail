@@ -13,6 +13,7 @@ import {
 import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth';
 import { buildBetterAuthRouteResponse } from './better-auth-bridge';
 import type { BetterAuthRuntimeConfig } from './better-auth-config';
+import { buildLocalLoginPath } from './break-glass-policy';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
 
 export interface EnterpriseSsoProviderOption {
@@ -27,6 +28,7 @@ export interface EnterpriseLoginExperience {
   tenantId: string;
   loginMode: TenantAuthPolicyRecord['loginMode'];
   localLoginAllowed: boolean;
+  explicitLocalLoginPath: string | null;
   enterpriseProviders: readonly EnterpriseSsoProviderOption[];
   autoStartPath: string | null;
   notice?: string | undefined;
@@ -393,6 +395,7 @@ export const createEnterpriseSsoAdapter = <
         tenantId: request.tenantId,
         loginMode: 'local',
         localLoginAllowed: true,
+        explicitLocalLoginPath: null,
         enterpriseProviders: [],
         autoStartPath: null,
       };
@@ -414,6 +417,13 @@ export const createEnterpriseSsoAdapter = <
       tenantId: request.tenantId,
       loginMode: state.policy.loginMode,
       localLoginAllowed: state.policy.loginMode !== 'sso_required',
+      explicitLocalLoginPath:
+        state.policy.loginMode === 'sso_required' && state.policy.breakGlassEnabled
+          ? buildLocalLoginPath({
+              tenantId: request.tenantId,
+              nextPath: normalizedNextPath,
+            })
+          : null,
       enterpriseProviders,
       autoStartPath,
       ...(state.policy.loginMode === 'sso_required' && enterpriseProviders.length === 0

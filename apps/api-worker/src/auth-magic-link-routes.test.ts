@@ -7,6 +7,11 @@ const {
   mockedStartEnterpriseSso,
   mockedProxyEnterpriseSsoCallback,
   mockedFinalizeEnterpriseSso,
+  mockedBreakGlassRequestPasswordReset,
+  mockedBreakGlassSignIn,
+  mockedBreakGlassEnrollTwoFactor,
+  mockedBreakGlassVerifyTwoFactor,
+  mockedBreakGlassResetPassword,
 } = vi.hoisted(() => {
   return {
     mockedResolveEnterpriseLoginExperience: vi.fn(),
@@ -14,6 +19,11 @@ const {
     mockedStartEnterpriseSso: vi.fn(),
     mockedProxyEnterpriseSsoCallback: vi.fn(),
     mockedFinalizeEnterpriseSso: vi.fn(),
+    mockedBreakGlassRequestPasswordReset: vi.fn(),
+    mockedBreakGlassSignIn: vi.fn(),
+    mockedBreakGlassEnrollTwoFactor: vi.fn(),
+    mockedBreakGlassVerifyTwoFactor: vi.fn(),
+    mockedBreakGlassResetPassword: vi.fn(),
   };
 });
 
@@ -50,6 +60,24 @@ vi.mock('./auth/enterprise-sso-adapter', () => {
       start: mockedStartEnterpriseSso,
       proxyCallback: mockedProxyEnterpriseSsoCallback,
       finalize: mockedFinalizeEnterpriseSso,
+    })),
+  };
+});
+
+vi.mock('./auth/break-glass-policy', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/break-glass-policy')>(
+      './auth/break-glass-policy',
+    );
+
+  return {
+    ...actual,
+    createBreakGlassPolicyAdapter: vi.fn(() => ({
+      requestPasswordReset: mockedBreakGlassRequestPasswordReset,
+      signIn: mockedBreakGlassSignIn,
+      enrollTwoFactor: mockedBreakGlassEnrollTwoFactor,
+      verifyTwoFactor: mockedBreakGlassVerifyTwoFactor,
+      resetPassword: mockedBreakGlassResetPassword,
     })),
   };
 });
@@ -321,6 +349,25 @@ beforeEach(() => {
     id: 'usr_123',
     email: 'learner@example.edu',
   });
+  mockedBreakGlassRequestPasswordReset.mockReset();
+  mockedBreakGlassRequestPasswordReset.mockResolvedValue('sent');
+  mockedBreakGlassSignIn.mockReset();
+  mockedBreakGlassSignIn.mockResolvedValue({
+    status: 'rejected',
+    reason: 'break_glass_invalid_credentials',
+  });
+  mockedBreakGlassEnrollTwoFactor.mockReset();
+  mockedBreakGlassEnrollTwoFactor.mockResolvedValue({
+    status: 'rejected',
+    reason: 'break_glass_enrollment_failed',
+  });
+  mockedBreakGlassVerifyTwoFactor.mockReset();
+  mockedBreakGlassVerifyTwoFactor.mockResolvedValue({
+    status: 'rejected',
+    reason: 'break_glass_invalid_code',
+  });
+  mockedBreakGlassResetPassword.mockReset();
+  mockedBreakGlassResetPassword.mockResolvedValue('rejected');
   mockedResolveEnterpriseLoginExperience.mockReset();
   mockedResolveEnterpriseLoginExperience.mockResolvedValue({
     tenantId: 'tenant_123',
@@ -444,6 +491,7 @@ describe('magic-link auth routes', () => {
       tenantId: 'tenant_123',
       loginMode: 'hybrid',
       localLoginAllowed: true,
+      explicitLocalLoginPath: null,
       enterpriseProviders: [
         {
           id: 'tap_oidc',
@@ -468,6 +516,112 @@ describe('magic-link auth routes', () => {
     expect(body).toContain('Institution sign-in');
     expect(body).toContain('Continue with Campus OIDC');
     expect(body).toContain('id="magic-link-login-form"');
+  });
+
+  it('renders explicit break-glass local sign-in link when SSO-required tenant enables fallback accounts', async () => {
+    mockedResolveEnterpriseLoginExperience.mockResolvedValue({
+      tenantId: 'tenant_123',
+      loginMode: 'sso_required',
+      localLoginAllowed: false,
+      explicitLocalLoginPath:
+        '/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      enterpriseProviders: [
+        {
+          id: 'tap_oidc',
+          label: 'Campus OIDC',
+          protocol: 'oidc',
+          isDefault: false,
+          startPath:
+            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        },
+      ],
+      autoStartPath: null,
+    });
+
+    const response = await app.request(
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('break-glass local sign-in');
+    expect(body).toContain('/login/local?tenantId=tenant_123&amp;next=%2Ftenants%2Ftenant_123%2Fadmin');
+  });
+
+  it('renders explicit break-glass local login page', async () => {
+    const response = await app.request(
+      '/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Break-glass local sign-in');
+    expect(body).toContain('action="/auth/local/sign-in"');
+    expect(body).toContain('action="/auth/local/reset-password/request"');
+  });
+
+  it('redirects local break-glass sign-in into MFA setup when Better Auth account exists without TOTP', async () => {
+    mockedBreakGlassSignIn.mockResolvedValue({
+      status: 'setup_required',
+    });
+
+    const response = await app.request(
+      '/auth/local/sign-in',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          tenantId: 'tenant_123',
+          next: '/tenants/tenant_123/admin',
+          email: 'admin@example.edu',
+          password: 'test-password',
+        }).toString(),
+      },
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      '/auth/local/two-factor/setup?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    );
+    expect(response.headers.get('set-cookie')).toContain('credtrail_break_glass_pending_mfa=');
+  });
+
+  it('redirects local break-glass verification into the requested tenant path on success', async () => {
+    mockedBreakGlassVerifyTwoFactor.mockResolvedValue({
+      status: 'authenticated',
+      principal: {
+        userId: 'usr_break_glass',
+        authSessionId: 'ba_session_123',
+        authMethod: 'better_auth',
+        expiresAt: '2026-03-17T01:00:00.000Z',
+      },
+    });
+
+    const response = await app.request(
+      '/auth/local/two-factor/verify',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          tenantId: 'tenant_123',
+          next: '/tenants/tenant_123/admin',
+          code: '123456',
+        }).toString(),
+      },
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
   });
 
   it('returns token + url in development mode for magic-link request', async () => {

@@ -3,9 +3,11 @@ import {
   createTenantApiKey,
   createAuditLog,
   createDelegatedIssuingAuthorityGrant,
+  ensureTenantMembership,
   createTenantOrgUnit,
   deleteTenantAuthProvider,
   deleteTenantSsoSamlConfiguration,
+  findActiveTenantBreakGlassAccountByUserId,
   findDelegatedIssuingAuthorityGrantById,
   findTenantAuthPolicy,
   findTenantAuthProviderById,
@@ -19,16 +21,20 @@ import {
   listTenantApiKeys,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
+  listTenantBreakGlassAccounts,
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
   removeTenantMembershipOrgUnitScope,
   revokeTenantApiKey,
+  revokeTenantBreakGlassAccount,
   revokeDelegatedIssuingAuthorityGrant,
   resolveTenantAuthPolicy,
   updateTenantAuthProvider,
+  upsertTenantBreakGlassAccount,
   upsertTenantAuthPolicy,
   upsertTenantSsoSamlConfiguration,
   upsertTenantMembershipOrgUnitScope,
+  upsertUserByEmail,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
@@ -36,6 +42,7 @@ import {
 import type { Hono } from 'hono';
 import {
   parseCreateTenantApiKeyRequest,
+  parseCreateTenantBreakGlassAccountRequest,
   parseTenantAuthProviderPathParams,
   parseCreateDelegatedIssuingAuthorityGrantRequest,
   parseRevokeTenantApiKeyRequest,
@@ -58,10 +65,18 @@ import { renderPageShell } from '@credtrail/ui-components';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import { institutionAdminDashboardPage } from '../admin/institution-admin-page';
 import { institutionAdminRuleBuilderPage } from '../admin/institution-admin-rule-builder-page';
+import { buildLocalTwoFactorPath } from '../auth/break-glass-policy';
 
 interface RegisterTenantGovernanceRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
+  requestBreakGlassPasswordReset?: (
+    c: AppContext,
+    input: {
+      tenantId: string;
+      email: string;
+    },
+  ) => Promise<'sent' | 'unavailable'>;
   generateOpaqueToken: () => string;
   sha256Hex: (value: string) => Promise<string>;
   requireTenantRole: (
@@ -85,6 +100,7 @@ export const registerTenantGovernanceRoutes = (
   const {
     app,
     resolveDatabase,
+    requestBreakGlassPasswordReset,
     generateOpaqueToken,
     sha256Hex,
     requireTenantRole,
@@ -167,6 +183,18 @@ export const registerTenantGovernanceRoutes = (
         );
       }
 
+      if (roleCheck.status === 423) {
+        return c.redirect(
+          buildLocalTwoFactorPath({
+            tenantId: pathParams.tenantId,
+            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
+            setup: true,
+            reason: 'break_glass_mfa_setup_pending',
+          }),
+          302,
+        );
+      }
+
       if (roleCheck.status === 403) {
         c.header('Cache-Control', 'no-store');
         return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
@@ -188,8 +216,16 @@ export const registerTenantGovernanceRoutes = (
       );
     }
 
-    const [currentUser, badgeTemplates, orgUnits, apiKeys, badgeRules, authPolicy, authProviders] =
-      await Promise.all([
+    const [
+      currentUser,
+      badgeTemplates,
+      orgUnits,
+      apiKeys,
+      badgeRules,
+      authPolicy,
+      authProviders,
+      breakGlassAccounts,
+    ] = await Promise.all([
       findUserById(db, session.userId),
       listBadgeTemplates(db, {
         tenantId: pathParams.tenantId,
@@ -209,6 +245,9 @@ export const registerTenantGovernanceRoutes = (
       tenant.planTier === 'enterprise' ? findTenantAuthPolicy(db, pathParams.tenantId) : Promise.resolve(null),
       tenant.planTier === 'enterprise'
         ? listTenantAuthProviders(db, pathParams.tenantId)
+        : Promise.resolve([]),
+      tenant.planTier === 'enterprise'
+        ? listTenantBreakGlassAccounts(db, pathParams.tenantId)
         : Promise.resolve([]),
     ]);
     const badgeRuleVersionLists = await Promise.all(
@@ -239,6 +278,7 @@ export const registerTenantGovernanceRoutes = (
         badgeRuleVersions,
         enterpriseAuthPolicy: authPolicy,
         enterpriseAuthProviders: authProviders,
+        breakGlassAccounts,
       }),
     );
   });
@@ -253,6 +293,18 @@ export const registerTenantGovernanceRoutes = (
           c,
           pathParams.tenantId,
           `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/rules/new`,
+        );
+      }
+
+      if (roleCheck.status === 423) {
+        return c.redirect(
+          buildLocalTwoFactorPath({
+            tenantId: pathParams.tenantId,
+            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/rules/new`,
+            setup: true,
+            reason: 'break_glass_mfa_setup_pending',
+          }),
+          302,
         );
       }
 
@@ -736,6 +788,150 @@ export const registerTenantGovernanceRoutes = (
         targetId: pathParams.providerId,
         metadata: {
           role: membershipRole,
+        },
+      });
+    }
+
+    return c.json({ removed });
+  });
+
+  app.get('/v1/tenants/:tenantId/break-glass-accounts', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const accounts = await listTenantBreakGlassAccounts(db, pathParams.tenantId);
+    return c.json(accounts);
+  });
+
+  app.post('/v1/tenants/:tenantId/break-glass-accounts', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let request: ReturnType<typeof parseCreateTenantBreakGlassAccountRequest>;
+
+    try {
+      request = parseCreateTenantBreakGlassAccountRequest(await c.req.json<unknown>());
+    } catch {
+      return c.json(
+        {
+          error: 'Invalid break-glass account payload',
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const user = await upsertUserByEmail(db, request.email);
+    const membershipResult = await ensureTenantMembership(db, pathParams.tenantId, user.id);
+    const account = await upsertTenantBreakGlassAccount(db, {
+      tenantId: pathParams.tenantId,
+      userId: user.id,
+      createdByUserId: session.userId,
+    });
+    const passwordResetStatus =
+      request.sendEnrollmentEmail === false || requestBreakGlassPasswordReset === undefined
+        ? 'skipped'
+        : await requestBreakGlassPasswordReset(c, {
+            tenantId: pathParams.tenantId,
+            email: request.email,
+          });
+
+    if (membershipResult.created) {
+      await createAuditLog(db, {
+        tenantId: pathParams.tenantId,
+        actorUserId: session.userId,
+        action: 'membership.role_assigned',
+        targetType: 'membership',
+        targetId: `${pathParams.tenantId}:${user.id}`,
+        metadata: {
+          userId: user.id,
+          role: membershipResult.membership.role,
+        },
+      });
+    }
+
+    await createAuditLog(db, {
+      tenantId: pathParams.tenantId,
+      actorUserId: session.userId,
+      action: 'tenant.break_glass_account_upserted',
+      targetType: 'tenant_break_glass_account',
+      targetId: `${pathParams.tenantId}:${user.id}`,
+      metadata: {
+        role: membershipRole,
+        email: request.email,
+        sendEnrollmentEmail: request.sendEnrollmentEmail !== false,
+        passwordResetStatus,
+      },
+    });
+
+    return c.json(
+      {
+        account,
+        passwordResetStatus,
+      },
+      201,
+    );
+  });
+
+  app.delete('/v1/tenants/:tenantId/break-glass-accounts/:userId', async (c) => {
+    const pathParams = parseTenantUserPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const enterpriseCheck = await requireEnterpriseTenant(c, pathParams.tenantId, db);
+
+    if (enterpriseCheck !== null) {
+      return enterpriseCheck;
+    }
+
+    const existingAccount = await findActiveTenantBreakGlassAccountByUserId(
+      db,
+      pathParams.tenantId,
+      pathParams.userId,
+    );
+    const removed = await revokeTenantBreakGlassAccount(db, {
+      tenantId: pathParams.tenantId,
+      userId: pathParams.userId,
+      revokedAt: new Date().toISOString(),
+    });
+
+    if (removed) {
+      await createAuditLog(db, {
+        tenantId: pathParams.tenantId,
+        actorUserId: session.userId,
+        action: 'tenant.break_glass_account_revoked',
+        targetType: 'tenant_break_glass_account',
+        targetId: `${pathParams.tenantId}:${pathParams.userId}`,
+        metadata: {
+          role: membershipRole,
+          email: existingAccount?.email ?? null,
         },
       });
     }

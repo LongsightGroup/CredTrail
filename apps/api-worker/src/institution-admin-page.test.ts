@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockedFindTenantAuthPolicy, mockedListTenantAuthProviders } = vi.hoisted(() => {
+const {
+  mockedFindTenantAuthPolicy,
+  mockedListTenantAuthProviders,
+  mockedListTenantBreakGlassAccounts,
+} = vi.hoisted(() => {
   return {
     mockedFindTenantAuthPolicy: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
+    mockedListTenantBreakGlassAccounts: vi.fn(),
   };
 });
 
@@ -19,6 +24,7 @@ vi.mock('@credtrail/db', async () => {
     findUserById: vi.fn(),
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
+    listTenantBreakGlassAccounts: mockedListTenantBreakGlassAccounts,
     listTenantAuthProviders: mockedListTenantAuthProviders,
     listBadgeTemplates: vi.fn(),
     listTenantApiKeys: vi.fn(),
@@ -253,6 +259,23 @@ beforeEach(() => {
       updatedAt: '2026-02-18T12:00:00.000Z',
     },
   ]);
+  mockedListTenantBreakGlassAccounts.mockReset();
+  mockedListTenantBreakGlassAccounts.mockResolvedValue([
+    {
+      tenantId: 'tenant_123',
+      userId: 'usr_break_glass',
+      email: 'admin@tenant-123.edu',
+      createdByUserId: 'usr_admin',
+      lastUsedAt: null,
+      lastEnrollmentEmailSentAt: '2026-02-18T12:05:00.000Z',
+      revokedAt: null,
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:05:00.000Z',
+      betterAuthUserId: 'ba_usr_break_glass',
+      localCredentialEnabled: true,
+      twoFactorEnabled: true,
+    },
+  ]);
 });
 
 describe('GET /tenants/:tenantId/admin', () => {
@@ -448,6 +471,9 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('Campus OIDC');
     expect(body).toContain('id="enterprise-auth-policy-form"');
     expect(body).toContain('id="enterprise-auth-provider-form"');
+    expect(body).toContain('Break-glass local accounts');
+    expect(body).toContain('admin@tenant-123.edu');
+    expect(body).toContain('/v1/tenants/tenant_123/break-glass-accounts');
     expect(body).toContain('/v1/tenants/tenant_123/auth-policy');
     expect(body).toContain('/v1/tenants/tenant_123/auth-providers');
   });

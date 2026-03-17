@@ -7,7 +7,7 @@ import {
   type DBAdapterInstance,
   type JoinConfig,
 } from 'better-auth/adapters';
-import { magicLink } from 'better-auth/plugins';
+import { magicLink, twoFactor } from 'better-auth/plugins';
 import { genericOAuth, type GenericOAuthConfig } from 'better-auth/plugins/generic-oauth';
 import type { BetterAuthRuntimeConfig } from './better-auth-config';
 
@@ -15,13 +15,14 @@ const BETTER_AUTH_BASE_PATH = '/api/auth';
 const REQUESTED_TENANT_COOKIE_NAME = 'credtrail_requested_tenant';
 const HOSTED_MAGIC_LINK_TOKEN_PREFIX = 'ctml';
 
-type SupportedAuthModel = 'user' | 'session' | 'account' | 'verification';
+type SupportedAuthModel = 'user' | 'session' | 'account' | 'verification' | 'twoFactor';
 
 const MODEL_TABLES: Record<SupportedAuthModel, string> = {
   user: 'auth.user',
   session: 'auth.session',
   account: 'auth.account',
   verification: 'auth.verification',
+  twoFactor: 'auth.two_factor',
 };
 
 const quoteIdentifier = (identifier: string): string => {
@@ -556,8 +557,17 @@ export const createCredtrailBetterAuth = (input: {
     token: string;
     url: string;
   }) => Promise<void>;
+  sendResetPassword?: (
+    data: {
+      email: string;
+      url: string;
+      token: string;
+    },
+  ) => Promise<void>;
 }) => {
-  const plugins: Array<ReturnType<typeof magicLink> | ReturnType<typeof genericOAuth>> = [
+  const plugins: Array<
+    ReturnType<typeof magicLink> | ReturnType<typeof genericOAuth> | ReturnType<typeof twoFactor>
+  > = [
     magicLink({
       expiresIn: input.magicLinkTtlSeconds,
       generateToken: () => {
@@ -571,6 +581,7 @@ export const createCredtrailBetterAuth = (input: {
         });
       },
     }),
+    twoFactor(),
   ];
 
   if (input.oauthProviders !== undefined && input.oauthProviders.length > 0) {
@@ -586,6 +597,17 @@ export const createCredtrailBetterAuth = (input: {
     basePath: BETTER_AUTH_BASE_PATH,
     ...(input.runtimeConfig.secret === null ? {} : { secret: input.runtimeConfig.secret }),
     trustedOrigins: input.runtimeConfig.trustedOrigins,
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: async ({ user, url, token }) => {
+        await input.sendResetPassword?.({
+          email: user.email,
+          url,
+          token,
+        });
+      },
+      revokeSessionsOnPasswordReset: true,
+    },
     database: createBetterAuthDatabaseAdapter(input.db),
     session: {
       expiresIn: input.runtimeConfig.session.expiresInSeconds,

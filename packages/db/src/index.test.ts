@@ -7,6 +7,7 @@ import {
   createTenantAuthProvider,
   createAuthIdentityLink,
   createLearnerProfile,
+  findActiveTenantBreakGlassAccountByEmail,
   findTenantAuthPolicy,
   listTenantAuthProviders,
   findLearnerProfileByIdentity,
@@ -14,12 +15,17 @@ import {
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
   findUserByEmail,
+  listTenantBreakGlassAccounts,
   listLearnerIdentitiesByProfile,
+  markTenantBreakGlassAccountUsed,
+  markTenantBreakGlassEnrollmentEmailSent,
   normalizeLearnerIdentityValue,
+  revokeTenantBreakGlassAccount,
   resolveTenantAuthPolicy,
   resolveLearnerProfileForIdentity,
   resolveLearnerProfileFromSaml,
   updateTenantAuthProvider,
+  upsertTenantBreakGlassAccount,
   upsertTenantAuthPolicy,
   upsertUserByEmail,
   type LearnerIdentityType,
@@ -99,6 +105,17 @@ interface FakeLegacySamlConfigurationRow {
   assertion_consumer_service_url: string;
   name_id_format: string | null;
   enforced: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeTenantBreakGlassAccountRow {
+  tenant_id: string;
+  user_id: string;
+  created_by_user_id: string | null;
+  last_used_at: string | null;
+  last_enrollment_email_sent_at: string | null;
+  revoked_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -763,6 +780,11 @@ class FakeTenantAuthStatement {
   run(): Promise<SqlRunResult> {
     const normalizedSql = this.normalizedSql();
 
+    if (normalizedSql.includes('INSERT INTO users')) {
+      this.insertUser();
+      return Promise.resolve(this.successResult(1));
+    }
+
     if (normalizedSql.includes('INSERT INTO tenant_auth_policies')) {
       return Promise.resolve(this.upsertTenantAuthPolicy());
     }
@@ -804,11 +826,44 @@ class FakeTenantAuthStatement {
       return Promise.resolve(this.clearPolicyDefaultProvider());
     }
 
+    if (normalizedSql.includes('INSERT INTO tenant_break_glass_accounts')) {
+      return Promise.resolve(this.upsertTenantBreakGlassAccount());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
+      normalizedSql.includes('SET revoked_at = ?')
+    ) {
+      return Promise.resolve(this.revokeTenantBreakGlassAccount());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
+      normalizedSql.includes('SET last_used_at = ?')
+    ) {
+      return Promise.resolve(this.markTenantBreakGlassAccountUsed());
+    }
+
+    if (
+      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
+      normalizedSql.includes('SET last_enrollment_email_sent_at = ?')
+    ) {
+      return Promise.resolve(this.markTenantBreakGlassEnrollmentEmailSent());
+    }
+
     throw new Error(`Unsupported run SQL in fake tenant auth DB: ${normalizedSql}`);
   }
 
   first<T>(): Promise<T | null> {
     const normalizedSql = this.normalizedSql();
+
+    if (normalizedSql.includes('FROM users WHERE email = ?')) {
+      return Promise.resolve(this.selectUserByEmail() as T | null);
+    }
+
+    if (normalizedSql.includes('FROM users WHERE id = ?')) {
+      return Promise.resolve(this.selectUserById() as T | null);
+    }
 
     if (normalizedSql.includes('FROM tenant_auth_policies')) {
       return Promise.resolve(this.selectTenantAuthPolicy() as T | null);
@@ -825,6 +880,20 @@ class FakeTenantAuthStatement {
       return Promise.resolve(this.selectLegacySamlConfiguration() as T | null);
     }
 
+    if (
+      normalizedSql.includes('FROM tenant_break_glass_accounts AS account') &&
+      normalizedSql.includes('account.user_id = ?')
+    ) {
+      return Promise.resolve(this.selectTenantBreakGlassAccountByUserId() as T | null);
+    }
+
+    if (
+      normalizedSql.includes('FROM tenant_break_glass_accounts AS account') &&
+      normalizedSql.includes('users.email = ?')
+    ) {
+      return Promise.resolve(this.selectTenantBreakGlassAccountByEmail() as T | null);
+    }
+
     throw new Error(`Unsupported first SQL in fake tenant auth DB: ${normalizedSql}`);
   }
 
@@ -838,11 +907,35 @@ class FakeTenantAuthStatement {
       });
     }
 
+    if (normalizedSql.includes('FROM tenant_break_glass_accounts AS account')) {
+      return Promise.resolve({
+        ...this.successResult(),
+        results: this.selectTenantBreakGlassAccounts() as T[],
+      });
+    }
+
     throw new Error(`Unsupported all SQL in fake tenant auth DB: ${normalizedSql}`);
   }
 
   private normalizedSql(): string {
     return this.sql.replace(/\s+/g, ' ').trim();
+  }
+
+  private insertUser(): void {
+    const [id, email] = this.boundParams;
+
+    if (typeof id !== 'string' || typeof email !== 'string') {
+      throw new Error('Invalid bound parameters for user insert');
+    }
+
+    const existingUser = this.db.users.find((row) => row.email === email);
+
+    if (existingUser === undefined) {
+      this.db.users.push({
+        id,
+        email,
+      });
+    }
   }
 
   private upsertTenantAuthPolicy(): SqlRunResult {
@@ -1046,6 +1139,156 @@ class FakeTenantAuthStatement {
     return this.successResult(rowsWritten);
   }
 
+  private upsertTenantBreakGlassAccount(): SqlRunResult {
+    const [tenantId, userId, createdByUserId, lastEnrollmentEmailSentAt, createdAt, updatedAt] =
+      this.boundParams;
+
+    if (
+      typeof tenantId !== 'string' ||
+      typeof userId !== 'string' ||
+      (createdByUserId !== null && typeof createdByUserId !== 'string') ||
+      (lastEnrollmentEmailSentAt !== null && typeof lastEnrollmentEmailSentAt !== 'string') ||
+      typeof createdAt !== 'string' ||
+      typeof updatedAt !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant break-glass account upsert');
+    }
+
+    const existing = this.db.tenantBreakGlassAccounts.find((row) => {
+      return row.tenant_id === tenantId && row.user_id === userId;
+    });
+
+    if (existing === undefined) {
+      this.db.tenantBreakGlassAccounts.push({
+        tenant_id: tenantId,
+        user_id: userId,
+        created_by_user_id: createdByUserId,
+        last_used_at: null,
+        last_enrollment_email_sent_at: lastEnrollmentEmailSentAt,
+        revoked_at: null,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      });
+      return this.successResult(1);
+    }
+
+    existing.created_by_user_id = createdByUserId;
+    existing.last_enrollment_email_sent_at =
+      lastEnrollmentEmailSentAt ?? existing.last_enrollment_email_sent_at;
+    existing.revoked_at = null;
+    existing.updated_at = updatedAt;
+    return this.successResult(1);
+  }
+
+  private revokeTenantBreakGlassAccount(): SqlRunResult {
+    const [revokedAt, updatedAt, tenantId, userId] = this.boundParams;
+
+    if (
+      typeof revokedAt !== 'string' ||
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof userId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant break-glass revoke');
+    }
+
+    const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.user_id === userId && candidate.revoked_at === null;
+    });
+
+    if (row === undefined) {
+      return this.successResult(0);
+    }
+
+    row.revoked_at = revokedAt;
+    row.updated_at = updatedAt;
+    return this.successResult(1);
+  }
+
+  private markTenantBreakGlassAccountUsed(): SqlRunResult {
+    const [usedAt, updatedAt, tenantId, userId] = this.boundParams;
+
+    if (
+      typeof usedAt !== 'string' ||
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof userId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for tenant break-glass usage');
+    }
+
+    const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.user_id === userId;
+    });
+
+    if (row === undefined) {
+      return this.successResult(0);
+    }
+
+    row.last_used_at = usedAt;
+    row.updated_at = updatedAt;
+    return this.successResult(1);
+  }
+
+  private markTenantBreakGlassEnrollmentEmailSent(): SqlRunResult {
+    const [sentAt, updatedAt, tenantId, userId] = this.boundParams;
+
+    if (
+      typeof sentAt !== 'string' ||
+      typeof updatedAt !== 'string' ||
+      typeof tenantId !== 'string' ||
+      typeof userId !== 'string'
+    ) {
+      throw new Error('Invalid bound parameters for break-glass enrollment email mark');
+    }
+
+    const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.user_id === userId;
+    });
+
+    if (row === undefined) {
+      return this.successResult(0);
+    }
+
+    row.last_enrollment_email_sent_at = sentAt;
+    row.updated_at = updatedAt;
+    return this.successResult(1);
+  }
+
+  private selectUserByEmail(): Record<string, unknown> | null {
+    const [email] = this.boundParams;
+
+    if (typeof email !== 'string') {
+      throw new Error('Invalid bound parameters for user select by email');
+    }
+
+    const row = this.db.users.find((candidate) => candidate.email === email);
+
+    return row === undefined
+      ? null
+      : {
+          id: row.id,
+          email: row.email,
+        };
+  }
+
+  private selectUserById(): Record<string, unknown> | null {
+    const [userId] = this.boundParams;
+
+    if (typeof userId !== 'string') {
+      throw new Error('Invalid bound parameters for user select by id');
+    }
+
+    const row = this.db.users.find((candidate) => candidate.id === userId);
+
+    return row === undefined
+      ? null
+      : {
+          id: row.id,
+          email: row.email,
+        };
+  }
+
   private selectTenantAuthPolicy(): Record<string, unknown> | null {
     const [tenantId] = this.boundParams;
 
@@ -1132,6 +1375,40 @@ class FakeTenantAuthStatement {
     };
   }
 
+  private selectTenantBreakGlassAccountByUserId(): Record<string, unknown> | null {
+    const [tenantId, userId] = this.boundParams;
+
+    if (typeof tenantId !== 'string' || typeof userId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant break-glass lookup by user');
+    }
+
+    const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.user_id === userId && candidate.revoked_at === null;
+    });
+
+    return row === undefined ? null : this.mapTenantBreakGlassAccount(row);
+  }
+
+  private selectTenantBreakGlassAccountByEmail(): Record<string, unknown> | null {
+    const [tenantId, email] = this.boundParams;
+
+    if (typeof tenantId !== 'string' || typeof email !== 'string') {
+      throw new Error('Invalid bound parameters for tenant break-glass lookup by email');
+    }
+
+    const user = this.db.users.find((candidate) => candidate.email === email);
+
+    if (user === undefined) {
+      return null;
+    }
+
+    const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.user_id === user.id && candidate.revoked_at === null;
+    });
+
+    return row === undefined ? null : this.mapTenantBreakGlassAccount(row);
+  }
+
   private mapTenantAuthProvider(row: FakeTenantAuthProviderRow): Record<string, unknown> {
     return {
       id: row.id,
@@ -1146,6 +1423,46 @@ class FakeTenantAuthStatement {
     };
   }
 
+  private selectTenantBreakGlassAccounts(): Record<string, unknown>[] {
+    const [tenantId] = this.boundParams;
+
+    if (typeof tenantId !== 'string') {
+      throw new Error('Invalid bound parameters for tenant break-glass list');
+    }
+
+    return this.db.tenantBreakGlassAccounts
+      .filter((row) => row.tenant_id === tenantId)
+      .map((row) => this.mapTenantBreakGlassAccount(row));
+  }
+
+  private mapTenantBreakGlassAccount(row: FakeTenantBreakGlassAccountRow): Record<string, unknown> {
+    const user = this.db.users.find((candidate) => candidate.id === row.user_id);
+    const betterAuthUser = user
+      ? this.db.betterAuthUsers.find((candidate) => candidate.email === user.email)
+      : undefined;
+    const betterAuthAccount =
+      betterAuthUser === undefined
+        ? undefined
+        : this.db.betterAuthAccounts.find((candidate) => {
+            return candidate.user_id === betterAuthUser.id && candidate.provider_id === 'credential';
+          });
+
+    return {
+      tenantId: row.tenant_id,
+      userId: row.user_id,
+      email: user?.email ?? '',
+      createdByUserId: row.created_by_user_id,
+      lastUsedAt: row.last_used_at,
+      lastEnrollmentEmailSentAt: row.last_enrollment_email_sent_at,
+      revokedAt: row.revoked_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      betterAuthUserId: betterAuthUser?.id ?? null,
+      localCredentialEnabled: betterAuthAccount?.password ? 1 : 0,
+      twoFactorEnabled: betterAuthUser?.two_factor_enabled ?? 0,
+    };
+  }
+
   private successResult(rowsWritten = 0): SqlRunResult {
     return {
       success: true,
@@ -1157,9 +1474,21 @@ class FakeTenantAuthStatement {
 }
 
 class FakeTenantAuthSqlDatabase {
+  users: FakeUserRow[] = [];
   tenantAuthPolicies: FakeTenantAuthPolicyRow[] = [];
   tenantAuthProviders: FakeTenantAuthProviderRow[] = [];
+  tenantBreakGlassAccounts: FakeTenantBreakGlassAccountRow[] = [];
   legacySamlConfigurations: FakeLegacySamlConfigurationRow[] = [];
+  betterAuthUsers: Array<{
+    id: string;
+    email: string;
+    two_factor_enabled: number;
+  }> = [];
+  betterAuthAccounts: Array<{
+    user_id: string;
+    provider_id: string;
+    password: string | null;
+  }> = [];
 
   prepare(sql: string): FakeTenantAuthStatement {
     return new FakeTenantAuthStatement(this, sql);
@@ -1505,6 +1834,74 @@ describe('tenant auth policy and provider helpers', () => {
     expect(configJson).toContain('idpEntityId');
     expect(configJson).toContain('idpCertificatePem');
   });
+
+  it('stores break-glass accounts with enrollment and usage status', async () => {
+    const db = createFakeTenantAuthDb();
+    const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
+    const user = await upsertUserByEmail(db, 'Admin@Example.edu');
+
+    tenantAuthDb.betterAuthUsers.push({
+      id: 'ba_usr_admin',
+      email: 'admin@example.edu',
+      two_factor_enabled: 1,
+    });
+    tenantAuthDb.betterAuthAccounts.push({
+      user_id: 'ba_usr_admin',
+      provider_id: 'credential',
+      password: 'hashed-password',
+    });
+
+    await upsertTenantBreakGlassAccount(db, {
+      tenantId: 'tenant_123',
+      userId: user.id,
+      createdByUserId: 'usr_owner',
+    });
+    await markTenantBreakGlassEnrollmentEmailSent(db, {
+      tenantId: 'tenant_123',
+      userId: user.id,
+      sentAt: '2026-03-16T12:05:00.000Z',
+    });
+    await markTenantBreakGlassAccountUsed(db, {
+      tenantId: 'tenant_123',
+      userId: user.id,
+      usedAt: '2026-03-16T12:10:00.000Z',
+    });
+
+    const listed = await listTenantBreakGlassAccounts(db, 'tenant_123');
+    const resolved = await findActiveTenantBreakGlassAccountByEmail(
+      db,
+      'tenant_123',
+      'admin@example.edu',
+    );
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toEqual(
+      expect.objectContaining({
+        tenantId: 'tenant_123',
+        userId: user.id,
+        email: 'admin@example.edu',
+        betterAuthUserId: 'ba_usr_admin',
+        localCredentialEnabled: true,
+        twoFactorEnabled: true,
+      }),
+    );
+    expect(resolved?.lastEnrollmentEmailSentAt).toBe('2026-03-16T12:05:00.000Z');
+    expect(resolved?.lastUsedAt).toBe('2026-03-16T12:10:00.000Z');
+
+    const removed = await revokeTenantBreakGlassAccount(db, {
+      tenantId: 'tenant_123',
+      userId: user.id,
+      revokedAt: '2026-03-16T12:20:00.000Z',
+    });
+    const resolvedAfterRevoke = await findActiveTenantBreakGlassAccountByEmail(
+      db,
+      'tenant_123',
+      'admin@example.edu',
+    );
+
+    expect(removed).toBe(true);
+    expect(resolvedAfterRevoke).toBeNull();
+  });
 });
 
 describe('better auth core migration', () => {
@@ -1557,5 +1954,23 @@ describe('better auth core migration', () => {
     expect(ssoSql).toContain('idx_auth_user_email');
     expect(ssoSql).toContain('idx_auth_account_provider_user');
     expect(ssoSql).not.toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
+  });
+
+  it('adds Better Auth two-factor and tenant break-glass migrations', () => {
+    const twoFactorSql = readFileSync(
+      new URL('../migrations/0030_better_auth_two_factor.sql', import.meta.url),
+      'utf8',
+    );
+    const breakGlassSql = readFileSync(
+      new URL('../migrations/0031_tenant_break_glass_accounts.sql', import.meta.url),
+      'utf8',
+    );
+
+    expect(twoFactorSql).toContain('ALTER TABLE auth.user');
+    expect(twoFactorSql).toContain('two_factor_enabled');
+    expect(twoFactorSql).toContain('CREATE TABLE IF NOT EXISTS auth.two_factor');
+    expect(breakGlassSql).toContain('CREATE TABLE IF NOT EXISTS tenant_break_glass_accounts');
+    expect(breakGlassSql).toContain('last_enrollment_email_sent_at');
+    expect(breakGlassSql).toContain('idx_tenant_break_glass_accounts_tenant_active');
   });
 });
