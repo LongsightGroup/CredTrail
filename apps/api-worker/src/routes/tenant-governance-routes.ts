@@ -13,6 +13,7 @@ import {
   findTenantAuthProviderById,
   findTenantById,
   findUserById,
+  listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
   findTenantSsoSamlConfiguration,
   listBadgeIssuanceRules,
@@ -66,6 +67,7 @@ import type { AppBindings, AppContext, AppEnv } from '../app';
 import { institutionAdminDashboardPage } from '../admin/institution-admin-page';
 import { institutionAdminRuleBuilderPage } from '../admin/institution-admin-rule-builder-page';
 import { buildLocalTwoFactorPath } from '../auth/break-glass-policy';
+import { buildOrganizationsPath } from '../auth/tenant-context-selection';
 
 interface RegisterTenantGovernanceRoutesInput {
   app: Hono<AppEnv>;
@@ -261,6 +263,12 @@ export const registerTenantGovernanceRoutes = (
     const badgeRuleVersions = badgeRuleVersionLists.flat();
     const activeApiKeys = apiKeys.filter((apiKey) => apiKey.revokedAt === null);
     const revokedApiKeyCount = apiKeys.length - activeApiKeys.length;
+    const accessibleTenantContexts = await listAccessibleTenantContextsForUser(db, session.userId);
+    const requestUrl = new URL(c.req.url);
+    const switchOrganizationPath =
+      accessibleTenantContexts.length > 1
+        ? buildOrganizationsPath(`${requestUrl.pathname}${requestUrl.search}`)
+        : null;
 
     c.header('Cache-Control', 'no-store');
 
@@ -279,6 +287,7 @@ export const registerTenantGovernanceRoutes = (
         enterpriseAuthPolicy: authPolicy,
         enterpriseAuthProviders: authProviders,
         breakGlassAccounts,
+        switchOrganizationPath,
       }),
     );
   });

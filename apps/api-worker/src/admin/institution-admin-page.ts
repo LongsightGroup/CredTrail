@@ -62,6 +62,7 @@ export const institutionAdminDashboardPage = (input: {
   enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
   breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
+  switchOrganizationPath?: string | null;
 }): string => {
   const templateById = new Map(input.badgeTemplates.map((template) => [template.id, template]));
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
@@ -258,6 +259,7 @@ export const institutionAdminDashboardPage = (input: {
   const revokedApiKeyCount = String(input.revokedApiKeyCount);
   const ruleCount = String(input.badgeRules.length);
   const userLabel = input.userEmail ?? input.userId;
+  const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? '';
   const orgUnitParentOptions = input.orgUnits
     .filter((orgUnit) => orgUnit.isActive)
     .map((orgUnit) => {
@@ -662,6 +664,11 @@ export const institutionAdminDashboardPage = (input: {
           <a href="#issued-badges-panel">Issued ledger</a>
           <a href="${escapeHtml(adminAuditLogPath)}">Audit logs</a>
           <a href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
+          ${
+            switchOrganizationPath.length === 0
+              ? ''
+              : `<a href="${escapeHtml(switchOrganizationPath)}">Switch organization</a>`
+          }
         </nav>
       </header>
       ${workspaceCardsMarkup}

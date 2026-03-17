@@ -162,6 +162,14 @@ export interface TenantMembershipRecord {
   updatedAt: string;
 }
 
+export interface AccessibleTenantContextRecord {
+  tenantId: string;
+  tenantSlug: string;
+  tenantDisplayName: string;
+  tenantPlanTier: TenantPlanTier;
+  membershipRole: TenantMembershipRole;
+}
+
 export interface UpsertTenantMembershipRoleInput {
   tenantId: string;
   userId: string;
@@ -1774,6 +1782,14 @@ interface TenantMembershipRow {
   role: TenantMembershipRole;
   createdAt: string;
   updatedAt: string;
+}
+
+interface AccessibleTenantContextRow {
+  tenantId: string;
+  tenantSlug: string;
+  tenantDisplayName: string;
+  tenantPlanTier: TenantPlanTier;
+  membershipRole: TenantMembershipRole;
 }
 
 interface TenantMembershipOrgUnitScopeRow {
@@ -4542,6 +4558,33 @@ export const findTenantMembership = async (
   return mapTenantMembershipRow(row);
 };
 
+export const listAccessibleTenantContextsForUser = async (
+  db: SqlDatabase,
+  userId: string,
+): Promise<AccessibleTenantContextRecord[]> => {
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        memberships.tenant_id AS tenantId,
+        tenants.slug AS tenantSlug,
+        tenants.display_name AS tenantDisplayName,
+        tenants.plan_tier AS tenantPlanTier,
+        memberships.role AS membershipRole
+      FROM memberships
+      INNER JOIN tenants
+        ON tenants.id = memberships.tenant_id
+      WHERE memberships.user_id = ?
+        AND tenants.is_active = 1
+      ORDER BY lower(tenants.display_name), tenants.slug, memberships.tenant_id
+    `,
+    )
+    .bind(userId)
+    .all<AccessibleTenantContextRow>();
+
+  return result.results.map(mapAccessibleTenantContextRow);
+};
+
 export const upsertTenantMembershipRole = async (
   db: SqlDatabase,
   input: UpsertTenantMembershipRoleInput,
@@ -6475,6 +6518,18 @@ const mapTenantMembershipRow = (row: TenantMembershipRow): TenantMembershipRecor
     role: row.role,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+};
+
+const mapAccessibleTenantContextRow = (
+  row: AccessibleTenantContextRow,
+): AccessibleTenantContextRecord => {
+  return {
+    tenantId: row.tenantId,
+    tenantSlug: row.tenantSlug,
+    tenantDisplayName: row.tenantDisplayName,
+    tenantPlanTier: row.tenantPlanTier,
+    membershipRole: row.membershipRole,
   };
 };
 

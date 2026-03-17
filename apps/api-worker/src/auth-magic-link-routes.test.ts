@@ -12,6 +12,7 @@ const {
   mockedBreakGlassEnrollTwoFactor,
   mockedBreakGlassVerifyTwoFactor,
   mockedBreakGlassResetPassword,
+  mockedListAccessibleTenantContextsForUserFn,
 } = vi.hoisted(() => {
   return {
     mockedResolveEnterpriseLoginExperience: vi.fn(),
@@ -24,6 +25,7 @@ const {
     mockedBreakGlassEnrollTwoFactor: vi.fn(),
     mockedBreakGlassVerifyTwoFactor: vi.fn(),
     mockedBreakGlassResetPassword: vi.fn(),
+    mockedListAccessibleTenantContextsForUserFn: vi.fn(),
   };
 });
 
@@ -39,6 +41,7 @@ vi.mock('@credtrail/db', async () => {
     findActiveSessionByHash: vi.fn(),
     findMagicLinkTokenByHash: vi.fn(),
     isMagicLinkTokenValid: vi.fn(),
+    listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUserFn,
     markMagicLinkTokenUsed: vi.fn(),
     revokeSessionByHash: vi.fn(),
     touchSession: vi.fn(),
@@ -90,6 +93,7 @@ import {
   findActiveSessionByHash,
   findMagicLinkTokenByHash,
   isMagicLinkTokenValid,
+  listAccessibleTenantContextsForUser,
   markMagicLinkTokenUsed,
   revokeSessionByHash,
   touchSession,
@@ -108,6 +112,7 @@ const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
 const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindMagicLinkTokenByHash = vi.mocked(findMagicLinkTokenByHash);
 const mockedIsMagicLinkTokenValid = vi.mocked(isMagicLinkTokenValid);
+const mockedListAccessibleTenantContextsForUser = vi.mocked(listAccessibleTenantContextsForUser);
 const mockedMarkMagicLinkTokenUsed = vi.mocked(markMagicLinkTokenUsed);
 const mockedRevokeSessionByHash = vi.mocked(revokeSessionByHash);
 const mockedTouchSession = vi.mocked(touchSession);
@@ -173,11 +178,13 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     authMethod: 'better_auth';
     expiresAt: string;
   };
-  betterAuthRequestedTenant?: {
-    tenantId: string;
-    source: 'route' | 'legacy_session';
-    authoritative: boolean;
-  };
+  betterAuthRequestedTenant?:
+    | {
+        tenantId: string;
+        source: 'route' | 'legacy_session';
+        authoritative: boolean;
+      }
+    | null;
 }): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
@@ -191,11 +198,14 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     authMethod: 'better_auth' as const,
     expiresAt: '2026-02-18T22:00:00.000Z',
   };
-  const betterAuthRequestedTenant = options?.betterAuthRequestedTenant ?? {
-    tenantId: 'tenant_123',
-    source: 'route' as const,
-    authoritative: true,
-  };
+  const betterAuthRequestedTenant =
+    options?.betterAuthRequestedTenant === undefined
+      ? {
+          tenantId: 'tenant_123',
+          source: 'route' as const,
+          authoritative: true,
+        }
+      : options.betterAuthRequestedTenant;
   let betterAuthAuthenticated = options?.betterAuthInitiallyAuthenticated ?? false;
 
   const betterAuthProvider: MockedInternalAuthProvider = {
@@ -208,7 +218,7 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
           expiresAt: '2026-02-18T12:10:00.000Z',
           debugMagicLinkToken: 'better-token-1234567890',
           debugMagicLinkUrl:
-            'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+            'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
         },
       ),
     ),
@@ -338,6 +348,16 @@ beforeEach(() => {
   mockedFindActiveSessionByHash.mockReset();
   mockedFindMagicLinkTokenByHash.mockReset();
   mockedIsMagicLinkTokenValid.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+    {
+      tenantId: 'tenant_123',
+      tenantSlug: 'tenant-123',
+      tenantDisplayName: 'Tenant 123',
+      tenantPlanTier: 'team',
+      membershipRole: 'viewer',
+    },
+  ]);
   mockedMarkMagicLinkTokenUsed.mockReset();
   mockedMarkMagicLinkTokenUsed.mockResolvedValue();
   mockedRevokeSessionByHash.mockReset();
@@ -743,7 +763,7 @@ describe('magic-link auth routes', () => {
       expiresAt: '2026-02-18T12:10:00.000Z',
       magicLinkToken: 'better-token-1234567890',
       magicLinkUrl:
-        'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
     });
     expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, 'learner@example.edu');
     expect(mockedEnsureTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
@@ -803,19 +823,33 @@ describe('magic-link auth routes', () => {
       await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
       undefined,
       createEnv('production'),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
+    expect(response.headers.get('location')).toBe('/auth/resolve');
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
     expect(legacyAuthProvider.createMagicLinkSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
     expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
     expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the neutral resolver after browser verify when no explicit next path is present', async () => {
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
+
+    const response = await isolatedApp.request(
+      '/auth/magic-link/verify?token=better-token-1234567890',
+      undefined,
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/auth/resolve');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
   });
 
   it('uses Better Auth-backed session inspection and logout without falling back to legacy session tables', async () => {
@@ -896,14 +930,159 @@ describe('magic-link auth routes', () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
       undefined,
       createEnv('production'),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
+    expect(response.headers.get('location')).toBe('/auth/resolve');
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+  });
+
+  it('redirects single-tenant authenticated users from /auth/resolve into their preferred tenant path', async () => {
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
+      betterAuthInitiallyAuthenticated: true,
+    });
+
+    const response = await isolatedApp.request(
+      '/auth/resolve',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/tenants/tenant_123/learner/dashboard');
+    expect(response.headers.get('set-cookie')).toContain('credtrail_requested_tenant=tenant_123');
+    expect(mockedListAccessibleTenantContextsForUser).toHaveBeenCalledWith(fakeDb, 'usr_better');
+  });
+
+  it('redirects multi-tenant authenticated users from /auth/resolve into the chooser flow', async () => {
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'admin',
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
+      betterAuthInitiallyAuthenticated: true,
+      betterAuthRequestedTenant: null,
+    });
+
+    const response = await isolatedApp.request(
+      '/auth/resolve',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/account/organizations');
+  });
+
+  it('renders the organization chooser for multi-tenant authenticated users', async () => {
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'admin',
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
+      betterAuthInitiallyAuthenticated: true,
+      betterAuthRequestedTenant: {
+        tenantId: 'tenant_456',
+        source: 'route',
+        authoritative: true,
+      },
+    });
+
+    const response = await isolatedApp.request(
+      '/account/organizations',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+        },
+      },
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Choose a CredTrail organization');
+    expect(body).toContain('Tenant 123');
+    expect(body).toContain('Tenant 456');
+    expect(body).toContain('Current');
+    expect(body).toContain('action="/account/organizations/select"');
+  });
+
+  it('remembers the explicit organization selection and redirects into the chosen tenant path', async () => {
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'admin',
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
+      betterAuthInitiallyAuthenticated: true,
+      betterAuthRequestedTenant: null,
+    });
+
+    const response = await isolatedApp.request(
+      '/account/organizations/select',
+      {
+        method: 'POST',
+        headers: {
+          Cookie: 'better-auth.session_token=better-session',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          tenantId: 'tenant_456',
+          next: '',
+        }).toString(),
+      },
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('/tenants/tenant_456/admin');
+    expect(response.headers.get('set-cookie')).toContain('credtrail_requested_tenant=tenant_456');
   });
 
   it('returns authenticated session details for the current session cookie', async () => {

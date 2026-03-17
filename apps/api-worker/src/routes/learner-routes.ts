@@ -5,6 +5,7 @@ import {
   findLearnerProfileByIdentity,
   findUserById,
   isLearnerIdentityLinkProofValid,
+  listAccessibleTenantContextsForUser,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
   markLearnerIdentityLinkProofUsed,
@@ -22,6 +23,7 @@ import {
 } from '@credtrail/validation';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
+import { buildOrganizationsPath } from '../auth/tenant-context-selection';
 
 interface RegisterLearnerRoutesInput<DidNotice> {
   app: Hono<AppEnv>;
@@ -50,6 +52,7 @@ interface RegisterLearnerRoutesInput<DidNotice> {
     badges: Awaited<ReturnType<typeof listLearnerBadgeSummaries>>,
     learnerDid: string | null,
     didNotice: DidNotice,
+    switchOrganizationPath?: string | null,
   ) => string;
 }
 
@@ -106,9 +109,27 @@ export const registerLearnerRoutes = <DidNotice>(
       userId: roleCheck.principal.userId,
     });
     const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query('didStatus'));
+    const accessibleTenantContexts = await listAccessibleTenantContextsForUser(
+      db,
+      roleCheck.principal.userId,
+    );
+    const requestUrl = new URL(c.req.url);
+    const switchOrganizationPath =
+      accessibleTenantContexts.length > 1
+        ? buildOrganizationsPath(`${requestUrl.pathname}${requestUrl.search}`)
+        : null;
 
     c.header('Cache-Control', 'no-store');
-    return c.html(learnerDashboardPage(c.req.url, pathParams.tenantId, badges, learnerDid, didNotice));
+    return c.html(
+      learnerDashboardPage(
+        c.req.url,
+        pathParams.tenantId,
+        badges,
+        learnerDid,
+        didNotice,
+        switchOrganizationPath,
+      ),
+    );
   });
 
   app.post('/tenants/:tenantId/learner/settings/did', async (c): Promise<Response> => {

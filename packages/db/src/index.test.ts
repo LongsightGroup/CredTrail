@@ -9,6 +9,7 @@ import {
   createLearnerProfile,
   findActiveTenantBreakGlassAccountByEmail,
   findTenantAuthPolicy,
+  listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
   findLearnerProfileByIdentity,
   findTenantAuthProviderById,
@@ -118,6 +119,20 @@ interface FakeTenantBreakGlassAccountRow {
   revoked_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface FakeTenantRow {
+  id: string;
+  slug: string;
+  display_name: string;
+  plan_tier: 'free' | 'team' | 'institution' | 'enterprise';
+  is_active: number;
+}
+
+interface FakeMembershipRow {
+  tenant_id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'issuer' | 'viewer';
 }
 
 class FakeStatement {
@@ -914,6 +929,17 @@ class FakeTenantAuthStatement {
       });
     }
 
+    if (
+      normalizedSql.includes('FROM memberships') &&
+      normalizedSql.includes('INNER JOIN tenants') &&
+      normalizedSql.includes('tenants.is_active = 1')
+    ) {
+      return Promise.resolve({
+        ...this.successResult(),
+        results: this.selectAccessibleTenantContexts() as T[],
+      });
+    }
+
     throw new Error(`Unsupported all SQL in fake tenant auth DB: ${normalizedSql}`);
   }
 
@@ -1463,6 +1489,44 @@ class FakeTenantAuthStatement {
     };
   }
 
+  private selectAccessibleTenantContexts(): Record<string, unknown>[] {
+    const [userId] = this.boundParams;
+
+    if (typeof userId !== 'string') {
+      throw new Error('Invalid bound parameters for accessible tenant context list');
+    }
+
+    return this.db.memberships
+      .filter((membership) => membership.user_id === userId)
+      .map((membership) => {
+        const tenant = this.db.tenants.find((candidate) => {
+          return candidate.id === membership.tenant_id && candidate.is_active === 1;
+        });
+
+        if (tenant === undefined) {
+          return null;
+        }
+
+        return {
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug,
+          tenantDisplayName: tenant.display_name,
+          tenantPlanTier: tenant.plan_tier,
+          membershipRole: membership.role,
+        };
+      })
+      .filter((row): row is Record<string, unknown> => row !== null)
+      .sort((left, right) => {
+        const byName = String(left.tenantDisplayName).localeCompare(String(right.tenantDisplayName));
+
+        if (byName !== 0) {
+          return byName;
+        }
+
+        return String(left.tenantSlug).localeCompare(String(right.tenantSlug));
+      });
+  }
+
   private successResult(rowsWritten = 0): SqlRunResult {
     return {
       success: true,
@@ -1479,6 +1543,8 @@ class FakeTenantAuthSqlDatabase {
   tenantAuthProviders: FakeTenantAuthProviderRow[] = [];
   tenantBreakGlassAccounts: FakeTenantBreakGlassAccountRow[] = [];
   legacySamlConfigurations: FakeLegacySamlConfigurationRow[] = [];
+  tenants: FakeTenantRow[] = [];
+  memberships: FakeMembershipRow[] = [];
   betterAuthUsers: Array<{
     id: string;
     email: string;
@@ -1901,6 +1967,71 @@ describe('tenant auth policy and provider helpers', () => {
 
     expect(removed).toBe(true);
     expect(resolvedAfterRevoke).toBeNull();
+  });
+
+  it('lists accessible tenant contexts for a user from active memberships', async () => {
+    const db = createFakeTenantAuthDb();
+    const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
+
+    tenantAuthDb.tenants.push(
+      {
+        id: 'tenant_admin',
+        slug: 'tenant-admin',
+        display_name: 'Admin Tenant',
+        plan_tier: 'enterprise',
+        is_active: 1,
+      },
+      {
+        id: 'tenant_viewer',
+        slug: 'tenant-viewer',
+        display_name: 'Viewer Tenant',
+        plan_tier: 'team',
+        is_active: 1,
+      },
+      {
+        id: 'tenant_inactive',
+        slug: 'tenant-inactive',
+        display_name: 'Inactive Tenant',
+        plan_tier: 'institution',
+        is_active: 0,
+      },
+    );
+    tenantAuthDb.memberships.push(
+      {
+        tenant_id: 'tenant_viewer',
+        user_id: 'usr_123',
+        role: 'viewer',
+      },
+      {
+        tenant_id: 'tenant_admin',
+        user_id: 'usr_123',
+        role: 'admin',
+      },
+      {
+        tenant_id: 'tenant_inactive',
+        user_id: 'usr_123',
+        role: 'owner',
+      },
+    );
+
+    const contexts = await listAccessibleTenantContextsForUser(db, 'usr_123');
+
+    expect(contexts).toEqual([
+      {
+        tenantId: 'tenant_admin',
+        tenantSlug: 'tenant-admin',
+        tenantDisplayName: 'Admin Tenant',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'admin',
+      },
+      {
+        tenantId: 'tenant_viewer',
+        tenantSlug: 'tenant-viewer',
+        tenantDisplayName: 'Viewer Tenant',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+    ]);
   });
 });
 

@@ -31,6 +31,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
     badges: readonly LearnerBadgeSummaryRecord[],
     learnerDid: string | null,
     didNotice: LearnerDidSettingsNotice | null,
+    switchOrganizationPath?: string | null,
   ): string => {
     const totalBadges = badges.length;
     const activeBadges = badges.filter((badge) => badge.revokedAt === null).length;
@@ -87,6 +88,12 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
       learnerDid === null
         ? '<p class="learner-dashboard__subtle">No learner DID is currently configured.</p>'
         : `<p class="learner-dashboard__subtle learner-dashboard__subtle--break">Current DID: <code>${escapeHtml(learnerDid)}</code></p>`;
+    const switchOrganizationMarkup =
+      switchOrganizationPath === undefined || switchOrganizationPath === null || switchOrganizationPath.trim().length === 0
+        ? ''
+        : `<p class="learner-dashboard__hero-note learner-dashboard__hero-note--switch">
+            <a class="learner-dashboard__switch-link" href="${escapeHtml(switchOrganizationPath)}">Switch organization</a>
+          </p>`;
     const didSettingsSection = `<section class="learner-dashboard__profile" aria-labelledby="learner-profile-settings">
       <div class="learner-dashboard__section-heading learner-dashboard__section-heading--compact">
         <div>
@@ -285,6 +292,10 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           color: rgba(248, 252, 255, 0.88);
         }
 
+        .learner-dashboard__hero-note--switch {
+          margin-top: 0.95rem;
+        }
+
         .learner-dashboard__hero-chips {
           display: flex;
           flex-wrap: wrap;
@@ -305,6 +316,20 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           color: #f8fcff;
           font-size: 0.88rem;
           font-weight: 600;
+        }
+
+        .learner-dashboard__switch-link {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.4rem;
+          padding: 0.2rem 0;
+          color: #f6d87d;
+          font-weight: 700;
+          text-decoration: none;
+        }
+
+        .learner-dashboard__switch-link:hover {
+          text-decoration: underline;
         }
 
         .learner-dashboard__hero-card {
@@ -681,6 +706,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
               <li class="learner-dashboard__hero-chip">Public verification ready</li>
               <li class="learner-dashboard__hero-chip">${learnerDid === null ? 'Optional DID available' : 'Learner DID configured'}</li>
             </ul>
+            ${switchOrganizationMarkup}
           </div>
           <div class="learner-dashboard__hero-card">
             <p class="learner-dashboard__hero-card-label">Tenant record</p>

@@ -467,7 +467,7 @@ const resolveCurrentBetterAuthSession = async (
 const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   resolveDatabase,
   requestMagicLink: async (context, input) => {
-    const defaultNextPath = `/tenants/${encodeURIComponent(input.tenantId)}/admin`;
+    const defaultNextPath = '/auth/resolve';
     const nextPath = input.nextPath?.startsWith('/') === true ? input.nextPath : defaultNextPath;
     const expiresAt = addSecondsToIso(new Date().toISOString(), MAGIC_LINK_TTL_SECONDS);
     let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
@@ -1188,6 +1188,7 @@ registerAuthRoutes({
   },
   resolveAuthenticatedPrincipal,
   resolveRequestedTenantContext,
+  rememberRequestedTenant,
   revokeCurrentSession: (context) => {
     return authProvider.revokeCurrentSession(context);
   },

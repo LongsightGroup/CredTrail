@@ -4,11 +4,13 @@ const {
   mockedFindTenantAuthPolicy,
   mockedListTenantAuthProviders,
   mockedListTenantBreakGlassAccounts,
+  mockedListAccessibleTenantContextsForUser,
 } = vi.hoisted(() => {
   return {
     mockedFindTenantAuthPolicy: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedListTenantBreakGlassAccounts: vi.fn(),
+    mockedListAccessibleTenantContextsForUser: vi.fn(),
   };
 });
 
@@ -22,6 +24,7 @@ vi.mock('@credtrail/db', async () => {
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
     listTenantBreakGlassAccounts: mockedListTenantBreakGlassAccounts,
@@ -276,6 +279,16 @@ beforeEach(() => {
       twoFactorEnabled: true,
     },
   ]);
+  mockedListAccessibleTenantContextsForUser.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+    {
+      tenantId: 'tenant_123',
+      tenantSlug: 'tenant-123',
+      tenantDisplayName: 'Tenant 123',
+      tenantPlanTier: 'team',
+      membershipRole: 'admin',
+    },
+  ]);
 });
 
 describe('GET /tenants/:tenantId/admin', () => {
@@ -424,6 +437,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('title="User ID: usr_admin"');
     expect(body).toContain('/assets/ui/foundation.');
     expect(body).toContain('/assets/ui/institution-admin.');
+    expect(body).not.toContain('Switch organization');
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId: 'tenant_123',
       includeArchived: false,
@@ -436,6 +450,44 @@ describe('GET /tenants/:tenantId/admin', () => {
       tenantId: 'tenant_123',
       ruleId: 'brl_123',
     });
+  });
+
+  it('shows an explicit switch-organization entry point only for multi-tenant admins', async () => {
+    const env = createEnv();
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'admin',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'admin',
+      },
+    ]);
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Switch organization');
+    expect(body).toContain('/account/organizations?next=%2Ftenants%2Ftenant_123%2Fadmin');
+    expect(body).not.toContain('Choose a CredTrail organization');
   });
 
   it('renders enterprise auth settings for enterprise tenants', async () => {

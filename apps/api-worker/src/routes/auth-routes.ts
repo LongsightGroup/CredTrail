@@ -1,4 +1,5 @@
 import {
+  listAccessibleTenantContextsForUser,
   createAuditLog,
   ensureTenantMembership,
   upsertUserByEmail,
@@ -24,7 +25,13 @@ import {
   localResetPasswordPage,
   localTwoFactorPage,
   magicLinkLoginPage,
+  organizationChooserPage,
 } from '../auth/pages';
+import {
+  resolveChosenTenantLocation,
+  resolveTenantContextSelection,
+  toAccessibleTenantContextViews,
+} from '../auth/tenant-context-selection';
 import { sessionCookieSecure } from '../utils/crypto';
 
 interface RegisterAuthRoutesInput {
@@ -44,6 +51,7 @@ interface RegisterAuthRoutesInput {
   resolveRequestedTenantContext: (
     c: AppContext,
   ) => Promise<RequestedTenantContext | null>;
+  rememberRequestedTenant: (c: AppContext, tenantId: string) => RequestedTenantContext;
   revokeCurrentSession: (c: AppContext) => Promise<void>;
   enterpriseSso?: EnterpriseSsoAdapter<AppContext, AppBindings> | undefined;
   breakGlassPolicy?: BreakGlassPolicyAdapter<AppContext, AppBindings> | undefined;
@@ -62,10 +70,35 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     createMagicLinkSession,
     resolveAuthenticatedPrincipal,
     resolveRequestedTenantContext,
+    rememberRequestedTenant,
     revokeCurrentSession,
     enterpriseSso,
     breakGlassPolicy,
   } = input;
+
+  const renderNoAccessibleOrganizationsPage = (
+    title: string,
+    message: string,
+    status: number,
+  ): Response => {
+    return new Response(
+      renderPageShell(title, `<h1>${title}</h1><p>${message}</p>`),
+      {
+        status,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+        },
+      },
+    );
+  };
+
+  const loadAccessibleTenantContextViews = async (
+    c: AppContext,
+    userId: string,
+  ) => {
+    const contexts = await listAccessibleTenantContextsForUser(resolveDatabase(c.env), userId);
+    return toAccessibleTenantContextViews(contexts);
+  };
 
   app.get('/', (c) => {
     return c.redirect('/login', 302);
@@ -178,7 +211,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     });
 
     if (result.status === 'authenticated') {
-      return c.redirect(nextPath.startsWith('/') ? nextPath : `/tenants/${encodeURIComponent(tenantId)}/admin`, 302);
+      return c.redirect(nextPath.startsWith('/') ? nextPath : '/auth/resolve', 302);
     }
 
     if (result.status === 'two_factor_required') {
@@ -365,7 +398,7 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     deleteCookie(c, BREAK_GLASS_PENDING_MFA_COOKIE_NAME, {
       path: '/',
     });
-    const fallbackPath = `/tenants/${encodeURIComponent(tenantId)}/admin`;
+    const fallbackPath = '/auth/resolve';
     return c.redirect(nextPath.startsWith('/') ? nextPath : fallbackPath, 302);
   });
 
@@ -504,10 +537,106 @@ export const registerAuthRoutes = (input: RegisterAuthRoutesInput): void => {
     }
 
     const nextPathRaw = c.req.query('next');
-    const fallbackPath = `/tenants/${encodeURIComponent(requestedTenant.tenantId)}/admin`;
+    const fallbackPath = '/auth/resolve';
     const nextPath = nextPathRaw?.startsWith('/') === true ? nextPathRaw : fallbackPath;
 
     return c.redirect(nextPath, 302);
+  });
+
+  app.get('/auth/resolve', async (c) => {
+    const principal = await resolveAuthenticatedPrincipal(c);
+
+    if (principal === null) {
+      return c.redirect('/login?reason=auth_required', 302);
+    }
+
+    const contexts = await loadAccessibleTenantContextViews(c, principal.userId);
+    const requestedTenant = await resolveRequestedTenantContext(c);
+    const nextPath = (c.req.query('next') ?? '').trim();
+    const selection = resolveTenantContextSelection({
+      contexts,
+      requestedTenant,
+      nextPath,
+    });
+
+    if (selection.kind === 'redirect') {
+      rememberRequestedTenant(c, selection.tenantId);
+      return c.redirect(selection.location, 302);
+    }
+
+    if (selection.kind === 'chooser') {
+      return c.redirect(selection.location, 302);
+    }
+
+    const message =
+      selection.reason === 'requested_tenant_forbidden'
+        ? 'Your account does not have access to the requested tenant route.'
+        : 'No active CredTrail organizations are currently available for this account.';
+
+    return renderNoAccessibleOrganizationsPage('Organization Access Required', message, 403);
+  });
+
+  app.get('/account/organizations', async (c) => {
+    const principal = await resolveAuthenticatedPrincipal(c);
+
+    if (principal === null) {
+      return c.redirect('/login?reason=auth_required', 302);
+    }
+
+    const contexts = await loadAccessibleTenantContextViews(c, principal.userId);
+
+    if (contexts.length === 0) {
+      return renderNoAccessibleOrganizationsPage(
+        'Organization Access Required',
+        'No active CredTrail organizations are currently available for this account.',
+        403,
+      );
+    }
+
+    if (contexts.length === 1) {
+      rememberRequestedTenant(c, contexts[0].tenantId);
+      return c.redirect(contexts[0].preferredPath, 302);
+    }
+
+    const requestedTenant = await resolveRequestedTenantContext(c);
+    const nextPath = (c.req.query('next') ?? '').trim();
+
+    return c.html(
+      organizationChooserPage({
+        organizations: contexts,
+        nextPath,
+        currentTenantId: requestedTenant?.tenantId ?? null,
+      }),
+    );
+  });
+
+  app.post('/account/organizations/select', async (c) => {
+    const principal = await resolveAuthenticatedPrincipal(c);
+
+    if (principal === null) {
+      return c.redirect('/login?reason=auth_required', 302);
+    }
+
+    const formData = await c.req.formData();
+    const tenantId = getFormValue(formData, 'tenantId');
+    const nextPath = getFormValue(formData, 'next');
+    const contexts = await loadAccessibleTenantContextViews(c, principal.userId);
+    const location = resolveChosenTenantLocation({
+      contexts,
+      tenantId,
+      nextPath,
+    });
+
+    if (location === null) {
+      return renderNoAccessibleOrganizationsPage(
+        'Organization Access Required',
+        'Your account does not have access to the selected tenant.',
+        403,
+      );
+    }
+
+    rememberRequestedTenant(c, tenantId);
+    return c.redirect(location, 302);
   });
 
   app.get('/v1/auth/sso/:providerId/start', async (c) => {

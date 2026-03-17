@@ -1,4 +1,5 @@
 import { renderPageShell } from '@credtrail/ui-components';
+import type { AccessibleTenantContextView } from './tenant-context-selection';
 import { renderPageAssetTags } from '../ui/page-assets';
 import { escapeHtml } from '../utils/display-format';
 
@@ -154,6 +155,73 @@ export const magicLinkLoginPage = (input: {
       </div>
     </section>`,
     renderPageAssetTags(['foundationCss', 'authLoginCss', 'authLoginJs']),
+  );
+};
+
+export const organizationChooserPage = (input: {
+  organizations: readonly AccessibleTenantContextView[];
+  nextPath: string;
+  currentTenantId?: string | null;
+}): string => {
+  const organizationRows = input.organizations
+    .map((organization) => {
+      const isCurrent = input.currentTenantId === organization.tenantId;
+      const roleLabel = organization.membershipRole === 'owner' ? 'Owner' : organization.membershipRole;
+
+      return `<li class="ct-login__organization-row">
+        <div class="ct-login__organization-copy">
+          <p class="ct-login__organization-name">
+            ${escapeHtml(organization.tenantDisplayName)}
+            ${isCurrent ? '<span class="ct-login__organization-current">Current</span>' : ''}
+          </p>
+          <p class="ct-login__organization-meta">
+            ${escapeHtml(organization.tenantId)} · ${escapeHtml(roleLabel)} · ${escapeHtml(organization.tenantPlanTier)}
+          </p>
+        </div>
+        <form method="post" action="/account/organizations/select">
+          <input type="hidden" name="tenantId" value="${escapeHtml(organization.tenantId)}" />
+          <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
+          <button type="submit" class="ct-login__submit">${isCurrent ? 'Reopen tenant' : 'Open tenant'}</button>
+        </form>
+      </li>`;
+    })
+    .join('');
+
+  return renderPageShell(
+    'Choose Organization · CredTrail',
+    `<section class="ct-login ct-stack">
+      <div class="ct-login__card ct-grid">
+        <div class="ct-login__hero ct-stack">
+          <p class="ct-login__eyebrow">Organization access</p>
+          <h1 class="ct-login__title">Choose a CredTrail organization</h1>
+          <p class="ct-login__lede">
+            Your account can access more than one tenant. Pick the organization you want to open in this session.
+          </p>
+          <ol class="ct-login__steps">
+            <li class="ct-login__step">
+              <strong>Select the organization you need.</strong>
+              Each choice opens the tenant's existing admin or learner surface.
+            </li>
+            <li class="ct-login__step">
+              <strong>Keep tenant work separate.</strong>
+              CredTrail stays tenant-scoped even when the same person can access multiple organizations.
+            </li>
+          </ol>
+        </div>
+        <div class="ct-login__form-wrap ct-stack">
+          <section class="ct-stack" aria-labelledby="organization-chooser-title">
+            <h2 id="organization-chooser-title" class="ct-login__form-title">Available organizations</h2>
+            <ul class="ct-login__organization-list">
+              ${organizationRows}
+            </ul>
+          </section>
+          <p class="ct-login__help">
+            Need a different organization? Ask a tenant owner or administrator to grant your account access.
+          </p>
+        </div>
+      </div>
+    </section>`,
+    renderPageAssetTags(['foundationCss', 'authLoginCss']),
   );
 };
 

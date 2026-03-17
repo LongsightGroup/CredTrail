@@ -120,14 +120,14 @@ const redirectResponse = (location: string): Response => {
   });
 };
 
-const normalizeNextPath = (tenantId: string, nextPath: string | undefined): string => {
+const normalizeNextPath = (_tenantId: string, nextPath: string | undefined): string => {
   const trimmed = nextPath?.trim() ?? '';
 
   if (trimmed.startsWith('/')) {
     return trimmed;
   }
 
-  return `/tenants/${encodeURIComponent(tenantId)}/admin`;
+  return '/auth/resolve';
 };
 
 const buildTenantLoginPath = (input: {

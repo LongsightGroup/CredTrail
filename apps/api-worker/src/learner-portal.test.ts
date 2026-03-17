@@ -10,6 +10,7 @@ vi.mock('@credtrail/db', async () => {
     findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    listAccessibleTenantContextsForUser: vi.fn(),
     listLearnerBadgeSummaries: vi.fn(),
     listLearnerIdentitiesByProfile: vi.fn(),
     removeLearnerIdentityAliasesByType: vi.fn(),
@@ -30,6 +31,7 @@ import {
   findLearnerProfileByIdentity,
   findTenantMembership,
   findUserById,
+  listAccessibleTenantContextsForUser,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
   removeLearnerIdentityAliasesByType,
@@ -54,6 +56,7 @@ const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
+const mockedListAccessibleTenantContextsForUser = vi.mocked(listAccessibleTenantContextsForUser);
 const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
 const mockedListLearnerIdentitiesByProfile = vi.mocked(listLearnerIdentitiesByProfile);
 const mockedRemoveLearnerIdentityAliasesByType = vi.mocked(removeLearnerIdentityAliasesByType);
@@ -237,6 +240,16 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
+  mockedListAccessibleTenantContextsForUser.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+    {
+      tenantId: 'tenant_123',
+      tenantSlug: 'tenant-123',
+      tenantDisplayName: 'Tenant 123',
+      tenantPlanTier: 'team',
+      membershipRole: 'viewer',
+    },
+  ]);
 });
 
 afterEach(() => {
@@ -387,6 +400,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain('Profile settings');
     expect(body).toContain('Manage learner DID');
     expect(body).toContain('No learner DID is currently configured.');
+    expect(body).not.toContain('Switch organization');
     expect(mockedListLearnerIdentitiesByProfile).toHaveBeenCalledWith(
       fakeDb,
       'tenant_123',
@@ -436,6 +450,105 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain('<details class="learner-dashboard__profile-details" open>');
     expect(body).toContain('Current DID:');
     expect(body).toContain('did:key:z6MkhLearnerDidExample');
+  });
+
+  it('shows an explicit switch-organization link only when the learner can access more than one tenant', async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue();
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'viewer',
+      },
+    ]);
+
+    const response = await app.request(
+      '/tenants/tenant_123/learner/dashboard',
+      {
+        headers: {
+          Cookie: 'credtrail_session=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Switch organization');
+    expect(body).toContain(
+      '/account/organizations?next=%2Ftenants%2Ftenant_123%2Flearner%2Fdashboard',
+    );
+  });
+
+  it('lets one authenticated learner session open more than one tenant-scoped dashboard', async () => {
+    mockedFindTenantMembership.mockImplementation(async (_db, tenantId) => {
+      if (tenantId === 'tenant_123' || tenantId === 'tenant_456') {
+        return sampleTenantMembership({
+          tenantId,
+        });
+      }
+
+      return null;
+    });
+    mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+      {
+        tenantId: 'tenant_123',
+        tenantSlug: 'tenant-123',
+        tenantDisplayName: 'Tenant 123',
+        tenantPlanTier: 'team',
+        membershipRole: 'viewer',
+      },
+      {
+        tenantId: 'tenant_456',
+        tenantSlug: 'tenant-456',
+        tenantDisplayName: 'Tenant 456',
+        tenantPlanTier: 'enterprise',
+        membershipRole: 'viewer',
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders({
+      betterAuthPrincipal: {
+        userId: 'usr_123',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth',
+        expiresAt: '2026-03-17T22:00:00.000Z',
+      },
+    });
+    const env = createEnv();
+
+    mockedListLearnerBadgeSummaries.mockResolvedValue([]);
+
+    const firstResponse = await isolatedApp.request(
+      '/tenants/tenant_123/learner/dashboard',
+      undefined,
+      env,
+    );
+    const secondResponse = await isolatedApp.request(
+      '/tenants/tenant_456/learner/dashboard',
+      undefined,
+      env,
+    );
+    const secondBody = await secondResponse.text();
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(secondBody).toContain('Tenant record');
+    expect(secondBody).toContain('tenant_456');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_456', 'usr_123');
   });
 
   it('renders empty state when learner has no earned badges yet', async () => {
