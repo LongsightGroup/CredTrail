@@ -1,6 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deleteCookie, setCookie } from 'hono/cookie';
 
+const {
+  mockedResolveEnterpriseLoginExperience,
+  mockedEnforceLocalMagicLinkRequest,
+  mockedStartEnterpriseSso,
+  mockedProxyEnterpriseSsoCallback,
+  mockedFinalizeEnterpriseSso,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveEnterpriseLoginExperience: vi.fn(),
+    mockedEnforceLocalMagicLinkRequest: vi.fn(),
+    mockedStartEnterpriseSso: vi.fn(),
+    mockedProxyEnterpriseSsoCallback: vi.fn(),
+    mockedFinalizeEnterpriseSso: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -23,6 +39,18 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/enterprise-sso-adapter', () => {
+  return {
+    createEnterpriseSsoAdapter: vi.fn(() => ({
+      resolveLoginExperience: mockedResolveEnterpriseLoginExperience,
+      enforceLocalMagicLinkRequest: mockedEnforceLocalMagicLinkRequest,
+      start: mockedStartEnterpriseSso,
+      proxyCallback: mockedProxyEnterpriseSsoCallback,
+      finalize: mockedFinalizeEnterpriseSso,
+    })),
   };
 });
 
@@ -293,6 +321,43 @@ beforeEach(() => {
     id: 'usr_123',
     email: 'learner@example.edu',
   });
+  mockedResolveEnterpriseLoginExperience.mockReset();
+  mockedResolveEnterpriseLoginExperience.mockResolvedValue({
+    tenantId: 'tenant_123',
+    loginMode: 'local',
+    localLoginAllowed: true,
+    enterpriseProviders: [],
+    autoStartPath: null,
+  });
+  mockedEnforceLocalMagicLinkRequest.mockReset();
+  mockedEnforceLocalMagicLinkRequest.mockResolvedValue(null);
+  mockedStartEnterpriseSso.mockReset();
+  mockedStartEnterpriseSso.mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: {
+        location: '/login?reason=sso_unavailable',
+      },
+    }),
+  );
+  mockedProxyEnterpriseSsoCallback.mockReset();
+  mockedProxyEnterpriseSsoCallback.mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: {
+        location: '/login?reason=sso_failed',
+      },
+    }),
+  );
+  mockedFinalizeEnterpriseSso.mockReset();
+  mockedFinalizeEnterpriseSso.mockResolvedValue(
+    new Response(null, {
+      status: 302,
+      headers: {
+        location: '/login?reason=sso_failed',
+      },
+    }),
+  );
 });
 
 afterEach(() => {
@@ -343,6 +408,68 @@ describe('magic-link auth routes', () => {
     expect(scriptResponse.headers.get('cache-control')).toContain('immutable');
   });
 
+  it('redirects sso_required tenant login pages into the default enterprise provider flow', async () => {
+    mockedResolveEnterpriseLoginExperience.mockResolvedValue({
+      tenantId: 'tenant_123',
+      loginMode: 'sso_required',
+      localLoginAllowed: false,
+      enterpriseProviders: [
+        {
+          id: 'tap_oidc',
+          label: 'Campus OIDC',
+          protocol: 'oidc',
+          isDefault: true,
+          startPath:
+            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        },
+      ],
+      autoStartPath:
+        '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    });
+
+    const response = await app.request(
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(
+      '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    );
+  });
+
+  it('renders hybrid tenant login pages with both local and enterprise options', async () => {
+    mockedResolveEnterpriseLoginExperience.mockResolvedValue({
+      tenantId: 'tenant_123',
+      loginMode: 'hybrid',
+      localLoginAllowed: true,
+      enterpriseProviders: [
+        {
+          id: 'tap_oidc',
+          label: 'Campus OIDC',
+          protocol: 'oidc',
+          isDefault: true,
+          startPath:
+            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        },
+      ],
+      autoStartPath: null,
+    });
+
+    const response = await app.request(
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Institution sign-in');
+    expect(body).toContain('Continue with Campus OIDC');
+    expect(body).toContain('id="magic-link-login-form"');
+  });
+
   it('returns token + url in development mode for magic-link request', async () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
@@ -373,6 +500,45 @@ describe('magic-link auth routes', () => {
     expect(body.magicLinkToken.length).toBeGreaterThan(0);
     expect(body.magicLinkUrl).toContain('/auth/magic-link/verify?token=');
     expect(body.magicLinkUrl).toContain('next=');
+  });
+
+  it('rejects local hosted magic-link requests when enterprise SSO is required', async () => {
+    mockedEnforceLocalMagicLinkRequest.mockResolvedValue(
+      Response.json(
+        {
+          error: 'Enterprise SSO is required for this tenant. Use institution sign-in instead.',
+        },
+        {
+          status: 403,
+        },
+      ),
+    );
+
+    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
+      await loadAppWithMockedHostedAuthProviders();
+    const response = await isolatedApp.request(
+      '/v1/auth/magic-link/request',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          tenantId: 'tenant_123',
+          email: 'learner@example.edu',
+        }),
+      },
+      createEnv('production'),
+    );
+    const body = await response.json<{
+      error: string;
+    }>();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toContain('Enterprise SSO is required');
+    expect(mockedUpsertUserByEmail).not.toHaveBeenCalled();
+    expect(betterAuthProvider.requestMagicLink).not.toHaveBeenCalled();
+    expect(legacyAuthProvider.requestMagicLink).not.toHaveBeenCalled();
   });
 
   it('delegates hosted magic-link requests to Better Auth while preserving user and membership upserts', async () => {

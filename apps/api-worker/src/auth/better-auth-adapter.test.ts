@@ -8,7 +8,7 @@ vi.mock('@credtrail/db', async () => {
     createAuthIdentityLink: vi.fn(),
     findAuthIdentityLinkByAuthUserId: vi.fn(),
     findAuthIdentityLinkByCredtrailUserId: vi.fn(),
-    findUserByEmail: vi.fn(),
+    upsertUserByEmail: vi.fn(),
   };
 });
 
@@ -16,7 +16,7 @@ import {
   createAuthIdentityLink,
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
-  findUserByEmail,
+  upsertUserByEmail,
   type SqlDatabase,
 } from '@credtrail/db';
 import { createBetterAuthRuntimeConfig } from './better-auth-config';
@@ -33,7 +33,7 @@ interface FakeContext {
 const mockedCreateAuthIdentityLink = vi.mocked(createAuthIdentityLink);
 const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByAuthUserId);
 const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(findAuthIdentityLinkByCredtrailUserId);
-const mockedFindUserByEmail = vi.mocked(findUserByEmail);
+const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 
 const fakeDb = {
   prepare: vi.fn(),
@@ -121,7 +121,7 @@ beforeEach(() => {
   mockedCreateAuthIdentityLink.mockReset();
   mockedFindAuthIdentityLinkByAuthUserId.mockReset();
   mockedFindAuthIdentityLinkByCredtrailUserId.mockReset();
-  mockedFindUserByEmail.mockReset();
+  mockedUpsertUserByEmail.mockReset();
 });
 
 describe('better auth adapter', () => {
@@ -164,7 +164,7 @@ describe('better auth adapter', () => {
 
   it('links unlinked Better Auth users to existing CredTrail users by normalized verified email', async () => {
     mockedFindAuthIdentityLinkByAuthUserId.mockResolvedValue(null);
-    mockedFindUserByEmail.mockResolvedValue(sampleUser());
+    mockedUpsertUserByEmail.mockResolvedValue(sampleUser());
     mockedFindAuthIdentityLinkByCredtrailUserId.mockResolvedValue(null);
     mockedCreateAuthIdentityLink.mockResolvedValue(sampleLink());
 
@@ -179,7 +179,7 @@ describe('better auth adapter', () => {
       authMethod: 'better_auth',
       expiresAt: '2026-03-17T20:00:00.000Z',
     });
-    expect(mockedFindUserByEmail).toHaveBeenCalledWith(fakeDb, 'Student@Example.edu');
+    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, 'Student@Example.edu');
     expect(mockedCreateAuthIdentityLink).toHaveBeenCalledWith(fakeDb, {
       authSystem: 'better_auth',
       authUserId: 'ba_usr_123',
@@ -203,7 +203,7 @@ describe('better auth adapter', () => {
       authMethod: 'better_auth',
       expiresAt: '2026-03-17T20:00:00.000Z',
     });
-    expect(mockedFindUserByEmail).not.toHaveBeenCalled();
+    expect(mockedUpsertUserByEmail).not.toHaveBeenCalled();
     expect(mockedCreateAuthIdentityLink).not.toHaveBeenCalled();
   });
 
@@ -218,7 +218,7 @@ describe('better auth adapter', () => {
       }),
     );
 
-    mockedFindUserByEmail.mockResolvedValue(sampleUser());
+    mockedUpsertUserByEmail.mockResolvedValue(sampleUser());
     mockedFindAuthIdentityLinkByCredtrailUserId.mockResolvedValue(
       sampleLink({
         authUserId: 'ba_usr_conflict',

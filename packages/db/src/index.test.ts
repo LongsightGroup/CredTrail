@@ -1547,4 +1547,15 @@ describe('better auth core migration', () => {
     expect(backfillSql).toContain('tenant_sso_saml_configurations');
     expect(backfillSql).toContain('tenant_auth_policies');
   });
+
+  it('adds Better Auth enterprise SSO indexes without changing CredTrail-owned tables', () => {
+    const ssoSql = readFileSync(
+      new URL('../migrations/0029_better_auth_enterprise_sso.sql', import.meta.url),
+      'utf8',
+    );
+
+    expect(ssoSql).toContain('idx_auth_user_email');
+    expect(ssoSql).toContain('idx_auth_account_provider_user');
+    expect(ssoSql).not.toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
+  });
 });
