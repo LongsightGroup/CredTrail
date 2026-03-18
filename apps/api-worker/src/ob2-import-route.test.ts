@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const {
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -19,6 +29,25 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -156,6 +185,25 @@ const sampleMigrationQueueMessage = (
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+      return {
+        userId: 'usr_123',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth' as const,
+        expiresAt: '2026-03-01T00:00:00.000Z',
+      };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
   mockedEnqueueJobQueueMessage.mockReset();
   mockedEnqueueJobQueueMessage.mockResolvedValue({
     id: 'job_123',
@@ -204,7 +252,7 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/convert', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -296,7 +344,7 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/dry-run', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -356,7 +404,7 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/dry-run', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({}),
@@ -422,7 +470,7 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/batch-upload', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -495,7 +543,7 @@ describe('POST /v1/tenants/:tenantId/migrations/ob2/batch-upload', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -568,7 +616,7 @@ describe('POST /v1/tenants/:tenantId/migrations/credly/ingest', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -606,7 +654,7 @@ describe('POST /v1/tenants/:tenantId/migrations/credly/ingest', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -664,7 +712,7 @@ describe('POST /v1/tenants/:tenantId/migrations/parchment/ingest', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -723,7 +771,7 @@ describe('POST /v1/tenants/:tenantId/migrations/parchment/ingest', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
         body: formData,
       },
@@ -794,7 +842,7 @@ describe('migration progress dashboard and retry controls', () => {
       {
         method: 'GET',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
         },
       },
       env,
@@ -851,7 +899,7 @@ describe('migration progress dashboard and retry controls', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -896,7 +944,7 @@ describe('migration progress dashboard and retry controls', () => {
       {
         method: 'POST',
         headers: {
-          cookie: 'credtrail_session=test-session-token',
+          cookie: 'better-auth.session_token=test-session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({}),

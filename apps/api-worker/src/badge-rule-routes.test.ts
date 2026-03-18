@@ -7,6 +7,16 @@ const { mockedIssueBadgeForTenant, mockedCreateGradebookProvider } = vi.hoisted(
   };
 });
 
+const {
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -61,6 +71,25 @@ vi.mock('./lms/gradebook-provider', async () => {
   return {
     ...actual,
     createGradebookProvider: mockedCreateGradebookProvider,
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -350,6 +379,25 @@ const sampleApprovalEvent = (
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+      return {
+        userId: 'usr_123',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth' as const,
+        expiresAt: '2026-02-20T00:00:00.000Z',
+      };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
 
   mockedFindActiveSessionByHash.mockReset();
   mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
@@ -408,7 +456,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -441,7 +489,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -473,7 +521,7 @@ describe('badge rule routes', () => {
       '/v1/tenants/tenant_123/badge-rule-value-lists',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -499,7 +547,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -539,7 +587,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -591,7 +639,7 @@ describe('badge rule routes', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -657,7 +705,7 @@ describe('badge rule routes', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -704,7 +752,7 @@ describe('badge rule routes', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -726,7 +774,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -796,7 +844,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -901,7 +949,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -998,7 +1046,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -1053,7 +1101,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -1163,7 +1211,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -1236,7 +1284,7 @@ describe('badge rule routes', () => {
       '/v1/tenants/tenant_123/badge-rules/review-queue?status=pending',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -1286,7 +1334,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({
@@ -1331,7 +1379,7 @@ describe('badge rule routes', () => {
       {
         method: 'POST',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
           'content-type': 'application/json',
         },
         body: JSON.stringify({

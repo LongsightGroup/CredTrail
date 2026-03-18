@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const {
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -25,6 +35,25 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -199,6 +228,25 @@ const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogReco
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+      return {
+        userId: 'usr_123',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth' as const,
+        expiresAt: '2026-02-11T22:00:00.000Z',
+      };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
 });
 
 describe('assertion lifecycle endpoints', () => {
@@ -257,7 +305,7 @@ describe('assertion lifecycle endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -286,7 +334,7 @@ describe('assertion lifecycle endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -333,7 +381,7 @@ describe('assertion lifecycle endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -384,7 +432,7 @@ describe('assertion lifecycle endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           toState: 'suspended',
@@ -467,7 +515,7 @@ describe('assertion lifecycle endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           toState: 'revoked',
@@ -503,7 +551,7 @@ describe('assertion lifecycle endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           toState: 'expired',
@@ -543,7 +591,7 @@ describe('assertion lifecycle endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           toState: 'active',
