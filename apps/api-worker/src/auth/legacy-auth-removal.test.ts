@@ -96,6 +96,16 @@ describe('legacy auth removal cleanup contract', () => {
     expect(adapterModule).not.toHaveProperty('createCompositeAuthProvider');
   });
 
+  it('describes hosted auth as Better Auth-backed in the app README', () => {
+    const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
+
+    expect(readme).toContain('Better Auth-backed passwordless email login');
+    expect(readme).toContain('Better Auth-backed institutional sign-in');
+    expect(readme).toContain('Better Auth sessions with tenant-scoped authorization');
+    expect(readme).not.toContain('Magic link authentication');
+    expect(readme).not.toContain('Session management - Server-side sessions with secure cookie handling');
+  });
+
   it('keeps active auth runtime sources free of legacy auth helper symbols', () => {
     const source = [
       readFileSync(new URL('./better-auth-adapter.ts', import.meta.url), 'utf8'),
@@ -104,7 +114,7 @@ describe('legacy auth removal cleanup contract', () => {
     ].join('\n');
 
     expect(source).not.toMatch(
-      /createLegacyAuthProvider|resolveLegacySessionRecord|createCompositeAuthProvider|credtrail_session|legacy_magic_link|legacy_lti|createMagicLinkToken|findMagicLinkTokenByHash|markMagicLinkTokenUsed|createSession|findActiveSessionByHash|revokeSessionByHash/,
+      /createLegacyAuthProvider|resolveLegacySessionRecord|createCompositeAuthProvider|credtrail_session|legacy_magic_link|legacy_lti|createMagicLinkToken|findMagicLinkTokenByHash|markMagicLinkTokenUsed|createSession|findActiveSessionByHash|touchSession|revokeSessionByHash/,
     );
   });
 

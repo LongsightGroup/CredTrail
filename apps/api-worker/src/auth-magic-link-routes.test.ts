@@ -35,16 +35,8 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     createAuditLog: vi.fn(),
-    createMagicLinkToken: vi.fn(),
-    createSession: vi.fn(),
     ensureTenantMembership: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
-    findMagicLinkTokenByHash: vi.fn(),
-    isMagicLinkTokenValid: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUserFn,
-    markMagicLinkTokenUsed: vi.fn(),
-    revokeSessionByHash: vi.fn(),
-    touchSession: vi.fn(),
     upsertUserByEmail: vi.fn(),
   };
 });
@@ -87,18 +79,9 @@ vi.mock('./auth/break-glass-policy', async () => {
 
 import {
   createAuditLog,
-  createMagicLinkToken,
-  createSession,
   ensureTenantMembership,
-  findActiveSessionByHash,
-  findMagicLinkTokenByHash,
-  isMagicLinkTokenValid,
   listAccessibleTenantContextsForUser,
-  markMagicLinkTokenUsed,
-  revokeSessionByHash,
-  touchSession,
   upsertUserByEmail,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -106,16 +89,8 @@ import { createPostgresDatabase } from '@credtrail/db/postgres';
 import { app } from './index';
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
-const mockedCreateMagicLinkToken = vi.mocked(createMagicLinkToken);
-const mockedCreateSession = vi.mocked(createSession);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
-const mockedFindMagicLinkTokenByHash = vi.mocked(findMagicLinkTokenByHash);
-const mockedIsMagicLinkTokenValid = vi.mocked(isMagicLinkTokenValid);
 const mockedListAccessibleTenantContextsForUser = vi.mocked(listAccessibleTenantContextsForUser);
-const mockedMarkMagicLinkTokenUsed = vi.mocked(markMagicLinkTokenUsed);
-const mockedRevokeSessionByHash = vi.mocked(revokeSessionByHash);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 
@@ -136,20 +111,6 @@ const createEnv = (
     DATABASE_URL: 'postgres://credtrail-test.local/db',
     BADGE_OBJECTS: {} as R2Bucket,
     PLATFORM_DOMAIN: 'credtrail.test',
-  };
-};
-
-const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
-  return {
-    id: 'ses_123',
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-18T22:00:00.000Z',
-    lastSeenAt: '2026-02-18T12:00:00.000Z',
-    revokedAt: null,
-    createdAt: '2026-02-18T12:00:00.000Z',
-    ...overrides,
   };
 };
 
@@ -281,18 +242,6 @@ beforeEach(() => {
     occurredAt: '2026-02-18T12:00:00.000Z',
     createdAt: '2026-02-18T12:00:00.000Z',
   });
-  mockedCreateMagicLinkToken.mockReset();
-  mockedCreateMagicLinkToken.mockResolvedValue({
-    id: 'mlt_123',
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    magicTokenHash: 'hash_123',
-    expiresAt: '2026-02-18T12:10:00.000Z',
-    usedAt: null,
-    createdAt: '2026-02-18T12:00:00.000Z',
-  });
-  mockedCreateSession.mockReset();
-  mockedCreateSession.mockResolvedValue(sampleSession());
   mockedEnsureTenantMembership.mockReset();
   mockedEnsureTenantMembership.mockResolvedValue({
     membership: {
@@ -304,9 +253,6 @@ beforeEach(() => {
     },
     created: false,
   });
-  mockedFindActiveSessionByHash.mockReset();
-  mockedFindMagicLinkTokenByHash.mockReset();
-  mockedIsMagicLinkTokenValid.mockReset();
   mockedListAccessibleTenantContextsForUser.mockReset();
   mockedListAccessibleTenantContextsForUser.mockResolvedValue([
     {
@@ -317,12 +263,6 @@ beforeEach(() => {
       membershipRole: 'viewer',
     },
   ]);
-  mockedMarkMagicLinkTokenUsed.mockReset();
-  mockedMarkMagicLinkTokenUsed.mockResolvedValue();
-  mockedRevokeSessionByHash.mockReset();
-  mockedRevokeSessionByHash.mockResolvedValue();
-  mockedTouchSession.mockReset();
-  mockedTouchSession.mockResolvedValue();
   mockedUpsertUserByEmail.mockReset();
   mockedUpsertUserByEmail.mockResolvedValue({
     id: 'usr_123',
@@ -730,7 +670,6 @@ describe('magic-link auth routes', () => {
         email: 'learner@example.edu',
       }),
     );
-    expect(mockedCreateMagicLinkToken).not.toHaveBeenCalled();
   });
 
   it('delegates JSON verify to Better Auth-backed session creation instead of legacy token tables', async () => {
@@ -765,9 +704,6 @@ describe('magic-link auth routes', () => {
     });
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(mockedCreateSession).not.toHaveBeenCalled();
-    expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
-    expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
   });
 
   it('delegates browser GET verify to Better Auth-backed session creation instead of legacy token tables', async () => {
@@ -783,9 +719,6 @@ describe('magic-link auth routes', () => {
     expect(response.headers.get('location')).toBe('/auth/resolve');
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(mockedCreateSession).not.toHaveBeenCalled();
-    expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
-    expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
   });
 
   it('falls back to the neutral resolver after browser verify when no explicit next path is present', async () => {
@@ -852,7 +785,6 @@ describe('magic-link auth routes', () => {
     });
     expect(logoutResponse.headers.get('set-cookie')).toContain('better-auth.session_token=');
     expect(betterAuthProvider.revokeCurrentSession).toHaveBeenCalledTimes(1);
-    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
 
     const afterLogoutResponse = await isolatedApp.request(
       '/v1/auth/session',
@@ -1033,8 +965,6 @@ describe('magic-link auth routes', () => {
   });
 
   it('does not rely on credtrail_session for hosted auth session inspection', async () => {
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-
     const response = await app.request(
       '/v1/auth/session',
       {
@@ -1052,8 +982,6 @@ describe('magic-link auth routes', () => {
     expect(body).toEqual({
       error: 'Not authenticated',
     });
-    expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
-    expect(mockedTouchSession).not.toHaveBeenCalled();
   });
 
   it('does not emit credtrail_session clears on hosted logout after Better Auth cleanup', async () => {
@@ -1076,6 +1004,5 @@ describe('magic-link auth routes', () => {
       status: 'signed_out',
     });
     expect(response.headers.get('set-cookie') ?? '').not.toContain('credtrail_session=');
-    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
   });
 });

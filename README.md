@@ -34,10 +34,10 @@ Open-source Open Badges 3.0 platform with Cloudflare SaaS and Docker self-host r
 - **Achievement metadata** - Rich achievement descriptions with evidence links
 
 ### ✅ Authentication & Access Control
-- **Magic link authentication** - Passwordless email-based login
-- **Institutional SSO integration** - Learner identity linking for institution-managed sign-in flows
+- **Hosted authentication** - Better Auth-backed passwordless email login through CredTrail wrapper routes
+- **Institutional SSO integration** - Better Auth-backed institutional sign-in with learner identity linking
 - **Multi-tenant RBAC** - Tenant-scoped roles: owner, admin, issuer
-- **Session management** - Server-side sessions with secure cookie handling
+- **Session management** - Better Auth sessions with tenant-scoped authorization and secure cookie handling
 - **Guided onboarding** - New tenant setup flow with first badge template and issuance walkthrough
 
 ### ✅ Open Badges 3.0 API Compliance

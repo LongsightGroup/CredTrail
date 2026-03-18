@@ -16,7 +16,6 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     addLearnerIdentityAlias: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
@@ -25,7 +24,6 @@ vi.mock('@credtrail/db', async () => {
     listLearnerIdentitiesByProfile: vi.fn(),
     removeLearnerIdentityAliasesByType: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
-    touchSession: vi.fn(),
   };
 });
 
@@ -56,7 +54,6 @@ vi.mock('./auth/better-auth-adapter', async () => {
 
 import {
   addLearnerIdentityAlias,
-  findActiveSessionByHash,
   findLearnerProfileByIdentity,
   findTenantMembership,
   findUserById,
@@ -65,10 +62,8 @@ import {
   listLearnerIdentitiesByProfile,
   removeLearnerIdentityAliasesByType,
   resolveLearnerProfileForIdentity,
-  touchSession,
   type LearnerBadgeSummaryRecord,
   type LearnerProfileRecord,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
 } from '@credtrail/db';
@@ -81,7 +76,6 @@ interface ErrorResponse {
 }
 
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
@@ -90,7 +84,6 @@ const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
 const mockedListLearnerIdentitiesByProfile = vi.mocked(listLearnerIdentitiesByProfile);
 const mockedRemoveLearnerIdentityAliasesByType = vi.mocked(removeLearnerIdentityAliasesByType);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -188,19 +181,6 @@ const sampleLearnerProfile = (overrides?: Partial<LearnerProfileRecord>): Learne
   };
 };
 
-const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
-  return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
-    revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-  };
-};
-
 const sampleLearnerBadge = (
   overrides?: Partial<LearnerBadgeSummaryRecord>,
 ): LearnerBadgeSummaryRecord => {
@@ -272,8 +252,6 @@ afterEach(() => {
 
 describe('GET /tenants/:tenantId/learner/dashboard', () => {
   beforeEach(() => {
-    mockedFindActiveSessionByHash.mockReset();
-    mockedTouchSession.mockReset();
     mockedFindUserById.mockReset();
     mockedFindUserById.mockResolvedValue(sampleUserRecord());
     mockedResolveLearnerProfileForIdentity.mockReset();
@@ -290,18 +268,11 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
 
     expect(response.status).toBe(401);
     expect(body.error).toBe('Not authenticated');
-    expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
 
   it('authorizes learner dashboard from requested tenant membership even when session tenant differs', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(
-      sampleSession({
-        tenantId: 'tenant_other',
-      }),
-    );
-    mockedTouchSession.mockResolvedValue();
     mockedListLearnerBadgeSummaries.mockResolvedValue([]);
 
     const response = await app.request(
@@ -340,19 +311,12 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(body).toContain('Your credential collection');
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
     expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
-    expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the authenticated user lacks membership for the requested tenant', async () => {
     const env = createEnv();
 
     mockedFindTenantMembership.mockResolvedValue(null);
-    mockedFindActiveSessionByHash.mockResolvedValue(
-      sampleSession({
-        tenantId: 'tenant_other',
-      }),
-    );
-    mockedTouchSession.mockResolvedValue();
 
     const response = await app.request(
       '/tenants/tenant_123/learner/dashboard',
@@ -373,8 +337,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   it('renders learner badge list with share links', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListLearnerBadgeSummaries.mockResolvedValue([
       sampleLearnerBadge(),
       sampleLearnerBadge({
@@ -426,8 +388,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   it('renders configured learner DID and status notice', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListLearnerIdentitiesByProfile.mockResolvedValue([
       {
         id: 'lid_did_123',
@@ -466,8 +426,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   it('shows an explicit switch-organization link only when the learner can access more than one tenant', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListLearnerBadgeSummaries.mockResolvedValue([]);
     mockedListAccessibleTenantContextsForUser.mockResolvedValue([
       {
@@ -565,8 +523,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   it('renders empty state when learner has no earned badges yet', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListLearnerBadgeSummaries.mockResolvedValue([]);
 
     const response = await app.request(
@@ -588,8 +544,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
 
 describe('POST /tenants/:tenantId/learner/settings/did', () => {
   beforeEach(() => {
-    mockedFindActiveSessionByHash.mockReset();
-    mockedTouchSession.mockReset();
     mockedFindUserById.mockReset();
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedFindLearnerProfileByIdentity.mockReset();
@@ -621,8 +575,6 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
   it('saves learner DID and redirects with updated status', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedFindUserById.mockResolvedValue(sampleUserRecord());
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockResolvedValue(null);
@@ -668,8 +620,6 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
   it('clears learner DID and redirects with cleared status', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedFindUserById.mockResolvedValue(sampleUserRecord());
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedRemoveLearnerIdentityAliasesByType.mockResolvedValue(1);
@@ -708,8 +658,6 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
   it('rejects DID already linked to another learner profile', async () => {
     const env = createEnv();
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedFindUserById.mockResolvedValue(sampleUserRecord());
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockResolvedValue(
@@ -746,9 +694,6 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
 
   it('rejects invalid DID values and redirects with invalid status', async () => {
     const env = createEnv();
-
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
 
     const response = await app.request(
       '/tenants/tenant_123/learner/settings/did',

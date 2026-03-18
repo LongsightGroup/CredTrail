@@ -32,11 +32,9 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     createAuditLog: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
     findTenantAuthProviderById: mockedFindTenantAuthProviderById,
     findTenantMembership: vi.fn(),
     findTenantById: vi.fn(),
-    touchSession: vi.fn(),
     findTenantAuthPolicy: mockedFindTenantAuthPolicy,
     resolveTenantAuthPolicy: mockedResolveTenantAuthPolicy,
     upsertTenantAuthPolicy: mockedUpsertTenantAuthPolicy,
@@ -74,12 +72,9 @@ vi.mock('./auth/better-auth-adapter', async () => {
 
 import {
   createAuditLog,
-  findActiveSessionByHash,
   findTenantMembership,
   findTenantById,
-  touchSession,
   type AuditLogRecord,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
   type TenantRecord,
@@ -93,10 +88,8 @@ interface ErrorResponse {
 }
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -113,19 +106,6 @@ const createEnv = (): {
     DATABASE_URL: 'postgres://credtrail-test.local/db',
     BADGE_OBJECTS: {} as R2Bucket,
     PLATFORM_DOMAIN: 'credtrail.test',
-  };
-};
-
-const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
-  return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_admin',
-    sessionTokenHash: 'session_hash',
-    expiresAt: '2026-03-16T23:00:00.000Z',
-    lastSeenAt: '2026-03-16T12:00:00.000Z',
-    revokedAt: null,
-    createdAt: '2026-03-16T12:00:00.000Z',
   };
 };
 
@@ -202,10 +182,6 @@ const sampleAuthProvider = (overrides?: Record<string, unknown>): Record<string,
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
-  mockedFindActiveSessionByHash.mockReset();
-  mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-  mockedTouchSession.mockReset();
-  mockedTouchSession.mockResolvedValue();
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership('admin'));
   mockedFindTenantById.mockReset();

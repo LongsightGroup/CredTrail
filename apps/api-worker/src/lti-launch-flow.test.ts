@@ -8,7 +8,6 @@ vi.mock('@credtrail/db', async () => {
     ...actual,
     addLearnerIdentityAlias: vi.fn(),
     createAuthIdentityLink: vi.fn(),
-    createSession: vi.fn(),
     ensureTenantMembership: vi.fn(),
     findAuthIdentityLinkByAuthUserId: vi.fn(),
     findAuthIdentityLinkByCredtrailUserId: vi.fn(),
@@ -31,7 +30,6 @@ vi.mock('@credtrail/db/postgres', () => {
 import {
   addLearnerIdentityAlias,
   createAuthIdentityLink,
-  createSession,
   ensureTenantMembership,
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
@@ -44,7 +42,6 @@ import {
   upsertUserByEmail,
   type LearnerProfileRecord,
   type LtiIssuerRegistrationRecord,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
 } from '@credtrail/db';
@@ -58,7 +55,6 @@ interface ErrorResponse {
 
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedCreateAuthIdentityLink = vi.mocked(createAuthIdentityLink);
-const mockedCreateSession = vi.mocked(createSession);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
 const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByAuthUserId);
 const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(findAuthIdentityLinkByCredtrailUserId);
@@ -262,19 +258,6 @@ const sampleTenantMembership = (
     createdAt: '2026-02-10T22:00:00.000Z',
     updatedAt: '2026-02-10T22:00:00.000Z',
     ...overrides,
-  };
-};
-
-const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
-  return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
-    revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
   };
 };
 
@@ -500,15 +483,6 @@ describe('LTI 1.3 core launch flow', () => {
       previousRole: 'viewer',
       changed: true,
     });
-    mockedCreateSession.mockReset();
-    mockedCreateSession.mockImplementation((_db, input) => {
-      return Promise.resolve(
-        sampleSession({
-          tenantId: input.tenantId,
-          userId: input.userId,
-        }),
-      );
-    });
   });
 
   const createLtiEnv = (options?: {
@@ -601,7 +575,6 @@ describe('LTI 1.3 core launch flow', () => {
         userId: linkedUserId,
       }),
     );
-    expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 
   it('redirects OIDC login initiation to issuer authorization endpoint with required parameters', async () => {
@@ -783,7 +756,6 @@ describe('LTI 1.3 core launch flow', () => {
       userId: linkedUserId,
       role: 'issuer',
     });
-    expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 
   it('pulls NRPS roster for instructor launch and renders bulk issuance view', async () => {

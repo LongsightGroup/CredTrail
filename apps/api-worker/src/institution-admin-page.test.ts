@@ -23,7 +23,6 @@ vi.mock('@credtrail/db', async () => {
 
   return {
     ...actual,
-    findActiveSessionByHash: vi.fn(),
     findTenantAuthPolicy: mockedFindTenantAuthPolicy,
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -36,7 +35,6 @@ vi.mock('@credtrail/db', async () => {
     listBadgeTemplates: vi.fn(),
     listTenantApiKeys: vi.fn(),
     listTenantOrgUnits: vi.fn(),
-    touchSession: vi.fn(),
   };
 });
 
@@ -66,7 +64,6 @@ vi.mock('./auth/better-auth-adapter', async () => {
 });
 
 import {
-  findActiveSessionByHash,
   findTenantById,
   findTenantMembership,
   findUserById,
@@ -75,8 +72,6 @@ import {
   listBadgeTemplates,
   listTenantApiKeys,
   listTenantOrgUnits,
-  touchSession,
-  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
 } from '@credtrail/db';
@@ -84,8 +79,6 @@ import { createPostgresDatabase } from '@credtrail/db/postgres';
 
 import { app } from './index';
 
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
 const mockedFindUserById = vi.mocked(findUserById);
@@ -114,19 +107,6 @@ const createEnv = (): {
   };
 };
 
-const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
-  return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_admin',
-    sessionTokenHash: 'session_hash',
-    expiresAt: '2026-02-18T23:00:00.000Z',
-    lastSeenAt: '2026-02-18T12:00:00.000Z',
-    revokedAt: null,
-    createdAt: '2026-02-18T12:00:00.000Z',
-  };
-};
-
 const sampleMembership = (role: TenantMembershipRecord['role']): TenantMembershipRecord => {
   return {
     tenantId: 'tenant_123',
@@ -140,8 +120,6 @@ const sampleMembership = (role: TenantMembershipRecord['role']): TenantMembershi
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
-  mockedFindActiveSessionByHash.mockReset();
-  mockedTouchSession.mockReset();
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership('admin'));
   mockedFindTenantById.mockReset();
@@ -346,8 +324,6 @@ describe('GET /tenants/:tenantId/admin', () => {
 
   it('returns 403 page when membership role is below admin', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedFindTenantMembership.mockResolvedValue(sampleMembership('viewer'));
 
     const response = await app.request(
@@ -369,8 +345,6 @@ describe('GET /tenants/:tenantId/admin', () => {
 
   it('shows empty-state CTA when no rules exist', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListBadgeIssuanceRules.mockResolvedValue([]);
     mockedListBadgeIssuanceRuleVersions.mockResolvedValue([]);
 
@@ -393,8 +367,6 @@ describe('GET /tenants/:tenantId/admin', () => {
 
   it('renders institution admin dashboard for admin membership', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
 
     const response = await app.request(
       '/tenants/tenant_123/admin',
@@ -496,8 +468,6 @@ describe('GET /tenants/:tenantId/admin', () => {
 
   it('shows an explicit switch-organization entry point only for multi-tenant admins', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedListAccessibleTenantContextsForUser.mockResolvedValue([
       {
         tenantId: 'tenant_123',
@@ -534,8 +504,6 @@ describe('GET /tenants/:tenantId/admin', () => {
 
   it('renders enterprise auth settings for enterprise tenants', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
     mockedFindTenantById.mockResolvedValue({
       id: 'tenant_123',
       slug: 'tenant-123',
@@ -586,8 +554,6 @@ describe('GET /tenants/:tenantId/admin/rules/new', () => {
 
   it('renders dedicated rule-builder page for admin membership', async () => {
     const env = createEnv();
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
 
     const response = await app.request(
       '/tenants/tenant_123/admin/rules/new',
@@ -637,8 +603,6 @@ describe('GET /tenants/:tenantId/admin/rules/new', () => {
       ...createEnv(),
       RULE_BUILDER_TUTORIAL_EMBED_URL: 'https://videos.example.edu/embed/rule-builder',
     };
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
 
     const response = await app.request(
       '/tenants/tenant_123/admin/rules/new',
