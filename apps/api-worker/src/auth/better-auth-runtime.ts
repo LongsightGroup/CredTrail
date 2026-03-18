@@ -1,4 +1,10 @@
-import type { SqlDatabase } from '@credtrail/db';
+import {
+  createAuthIdentityLink,
+  findAuthIdentityLinkByAuthUserId,
+  findAuthIdentityLinkByCredtrailUserId,
+  findUserById,
+  type SqlDatabase,
+} from '@credtrail/db';
 import { betterAuth } from 'better-auth';
 import {
   createAdapterFactory,
@@ -519,6 +525,132 @@ export interface BetterAuthDatabaseSessionRecord {
   userEmailVerified: boolean;
 }
 
+interface BetterAuthDatabaseUserRecord {
+  id: string;
+  email: string | null;
+  emailVerified: boolean;
+}
+
+const normalizedEmail = (email: string | null): string | null => {
+  const trimmed = email?.trim();
+
+  if (trimmed === undefined || trimmed.length === 0) {
+    return null;
+  }
+
+  return trimmed.toLowerCase();
+};
+
+const findBetterAuthUserByEmail = async (
+  db: SqlDatabase,
+  email: string,
+): Promise<BetterAuthDatabaseUserRecord | null> => {
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        email,
+        email_verified AS emailVerified
+      FROM auth.user
+      WHERE LOWER(email) = LOWER(?)
+      LIMIT 1
+    `,
+    )
+    .bind(email)
+    .first<BetterAuthDatabaseUserRecord>();
+
+  return row;
+};
+
+const createBetterAuthUser = async (input: {
+  db: SqlDatabase;
+  email: string | null;
+}): Promise<BetterAuthDatabaseUserRecord> => {
+  const userId = `ba_usr_${crypto.randomUUID().replace(/-/g, '')}`;
+  const email = normalizedEmail(input.email);
+
+  await input.db
+    .prepare(
+      `
+      INSERT INTO auth.user (
+        id,
+        email,
+        email_verified,
+        name,
+        image
+      )
+      VALUES (?, ?, ?, NULL, NULL)
+    `,
+    )
+    .bind(userId, email, false)
+    .run();
+
+  return {
+    id: userId,
+    email,
+    emailVerified: false,
+  };
+};
+
+const resolveBetterAuthUser = async (input: {
+  db: SqlDatabase;
+  runtimeConfig: BetterAuthRuntimeConfig;
+  credtrailUserId: string;
+}): Promise<{
+  authUserId: string;
+}> => {
+  const existingLink = await findAuthIdentityLinkByCredtrailUserId(
+    input.db,
+    input.runtimeConfig.authSystem,
+    input.credtrailUserId,
+  );
+
+  if (existingLink !== null) {
+    return {
+      authUserId: existingLink.authUserId,
+    };
+  }
+
+  const credtrailUser = await findUserById(input.db, input.credtrailUserId);
+
+  if (credtrailUser === null) {
+    throw new Error('CredTrail user not found for Better Auth session creation');
+  }
+
+  const matchedAuthUser =
+    credtrailUser.email.length === 0
+      ? null
+      : await findBetterAuthUserByEmail(input.db, credtrailUser.email);
+  const linkedMatchedUser =
+    matchedAuthUser === null
+      ? null
+      : await findAuthIdentityLinkByAuthUserId(
+          input.db,
+          input.runtimeConfig.authSystem,
+          matchedAuthUser.id,
+        );
+  const betterAuthUser =
+    matchedAuthUser !== null &&
+    (linkedMatchedUser === null || linkedMatchedUser.credtrailUserId === input.credtrailUserId)
+      ? matchedAuthUser
+      : await createBetterAuthUser({
+          db: input.db,
+          email: credtrailUser.email,
+        });
+
+  await createAuthIdentityLink(input.db, {
+    authSystem: input.runtimeConfig.authSystem,
+    authUserId: betterAuthUser.id,
+    credtrailUserId: input.credtrailUserId,
+    emailSnapshot: credtrailUser.email,
+  });
+
+  return {
+    authUserId: betterAuthUser.id,
+  };
+};
+
 export const findBetterAuthSessionByToken = async (
   db: SqlDatabase,
   sessionToken: string,
@@ -544,6 +676,63 @@ export const findBetterAuthSessionByToken = async (
     .first<BetterAuthDatabaseSessionRecord>();
 
   return row;
+};
+
+export const createBetterAuthSessionForCredtrailUser = async (input: {
+  db: SqlDatabase;
+  runtimeConfig: BetterAuthRuntimeConfig;
+  credtrailUserId: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}): Promise<{
+  sessionToken: string;
+  session: BetterAuthDatabaseSessionRecord;
+}> => {
+  const resolvedUser = await resolveBetterAuthUser({
+    db: input.db,
+    runtimeConfig: input.runtimeConfig,
+    credtrailUserId: input.credtrailUserId,
+  });
+  const sessionId = `ba_ses_${crypto.randomUUID().replace(/-/g, '')}`;
+  const sessionToken = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(
+    Date.now() + input.runtimeConfig.session.expiresInSeconds * 1000,
+  ).toISOString();
+
+  await input.db
+    .prepare(
+      `
+      INSERT INTO auth.session (
+        id,
+        token,
+        user_id,
+        expires_at,
+        ip_address,
+        user_agent
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `,
+    )
+    .bind(
+      sessionId,
+      sessionToken,
+      resolvedUser.authUserId,
+      expiresAt,
+      input.ipAddress ?? null,
+      input.userAgent ?? null,
+    )
+    .run();
+
+  const session = await findBetterAuthSessionByToken(input.db, sessionToken);
+
+  if (session === null) {
+    throw new Error('Better Auth session creation succeeded but the session could not be loaded');
+  }
+
+  return {
+    sessionToken,
+    session,
+  };
 };
 
 export const createCredtrailBetterAuth = (input: {

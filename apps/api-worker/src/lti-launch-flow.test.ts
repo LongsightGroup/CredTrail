@@ -7,8 +7,11 @@ vi.mock('@credtrail/db', async () => {
   return {
     ...actual,
     addLearnerIdentityAlias: vi.fn(),
+    createAuthIdentityLink: vi.fn(),
     createSession: vi.fn(),
     ensureTenantMembership: vi.fn(),
+    findAuthIdentityLinkByAuthUserId: vi.fn(),
+    findAuthIdentityLinkByCredtrailUserId: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findUserById: vi.fn(),
     listBadgeTemplates: vi.fn(),
@@ -27,9 +30,13 @@ vi.mock('@credtrail/db/postgres', () => {
 
 import {
   addLearnerIdentityAlias,
+  createAuthIdentityLink,
   createSession,
   ensureTenantMembership,
+  findAuthIdentityLinkByAuthUserId,
+  findAuthIdentityLinkByCredtrailUserId,
   findLearnerProfileByIdentity,
+  findUserById,
   listBadgeTemplates,
   listLtiIssuerRegistrations,
   resolveLearnerProfileForIdentity,
@@ -50,17 +57,144 @@ interface ErrorResponse {
 }
 
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
+const mockedCreateAuthIdentityLink = vi.mocked(createAuthIdentityLink);
 const mockedCreateSession = vi.mocked(createSession);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
+const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByAuthUserId);
+const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(findAuthIdentityLinkByCredtrailUserId);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
+const mockedFindUserById = vi.mocked(findUserById);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
 const mockedUpsertTenantMembershipRole = vi.mocked(upsertTenantMembershipRole);
 const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
+
+interface AuthUserRow {
+  id: string;
+  email: string | null;
+  email_verified: boolean;
+}
+
+interface AuthSessionRow {
+  id: string;
+  token: string;
+  user_id: string;
+  expires_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+}
+
+interface AuthIdentityLinkRow {
+  id: string;
+  authSystem: string;
+  authUserId: string;
+  authAccountId: string | null;
+  credtrailUserId: string;
+  emailSnapshot: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const authUsers: AuthUserRow[] = [];
+const authSessions: AuthSessionRow[] = [];
+const authIdentityLinks: AuthIdentityLinkRow[] = [];
+
+const fakeDbPrepare = vi.fn((sql: string) => {
+  const normalizedSql = sql.replace(/\s+/g, ' ').trim();
+  let params: unknown[] = [];
+
+  return {
+    bind(...boundParams: unknown[]) {
+      params = boundParams;
+      return this;
+    },
+    first: async <T>() => {
+      if (
+        normalizedSql.includes('FROM auth.user') &&
+        normalizedSql.includes('LOWER(email) = LOWER(?)')
+      ) {
+        const email = String(params[0] ?? '').toLowerCase();
+        const row =
+          authUsers.find((candidate) => (candidate.email ?? '').toLowerCase() === email) ?? null;
+
+        return row === null
+          ? null
+          : ({
+              id: row.id,
+              email: row.email,
+              emailVerified: row.email_verified,
+            } as T);
+      }
+
+      if (
+        normalizedSql.includes('FROM auth.session AS session') &&
+        normalizedSql.includes('WHERE session.token = ?')
+      ) {
+        const token = String(params[0] ?? '');
+        const session = authSessions.find((candidate) => candidate.token === token) ?? null;
+        const user =
+          session === null
+            ? null
+            : authUsers.find((candidate) => candidate.id === session.user_id) ?? null;
+
+        return session === null
+          ? null
+          : ({
+              sessionId: session.id,
+              sessionToken: session.token,
+              userId: session.user_id,
+              expiresAt: session.expires_at,
+              userEmail: user?.email ?? null,
+              userEmailVerified: user?.email_verified ?? false,
+            } as T);
+      }
+
+      throw new Error(`Unhandled fakeDb first() SQL: ${normalizedSql}`);
+    },
+    all: async <T>() => {
+      return {
+        success: true,
+        meta: {},
+        results: [] as T[],
+      };
+    },
+    run: async () => {
+      if (normalizedSql.includes('INSERT INTO auth.user')) {
+        authUsers.push({
+          id: String(params[0] ?? ''),
+          email: (params[1] as string | null | undefined) ?? null,
+          email_verified: Boolean(params[2]),
+        });
+        return {
+          success: true,
+          meta: {},
+        };
+      }
+
+      if (normalizedSql.includes('INSERT INTO auth.session')) {
+        authSessions.push({
+          id: String(params[0] ?? ''),
+          token: String(params[1] ?? ''),
+          user_id: String(params[2] ?? ''),
+          expires_at: String(params[3] ?? ''),
+          ip_address: (params[4] as string | null | undefined) ?? null,
+          user_agent: (params[5] as string | null | undefined) ?? null,
+        });
+        return {
+          success: true,
+          meta: {},
+        };
+      }
+
+      throw new Error(`Unhandled fakeDb run() SQL: ${normalizedSql}`);
+    },
+  };
+});
+
 const fakeDb = {
-  prepare: vi.fn(),
+  prepare: fakeDbPrepare,
 } as unknown as SqlDatabase;
 
 const createEnv = (): {
@@ -312,16 +446,64 @@ describe('LTI 1.3 core launch flow', () => {
   const linkedUserId = 'usr_lti_123';
 
   beforeEach(() => {
+    authUsers.length = 0;
+    authSessions.length = 0;
+    authIdentityLinks.length = 0;
+    fakeDbPrepare.mockClear();
     mockedCreatePostgresDatabase.mockReset();
     mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+    mockedCreateAuthIdentityLink.mockReset();
+    mockedCreateAuthIdentityLink.mockImplementation(
+      async (_db, input): Promise<(typeof authIdentityLinks)[number]> => {
+        const link = {
+          id: 'ail_123',
+          authSystem: input.authSystem,
+          authUserId: input.authUserId,
+          authAccountId: input.authAccountId ?? null,
+          credtrailUserId: input.credtrailUserId,
+          emailSnapshot: input.emailSnapshot ?? null,
+          createdAt: '2026-02-10T22:00:00.000Z',
+          updatedAt: '2026-02-10T22:00:00.000Z',
+        };
+        authIdentityLinks.push(link);
+        return link;
+      },
+    );
     mockedListLtiIssuerRegistrations.mockReset();
     mockedListLtiIssuerRegistrations.mockResolvedValue([]);
+    mockedFindAuthIdentityLinkByAuthUserId.mockReset();
+    mockedFindAuthIdentityLinkByAuthUserId.mockImplementation(async (_db, authSystem, authUserId) => {
+      return (
+        authIdentityLinks.find(
+          (candidate) =>
+            candidate.authSystem === authSystem && candidate.authUserId === authUserId,
+        ) ?? null
+      );
+    });
+    mockedFindAuthIdentityLinkByCredtrailUserId.mockReset();
+    mockedFindAuthIdentityLinkByCredtrailUserId.mockImplementation(
+      async (_db, authSystem, credtrailUserId) => {
+        return (
+          authIdentityLinks.find(
+            (candidate) =>
+              candidate.authSystem === authSystem &&
+              candidate.credtrailUserId === credtrailUserId,
+          ) ?? null
+        );
+      },
+    );
     mockedListBadgeTemplates.mockReset();
     mockedListBadgeTemplates.mockResolvedValue([sampleBadgeTemplate()]);
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockReset();
     mockedFindLearnerProfileByIdentity.mockResolvedValue(null);
+    mockedFindUserById.mockReset();
+    mockedFindUserById.mockResolvedValue(
+      sampleUserRecord({
+        id: linkedUserId,
+      }),
+    );
     mockedAddLearnerIdentityAlias.mockReset();
     mockedUpsertUserByEmail.mockReset();
     mockedUpsertUserByEmail.mockResolvedValue(
@@ -633,13 +815,7 @@ describe('LTI 1.3 core launch flow', () => {
       userId: linkedUserId,
       role: 'issuer',
     });
-    expect(mockedCreateSession).toHaveBeenCalledWith(
-      fakeDb,
-      expect.objectContaining({
-        tenantId,
-        userId: linkedUserId,
-      }),
-    );
+    expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 
   it('pulls NRPS roster for instructor launch and renders bulk issuance view', async () => {

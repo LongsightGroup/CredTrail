@@ -8,6 +8,7 @@ import {
 import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
 import type {
   InternalAuthProvider,
+  LtiSessionInput,
   RequestMagicLinkInput,
   RequestMagicLinkResult,
 } from './auth-provider';
@@ -42,6 +43,10 @@ export interface BetterAuthAdapterInput<
     context: ContextType,
     token: string,
   ) => Promise<BetterAuthResolvedSession | null>;
+  createLtiSession?: (
+    context: ContextType,
+    input: LtiSessionInput,
+  ) => Promise<BetterAuthResolvedSession>;
   resolveSession: (context: ContextType) => Promise<BetterAuthResolvedSession | null>;
   revokeSession: (context: ContextType) => Promise<void>;
   resolveRequestedTenantContext?: (
@@ -235,6 +240,34 @@ export const createMagicLinkSession = async <
   return principal;
 };
 
+export const createLtiSession = async <
+  ContextType extends BetterAuthAdapterContext<BindingsType>,
+  BindingsType,
+>(
+  context: ContextType,
+  sessionInput: LtiSessionInput,
+  input: BetterAuthAdapterInput<ContextType, BindingsType>,
+): Promise<AuthenticatedPrincipal> => {
+  if (input.createLtiSession === undefined) {
+    throw new Error('Better Auth LTI session creation is not wired yet');
+  }
+
+  const session = await input.createLtiSession(context, sessionInput);
+  const principal = await resolveAuthenticatedPrincipalFromSession({
+    db: input.resolveDatabase(context.env),
+    session,
+    authSystem: input.authSystem,
+  });
+
+  if (principal === null) {
+    input.cacheAuthenticatedPrincipal?.(context, null);
+    throw new Error('Better Auth LTI session could not be linked to a CredTrail user');
+  }
+
+  input.cacheAuthenticatedPrincipal?.(context, principal);
+  return principal;
+};
+
 export const createBetterAuthProvider = <
   ContextType extends BetterAuthAdapterContext<BindingsType>,
   BindingsType,
@@ -248,8 +281,8 @@ export const createBetterAuthProvider = <
     createMagicLinkSession: (context, token) => {
       return createMagicLinkSession(context, token, input);
     },
-    createLtiSession: async () => {
-      throw new Error('Better Auth provider does not create LTI sessions');
+    createLtiSession: (context, sessionInput) => {
+      return createLtiSession(context, sessionInput, input);
     },
     resolveAuthenticatedPrincipal: (context) => {
       return resolveAuthenticatedPrincipal(context, input);

@@ -103,6 +103,7 @@ import {
   REQUESTED_TENANT_COOKIE_NAME,
   buildHostedMagicLinkToken,
   buildHostedMagicLinkUrl,
+  createBetterAuthSessionForCredtrailUser,
   createCredtrailBetterAuth,
   findBetterAuthSessionByToken,
   parseHostedMagicLinkToken,
@@ -590,6 +591,35 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
       },
     };
   },
+  createLtiSession: async (context, input) => {
+    const runtimeConfig = createBetterAuthRuntimeConfig(context.env);
+    const { session, sessionToken } = await createBetterAuthSessionForCredtrailUser({
+      db: resolveDatabase(context.env),
+      runtimeConfig,
+      credtrailUserId: input.userId,
+      userAgent: context.req.header('user-agent') ?? null,
+    });
+
+    setCookie(context, runtimeConfig.session.cookieName, sessionToken, {
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: runtimeConfig.baseURL.startsWith('https://'),
+      path: '/',
+      maxAge: runtimeConfig.session.expiresInSeconds,
+    });
+    rememberRequestedTenant(context, input.tenantId);
+
+    return {
+      sessionId: session.sessionId,
+      accountId: null,
+      expiresAt: session.expiresAt,
+      user: {
+        id: session.userId,
+        email: session.userEmail,
+        emailVerified: session.userEmailVerified,
+      },
+    };
+  },
   resolveSession: resolveCurrentBetterAuthSession,
   revokeSession: async (context) => {
     const { auth } = createBetterAuthRuntime(context);
@@ -626,7 +656,7 @@ const authProvider = createCompositeAuthProvider<AppContext>({
   primary: betterAuthProvider,
   fallback: legacyAuthProvider,
   createMagicLinkSessionProvider: 'primary',
-  createLtiSessionProvider: 'fallback',
+  createLtiSessionProvider: 'primary',
 });
 
 const resolveAuthenticatedPrincipal = async (
