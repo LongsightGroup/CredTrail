@@ -3,6 +3,25 @@ import type { AccessibleTenantContextView } from './tenant-context-selection';
 import { renderPageAssetTags } from '../ui/page-assets';
 import { escapeHtml } from '../utils/display-format';
 
+const renderLoginSteps = (
+  steps: readonly {
+    title: string;
+    body: string;
+  }[],
+): string =>
+  `<ol class="ct-login__steps">
+    ${steps
+      .map(
+        (step) => `<li class="ct-login__step">
+          <span class="ct-login__step-copy">
+            <strong>${escapeHtml(step.title)}</strong>
+            <span>${escapeHtml(step.body)}</span>
+          </span>
+        </li>`,
+      )
+      .join('')}
+  </ol>`;
+
 export const magicLinkLoginPage = (input: {
   tenantId: string;
   nextPath: string;
@@ -64,14 +83,13 @@ export const magicLinkLoginPage = (input: {
       : `<section class="ct-stack" aria-labelledby="enterprise-sso-title">
           <h2 id="enterprise-sso-title" class="ct-login__form-title">Institution sign-in</h2>
           <p class="ct-login__form-text">
-            Continue through your institution identity provider to access this tenant.
+            Continue through your institution identity provider. Your tenant administrator manages the hosted enterprise connection for this sign-in path.
           </p>
           <div id="enterprise-sso-options" class="ct-stack">
             ${enterpriseProviders
               .map((provider) => {
-                const suffix = provider.protocol === 'oidc' ? 'OIDC' : 'SAML';
                 return `<a class="ct-login__submit" href="${escapeHtml(provider.startPath)}">
-                  Continue with ${escapeHtml(provider.label)}${provider.isDefault ? '' : ` (${escapeHtml(suffix)})`}
+                  Continue with ${escapeHtml(provider.label)}
                 </a>`;
               })
               .join('')}
@@ -82,7 +100,7 @@ export const magicLinkLoginPage = (input: {
     : `<section class="ct-stack" aria-labelledby="magic-link-login-title">
           <h2 id="magic-link-login-title" class="ct-login__form-title">Email me a sign-in link</h2>
           <p class="ct-login__form-text">
-            Enter your tenant ID and institution email. We will send the sign-in link from a CredTrail email address.
+            Enter your tenant ID and institution email. We will send a one-time link from CredTrail.
           </p>
           ${accessContextNotice}
           <form id="magic-link-login-form" class="ct-login__form ct-stack">
@@ -99,7 +117,7 @@ export const magicLinkLoginPage = (input: {
             <button type="submit" class="ct-login__submit">Send sign-in link</button>
           </form>
           <p class="ct-login__help">
-            The sign-in email comes from CredTrail, works for this tenant flow, and expires in 10 minutes.
+            The link expires in 10 minutes and returns you to this tenant flow.
           </p>
           <p id="magic-link-login-status" class="ct-login__status" hidden></p>
           <p id="magic-link-dev-link" class="ct-login__dev"></p>
@@ -113,9 +131,37 @@ export const magicLinkLoginPage = (input: {
           <a href="${escapeHtml(explicitLocalLoginPath)}">break-glass local sign-in</a>.
         </p>`;
   const loginIntroText =
-    enterpriseProviders.length > 0 && !localLoginAllowed
-      ? 'Use your institution sign-in to continue into this CredTrail tenant.'
-      : 'Use your tenant ID and institution email to receive a secure sign-in link from CredTrail.';
+    enterpriseProviders.length > 0
+      ? localLoginAllowed
+        ? 'Choose your institution sign-in or request a hosted CredTrail sign-in link.'
+        : 'Continue with your institution sign-in to open this CredTrail tenant.'
+      : 'Enter your tenant ID and institution email. CredTrail will email you a secure sign-in link.';
+  const loginStepsMarkup = renderLoginSteps([
+    enterpriseProviders.length > 0
+      ? {
+          title: 'Choose how to continue.',
+          body: localLoginAllowed
+            ? 'Use institution sign-in, or request a hosted link when your tenant allows it.'
+            : 'Use your institution identity provider to sign in.',
+        }
+      : {
+          title: 'Enter tenant and email.',
+          body: 'Use the email your institution already uses for CredTrail access.',
+        },
+    enterpriseProviders.length > 0
+      ? {
+          title: 'Finish verification.',
+          body: 'Your identity provider or one-time link completes the sign-in step.',
+        }
+      : {
+          title: 'Use the link from your inbox.',
+          body: 'The CredTrail email expires in 10 minutes.',
+        },
+    {
+      title: 'Return to your tenant.',
+      body: 'CredTrail brings you back to the page you were trying to open.',
+    },
+  ]);
 
   return renderPageShell(
     'Sign In · CredTrail',
@@ -127,20 +173,7 @@ export const magicLinkLoginPage = (input: {
           <p class="ct-login__lede">
             ${loginIntroText}
           </p>
-          <ol class="ct-login__steps">
-            <li class="ct-login__step">
-              <strong>${enterpriseProviders.length > 0 ? 'Choose your sign-in method.' : 'Enter your details.'}</strong>
-              ${enterpriseProviders.length > 0 ? 'Continue with institution SSO, or use a local hosted sign-in link when your tenant allows it.' : 'Use the email your institution already uses for CredTrail access.'}
-            </li>
-            <li class="ct-login__step">
-              <strong>${enterpriseProviders.length > 0 ? 'Complete identity verification.' : 'Check your inbox.'}</strong>
-              ${enterpriseProviders.length > 0 ? 'Your institution identity provider handles the authentication challenge.' : 'The sign-in email comes from CredTrail and expires in 10 minutes.'}
-            </li>
-            <li class="ct-login__step">
-              <strong>Open the link on this browser.</strong>
-              We will return you to the tenant page you were trying to reach.
-            </li>
-          </ol>
+          ${loginStepsMarkup}
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${loginReasonNotice}
@@ -197,16 +230,16 @@ export const organizationChooserPage = (input: {
           <p class="ct-login__lede">
             Your account can access more than one tenant. Pick the organization you want to open in this session.
           </p>
-          <ol class="ct-login__steps">
-            <li class="ct-login__step">
-              <strong>Select the organization you need.</strong>
-              Each choice opens the tenant's existing admin or learner surface.
-            </li>
-            <li class="ct-login__step">
-              <strong>Keep tenant work separate.</strong>
-              CredTrail stays tenant-scoped even when the same person can access multiple organizations.
-            </li>
-          </ol>
+          ${renderLoginSteps([
+            {
+              title: 'Select the organization you need.',
+              body: 'Each choice opens the tenant admin or learner surface for this session.',
+            },
+            {
+              title: 'Keep tenant work separate.',
+              body: 'CredTrail stays tenant-scoped even when one account can access multiple organizations.',
+            },
+          ])}
         </div>
         <div class="ct-login__form-wrap ct-stack">
           <section class="ct-stack" aria-labelledby="organization-chooser-title">
@@ -267,20 +300,20 @@ export const localBreakGlassLoginPage = (input: {
           <p class="ct-login__lede">
             This path is reserved for explicit fallback accounts when institution SSO is unavailable.
           </p>
-          <ol class="ct-login__steps">
-            <li class="ct-login__step">
-              <strong>Use your break-glass email and password.</strong>
-              Local access is not available for general tenant users.
-            </li>
-            <li class="ct-login__step">
-              <strong>Complete local MFA.</strong>
-              CredTrail requires a valid TOTP challenge before tenant access is granted.
-            </li>
-            <li class="ct-login__step">
-              <strong>Return to the requested tenant path.</strong>
-              We will send you back to the page you originally requested.
-            </li>
-          </ol>
+          ${renderLoginSteps([
+            {
+              title: 'Use your break-glass credentials.',
+              body: 'This access path is reserved for designated fallback accounts only.',
+            },
+            {
+              title: 'Complete local MFA.',
+              body: 'CredTrail requires a valid TOTP challenge before tenant access is granted.',
+            },
+            {
+              title: 'Return to the requested tenant path.',
+              body: 'After verification, CredTrail sends you back to the page you originally requested.',
+            },
+          ])}
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${

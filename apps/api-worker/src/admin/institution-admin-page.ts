@@ -338,19 +338,25 @@ const renderInstitutionAdminPage = (
     updatedAt: '',
   };
   const enterpriseAuthProviders = input.enterpriseAuthProviders ?? [];
+  const supportedEnterpriseAuthProviders = enterpriseAuthProviders.filter(
+    (provider) => provider.protocol === 'oidc',
+  );
+  const legacySamlProviders = enterpriseAuthProviders.filter((provider) => provider.protocol === 'saml');
+  const legacyDefaultProvider = legacySamlProviders.find(
+    (provider) => provider.id === enterpriseAuthPolicy.defaultProviderId,
+  );
   const breakGlassAccounts = input.breakGlassAccounts ?? [];
-  const enterpriseAuthProviderOptions = enterpriseAuthProviders
+  const enterpriseAuthProviderOptions = supportedEnterpriseAuthProviders
     .map((provider) => {
-      const providerLabel = `${provider.label} (${provider.protocol})`;
       return `<option value="${escapeHtml(provider.id)}"${
         enterpriseAuthPolicy.defaultProviderId === provider.id ? ' selected' : ''
-      }>${escapeHtml(providerLabel)}</option>`;
+      }>${escapeHtml(provider.label)}</option>`;
     })
     .join('\n');
   const enterpriseAuthProviderRows =
-    enterpriseAuthProviders.length === 0
-      ? `<tr><td colspan="6" class="ct-admin__empty">No enterprise auth providers configured yet.</td></tr>`
-      : enterpriseAuthProviders
+    supportedEnterpriseAuthProviders.length === 0
+      ? `<tr><td colspan="6" class="ct-admin__empty">No OIDC enterprise providers configured yet.</td></tr>`
+      : supportedEnterpriseAuthProviders
           .map((provider) => {
             return `<tr>
               <td><strong>${escapeHtml(provider.label)}</strong><div class="ct-admin__meta">${escapeHtml(
@@ -386,12 +392,37 @@ const renderInstitutionAdminPage = (
             </tr>`;
           })
           .join('\n');
+  const legacySamlRows =
+    legacySamlProviders.length === 0
+      ? '<tr><td colspan="5" class="ct-admin__empty">No legacy SAML compatibility entries detected.</td></tr>'
+      : legacySamlProviders
+          .map((provider) => {
+            return `<tr>
+              <td><strong>${escapeHtml(provider.label)}</strong><div class="ct-admin__meta">${escapeHtml(
+                provider.id,
+              )}</div></td>
+              <td>${provider.isDefault ? 'Default' : 'Secondary'}</td>
+              <td>${provider.enabled ? 'Enabled' : 'Disabled'}</td>
+              <td>${escapeHtml(formatIsoTimestamp(provider.updatedAt))}</td>
+              <td>
+                <button
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger"
+                  data-enterprise-auth-delete-provider-id="${escapeHtml(provider.id)}"
+                  data-provider-label="${escapeHtml(provider.label)}"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>`;
+          })
+          .join('\n');
   const enterpriseAuthPanelMarkup =
     input.tenant.planTier !== 'enterprise'
       ? ''
       : `<article id="enterprise-auth-panel" class="ct-admin__panel ct-stack">
           <h2>Enterprise Auth</h2>
-          <p>Manage tenant login mode, default provider selection, and provider-neutral OIDC or SAML connection metadata.</p>
+          <p>Hosted enterprise sign-in supports OIDC providers. Legacy SAML compatibility stays visible for cleanup only.</p>
           <form id="enterprise-auth-policy-form" class="ct-admin__form ct-stack">
             <label>
               Login mode
@@ -408,17 +439,14 @@ const renderInstitutionAdminPage = (
                 ${enterpriseAuthProviderOptions}
               </select>
             </label>
-            <label>
-              Enforcement scope
-              <select name="enforceForRoles" required>
-                <option value="all_users"${
-                  enterpriseAuthPolicy.enforceForRoles === 'all_users' ? ' selected' : ''
-                }>All users</option>
-                <option value="admins_only"${
-                  enterpriseAuthPolicy.enforceForRoles === 'admins_only' ? ' selected' : ''
-                }>Admins only</option>
-              </select>
-            </label>
+            <p class="ct-admin__hint">SSO enforcement applies to the tenant login experience. Role-specific enforcement is not configurable in the hosted runtime.</p>
+            ${
+              legacyDefaultProvider === undefined
+                ? ''
+                : `<p class="ct-admin__hint">This tenant still references <strong>${escapeHtml(
+                    legacyDefaultProvider.label,
+                  )}</strong> as a legacy default. Choose an OIDC provider before requiring institution sign-in.</p>`
+            }
             <label class="ct-admin__checkbox-row ct-checkbox-row">
               <input name="breakGlassEnabled" type="checkbox"${
                 enterpriseAuthPolicy.breakGlassEnabled ? ' checked' : ''
@@ -436,27 +464,14 @@ const renderInstitutionAdminPage = (
           <p id="enterprise-auth-policy-status" class="ct-admin__status"></p>
           <form id="enterprise-auth-provider-form" class="ct-admin__form ct-stack">
             <input type="hidden" name="providerId" value="" />
+            <input type="hidden" name="protocol" value="oidc" />
+            <p class="ct-admin__hint">Add or edit hosted OIDC providers here. Use a new OIDC connection instead of modifying legacy SAML settings.</p>
             <label>
-              Provider protocol
-              <select name="protocol" required>
-                <option value="oidc">OIDC</option>
-                <option value="saml">SAML</option>
-              </select>
-            </label>
-            <label>
-              Provider label
+              OIDC provider label
               <input name="label" type="text" required placeholder="Campus OIDC" />
             </label>
-            <label class="ct-admin__checkbox-row ct-checkbox-row">
-              <input name="enabled" type="checkbox" checked />
-              Provider enabled
-            </label>
-            <label class="ct-admin__checkbox-row ct-checkbox-row">
-              <input name="isDefault" type="checkbox" />
-              Set as default provider
-            </label>
             <label>
-              Provider config JSON
+              OIDC discovery or connection JSON
               <textarea
                 id="enterprise-auth-provider-config-json"
                 name="configJson"
@@ -465,6 +480,14 @@ const renderInstitutionAdminPage = (
                 spellcheck="false"
                 placeholder='{"issuer":"https://idp.example.edu","clientId":"credtrail"}'
               ></textarea>
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="enabled" type="checkbox" checked />
+              Provider enabled
+            </label>
+            <label class="ct-admin__checkbox-row ct-checkbox-row">
+              <input name="isDefault" type="checkbox" />
+              Set as default provider
             </label>
             <div class="ct-cluster">
               <button type="submit">Save provider</button>
@@ -495,6 +518,30 @@ const renderInstitutionAdminPage = (
               </tbody>
             </table>
           </div>
+          ${
+            legacySamlProviders.length === 0
+              ? ''
+              : `<section class="ct-stack" aria-labelledby="legacy-saml-title">
+                  <h3 id="legacy-saml-title">Legacy SAML compatibility</h3>
+                  <p>These entries remain visible so you can audit or remove older SAML setup after an OIDC cutover. They are not editable from the hosted provider workflow.</p>
+                  <div class="ct-admin__table-wrap">
+                    <table class="ct-admin__table">
+                      <thead>
+                        <tr>
+                          <th>Legacy entry</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th>Updated</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${legacySamlRows}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>`
+          }
           <section class="ct-stack" aria-labelledby="break-glass-accounts-title">
             <h3 id="break-glass-accounts-title">Break-glass local accounts</h3>
             <p>

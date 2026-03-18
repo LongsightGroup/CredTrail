@@ -295,7 +295,7 @@ export const INSTITUTION_ADMIN_JS = `
       providerIdInput.value = typeof provider.id === 'string' ? provider.id : '';
     }
 
-    if (protocolInput instanceof HTMLSelectElement) {
+    if (protocolInput instanceof HTMLInputElement || protocolInput instanceof HTMLSelectElement) {
       protocolInput.value = typeof provider.protocol === 'string' ? provider.protocol : 'oidc';
     }
 
@@ -332,7 +332,7 @@ export const INSTITUTION_ADMIN_JS = `
       providerIdInput.value = '';
     }
 
-    if (protocolInput instanceof HTMLSelectElement) {
+    if (protocolInput instanceof HTMLInputElement || protocolInput instanceof HTMLSelectElement) {
       protocolInput.value = 'oidc';
     }
 
@@ -1032,15 +1032,12 @@ export const INSTITUTION_ADMIN_JS = `
       const data = new FormData(enterpriseAuthPolicyForm);
       const loginModeRaw = data.get('loginMode');
       const defaultProviderIdRaw = data.get('defaultProviderId');
-      const enforceForRolesRaw = data.get('enforceForRoles');
       const loginMode = typeof loginModeRaw === 'string' ? loginModeRaw.trim() : '';
       const defaultProviderId =
         typeof defaultProviderIdRaw === 'string' ? defaultProviderIdRaw.trim() : '';
-      const enforceForRoles =
-        typeof enforceForRolesRaw === 'string' ? enforceForRolesRaw.trim() : '';
 
-      if (loginMode.length === 0 || enforceForRoles.length === 0) {
-        setStatus(enterpriseAuthPolicyStatus, 'Login mode and enforcement scope are required.', true);
+      if (loginMode.length === 0) {
+        setStatus(enterpriseAuthPolicyStatus, 'Login mode is required.', true);
         return;
       }
 
@@ -1055,7 +1052,6 @@ export const INSTITUTION_ADMIN_JS = `
             breakGlassEnabled: data.get('breakGlassEnabled') !== null,
             localMfaRequired: data.get('localMfaRequired') !== null,
             defaultProviderId: defaultProviderId.length > 0 ? defaultProviderId : null,
-            enforceForRoles,
           }),
         });
         const payload = await parseJsonBody(response);
