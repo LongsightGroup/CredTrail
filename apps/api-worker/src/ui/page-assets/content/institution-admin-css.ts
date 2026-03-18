@@ -65,9 +65,18 @@ export const INSTITUTION_ADMIN_CSS = `
   min-height: 2.75rem;
   padding: 0.5rem 0.9rem;
   text-decoration: none;
+  transition:
+    transform var(--ct-duration-fast) var(--ct-ease-standard),
+    background var(--ct-duration-fast) var(--ct-ease-standard),
+    box-shadow var(--ct-duration-fast) var(--ct-ease-standard);
 }
 .ct-admin__quick-links a:hover {
   background: var(--ct-theme-surface-brand-chip-strong);
+  transform: translateY(-1px);
+}
+.ct-admin__quick-links a[aria-current='page'] {
+  background: var(--ct-theme-surface-brand-chip-strong);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 .ct-admin__cta-link {
   display: inline-flex;
@@ -124,6 +133,7 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__workspace-actions .ct-admin__button,
 .ct-admin__workspace-actions .ct-admin__cta-link {
   min-height: 2.75rem;
+  border-radius: var(--ct-radius-pill);
 }
 .ct-admin__layout {
   --ct-grid-gap: var(--ct-space-4);
@@ -532,6 +542,10 @@ export const INSTITUTION_ADMIN_CSS = `
   color: var(--ct-theme-text-on-brand);
   background: var(--ct-theme-gradient-action);
   cursor: pointer;
+  transition:
+    transform var(--ct-duration-fast) var(--ct-ease-standard),
+    box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
+    filter var(--ct-duration-fast) var(--ct-ease-standard);
 }
 .ct-admin__button {
   display: inline-flex;
@@ -548,6 +562,34 @@ export const INSTITUTION_ADMIN_CSS = `
   text-decoration: none;
   line-height: 1.1;
   cursor: pointer;
+  transition:
+    transform var(--ct-duration-fast) var(--ct-ease-standard),
+    box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
+    filter var(--ct-duration-fast) var(--ct-ease-standard);
+}
+@media (hover: hover) {
+  .ct-admin__form button:hover:not(:disabled),
+  .ct-admin__button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--ct-shadow-soft);
+    filter: brightness(1.03);
+  }
+}
+.ct-admin__form button:focus-visible,
+.ct-admin__button:focus-visible {
+  outline: 2px solid var(--ct-theme-border-focus);
+  outline-offset: 3px;
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__form button:active:not(:disabled),
+.ct-admin__button:active {
+  transform: translateY(0);
+  box-shadow: none;
+  filter: none;
+}
+.ct-admin__form button:disabled {
+  opacity: 0.66;
+  cursor: progress;
 }
 .ct-admin__button:disabled {
   opacity: 0.66;

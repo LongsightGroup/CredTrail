@@ -58,7 +58,7 @@ vi.mock('./auth/better-auth-adapter', async () => {
       createLtiSession: vi.fn(),
       resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
       resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
-      revokeCurrentSession: vi.fn(async () => {}),
+      revokeCurrentSession: vi.fn(() => Promise.resolve()),
     })),
   };
 });
@@ -292,19 +292,19 @@ beforeEach(() => {
   ]);
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
-    async (context: { req: { header(name: string): string | undefined } }) => {
+    (context: { req: { header(name: string): string | undefined } }) => {
       const cookieHeader = context.req.header('cookie') ?? '';
 
       if (!cookieHeader.includes('better-auth.session_token=')) {
         return null;
       }
 
-    return {
-      userId: 'usr_admin',
-      authSessionId: 'ba_ses_123',
-      authMethod: 'better_auth' as const,
-      expiresAt: '2026-02-18T23:00:00.000Z',
-    };
+      return {
+        userId: 'usr_admin',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth' as const,
+        expiresAt: '2026-02-18T23:00:00.000Z',
+      };
     },
   );
   mockedResolveBetterAuthRequestedTenant.mockReset();
@@ -362,7 +362,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(response.status).toBe(200);
     expect(body).toContain('No badge rules found.');
     expect(body).toContain('/tenants/tenant_123/admin/rules/new');
-    expect(body).toContain('Create your first rule');
+    expect(body).toContain('Create first rule');
   });
 
   it('renders institution admin dashboard for admin membership', async () => {
@@ -383,26 +383,24 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(body).toContain('Institution Admin');
-    expect(body).toContain('Manual Issue Badge');
-    expect(body).toContain('Upload Badge Template Image');
-    expect(body).toContain('Create Tenant API Key');
-    expect(body).toContain('Create Org Unit');
-    expect(body).toContain('Governance Delegation');
-    expect(body).toContain('Rule Builder Workspace');
-    expect(body).toContain('Evaluate Rule');
-    expect(body).toContain('Issued Badges Ledger');
-    expect(body).toContain('Institution admin workstreams');
-    expect(body).toContain('Credential operations');
-    expect(body).toContain('Rule design');
-    expect(body).toContain('Access and structure');
+    expect(body).toContain('Choose a workspace instead of forcing every task onto one page.');
+    expect(body).toContain('Institution admin workspaces');
+    expect(body).toContain('Operations');
+    expect(body).toContain('Rules');
+    expect(body).toContain('Access');
+    expect(body).toContain('Open operations');
+    expect(body).toContain('Open rules');
+    expect(body).toContain('Open access');
     expect(body).not.toContain('Enterprise Auth');
-    expect(body).toContain('Badge Rules (1)');
-    expect(body).toContain('CS101 Excellence Rule');
-    expect(body).toContain('TypeScript Foundations');
-    expect(body).toContain('/showcase/tenant_123?badgeTemplateId=badge_template_001');
-    expect(body).toContain('/showcase/tenant_123/criteria?badgeTemplateId=badge_template_001');
+    expect(body).not.toContain('Manual Issue Badge');
+    expect(body).not.toContain('Create Tenant API Key');
+    expect(body).not.toContain('Issued Badges Ledger');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/rules"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/access"');
+    expect(body).toContain('href="/admin/audit-logs?tenantId=tenant_123"');
+    expect(body).toContain('href="/showcase/tenant_123"');
     expect(body).toContain('/v1/tenants/tenant_123/assertions/manual-issue');
-    expect(body).toContain('/v1/tenants/tenant_123/assertions');
     expect(body).toContain('/v1/tenants/tenant_123/api-keys');
     expect(body).toContain('/v1/tenants/tenant_123/org-units');
     expect(body).toContain('/v1/tenants/tenant_123/badge-templates');
@@ -411,42 +409,6 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).toContain('/v1/tenants/tenant_123/badge-rule-value-lists');
     expect(body).toContain('/v1/tenants/tenant_123/badge-rules/preview-simulate');
     expect(body).toContain('/v1/tenants/tenant_123/badge-rules/review-queue');
-    expect(body).toContain('id="badge-template-image-upload-form"');
-    expect(body).toContain('id="badge-template-image-upload-status"');
-    expect(body).toContain('name="file"');
-    expect(body).toContain('accept="image/png,image/jpeg,image/webp"');
-    expect(body).toContain('id="membership-scope-form"');
-    expect(body).toContain('id="membership-scope-remove-form"');
-    expect(body).toContain('id="delegated-grant-form"');
-    expect(body).toContain('id="delegated-revoke-form"');
-    expect(body).toContain('name="allowedAction" type="checkbox" value="manage_lifecycle"');
-    expect(body).toContain('/admin/audit-logs?tenantId=tenant_123');
-    expect(body).toContain('href="#manual-issue-panel"');
-    expect(body).toContain('href="/tenants/tenant_123/admin/rules/new"');
-    expect(body).toContain('href="#api-key-panel"');
-    expect(body).toContain('href="#issued-badges-panel"');
-    expect(body).toContain('id="issued-badges-filter-form"');
-    expect(body).toContain('id="issued-badges-body"');
-    expect(body).toContain('id="issued-badges-status"');
-    expect(body).toContain('id="issued-badges-action-status"');
-    expect(body).toContain('id="assertion-lifecycle-view-form"');
-    expect(body).toContain('id="assertion-lifecycle-transition-form"');
-    expect(body).toContain('id="rule-governance-form"');
-    expect(body).toContain('id="rule-builder-panel"');
-    expect(body).toContain('id="rule-value-list-form"');
-    expect(body).toContain('id="rule-value-list-body"');
-    expect(body).toContain('id="rule-review-queue-refresh"');
-    expect(body).toContain('id="rule-review-queue-body"');
-    expect(body).toContain('Open rule builder');
-    expect(body).toContain('id="assertion-lifecycle-output"');
-    expect(body).toContain('id="rule-governance-output"');
-    expect(body).toContain('value="credential_expired"');
-    expect(body).toContain(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/submit-approval',
-    );
-    expect(body).toContain('/v1/tenants/tenant_123/api-keys/tak_active/revoke');
-    expect(body).toContain('Active API Keys (1)');
-    expect(body).toContain('Revoked keys: 1');
     expect(body).toContain('User: admin@tenant-123.edu');
     expect(body).toContain('title="User ID: usr_admin"');
     expect(body).toContain('/assets/ui/foundation.');
@@ -502,7 +464,7 @@ describe('GET /tenants/:tenantId/admin', () => {
     expect(body).not.toContain('Choose a CredTrail organization');
   });
 
-  it('renders enterprise auth settings for enterprise tenants', async () => {
+  it('keeps enterprise auth off the admin hub even for enterprise tenants', async () => {
     const env = createEnv();
     mockedFindTenantById.mockResolvedValue({
       id: 'tenant_123',
@@ -518,6 +480,134 @@ describe('GET /tenants/:tenantId/admin', () => {
 
     const response = await app.request(
       '/tenants/tenant_123/admin',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).not.toContain('Enterprise Auth');
+    expect(body).not.toContain('Login mode');
+    expect(body).not.toContain('id="enterprise-auth-policy-form"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/access"');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/operations', () => {
+  it('renders the operations workspace', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/operations',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('>Operations<');
+    expect(body).toContain('Manual Issue Badge');
+    expect(body).toContain('id="manual-issue-form"');
+    expect(body).toContain('Credential Lifecycle');
+    expect(body).toContain('id="assertion-lifecycle-view-form"');
+    expect(body).toContain('Rule Review Queue');
+    expect(body).toContain('id="rule-review-queue-refresh"');
+    expect(body).toContain('Issued Badges Ledger');
+    expect(body).toContain('id="issued-badges-filter-form"');
+    expect(body).not.toContain('Create Tenant API Key');
+    expect(body).not.toContain('Rule Value Lists');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/rules', () => {
+  it('renders the rules workspace', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/rules',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('>Rules<');
+    expect(body).toContain('Rule Builder Workspace');
+    expect(body).toContain('Open rule builder');
+    expect(body).toContain('Upload Badge Template Image');
+    expect(body).toContain('id="badge-template-image-upload-form"');
+    expect(body).toContain('Rule Value Lists');
+    expect(body).toContain('id="rule-value-list-form"');
+    expect(body).toContain('Evaluate Rule');
+    expect(body).toContain('id="rule-evaluate-form"');
+    expect(body).toContain('Rule Governance Context');
+    expect(body).toContain('Badge Rules (1)');
+    expect(body).toContain('Badge Templates (1)');
+    expect(body).not.toContain('Create Tenant API Key');
+    expect(body).not.toContain('Issued Badges Ledger');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/access', () => {
+  it('renders the access workspace', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/access',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(body).toContain('>Access<');
+    expect(body).toContain('Create Tenant API Key');
+    expect(body).toContain('id="api-key-form"');
+    expect(body).toContain('Create Org Unit');
+    expect(body).toContain('id="org-unit-form"');
+    expect(body).toContain('Governance Delegation');
+    expect(body).toContain('id="membership-scope-form"');
+    expect(body).toContain('Active API Keys (1)');
+    expect(body).toContain('Org Units (1)');
+    expect(body).not.toContain('Manual Issue Badge');
+    expect(body).not.toContain('Rule Value Lists');
+  });
+
+  it('renders enterprise auth settings inside the access workspace for enterprise tenants', async () => {
+    const env = createEnv();
+    mockedFindTenantById.mockResolvedValue({
+      id: 'tenant_123',
+      slug: 'tenant-123',
+      displayName: 'Tenant 123',
+      planTier: 'enterprise',
+      issuerDomain: 'tenant-123.credtrail.test',
+      didWeb: 'did:web:credtrail.test:tenant_123',
+      isActive: true,
+      createdAt: '2026-02-18T12:00:00.000Z',
+      updatedAt: '2026-02-18T12:00:00.000Z',
+    });
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/access',
       {
         headers: {
           Cookie: 'better-auth.session_token=session-token',
