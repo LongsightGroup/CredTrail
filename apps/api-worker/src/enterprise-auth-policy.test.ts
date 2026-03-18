@@ -9,6 +9,8 @@ const {
   mockedCreateTenantAuthProvider,
   mockedUpdateTenantAuthProvider,
   mockedDeleteTenantAuthProvider,
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
 } = vi.hoisted(() => {
   return {
     mockedFindTenantAuthProviderById: vi.fn(),
@@ -19,6 +21,8 @@ const {
     mockedCreateTenantAuthProvider: vi.fn(),
     mockedUpdateTenantAuthProvider: vi.fn(),
     mockedDeleteTenantAuthProvider: vi.fn(),
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
   };
 });
 
@@ -46,6 +50,25 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -223,6 +246,25 @@ beforeEach(() => {
   );
   mockedDeleteTenantAuthProvider.mockReset();
   mockedDeleteTenantAuthProvider.mockResolvedValue(true);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+    return {
+      userId: 'usr_admin',
+      authSessionId: 'ba_ses_123',
+      authMethod: 'better_auth' as const,
+      expiresAt: '2026-03-16T23:00:00.000Z',
+    };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
 });
 
 describe('enterprise auth policy governance', () => {
@@ -234,7 +276,7 @@ describe('enterprise auth policy governance', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -251,7 +293,7 @@ describe('enterprise auth policy governance', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           loginMode: 'sso_required',
@@ -287,7 +329,7 @@ describe('enterprise auth policy governance', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -305,7 +347,7 @@ describe('enterprise auth policy governance', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           protocol: 'oidc',
@@ -336,7 +378,7 @@ describe('enterprise auth policy governance', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           protocol: 'saml',
@@ -359,7 +401,7 @@ describe('enterprise auth policy governance', () => {
       {
         method: 'DELETE',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -387,7 +429,7 @@ describe('enterprise auth policy governance', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,

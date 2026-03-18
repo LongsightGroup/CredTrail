@@ -8,7 +8,6 @@ import {
   findTenantSigningRegistrationByDid,
   listLtiIssuerRegistrations,
   upsertTenantMembershipRole,
-  type SessionRecord,
   type SqlDatabase,
 } from '@credtrail/db';
 import { createPostgresDatabase } from '@credtrail/db/postgres';
@@ -88,10 +87,7 @@ import type {
   AuthenticatedPrincipal,
   RequestedTenantContext,
 } from './auth/auth-context';
-import {
-  createBetterAuthProvider,
-  createCompositeAuthProvider,
-} from './auth/better-auth-adapter';
+import { createBetterAuthProvider } from './auth/better-auth-adapter';
 import { applyBetterAuthResponseHeaders } from './auth/better-auth-bridge';
 import { createBetterAuthRuntimeConfig } from './auth/better-auth-config';
 import {
@@ -109,10 +105,6 @@ import {
   parseHostedMagicLinkToken,
 } from './auth/better-auth-runtime';
 import { createEnterpriseSsoAdapter } from './auth/enterprise-sso-adapter';
-import {
-  createLegacyAuthProvider,
-  resolveLegacySessionRecord,
-} from './auth/legacy-auth-adapter';
 import { createOAuthTokenHelpers } from './ob3/oauth-token-helpers';
 import { createOb3ErrorResponses } from './ob3/error-responses';
 import { createOb3AccessTokenAuthenticator } from './ob3/access-token-auth';
@@ -227,7 +219,6 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LEARNER_IDENTITY_LINK_TTL_SECONDS = 10 * 60;
 const OID4VCI_PRE_AUTH_CODE_TTL_SECONDS = 10 * 60;
 const OID4VCI_ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
-const SESSION_COOKIE_NAME = 'credtrail_session';
 const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
 const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
 const databasesByUrl = new Map<string, SqlDatabase>();
@@ -262,45 +253,6 @@ const observabilityContext = (bindings: AppBindings): ObservabilityContext => {
     environment: bindings.APP_ENV,
   };
 };
-
-const legacyAuthAdapterInput = {
-  resolveDatabase,
-  readSessionToken: (context: AppContext): string | undefined => {
-    return getCookie(context, SESSION_COOKIE_NAME);
-  },
-  setSessionCookie: (context: AppContext, sessionToken: string): void => {
-    setCookie(context, SESSION_COOKIE_NAME, sessionToken, {
-      httpOnly: true,
-      secure: sessionCookieSecure(context.env.APP_ENV),
-      sameSite: 'Lax',
-      path: '/',
-      maxAge: SESSION_TTL_SECONDS,
-    });
-  },
-  clearSessionCookie: (context: AppContext): void => {
-    deleteCookie(context, SESSION_COOKIE_NAME, {
-      path: '/',
-    });
-  },
-  generateOpaqueToken,
-  addSecondsToIso,
-  sessionTtlSeconds: SESSION_TTL_SECONDS,
-  cacheAuthenticatedPrincipal: (
-    context: AppContext,
-    principal: AppEnv['Variables']['authenticatedPrincipal'],
-  ): void => {
-    context.set('authenticatedPrincipal', principal);
-  },
-  cacheRequestedTenantContext: (
-    context: AppContext,
-    requestedTenant: AppEnv['Variables']['requestedTenantContext'],
-  ): void => {
-    context.set('requestedTenantContext', requestedTenant);
-  },
-  sha256Hex,
-};
-
-const legacyAuthProvider = createLegacyAuthProvider<AppContext, AppBindings>(legacyAuthAdapterInput);
 
 const requestedTenantFromCookie = (context: AppContext): RequestedTenantContext | null => {
   const tenantId = getCookie(context, REQUESTED_TENANT_COOKIE_NAME)?.trim();
@@ -652,13 +604,6 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   },
 });
 
-const authProvider = createCompositeAuthProvider<AppContext>({
-  primary: betterAuthProvider,
-  fallback: legacyAuthProvider,
-  createMagicLinkSessionProvider: 'primary',
-  createLtiSessionProvider: 'primary',
-});
-
 const resolveAuthenticatedPrincipal = async (
   c: AppContext,
 ): Promise<AuthenticatedPrincipal | null> => {
@@ -668,7 +613,7 @@ const resolveAuthenticatedPrincipal = async (
     return cachedPrincipal ?? null;
   }
 
-  const principal = await authProvider.resolveAuthenticatedPrincipal(c);
+  const principal = await betterAuthProvider.resolveAuthenticatedPrincipal(c);
   c.set('authenticatedPrincipal', principal);
   return principal;
 };
@@ -682,7 +627,7 @@ const resolveRequestedTenantContext = async (
     return cachedRequestedTenant ?? null;
   }
 
-  const requestedTenant = await authProvider.resolveRequestedTenantContext(c);
+  const requestedTenant = await betterAuthProvider.resolveRequestedTenantContext(c);
   c.set('requestedTenantContext', requestedTenant);
   return requestedTenant;
 };
@@ -705,10 +650,6 @@ const enterpriseSsoAdapter = createEnterpriseSsoAdapter<AppContext, AppBindings>
   resolveRequestedTenantContext,
   rememberRequestedTenant,
 });
-
-const resolveSessionFromCookie = async (c: AppContext): Promise<SessionRecord | null> => {
-  return resolveLegacySessionRecord(c, legacyAuthAdapterInput);
-};
 
 const resolveLtiIssuerRegistry = async (c: AppContext): Promise<LtiIssuerRegistry> => {
   const envRegistry = parseLtiIssuerRegistryFromEnv(c.env.LTI_ISSUER_REGISTRY_JSON);
@@ -737,7 +678,6 @@ const {
   requireDelegatedIssuingAuthorityPermission,
 } = createTenantAccessHelpers<AppContext, AppBindings>({
   resolveAuthenticatedPrincipal,
-  resolveLegacySessionRecord: resolveSessionFromCookie,
   resolvePendingBreakGlassTenantId: pendingBreakGlassTenantFromCookie,
   resolveDatabase,
 });
@@ -1196,7 +1136,7 @@ registerLtiRoutes({
   upsertTenantMembershipRole,
   sha256Hex,
   createLtiSession: (context, input) => {
-    return authProvider.createLtiSession(context, input);
+    return betterAuthProvider.createLtiSession(context, input);
   },
 });
 

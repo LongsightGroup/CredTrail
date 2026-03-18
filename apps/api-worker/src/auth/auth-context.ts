@@ -1,4 +1,4 @@
-export type AuthMethod = 'better_auth' | 'legacy_magic_link' | 'legacy_lti';
+export type AuthMethod = 'better_auth';
 
 export interface AuthenticatedPrincipal {
   userId: string;

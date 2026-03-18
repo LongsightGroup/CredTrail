@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const {
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -22,6 +32,25 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -250,6 +279,25 @@ beforeEach(() => {
       membershipRole: 'viewer',
     },
   ]);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+    return {
+      userId: 'usr_123',
+      authSessionId: 'ba_ses_123',
+      authMethod: 'better_auth' as const,
+      expiresAt: '2026-03-17T22:00:00.000Z',
+    };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -295,7 +343,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -347,7 +395,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -378,7 +426,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -436,7 +484,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard?didStatus=updated',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -479,7 +527,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -562,7 +610,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
       '/tenants/tenant_123/learner/dashboard',
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -623,7 +671,7 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: new URLSearchParams({
           did: 'did:key:z6MkhLearnerDidExample',
@@ -669,7 +717,7 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: new URLSearchParams({
           did: '',
@@ -713,7 +761,7 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: new URLSearchParams({
           did: 'did:key:z6MkhConflictingDid',
@@ -745,7 +793,7 @@ describe('POST /tenants/:tenantId/learner/settings/did', () => {
         method: 'POST',
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: new URLSearchParams({
           did: 'did:example:unsupported',

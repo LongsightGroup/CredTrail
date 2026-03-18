@@ -1,10 +1,10 @@
 import {
   findActiveDelegatedIssuingAuthorityGrantForAction,
   findTenantMembership,
-  type SessionRecord,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
   type DelegatedIssuingAuthorityAction,
+  type SessionRecord,
   type SqlDatabase,
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
@@ -48,7 +48,6 @@ interface CreateTenantAccessHelpersInput<
   BindingsType extends { BOOTSTRAP_ADMIN_TOKEN?: string | undefined },
 > {
   resolveAuthenticatedPrincipal: (context: ContextType) => Promise<AuthenticatedPrincipal | null>;
-  resolveLegacySessionRecord: (context: ContextType) => Promise<SessionRecord | null>;
   resolvePendingBreakGlassTenantId?: (context: ContextType) => string | null;
   resolveDatabase: (bindings: BindingsType) => SqlDatabase;
 }
@@ -312,12 +311,10 @@ export const createTenantAccessHelpers = <
       return result;
     }
 
-    const legacySession = await input.resolveLegacySessionRecord(context);
-
     return {
       principal: result.principal,
       requestedTenant: result.requestedTenant,
-      session: legacySession ?? sessionCompatibilityFromPrincipal(result.principal, requestedTenant),
+      session: sessionCompatibilityFromPrincipal(result.principal, requestedTenant),
       membershipRole: result.membershipRole,
     };
   };
