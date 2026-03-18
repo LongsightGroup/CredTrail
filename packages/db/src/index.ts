@@ -835,16 +835,6 @@ export interface ResolveDedicatedDbProvisioningRequestInput {
   resolvedAt?: string | undefined;
 }
 
-export interface MagicLinkTokenRecord {
-  id: string;
-  tenantId: string;
-  userId: string;
-  magicTokenHash: string;
-  expiresAt: string;
-  usedAt: string | null;
-  createdAt: string;
-}
-
 export interface SessionRecord {
   id: string;
   tenantId: string;
@@ -1188,20 +1178,6 @@ export type LearnerProfileResolutionStrategy = 'saml_subject' | 'verified_email'
 export interface ResolveLearnerProfileFromSamlResult {
   profile: LearnerProfileRecord;
   strategy: LearnerProfileResolutionStrategy;
-}
-
-export interface CreateMagicLinkTokenInput {
-  tenantId: string;
-  userId: string;
-  magicTokenHash: string;
-  expiresAt: string;
-}
-
-export interface CreateSessionInput {
-  tenantId: string;
-  userId: string;
-  sessionTokenHash: string;
-  expiresAt: string;
 }
 
 export interface CreateLearnerIdentityLinkProofInput {
@@ -5013,41 +4989,6 @@ export const revokeTenantApiKey = async (
   return (result.meta.rowsWritten ?? 0) > 0;
 };
 
-export const createMagicLinkToken = async (
-  db: SqlDatabase,
-  input: CreateMagicLinkTokenInput,
-): Promise<MagicLinkTokenRecord> => {
-  const id = createPrefixedId('mlt');
-  const createdAt = new Date().toISOString();
-
-  await db
-    .prepare(
-      `
-      INSERT INTO magic_link_tokens (
-        id,
-        tenant_id,
-        user_id,
-        magic_token_hash,
-        expires_at,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `,
-    )
-    .bind(id, input.tenantId, input.userId, input.magicTokenHash, input.expiresAt, createdAt)
-    .run();
-
-  return {
-    id,
-    tenantId: input.tenantId,
-    userId: input.userId,
-    magicTokenHash: input.magicTokenHash,
-    expiresAt: input.expiresAt,
-    usedAt: null,
-    createdAt,
-  };
-};
-
 export const createLearnerIdentityLinkProof = async (
   db: SqlDatabase,
   input: CreateLearnerIdentityLinkProofInput,
@@ -5100,32 +5041,6 @@ export const createLearnerIdentityLinkProof = async (
   };
 };
 
-export const findMagicLinkTokenByHash = async (
-  db: SqlDatabase,
-  magicTokenHash: string,
-): Promise<MagicLinkTokenRecord | null> => {
-  const token = await db
-    .prepare(
-      `
-      SELECT
-        id,
-        tenant_id AS tenantId,
-        user_id AS userId,
-        magic_token_hash AS magicTokenHash,
-        expires_at AS expiresAt,
-        used_at AS usedAt,
-        created_at AS createdAt
-      FROM magic_link_tokens
-      WHERE magic_token_hash = ?
-      LIMIT 1
-    `,
-    )
-    .bind(magicTokenHash)
-    .first<MagicLinkTokenRecord>();
-
-  return token;
-};
-
 export const findLearnerIdentityLinkProofByHash = async (
   db: SqlDatabase,
   tokenHash: string,
@@ -5155,24 +5070,6 @@ export const findLearnerIdentityLinkProofByHash = async (
   return proof;
 };
 
-export const markMagicLinkTokenUsed = async (
-  db: SqlDatabase,
-  tokenId: string,
-  usedAt: string,
-): Promise<void> => {
-  await db
-    .prepare(
-      `
-      UPDATE magic_link_tokens
-      SET used_at = ?
-      WHERE id = ?
-        AND used_at IS NULL
-    `,
-    )
-    .bind(usedAt, tokenId)
-    .run();
-};
-
 export const markLearnerIdentityLinkProofUsed = async (
   db: SqlDatabase,
   proofId: string,
@@ -5191,21 +5088,6 @@ export const markLearnerIdentityLinkProofUsed = async (
     .run();
 };
 
-export const isMagicLinkTokenValid = (token: MagicLinkTokenRecord, nowIso: string): boolean => {
-  if (token.usedAt !== null) {
-    return false;
-  }
-
-  const expiryMs = Date.parse(token.expiresAt);
-  const nowMs = Date.parse(nowIso);
-
-  if (!Number.isFinite(expiryMs) || !Number.isFinite(nowMs)) {
-    return false;
-  }
-
-  return expiryMs > nowMs;
-};
-
 export const isLearnerIdentityLinkProofValid = (
   proof: LearnerIdentityLinkProofRecord,
   nowIso: string,
@@ -5222,115 +5104,6 @@ export const isLearnerIdentityLinkProofValid = (
   }
 
   return expiryMs > nowMs;
-};
-
-export const createSession = async (
-  db: SqlDatabase,
-  input: CreateSessionInput,
-): Promise<SessionRecord> => {
-  const id = createPrefixedId('ses');
-  const createdAt = new Date().toISOString();
-
-  await db
-    .prepare(
-      `
-      INSERT INTO sessions (
-        id,
-        tenant_id,
-        user_id,
-        session_token_hash,
-        expires_at,
-        created_at,
-        last_seen_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-    )
-    .bind(
-      id,
-      input.tenantId,
-      input.userId,
-      input.sessionTokenHash,
-      input.expiresAt,
-      createdAt,
-      createdAt,
-    )
-    .run();
-
-  return {
-    id,
-    tenantId: input.tenantId,
-    userId: input.userId,
-    sessionTokenHash: input.sessionTokenHash,
-    expiresAt: input.expiresAt,
-    lastSeenAt: createdAt,
-    revokedAt: null,
-    createdAt,
-  };
-};
-
-export const findActiveSessionByHash = async (
-  db: SqlDatabase,
-  sessionTokenHash: string,
-  nowIso: string,
-): Promise<SessionRecord | null> => {
-  const session = await db
-    .prepare(
-      `
-      SELECT
-        id,
-        tenant_id AS tenantId,
-        user_id AS userId,
-        session_token_hash AS sessionTokenHash,
-        expires_at AS expiresAt,
-        last_seen_at AS lastSeenAt,
-        revoked_at AS revokedAt,
-        created_at AS createdAt
-      FROM sessions
-      WHERE session_token_hash = ?
-        AND revoked_at IS NULL
-        AND expires_at > ?
-      LIMIT 1
-    `,
-    )
-    .bind(sessionTokenHash, nowIso)
-    .first<SessionRecord>();
-
-  return session;
-};
-
-export const touchSession = async (
-  db: SqlDatabase,
-  sessionId: string,
-  seenAt: string,
-): Promise<void> => {
-  await db
-    .prepare(
-      `
-      UPDATE sessions
-      SET last_seen_at = ?
-      WHERE id = ?
-    `,
-    )
-    .bind(seenAt, sessionId)
-    .run();
-};
-
-export const revokeSessionByHash = async (
-  db: SqlDatabase,
-  sessionTokenHash: string,
-  revokedAt: string,
-): Promise<void> => {
-  await db
-    .prepare(
-      `
-      UPDATE sessions
-      SET revoked_at = COALESCE(revoked_at, ?)
-      WHERE session_token_hash = ?
-    `,
-    )
-    .bind(revokedAt, sessionTokenHash)
-    .run();
 };
 
 const mapOAuthClientRow = (row: OAuthClientRow): OAuthClientRecord => {
