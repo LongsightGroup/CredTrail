@@ -30,6 +30,8 @@ import {
   revokeTenantBreakGlassAccount,
   revokeDelegatedIssuingAuthorityGrant,
   resolveTenantAuthPolicy,
+  HOSTED_ENTERPRISE_OIDC_ONLY_ERROR,
+  isHostedEnterpriseAuthProviderSupported,
   updateTenantAuthProvider,
   upsertTenantBreakGlassAccount,
   upsertTenantAuthPolicy,
@@ -141,6 +143,50 @@ export const registerTenantGovernanceRoutes = (
     }
 
     return null;
+  };
+
+  const LEGACY_SAML_DEPRECATED_ERROR =
+    'Legacy SAML configuration is deprecated for hosted enterprise sign-in. Configure an OIDC provider instead.';
+  const LEGACY_SAML_COMPATIBILITY_NOTICE =
+    'Legacy SAML compatibility remains visible for cleanup only. Configure an OIDC provider for hosted enterprise sign-in.';
+  const LEGACY_SAML_EDIT_BLOCKED_ERROR =
+    'Legacy SAML compatibility entries are not editable from the supported enterprise auth workflow. Configure a new OIDC provider instead or delete the legacy entry.';
+  const LEGACY_SAML_DEFAULT_PROVIDER_ERROR =
+    'Default enterprise provider must be an OIDC provider. Legacy SAML compatibility entries cannot be selected.';
+
+  const serializeTenantAuthPolicy = (
+    policy: Awaited<ReturnType<typeof resolveTenantAuthPolicy>>,
+  ): Record<string, unknown> => {
+    return {
+      tenantId: policy.tenantId,
+      loginMode: policy.loginMode,
+      breakGlassEnabled: policy.breakGlassEnabled,
+      localMfaRequired: policy.localMfaRequired,
+      defaultProviderId: policy.defaultProviderId,
+      createdAt: policy.createdAt,
+      updatedAt: policy.updatedAt,
+    };
+  };
+
+  const serializeTenantAuthProvider = (
+    provider: Awaited<ReturnType<typeof listTenantAuthProviders>>[number],
+  ): Record<string, unknown> => {
+    const compatibilityOnly = !isHostedEnterpriseAuthProviderSupported(provider);
+
+    return {
+      id: provider.id,
+      tenantId: provider.tenantId,
+      protocol: provider.protocol,
+      label: provider.label,
+      enabled: provider.enabled,
+      isDefault: provider.isDefault,
+      configJson: provider.configJson,
+      createdAt: provider.createdAt,
+      updatedAt: provider.updatedAt,
+      supportedInHostedRuntime: !compatibilityOnly,
+      compatibilityOnly,
+      ...(compatibilityOnly ? { notice: LEGACY_SAML_COMPATIBILITY_NOTICE } : {}),
+    };
   };
 
   const adminRoleRequiredPage = (tenantId: string): string => {
@@ -576,6 +622,8 @@ export const registerTenantGovernanceRoutes = (
 
     return c.json({
       tenantId: pathParams.tenantId,
+      deprecated: true,
+      notice: LEGACY_SAML_COMPATIBILITY_NOTICE,
       configuration,
     });
   });
@@ -608,43 +656,15 @@ export const registerTenantGovernanceRoutes = (
     if (enterpriseCheck !== null) {
       return enterpriseCheck;
     }
-
-    const configuration = await upsertTenantSsoSamlConfiguration(db, {
-      tenantId: pathParams.tenantId,
-      idpEntityId: request.idpEntityId,
-      ssoLoginUrl: request.ssoLoginUrl,
-      idpCertificatePem: request.idpCertificatePem,
-      idpMetadataUrl: request.idpMetadataUrl,
-      spEntityId: request.spEntityId,
-      assertionConsumerServiceUrl: request.assertionConsumerServiceUrl,
-      nameIdFormat: request.nameIdFormat,
-      enforced: request.enforced,
-    });
-
-    await createAuditLog(db, {
-      tenantId: pathParams.tenantId,
-      actorUserId: session.userId,
-      action: 'tenant.sso_saml_configuration_upserted',
-      targetType: 'tenant_sso_saml_configuration',
-      targetId: pathParams.tenantId,
-      metadata: {
-        role: membershipRole,
-        idpEntityId: configuration.idpEntityId,
-        ssoLoginUrl: configuration.ssoLoginUrl,
-        idpMetadataUrl: configuration.idpMetadataUrl,
-        spEntityId: configuration.spEntityId,
-        assertionConsumerServiceUrl: configuration.assertionConsumerServiceUrl,
-        nameIdFormat: configuration.nameIdFormat,
-        enforced: configuration.enforced,
-      },
-    });
+    void request;
+    void session;
+    void membershipRole;
 
     return c.json(
       {
-        tenantId: pathParams.tenantId,
-        configuration,
+        error: LEGACY_SAML_DEPRECATED_ERROR,
       },
-      201,
+      410,
     );
   });
 
@@ -701,7 +721,7 @@ export const registerTenantGovernanceRoutes = (
     }
 
     const policy = await resolveTenantAuthPolicy(db, pathParams.tenantId);
-    return c.json(policy);
+    return c.json(serializeTenantAuthPolicy(policy));
   });
 
   app.put('/v1/tenants/:tenantId/auth-policy', async (c) => {
@@ -744,6 +764,15 @@ export const registerTenantGovernanceRoutes = (
           400,
         );
       }
+
+      if (!isHostedEnterpriseAuthProviderSupported(provider)) {
+        return c.json(
+          {
+            error: LEGACY_SAML_DEFAULT_PROVIDER_ERROR,
+          },
+          400,
+        );
+      }
     }
 
     const policy = await upsertTenantAuthPolicy(db, {
@@ -752,7 +781,6 @@ export const registerTenantGovernanceRoutes = (
       breakGlassEnabled: request.breakGlassEnabled,
       localMfaRequired: request.localMfaRequired,
       defaultProviderId: request.defaultProviderId,
-      enforceForRoles: request.enforceForRoles,
     });
 
     await createAuditLog(db, {
@@ -771,7 +799,7 @@ export const registerTenantGovernanceRoutes = (
       },
     });
 
-    return c.json(policy);
+    return c.json(serializeTenantAuthPolicy(policy));
   });
 
   app.get('/v1/tenants/:tenantId/auth-providers', async (c) => {
@@ -790,7 +818,7 @@ export const registerTenantGovernanceRoutes = (
     }
 
     const providers = await listTenantAuthProviders(db, pathParams.tenantId);
-    return c.json(providers);
+    return c.json(providers.map(serializeTenantAuthProvider));
   });
 
   app.post('/v1/tenants/:tenantId/auth-providers', async (c) => {
@@ -820,6 +848,15 @@ export const registerTenantGovernanceRoutes = (
 
     if (enterpriseCheck !== null) {
       return enterpriseCheck;
+    }
+
+    if (request.protocol !== 'oidc') {
+      return c.json(
+        {
+          error: HOSTED_ENTERPRISE_OIDC_ONLY_ERROR,
+        },
+        400,
+      );
     }
 
     const provider = await createTenantAuthProvider(db, {
@@ -858,7 +895,7 @@ export const registerTenantGovernanceRoutes = (
       },
     });
 
-    return c.json(provider, 201);
+    return c.json(serializeTenantAuthProvider(provider), 201);
   });
 
   app.put('/v1/tenants/:tenantId/auth-providers/:providerId', async (c) => {
@@ -890,6 +927,39 @@ export const registerTenantGovernanceRoutes = (
       return enterpriseCheck;
     }
 
+    const existingProvider = await findTenantAuthProviderById(
+      db,
+      pathParams.tenantId,
+      pathParams.providerId,
+    );
+
+    if (existingProvider === null) {
+      return c.json(
+        {
+          error: 'Tenant auth provider not found',
+        },
+        404,
+      );
+    }
+
+    if (!isHostedEnterpriseAuthProviderSupported(existingProvider)) {
+      return c.json(
+        {
+          error: LEGACY_SAML_EDIT_BLOCKED_ERROR,
+        },
+        400,
+      );
+    }
+
+    if (request.protocol !== 'oidc') {
+      return c.json(
+        {
+          error: HOSTED_ENTERPRISE_OIDC_ONLY_ERROR,
+        },
+        400,
+      );
+    }
+
     const provider = await updateTenantAuthProvider(db, {
       tenantId: pathParams.tenantId,
       providerId: pathParams.providerId,
@@ -899,15 +969,6 @@ export const registerTenantGovernanceRoutes = (
       isDefault: request.isDefault,
       configJson: request.configJson,
     });
-
-    if (provider === null) {
-      return c.json(
-        {
-          error: 'Tenant auth provider not found',
-        },
-        404,
-      );
-    }
 
     const currentPolicy = await resolveTenantAuthPolicy(db, pathParams.tenantId);
     await upsertTenantAuthPolicy(db, {
@@ -939,7 +1000,7 @@ export const registerTenantGovernanceRoutes = (
       },
     });
 
-    return c.json(provider);
+    return c.json(serializeTenantAuthProvider(provider));
   });
 
   app.delete('/v1/tenants/:tenantId/auth-providers/:providerId', async (c) => {

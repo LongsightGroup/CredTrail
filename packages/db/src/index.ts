@@ -387,6 +387,9 @@ export type TenantLoginMode = 'local' | 'hybrid' | 'sso_required';
 
 export type TenantAuthPolicyEnforceForRoles = 'all_users' | 'admins_only';
 
+export const HOSTED_ENTERPRISE_OIDC_ONLY_ERROR =
+  'Hosted enterprise sign-in currently supports OIDC providers only. Legacy SAML compatibility remains available for visibility and cleanup.';
+
 export interface TenantAuthPolicyRecord {
   tenantId: string;
   loginMode: TenantLoginMode;
@@ -6373,7 +6376,7 @@ const mapTenantAuthPolicyRow = (row: TenantAuthPolicyRow): TenantAuthPolicyRecor
     breakGlassEnabled: row.breakGlassEnabled === 1 || row.breakGlassEnabled === true,
     localMfaRequired: row.localMfaRequired === 1 || row.localMfaRequired === true,
     defaultProviderId: row.defaultProviderId,
-    enforceForRoles: row.enforceForRoles,
+    enforceForRoles: 'all_users',
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -6473,7 +6476,7 @@ const buildLegacyTenantAuthProvider = (
     id: buildLegacyTenantAuthProviderId(configuration.tenantId),
     tenantId: configuration.tenantId,
     protocol: 'saml',
-    label: 'Legacy SAML',
+    label: 'Legacy SAML (compatibility only)',
     enabled: true,
     isDefault: true,
     configJson: JSON.stringify({
@@ -6489,6 +6492,20 @@ const buildLegacyTenantAuthProvider = (
     createdAt: configuration.createdAt,
     updatedAt: configuration.updatedAt,
   };
+};
+
+export const isHostedEnterpriseAuthProviderSupported = (
+  provider: Pick<TenantAuthProviderRecord, 'protocol'>,
+): boolean => {
+  return provider.protocol === 'oidc';
+};
+
+const assertHostedEnterpriseAuthProviderWritable = (
+  protocol: TenantAuthProviderProtocol,
+): void => {
+  if (protocol !== 'oidc') {
+    throw new Error(HOSTED_ENTERPRISE_OIDC_ONLY_ERROR);
+  }
 };
 
 const mapTenantCanvasGradebookIntegrationRow = (
@@ -7047,7 +7064,7 @@ export const upsertTenantAuthPolicy = async (
         input.breakGlassEnabled === true ? 1 : 0,
         input.localMfaRequired === true ? 1 : 0,
         input.defaultProviderId ?? null,
-        input.enforceForRoles ?? 'all_users',
+        'all_users',
         nowIso,
         nowIso,
       )
@@ -7206,6 +7223,7 @@ export const createTenantAuthProvider = async (
   db: SqlDatabase,
   input: CreateTenantAuthProviderInput,
 ): Promise<TenantAuthProviderRecord> => {
+  assertHostedEnterpriseAuthProviderWritable(input.protocol);
   const id = input.id ?? createPrefixedId('tap');
   const nowIso = new Date().toISOString();
   const enabled = input.enabled ?? true;
@@ -7290,6 +7308,7 @@ export const updateTenantAuthProvider = async (
   db: SqlDatabase,
   input: UpdateTenantAuthProviderInput,
 ): Promise<TenantAuthProviderRecord | null> => {
+  assertHostedEnterpriseAuthProviderWritable(input.protocol);
   const nowIso = new Date().toISOString();
   const enabled = input.enabled ?? true;
   const isDefault = input.isDefault ?? false;

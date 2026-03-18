@@ -438,7 +438,6 @@ export const upsertTenantAuthPolicyRequestSchema = z.object({
   breakGlassEnabled: z.boolean().optional(),
   localMfaRequired: z.boolean().optional(),
   defaultProviderId: resourceIdSchema.nullable().optional(),
-  enforceForRoles: tenantAuthPolicyEnforceForRolesSchema.optional(),
 });
 
 export const upsertTenantAuthProviderRequestSchema = z
