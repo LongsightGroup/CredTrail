@@ -88,6 +88,12 @@ beforeEach(() => {
 });
 
 describe('legacy auth removal cleanup contract', () => {
+  it('does not expose a composite auth provider helper once runtime fallback is removed', async () => {
+    const adapterModule = await import('./better-auth-adapter');
+
+    expect(adapterModule).not.toHaveProperty('createCompositeAuthProvider');
+  });
+
   it('creates Better Auth-backed LTI sessions instead of credtrail_session fallbacks', async () => {
     mockedFindAuthIdentityLinkByAuthUserId.mockResolvedValue(
       sampleLink({

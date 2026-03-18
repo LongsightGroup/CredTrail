@@ -132,6 +132,91 @@ afterEach(() => {
   vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
+const loadAppWithMockedAuthFactories = async (input?: {
+  betterAuthPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'better_auth';
+    expiresAt: string;
+  } | null;
+  betterAuthRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+  legacyPrincipal?: {
+    userId: string;
+    authSessionId: string;
+    authMethod: 'legacy_magic_link' | 'legacy_lti';
+    expiresAt: string;
+  } | null;
+  legacyRequestedTenant?: {
+    tenantId: string;
+    source: 'route' | 'legacy_session';
+    authoritative: boolean;
+  } | null;
+}) => {
+  vi.resetModules();
+
+  const betterAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input?.betterAuthPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() =>
+      Promise.resolve(input?.betterAuthRequestedTenant ?? null),
+    ),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+  const legacyAuthProvider: MockedInternalAuthProvider = {
+    requestMagicLink: vi.fn(),
+    createMagicLinkSession: vi.fn(),
+    createLtiSession: vi.fn(),
+    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input?.legacyPrincipal ?? null)),
+    resolveRequestedTenantContext: vi.fn(() =>
+      Promise.resolve(input?.legacyRequestedTenant ?? null),
+    ),
+    revokeCurrentSession: vi.fn(() => Promise.resolve()),
+  };
+  const createBetterAuthProvider = vi.fn(() => betterAuthProvider);
+  const createLegacyAuthProvider = vi.fn(() => legacyAuthProvider);
+
+  vi.doMock('./auth/better-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+        './auth/better-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createBetterAuthProvider,
+    };
+  });
+
+  vi.doMock('./auth/legacy-auth-adapter', async () => {
+    const actual =
+      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
+        './auth/legacy-auth-adapter',
+      );
+
+    return {
+      ...actual,
+      createLegacyAuthProvider,
+      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
+    };
+  });
+
+  const { app: isolatedApp } = await import('./index');
+
+  return {
+    app: isolatedApp,
+    betterAuthProvider,
+    legacyAuthProvider,
+    createBetterAuthProvider,
+    createLegacyAuthProvider,
+  };
+};
+
 const loadAppWithMockedAuthProviders = async (input: {
   betterAuthPrincipal?: {
     userId: string;
@@ -219,6 +304,14 @@ describe('GET /', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/login');
+  });
+
+  it('does not instantiate a legacy auth provider in the composition root', async () => {
+    const { createBetterAuthProvider, createLegacyAuthProvider } =
+      await loadAppWithMockedAuthFactories();
+
+    expect(createBetterAuthProvider).toHaveBeenCalledTimes(1);
+    expect(createLegacyAuthProvider).not.toHaveBeenCalled();
   });
 
   it('prefers Better Auth session resolution over legacy fallback in the composition root', async () => {
