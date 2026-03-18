@@ -162,9 +162,21 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
   const betterAuthProvider: MockedInternalAuthProvider = {
     requestMagicLink: vi.fn(),
     createMagicLinkSession: vi.fn(),
-    createLtiSession: vi.fn(async () => {
-      throw new Error('Better Auth should not create LTI sessions');
-    }),
+    createLtiSession: vi.fn(
+      (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
+        setCookie(context, 'better-auth.session_token', 'better-lti-session', {
+          httpOnly: true,
+          sameSite: 'Lax',
+          path: '/',
+        });
+        return Promise.resolve({
+          userId: input.userId,
+          authSessionId: 'ba_ses_adapter',
+          authMethod: 'better_auth' as const,
+          expiresAt: '2026-02-11T22:00:00.000Z',
+        });
+      },
+    ),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
     resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
@@ -172,21 +184,14 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
   const legacyAuthProvider: MockedInternalAuthProvider = {
     requestMagicLink: vi.fn(),
     createMagicLinkSession: vi.fn(),
-    createLtiSession: vi.fn(
-      (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
-        setCookie(context, 'credtrail_session', 'adapter-session', {
-          httpOnly: true,
-          sameSite: 'Lax',
-          path: '/',
-        });
-        return Promise.resolve({
-          userId: input.userId,
-          authSessionId: 'ses_adapter',
-          authMethod: 'legacy_lti' as const,
-          expiresAt: '2026-02-11T22:00:00.000Z',
-        });
-      },
-    ),
+    createLtiSession: vi.fn(async (_context, input: { tenantId: string; userId: string }) => {
+      return {
+        userId: input.userId,
+        authSessionId: 'ses_adapter',
+        authMethod: 'legacy_lti' as const,
+        expiresAt: '2026-02-11T22:00:00.000Z',
+      };
+    }),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
     resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
@@ -370,7 +375,7 @@ describe('LTI 1.3 core launch flow', () => {
     return env;
   };
 
-  it('keeps LTI session issuance on the legacy auth provider while Better Auth stays primary for hosted auth', async () => {
+  it('establishes a Better Auth browser session for LTI launches without legacy session writes', async () => {
     const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
       await loadAppWithMockedAuthProviders();
     const env = createLtiEnv();
@@ -435,15 +440,17 @@ describe('LTI 1.3 core launch flow', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=adapter-session');
-    expect(legacyAuthProvider.createLtiSession).toHaveBeenCalledWith(
+    expect(response.headers.get('set-cookie') ?? '').toContain(
+      'better-auth.session_token=better-lti-session',
+    );
+    expect(betterAuthProvider.createLtiSession).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         tenantId,
         userId: linkedUserId,
       }),
     );
-    expect(betterAuthProvider.createLtiSession).not.toHaveBeenCalled();
+    expect(legacyAuthProvider.createLtiSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 
@@ -602,7 +609,7 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.text();
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=');
     expect(body).toContain('LTI 1.3 launch complete');
     expect(body).toContain('Instructor');
     expect(body).toContain('issuer');
@@ -982,7 +989,7 @@ describe('LTI 1.3 core launch flow', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
+    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=');
     expect(body).toContain('Select badge template placement');
     expect(body).toContain(deepLinkReturnUrl);
     expect(body).toContain('name="JWT"');

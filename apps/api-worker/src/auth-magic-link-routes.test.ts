@@ -1085,7 +1085,7 @@ describe('magic-link auth routes', () => {
     expect(response.headers.get('set-cookie')).toContain('credtrail_requested_tenant=tenant_456');
   });
 
-  it('returns authenticated session details for the current session cookie', async () => {
+  it('does not rely on credtrail_session for hosted auth session inspection', async () => {
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
 
     const response = await app.request(
@@ -1098,23 +1098,18 @@ describe('magic-link auth routes', () => {
       createEnv('production'),
     );
     const body = await response.json<{
-      status: string;
-      tenantId: string;
-      userId: string;
-      expiresAt: string;
+      error: string;
     }>();
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
     expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
-      expiresAt: '2026-02-18T22:00:00.000Z',
+      error: 'Not authenticated',
     });
-    expect(mockedTouchSession).toHaveBeenCalledWith(fakeDb, 'ses_123', expect.any(String));
+    expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
+    expect(mockedTouchSession).not.toHaveBeenCalled();
   });
 
-  it('revokes the current session on logout and clears the session cookie', async () => {
+  it('does not emit credtrail_session clears on hosted logout after Better Auth cleanup', async () => {
     const response = await app.request(
       '/v1/auth/logout',
       {
@@ -1133,11 +1128,7 @@ describe('magic-link auth routes', () => {
     expect(body).toEqual({
       status: 'signed_out',
     });
-    expect(response.headers.get('set-cookie')).toContain('credtrail_session=');
-    expect(mockedRevokeSessionByHash).toHaveBeenCalledWith(
-      fakeDb,
-      expect.any(String),
-      expect.any(String),
-    );
+    expect(response.headers.get('set-cookie') ?? '').not.toContain('credtrail_session=');
+    expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
   });
 });
