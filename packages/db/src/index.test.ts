@@ -1817,11 +1817,11 @@ describe('tenant auth policy and provider helpers', () => {
     expect(created.breakGlassEnabled).toBe(true);
     expect(created.localMfaRequired).toBe(true);
     expect(created.defaultProviderId).toBe('tap_oidc');
-    expect(created.enforceForRoles).toBe('admins_only');
+    expect(created.enforceForRoles).toBe('all_users');
     expect(resolved).toEqual(created);
   });
 
-  it('keeps exactly one default auth provider per tenant when providers are created or updated', async () => {
+  it('keeps exactly one default OIDC auth provider per tenant when providers are created or updated', async () => {
     const db = createFakeTenantAuthDb();
 
     await createTenantAuthProvider(db, {
@@ -1834,34 +1834,72 @@ describe('tenant auth policy and provider helpers', () => {
       configJson: '{"issuer":"https://idp.example.edu"}',
     });
     await createTenantAuthProvider(db, {
-      id: 'tap_saml',
+      id: 'tap_oidc_backup',
       tenantId: 'tenant_123',
-      protocol: 'saml',
-      label: 'Campus SAML',
+      protocol: 'oidc',
+      label: 'Campus OIDC Backup',
       enabled: true,
       isDefault: false,
-      configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+      configJson: '{"issuer":"https://backup-idp.example.edu"}',
     });
 
     const updated = await updateTenantAuthProvider(db, {
       tenantId: 'tenant_123',
-      providerId: 'tap_saml',
-      protocol: 'saml',
-      label: 'Campus SAML',
+      providerId: 'tap_oidc_backup',
+      protocol: 'oidc',
+      label: 'Campus OIDC Backup',
       enabled: false,
       isDefault: true,
-      configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+      configJson: '{"issuer":"https://backup-idp.example.edu"}',
     });
     const providers = await listTenantAuthProviders(db, 'tenant_123');
 
     expect(updated?.isDefault).toBe(true);
     expect(updated?.enabled).toBe(false);
     expect(providers).toHaveLength(2);
-    expect(providers.find((provider) => provider.id === 'tap_saml')?.isDefault).toBe(true);
+    expect(providers.find((provider) => provider.id === 'tap_oidc_backup')?.isDefault).toBe(true);
     expect(providers.find((provider) => provider.id === 'tap_oidc')?.isDefault).toBe(false);
 
-    const samlProvider = await findTenantAuthProviderById(db, 'tenant_123', 'tap_saml');
-    expect(samlProvider?.enabled).toBe(false);
+    const backupProvider = await findTenantAuthProviderById(db, 'tenant_123', 'tap_oidc_backup');
+    expect(backupProvider?.enabled).toBe(false);
+  });
+
+  it('rejects new hosted SAML provider writes while preserving legacy compatibility reads', async () => {
+    const db = createFakeTenantAuthDb();
+
+    await expect(
+      createTenantAuthProvider(db, {
+        id: 'tap_saml',
+        tenantId: 'tenant_123',
+        protocol: 'saml',
+        label: 'Campus SAML',
+        enabled: true,
+        isDefault: true,
+        configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+      }),
+    ).rejects.toThrow('Hosted enterprise sign-in currently supports OIDC providers only.');
+
+    await createTenantAuthProvider(db, {
+      id: 'tap_oidc',
+      tenantId: 'tenant_123',
+      protocol: 'oidc',
+      label: 'Campus OIDC',
+      enabled: true,
+      isDefault: true,
+      configJson: '{"issuer":"https://idp.example.edu"}',
+    });
+
+    await expect(
+      updateTenantAuthProvider(db, {
+        tenantId: 'tenant_123',
+        providerId: 'tap_oidc',
+        protocol: 'saml',
+        label: 'Campus SAML',
+        enabled: true,
+        isDefault: true,
+        configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
+      }),
+    ).rejects.toThrow('Hosted enterprise sign-in currently supports OIDC providers only.');
   });
 
   it('bridges legacy SAML configuration into the provider and policy model', async () => {
@@ -1893,6 +1931,7 @@ describe('tenant auth policy and provider helpers', () => {
         protocol: 'saml',
         isDefault: true,
         enabled: true,
+        label: 'Legacy SAML (compatibility only)',
       }),
     ]);
 

@@ -246,6 +246,17 @@ beforeEach(() => {
 describe('enterprise auth policy governance', () => {
   it('reads and updates enterprise tenant auth policy with audit logging', async () => {
     const env = createEnv();
+    mockedResolveTenantAuthPolicy.mockResolvedValue(
+      sampleAuthPolicy({
+        enforceForRoles: 'admins_only',
+      }),
+    );
+    mockedUpsertTenantAuthPolicy.mockResolvedValue(
+      sampleAuthPolicy({
+        loginMode: 'sso_required',
+        enforceForRoles: 'all_users',
+      }),
+    );
 
     const getResponse = await app.request(
       '/v1/tenants/tenant_123/auth-policy',
@@ -262,6 +273,7 @@ describe('enterprise auth policy governance', () => {
     const getBody = await getResponse.json<Record<string, unknown>>();
     expect(getBody.loginMode).toBe('hybrid');
     expect(getBody.defaultProviderId).toBe('tap_oidc');
+    expect(getBody.enforceForRoles).toBeUndefined();
 
     const putResponse = await app.request(
       '/v1/tenants/tenant_123/auth-policy',
@@ -276,7 +288,7 @@ describe('enterprise auth policy governance', () => {
           breakGlassEnabled: true,
           localMfaRequired: true,
           defaultProviderId: 'tap_oidc',
-          enforceForRoles: 'all_users',
+          enforceForRoles: 'admins_only',
         }),
       },
       env,
@@ -285,6 +297,13 @@ describe('enterprise auth policy governance', () => {
     expect(putResponse.status).toBe(200);
     const putBody = await putResponse.json<Record<string, unknown>>();
     expect(putBody.loginMode).toBe('sso_required');
+    expect(putBody.enforceForRoles).toBeUndefined();
+    expect(mockedUpsertTenantAuthPolicy).toHaveBeenCalledWith(
+      fakeDb,
+      expect.not.objectContaining({
+        enforceForRoles: expect.anything(),
+      }),
+    );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
@@ -297,7 +316,7 @@ describe('enterprise auth policy governance', () => {
     );
   });
 
-  it('manages provider-neutral enterprise auth providers with audit logging', async () => {
+  it('keeps enterprise auth provider management OIDC-only while exposing legacy SAML as compatibility-only', async () => {
     const env = createEnv();
 
     const listResponse = await app.request(
@@ -316,6 +335,9 @@ describe('enterprise auth policy governance', () => {
     expect(listBody).toHaveLength(2);
     expect(listBody[0]?.protocol).toBe('oidc');
     expect(listBody[1]?.protocol).toBe('saml');
+    expect(listBody[0]?.compatibilityOnly).toBe(false);
+    expect(listBody[1]?.compatibilityOnly).toBe(true);
+    expect(listBody[1]?.notice).toContain('Legacy SAML compatibility');
 
     const createResponse = await app.request(
       '/v1/tenants/tenant_123/auth-providers',
@@ -348,6 +370,41 @@ describe('enterprise auth policy governance', () => {
       }),
     );
 
+    const createLegacySamlResponse = await app.request(
+      '/v1/tenants/tenant_123/auth-providers',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'better-auth.session_token=session-token',
+        },
+        body: JSON.stringify({
+          protocol: 'saml',
+          label: 'Campus SAML',
+          enabled: true,
+          isDefault: false,
+          configJson:
+            '{"ssoLoginUrl":"https://idp.example.edu/sso","idpEntityId":"https://idp.example.edu/entity"}',
+        }),
+      },
+      env,
+    );
+    const createLegacySamlBody = await createLegacySamlResponse.json<ErrorResponse>();
+
+    expect(createLegacySamlResponse.status).toBe(400);
+    expect(createLegacySamlBody.error).toContain('OIDC providers only');
+
+    mockedFindTenantAuthProviderById.mockResolvedValueOnce(
+      sampleAuthProvider({
+        id: 'tap_saml',
+        protocol: 'saml',
+        label: 'Campus SAML',
+        isDefault: false,
+        configJson:
+          '{"ssoLoginUrl":"https://idp.example.edu/sso","idpEntityId":"https://idp.example.edu/entity"}',
+      }),
+    );
+
     const updateResponse = await app.request(
       '/v1/tenants/tenant_123/auth-providers/tap_saml',
       {
@@ -367,10 +424,10 @@ describe('enterprise auth policy governance', () => {
       },
       env,
     );
+    const updateBody = await updateResponse.json<ErrorResponse>();
 
-    expect(updateResponse.status).toBe(200);
-    const updateBody = await updateResponse.json<Record<string, unknown>>();
-    expect(updateBody.enabled).toBe(false);
+    expect(updateResponse.status).toBe(400);
+    expect(updateBody.error).toContain('Legacy SAML compatibility entries are not editable');
 
     const deleteResponse = await app.request(
       '/v1/tenants/tenant_123/auth-providers/tap_saml',
@@ -394,6 +451,33 @@ describe('enterprise auth policy governance', () => {
         targetId: 'tap_saml',
       }),
     );
+  });
+
+  it('treats legacy SAML write endpoints as deprecated compatibility-only surfaces', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/v1/tenants/tenant_123/sso/saml',
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'better-auth.session_token=session-token',
+        },
+        body: JSON.stringify({
+          idpEntityId: 'https://idp.example.edu/entity',
+          ssoLoginUrl: 'https://idp.example.edu/sso',
+          idpCertificatePem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
+          spEntityId: 'https://credtrail.test/saml/sp',
+          assertionConsumerServiceUrl: 'https://credtrail.test/saml/acs',
+        }),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(410);
+    expect(body.error).toContain('deprecated');
   });
 
   it('keeps enterprise auth governance gated behind enterprise plan checks', async () => {

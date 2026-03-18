@@ -714,21 +714,9 @@ describe('org unit and badge ownership governance endpoints', () => {
     );
     const body = await response.json<Record<string, unknown>>();
 
-    expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('tenant_123');
-    expect(mockedUpsertTenantSsoSamlConfiguration).toHaveBeenCalledWith(
-      fakeDb,
-      expect.objectContaining({
-        tenantId: 'tenant_123',
-        idpEntityId: 'https://idp.example.edu/entity',
-      }),
-    );
-    expect(mockedCreateAuditLog).toHaveBeenCalledWith(
-      fakeDb,
-      expect.objectContaining({
-        action: 'tenant.sso_saml_configuration_upserted',
-      }),
-    );
+    expect(response.status).toBe(410);
+    expect(body.error).toContain('deprecated');
+    expect(mockedUpsertTenantSsoSamlConfiguration).not.toHaveBeenCalled();
   });
 
   it('returns 403 for SAML SSO configuration on non-enterprise plans', async () => {

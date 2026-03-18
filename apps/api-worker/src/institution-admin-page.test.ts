@@ -262,6 +262,18 @@ beforeEach(() => {
       createdAt: '2026-02-18T12:00:00.000Z',
       updatedAt: '2026-02-18T12:00:00.000Z',
     },
+    {
+      id: 'tap_saml',
+      tenantId: 'tenant_123',
+      protocol: 'saml',
+      label: 'Legacy SAML',
+      enabled: true,
+      isDefault: false,
+      configJson:
+        '{"ssoLoginUrl":"https://idp.example.edu/sso","idpEntityId":"https://idp.example.edu/entity"}',
+      createdAt: '2026-02-18T12:05:00.000Z',
+      updatedAt: '2026-02-18T12:05:00.000Z',
+    },
   ]);
   mockedListTenantBreakGlassAccounts.mockReset();
   mockedListTenantBreakGlassAccounts.mockResolvedValue([
@@ -621,6 +633,11 @@ describe('GET /tenants/:tenantId/admin/access', () => {
     expect(body).toContain('Enterprise Auth');
     expect(body).toContain('Login mode');
     expect(body).toContain('Campus OIDC');
+    expect(body).toContain('Hosted enterprise sign-in supports OIDC providers.');
+    expect(body).toContain('Legacy SAML compatibility');
+    expect(body).not.toContain('OIDC or SAML connection metadata');
+    expect(body).not.toContain('name="enforceForRoles"');
+    expect(body).not.toContain('<option value="saml">');
     expect(body).toContain('id="enterprise-auth-policy-form"');
     expect(body).toContain('id="enterprise-auth-provider-form"');
     expect(body).toContain('Break-glass local accounts');

@@ -353,10 +353,11 @@ describe('magic-link auth routes', () => {
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(body).toContain('Access your CredTrail tenant');
     expect(body).toContain('Email me a sign-in link');
-    expect(body).toContain('The sign-in email comes from CredTrail and expires in 10 minutes.');
+    expect(body).toContain('The link expires in 10 minutes and returns you to this tenant flow.');
     expect(body).toContain('id="magic-link-login-form"');
     expect(body).toContain('name="tenantId"');
     expect(body).toContain('value="sakai"');
+    expect(body).toContain('ct-login__step-copy');
     expect(body).toContain('/assets/ui/foundation.');
     expect(body).not.toContain('.ct-login__hero {');
     expect(stylesheetPath).not.toBeNull();
@@ -433,6 +434,7 @@ describe('magic-link auth routes', () => {
     expect(response.status).toBe(200);
     expect(body).toContain('Institution sign-in');
     expect(body).toContain('Continue with Campus OIDC');
+    expect(body).not.toContain('OIDC or SAML');
     expect(body).toContain('id="magic-link-login-form"');
   });
 
