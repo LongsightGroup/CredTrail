@@ -2087,6 +2087,32 @@ describe('better auth core migration', () => {
     expect(ssoSql).not.toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
   });
 
+  it('removes legacy auth table helpers from the public DB package', async () => {
+    const dbModule = await import('./index');
+
+    expect(dbModule).not.toHaveProperty('createMagicLinkToken');
+    expect(dbModule).not.toHaveProperty('findMagicLinkTokenByHash');
+    expect(dbModule).not.toHaveProperty('markMagicLinkTokenUsed');
+    expect(dbModule).not.toHaveProperty('createSession');
+    expect(dbModule).not.toHaveProperty('findActiveSessionByHash');
+    expect(dbModule).not.toHaveProperty('touchSession');
+    expect(dbModule).not.toHaveProperty('revokeSessionByHash');
+  });
+
+  it('adds a forward migration that drops obsolete legacy auth tables and indexes', () => {
+    const sql = readFileSync(
+      new URL('../migrations/0032_drop_legacy_auth_tables.sql', import.meta.url),
+      'utf8',
+    );
+
+    expect(sql).toContain('DROP INDEX IF EXISTS idx_magic_link_tokens_tenant_user');
+    expect(sql).toContain('DROP INDEX IF EXISTS idx_magic_link_tokens_expires_at');
+    expect(sql).toContain('DROP INDEX IF EXISTS idx_sessions_tenant_user');
+    expect(sql).toContain('DROP INDEX IF EXISTS idx_sessions_expires_at');
+    expect(sql).toContain('DROP TABLE IF EXISTS magic_link_tokens');
+    expect(sql).toContain('DROP TABLE IF EXISTS sessions');
+  });
+
   it('adds Better Auth two-factor and tenant break-glass migrations', () => {
     const twoFactorSql = readFileSync(
       new URL('../migrations/0030_better_auth_two_factor.sql', import.meta.url),

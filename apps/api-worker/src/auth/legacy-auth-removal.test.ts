@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@credtrail/db', async () => {
@@ -92,6 +94,18 @@ describe('legacy auth removal cleanup contract', () => {
     const adapterModule = await import('./better-auth-adapter');
 
     expect(adapterModule).not.toHaveProperty('createCompositeAuthProvider');
+  });
+
+  it('keeps active auth runtime sources free of legacy auth helper symbols', () => {
+    const source = [
+      readFileSync(new URL('./better-auth-adapter.ts', import.meta.url), 'utf8'),
+      readFileSync(new URL('../index.ts', import.meta.url), 'utf8'),
+      readFileSync(new URL('../../../../packages/db/src/index.ts', import.meta.url), 'utf8'),
+    ].join('\n');
+
+    expect(source).not.toMatch(
+      /createLegacyAuthProvider|resolveLegacySessionRecord|createCompositeAuthProvider|credtrail_session|legacy_magic_link|legacy_lti|createMagicLinkToken|findMagicLinkTokenByHash|markMagicLinkTokenUsed|createSession|findActiveSessionByHash|revokeSessionByHash/,
+    );
   });
 
   it('creates Better Auth-backed LTI sessions without runtime fallback plumbing', async () => {
