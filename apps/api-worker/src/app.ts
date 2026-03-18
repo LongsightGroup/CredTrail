@@ -1211,16 +1211,20 @@ registerAuthRoutes({
   app,
   resolveDatabase,
   requestMagicLink: (context, input) => {
-    return authProvider.requestMagicLink(context, input);
+    return betterAuthProvider.requestMagicLink(context, input);
   },
   createMagicLinkSession: (context, token) => {
-    return authProvider.createMagicLinkSession(context, token);
+    return betterAuthProvider.createMagicLinkSession(context, token);
   },
-  resolveAuthenticatedPrincipal,
-  resolveRequestedTenantContext,
+  resolveAuthenticatedPrincipal: (context) => {
+    return betterAuthProvider.resolveAuthenticatedPrincipal(context);
+  },
+  resolveRequestedTenantContext: (context) => {
+    return betterAuthProvider.resolveRequestedTenantContext(context);
+  },
   rememberRequestedTenant,
   revokeCurrentSession: (context) => {
-    return authProvider.revokeCurrentSession(context);
+    return betterAuthProvider.revokeCurrentSession(context);
   },
   enterpriseSso: enterpriseSsoAdapter,
   breakGlassPolicy: breakGlassPolicyAdapter,

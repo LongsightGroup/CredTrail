@@ -268,7 +268,7 @@ describe('GET /', () => {
     expect(legacyAuthProvider.resolveRequestedTenantContext).not.toHaveBeenCalled();
   });
 
-  it('falls back to legacy session resolution when Better Auth is absent', async () => {
+  it('keeps hosted auth routes Better Auth-only when no Better Auth session is present', async () => {
     const { app: isolatedApp, legacyAuthProvider } = await loadAppWithMockedAuthProviders({
       betterAuthPrincipal: null,
       betterAuthRequestedTenant: null,
@@ -287,21 +287,15 @@ describe('GET /', () => {
 
     const response = await isolatedApp.request('/v1/auth/session', undefined, createEnv());
     const body = await response.json<{
-      status: string;
-      tenantId: string;
-      userId: string;
-      expiresAt: string;
+      error: string;
     }>();
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(401);
     expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_legacy',
-      userId: 'usr_legacy',
-      expiresAt: '2026-03-17T20:00:00.000Z',
+      error: 'Not authenticated',
     });
-    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
-    expect(legacyAuthProvider.resolveRequestedTenantContext).toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
+    expect(legacyAuthProvider.resolveRequestedTenantContext).not.toHaveBeenCalled();
   });
 });
 
