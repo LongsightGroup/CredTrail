@@ -51,7 +51,7 @@ const samplePrincipal = (): AuthenticatedPrincipal => {
   return {
     userId: 'usr_123',
     authSessionId: 'ses_123',
-    authMethod: 'legacy_magic_link',
+    authMethod: 'better_auth',
     expiresAt: '2026-02-18T22:00:00.000Z',
   };
 };

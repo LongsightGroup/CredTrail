@@ -131,21 +131,9 @@ const loadAppWithMockedAuthProviders = async (input: {
     source: 'route' | 'legacy_session';
     authoritative: boolean;
   } | null;
-  legacyPrincipal?: {
-    userId: string;
-    authSessionId: string;
-    authMethod: 'legacy_magic_link' | 'legacy_lti';
-    expiresAt: string;
-  } | null;
-  legacyRequestedTenant?: {
-    tenantId: string;
-    source: 'route' | 'legacy_session';
-    authoritative: boolean;
-  } | null;
 }): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
-  legacyAuthProvider: MockedInternalAuthProvider;
 }> => {
   vi.resetModules();
 
@@ -155,14 +143,6 @@ const loadAppWithMockedAuthProviders = async (input: {
     createLtiSession: vi.fn(),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
     resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
-    revokeCurrentSession: vi.fn(() => Promise.resolve()),
-  };
-  const legacyAuthProvider: MockedInternalAuthProvider = {
-    requestMagicLink: vi.fn(),
-    createMagicLinkSession: vi.fn(),
-    createLtiSession: vi.fn(),
-    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.legacyPrincipal ?? null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.legacyRequestedTenant ?? null)),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
@@ -178,25 +158,11 @@ const loadAppWithMockedAuthProviders = async (input: {
     };
   });
 
-  vi.doMock('./auth/legacy-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
-        './auth/legacy-auth-adapter',
-      );
-
-    return {
-      ...actual,
-      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
-      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
-    };
-  });
-
   const { app: isolatedApp } = await import('./index');
 
   return {
     app: isolatedApp,
     betterAuthProvider,
-    legacyAuthProvider,
   };
 };
 
@@ -302,7 +268,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock('./auth/better-auth-adapter');
-  vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
 describe('GET /tenants/:tenantId/learner/dashboard', () => {
@@ -356,8 +321,7 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
   });
 
   it('authorizes learner dashboard from Better Auth without a legacy session cookie', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedAuthProviders({
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders({
         betterAuthPrincipal: {
           userId: 'usr_123',
           authSessionId: 'ba_ses_123',
@@ -375,7 +339,6 @@ describe('GET /tenants/:tenantId/learner/dashboard', () => {
     expect(response.status).toBe(200);
     expect(body).toContain('Your credential collection');
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
-    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
     expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
     expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });

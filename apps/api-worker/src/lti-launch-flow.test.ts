@@ -290,7 +290,6 @@ interface MockedInternalAuthProvider {
 const loadAppWithMockedAuthProviders = async (): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
-  legacyAuthProvider: MockedInternalAuthProvider;
 }> => {
   vi.resetModules();
   const betterAuthProvider: MockedInternalAuthProvider = {
@@ -315,21 +314,6 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
     resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
-  const legacyAuthProvider: MockedInternalAuthProvider = {
-    requestMagicLink: vi.fn(),
-    createMagicLinkSession: vi.fn(),
-    createLtiSession: vi.fn(async (_context, input: { tenantId: string; userId: string }) => {
-      return {
-        userId: input.userId,
-        authSessionId: 'ses_adapter',
-        authMethod: 'legacy_lti' as const,
-        expiresAt: '2026-02-11T22:00:00.000Z',
-      };
-    }),
-    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
-    revokeCurrentSession: vi.fn(() => Promise.resolve()),
-  };
 
   vi.doMock('./auth/better-auth-adapter', async () => {
     const actual =
@@ -343,24 +327,11 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
     };
   });
 
-  vi.doMock('./auth/legacy-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
-        './auth/legacy-auth-adapter',
-      );
-
-    return {
-      ...actual,
-      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
-    };
-  });
-
   const { app: isolatedApp } = await import('./index');
 
   return {
     app: isolatedApp,
     betterAuthProvider,
-    legacyAuthProvider,
   };
 };
 
@@ -433,7 +404,6 @@ const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unkno
 
 afterEach(() => {
   vi.doUnmock('./auth/better-auth-adapter');
-  vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
 describe('LTI 1.3 core launch flow', () => {
@@ -558,8 +528,7 @@ describe('LTI 1.3 core launch flow', () => {
   };
 
   it('establishes a Better Auth browser session for LTI launches without legacy session writes', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders();
     const env = createLtiEnv();
     const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
@@ -632,7 +601,6 @@ describe('LTI 1.3 core launch flow', () => {
         userId: linkedUserId,
       }),
     );
-    expect(legacyAuthProvider.createLtiSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
   });
 

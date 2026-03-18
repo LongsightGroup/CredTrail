@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const {
+  mockedResolveBetterAuthPrincipal,
+  mockedResolveBetterAuthRequestedTenant,
+} = vi.hoisted(() => {
+  return {
+    mockedResolveBetterAuthPrincipal: vi.fn(),
+    mockedResolveBetterAuthRequestedTenant: vi.fn(),
+  };
+});
+
 vi.mock('@credtrail/db', async () => {
   const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
 
@@ -39,6 +49,25 @@ vi.mock('@credtrail/db', async () => {
 vi.mock('@credtrail/db/postgres', () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock('./auth/better-auth-adapter', async () => {
+  const actual =
+    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
+      './auth/better-auth-adapter',
+    );
+
+  return {
+    ...actual,
+    createBetterAuthProvider: vi.fn(() => ({
+      requestMagicLink: vi.fn(),
+      createMagicLinkSession: vi.fn(),
+      createLtiSession: vi.fn(),
+      resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
+      resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
+      revokeCurrentSession: vi.fn(async () => {}),
+    })),
   };
 });
 
@@ -175,21 +204,9 @@ const loadAppWithMockedAuthProviders = async (input: {
     source: 'route' | 'legacy_session';
     authoritative: boolean;
   } | null;
-  legacyPrincipal?: {
-    userId: string;
-    authSessionId: string;
-    authMethod: 'legacy_magic_link' | 'legacy_lti';
-    expiresAt: string;
-  } | null;
-  legacyRequestedTenant?: {
-    tenantId: string;
-    source: 'route' | 'legacy_session';
-    authoritative: boolean;
-  } | null;
 }): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
-  legacyAuthProvider: MockedInternalAuthProvider;
 }> => {
   vi.resetModules();
 
@@ -199,14 +216,6 @@ const loadAppWithMockedAuthProviders = async (input: {
     createLtiSession: vi.fn(),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
     resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
-    revokeCurrentSession: vi.fn(() => Promise.resolve()),
-  };
-  const legacyAuthProvider: MockedInternalAuthProvider = {
-    requestMagicLink: vi.fn(),
-    createMagicLinkSession: vi.fn(),
-    createLtiSession: vi.fn(),
-    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.legacyPrincipal ?? null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.legacyRequestedTenant ?? null)),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
@@ -222,25 +231,11 @@ const loadAppWithMockedAuthProviders = async (input: {
     };
   });
 
-  vi.doMock('./auth/legacy-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
-        './auth/legacy-auth-adapter',
-      );
-
-    return {
-      ...actual,
-      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
-      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
-    };
-  });
-
   const { app: isolatedApp } = await import('./index');
 
   return {
     app: isolatedApp,
     betterAuthProvider,
-    legacyAuthProvider,
   };
 };
 
@@ -268,6 +263,25 @@ beforeEach(() => {
   mockedHasTenantMembershipOrgUnitScopeAssignments.mockResolvedValue(false);
   mockedListBadgeTemplateOwnershipEvents.mockReset();
   mockedListBadgeTemplateOwnershipEvents.mockResolvedValue([]);
+  mockedResolveBetterAuthPrincipal.mockReset();
+  mockedResolveBetterAuthPrincipal.mockImplementation(
+    async (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header('cookie') ?? '';
+
+      if (!cookieHeader.includes('better-auth.session_token=')) {
+        return null;
+      }
+
+      return {
+        userId: 'usr_123',
+        authSessionId: 'ba_ses_123',
+        authMethod: 'better_auth' as const,
+        expiresAt: '2026-03-17T22:00:00.000Z',
+      };
+    },
+  );
+  mockedResolveBetterAuthRequestedTenant.mockReset();
+  mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
   mockedListDelegatedIssuingAuthorityGrantEvents.mockReset();
   mockedListDelegatedIssuingAuthorityGrantEvents.mockResolvedValue([]);
   mockedListDelegatedIssuingAuthorityGrants.mockReset();
@@ -299,7 +313,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock('./auth/better-auth-adapter');
-  vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
 const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
@@ -539,7 +552,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -573,7 +586,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -586,8 +599,7 @@ describe('org unit and badge ownership governance endpoints', () => {
   });
 
   it('authorizes requested tenant governance routes from Better Auth without a legacy session cookie', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedAuthProviders({
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders({
         betterAuthPrincipal: {
           userId: 'usr_123',
           authSessionId: 'ba_ses_123',
@@ -608,7 +620,6 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(response.status).toBe(200);
     expect(body.tenantId).toBe('tenant_123');
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
-    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
     expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
     expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
@@ -634,7 +645,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           unitType: 'department',
@@ -686,7 +697,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           idpEntityId: 'https://idp.example.edu/entity',
@@ -733,7 +744,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -758,7 +769,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           label: 'Integration key',
@@ -801,7 +812,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -821,7 +832,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           revokedAt: '2026-02-20T00:00:00.000Z',
@@ -859,7 +870,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -896,7 +907,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           toOrgUnitId: 'tenant_123:org:department-math',
@@ -949,7 +960,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -988,7 +999,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           role: 'issuer',
@@ -1033,7 +1044,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'DELETE',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -1072,7 +1083,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -1111,7 +1122,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           orgUnitId: 'tenant_123:org:department-math',
@@ -1179,7 +1190,7 @@ describe('org unit and badge ownership governance endpoints', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
         body: JSON.stringify({
           reason: 'Policy update',
@@ -1235,7 +1246,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,
@@ -1266,7 +1277,7 @@ describe('org unit and badge ownership governance endpoints', () => {
       {
         method: 'GET',
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: 'better-auth.session_token=session-token',
         },
       },
       env,

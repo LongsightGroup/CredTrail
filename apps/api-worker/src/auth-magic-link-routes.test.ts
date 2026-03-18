@@ -188,7 +188,6 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
 }): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
-  legacyAuthProvider: MockedInternalAuthProvider;
 }> => {
   vi.resetModules();
 
@@ -247,32 +246,6 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     }),
   };
 
-  const legacyAuthProvider: MockedInternalAuthProvider = {
-    requestMagicLink: vi.fn(),
-    createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
-      setCookie(context, 'credtrail_session', 'legacy-session', {
-        httpOnly: true,
-        sameSite: 'Lax',
-        path: '/',
-      });
-      return Promise.resolve({
-        userId: 'usr_legacy',
-        authSessionId: 'ses_legacy',
-        authMethod: 'legacy_magic_link' as const,
-        expiresAt: '2026-02-18T20:00:00.000Z',
-      });
-    }),
-    createLtiSession: vi.fn(),
-    resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(null)),
-    revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
-      deleteCookie(context, 'credtrail_session', {
-        path: '/',
-      });
-      return Promise.resolve();
-    }),
-  };
-
   vi.doMock('./auth/better-auth-adapter', async () => {
     const actual =
       await vi.importActual<typeof import('./auth/better-auth-adapter')>(
@@ -285,25 +258,11 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     };
   });
 
-  vi.doMock('./auth/legacy-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/legacy-auth-adapter')>(
-        './auth/legacy-auth-adapter',
-      );
-
-    return {
-      ...actual,
-      createLegacyAuthProvider: vi.fn(() => legacyAuthProvider),
-      resolveLegacySessionRecord: vi.fn(() => Promise.resolve(null)),
-    };
-  });
-
   const { app: isolatedApp } = await import('./index');
 
   return {
     app: isolatedApp,
     betterAuthProvider,
-    legacyAuthProvider,
   };
 };
 
@@ -429,7 +388,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock('./auth/better-auth-adapter');
-  vi.doUnmock('./auth/legacy-auth-adapter');
 });
 
 describe('magic-link auth routes', () => {
@@ -688,8 +646,7 @@ describe('magic-link auth routes', () => {
       ),
     );
 
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedHostedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
     const response = await isolatedApp.request(
       '/v1/auth/magic-link/request',
       {
@@ -712,7 +669,6 @@ describe('magic-link auth routes', () => {
     expect(body.error).toContain('Enterprise SSO is required');
     expect(mockedUpsertUserByEmail).not.toHaveBeenCalled();
     expect(betterAuthProvider.requestMagicLink).not.toHaveBeenCalled();
-    expect(legacyAuthProvider.requestMagicLink).not.toHaveBeenCalled();
   });
 
   it('delegates hosted magic-link requests to Better Auth while preserving user and membership upserts', async () => {
@@ -727,8 +683,7 @@ describe('magic-link auth routes', () => {
       created: true,
     });
 
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedHostedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
       '/v1/auth/magic-link/request',
@@ -775,13 +730,11 @@ describe('magic-link auth routes', () => {
         email: 'learner@example.edu',
       }),
     );
-    expect(legacyAuthProvider.requestMagicLink).not.toHaveBeenCalled();
     expect(mockedCreateMagicLinkToken).not.toHaveBeenCalled();
   });
 
   it('delegates JSON verify to Better Auth-backed session creation instead of legacy token tables', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedHostedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
       '/v1/auth/magic-link/verify',
@@ -812,15 +765,13 @@ describe('magic-link auth routes', () => {
     });
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(legacyAuthProvider.createMagicLinkSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
     expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
     expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
   });
 
   it('delegates browser GET verify to Better Auth-backed session creation instead of legacy token tables', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedHostedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
       '/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
@@ -832,7 +783,6 @@ describe('magic-link auth routes', () => {
     expect(response.headers.get('location')).toBe('/auth/resolve');
     expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
-    expect(legacyAuthProvider.createMagicLinkSession).not.toHaveBeenCalled();
     expect(mockedCreateSession).not.toHaveBeenCalled();
     expect(mockedFindMagicLinkTokenByHash).not.toHaveBeenCalled();
     expect(mockedMarkMagicLinkTokenUsed).not.toHaveBeenCalled();
@@ -853,8 +803,7 @@ describe('magic-link auth routes', () => {
   });
 
   it('uses Better Auth-backed session inspection and logout without falling back to legacy session tables', async () => {
-    const { app: isolatedApp, betterAuthProvider, legacyAuthProvider } =
-      await loadAppWithMockedHostedAuthProviders({
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders({
         betterAuthInitiallyAuthenticated: true,
       });
 
@@ -882,7 +831,6 @@ describe('magic-link auth routes', () => {
       expiresAt: '2026-02-18T22:00:00.000Z',
     });
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
-    expect(legacyAuthProvider.resolveAuthenticatedPrincipal).not.toHaveBeenCalled();
 
     const logoutResponse = await isolatedApp.request(
       '/v1/auth/logout',
@@ -904,7 +852,6 @@ describe('magic-link auth routes', () => {
     });
     expect(logoutResponse.headers.get('set-cookie')).toContain('better-auth.session_token=');
     expect(betterAuthProvider.revokeCurrentSession).toHaveBeenCalledTimes(1);
-    expect(legacyAuthProvider.revokeCurrentSession).not.toHaveBeenCalled();
     expect(mockedRevokeSessionByHash).not.toHaveBeenCalled();
 
     const afterLogoutResponse = await isolatedApp.request(

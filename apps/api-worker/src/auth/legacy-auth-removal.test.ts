@@ -94,7 +94,7 @@ describe('legacy auth removal cleanup contract', () => {
     expect(adapterModule).not.toHaveProperty('createCompositeAuthProvider');
   });
 
-  it('creates Better Auth-backed LTI sessions instead of credtrail_session fallbacks', async () => {
+  it('creates Better Auth-backed LTI sessions without runtime fallback plumbing', async () => {
     mockedFindAuthIdentityLinkByAuthUserId.mockResolvedValue(
       sampleLink({
         authUserId: 'ba_usr_123',
