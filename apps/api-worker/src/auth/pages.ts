@@ -71,11 +71,14 @@ export const magicLinkLoginPage = (input: {
   const enterpriseProviders = input.enterpriseProviders ?? [];
   const localLoginAllowed = input.localLoginAllowed ?? true;
   const explicitLocalLoginPath = input.explicitLocalLoginPath ?? null;
+  const hasExplicitNotice = (input.notice ?? '').trim().length > 0;
   const loginReasonNotice =
     input.reason === 'sso_failed'
       ? '<p class="ct-login__context">Institution sign-in did not complete. Try again or contact your CredTrail administrator.</p>'
       : input.reason === 'sso_required'
         ? '<p class="ct-login__context">Institution sign-in is required for this tenant.</p>'
+        : input.reason === 'sso_unavailable' && !hasExplicitNotice
+          ? '<p class="ct-login__context">Hosted institution sign-in is not available for this tenant right now. Contact your CredTrail administrator.</p>'
         : '';
   const enterpriseSignInMarkup =
     enterpriseProviders.length === 0
@@ -177,7 +180,7 @@ export const magicLinkLoginPage = (input: {
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${loginReasonNotice}
-          ${input.notice === undefined || input.notice.trim().length === 0 ? '' : `<p class="ct-login__context">${escapeHtml(input.notice)}</p>`}
+          ${!hasExplicitNotice ? '' : `<p class="ct-login__context">${escapeHtml(input.notice ?? '')}</p>`}
           ${enterpriseSignInMarkup}
           ${localLoginMarkup}
           ${explicitLocalFallbackMarkup}

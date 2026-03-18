@@ -405,6 +405,41 @@ describe('magic-link auth routes', () => {
     );
   });
 
+  it('renders a truthful notice instead of auto-starting when no supported hosted enterprise provider is available', async () => {
+    mockedResolveEnterpriseLoginExperience.mockResolvedValue({
+      tenantId: 'tenant_123',
+      loginMode: 'sso_required',
+      localLoginAllowed: false,
+      enterpriseProviders: [],
+      autoStartPath: null,
+      notice:
+        'Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.',
+    });
+
+    const response = await app.request(
+      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('no supported hosted OIDC provider is currently available');
+    expect(body).not.toContain('Continue with Campus OIDC');
+  });
+
+  it('renders a truthful hosted enterprise unavailability notice after an unsupported SSO start redirect', async () => {
+    const response = await app.request(
+      '/login?tenantId=tenant_123&reason=sso_unavailable',
+      undefined,
+      createEnv('production'),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Hosted institution sign-in is not available for this tenant right now.');
+  });
+
   it('renders hybrid tenant login pages with both local and enterprise options', async () => {
     mockedResolveEnterpriseLoginExperience.mockResolvedValue({
       tenantId: 'tenant_123',

@@ -3,6 +3,7 @@ import {
   ensureTenantMembership,
   findTenantAuthProviderById,
   findTenantById,
+  isHostedEnterpriseAuthProviderSupported,
   listTenantAuthProviders,
   resolveTenantAuthPolicy,
   type SqlDatabase,
@@ -292,6 +293,16 @@ const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthC
   };
 };
 
+const isRuntimeCapableEnterpriseProvider = (
+  provider: TenantAuthProviderRecord,
+): boolean => {
+  if (!isHostedEnterpriseAuthProviderSupported(provider)) {
+    return false;
+  }
+
+  return toGenericOAuthConfig(provider) !== null;
+};
+
 const resolveDefaultProvider = (
   policy: TenantAuthPolicyRecord,
   providers: readonly TenantAuthProviderRecord[],
@@ -325,6 +336,7 @@ const resolveTenantEnterpriseState = async (
   tenant: Awaited<ReturnType<typeof findTenantById>>;
   policy: TenantAuthPolicyRecord | null;
   enabledProviders: TenantAuthProviderRecord[];
+  supportedProviders: TenantAuthProviderRecord[];
   defaultProvider: TenantAuthProviderRecord | null;
 }> => {
   const tenant = await findTenantById(db, tenantId);
@@ -334,6 +346,7 @@ const resolveTenantEnterpriseState = async (
       tenant,
       policy: null,
       enabledProviders: [] as TenantAuthProviderRecord[],
+      supportedProviders: [] as TenantAuthProviderRecord[],
       defaultProvider: null as TenantAuthProviderRecord | null,
     };
   }
@@ -342,12 +355,14 @@ const resolveTenantEnterpriseState = async (
   const enabledProviders = (await listTenantAuthProviders(db, tenantId)).filter(
     (provider) => provider.enabled,
   );
-  const defaultProvider = resolveDefaultProvider(policy, enabledProviders);
+  const supportedProviders = enabledProviders.filter(isRuntimeCapableEnterpriseProvider);
+  const defaultProvider = resolveDefaultProvider(policy, supportedProviders);
 
   return {
     tenant,
     policy,
     enabledProviders,
+    supportedProviders,
     defaultProvider,
   };
 };
@@ -401,7 +416,7 @@ export const createEnterpriseSsoAdapter = <
       };
     }
 
-    const enterpriseProviders = state.enabledProviders.map((provider) => ({
+    const enterpriseProviders = state.supportedProviders.map((provider) => ({
       id: provider.id,
       label: provider.label,
       protocol: provider.protocol,
@@ -429,7 +444,7 @@ export const createEnterpriseSsoAdapter = <
       ...(state.policy.loginMode === 'sso_required' && enterpriseProviders.length === 0
         ? {
             notice:
-              'Institution sign-in is required for this tenant, but no hosted enterprise provider is configured yet.',
+              'Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.',
           }
         : {}),
     };
@@ -522,6 +537,27 @@ export const createEnterpriseSsoAdapter = <
       );
     }
 
+    if (!isHostedEnterpriseAuthProviderSupported(provider)) {
+      await createAuditLog(db, {
+        tenantId: request.tenantId,
+        action: 'auth.sso_start_failed',
+        targetType: 'tenant_auth_provider',
+        targetId: provider.id,
+        metadata: {
+          reason: 'protocol_not_supported_in_runtime',
+          protocol: provider.protocol,
+        },
+      });
+
+      return redirectResponse(
+        buildTenantLoginPath({
+          tenantId: request.tenantId,
+          nextPath: normalizedNextPath,
+          reason: 'sso_unavailable',
+        }),
+      );
+    }
+
     const oauthConfig = toGenericOAuthConfig(provider);
 
     if (oauthConfig === null) {
@@ -531,7 +567,7 @@ export const createEnterpriseSsoAdapter = <
         targetType: 'tenant_auth_provider',
         targetId: provider.id,
         metadata: {
-          reason: provider.protocol === 'saml' ? 'protocol_not_supported_in_runtime' : 'invalid_provider_config',
+          reason: 'invalid_provider_config',
           protocol: provider.protocol,
         },
       });
@@ -659,7 +695,10 @@ export const createEnterpriseSsoAdapter = <
       requestedTenant.tenantId,
       request.providerId,
     );
-    const oauthConfig = provider === null ? null : toGenericOAuthConfig(provider);
+    const oauthConfig =
+      provider !== null && isHostedEnterpriseAuthProviderSupported(provider)
+        ? toGenericOAuthConfig(provider)
+        : null;
 
     if (provider === null || oauthConfig === null) {
       return redirectResponse(
