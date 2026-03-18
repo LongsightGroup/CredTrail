@@ -1449,7 +1449,6 @@ describe('enterprise governance request parsers', () => {
       breakGlassEnabled: true,
       localMfaRequired: true,
       defaultProviderId: 'tap_oidc',
-      enforceForRoles: 'admins_only',
     });
     const providerPayload = parseUpsertTenantAuthProviderRequest({
       protocol: 'oidc',
@@ -1462,7 +1461,7 @@ describe('enterprise governance request parsers', () => {
 
     expect(providerPathParams.providerId).toBe('tap_oidc');
     expect(policyPayload.loginMode).toBe('sso_required');
-    expect(policyPayload.enforceForRoles).toBe('admins_only');
+    expect(policyPayload.enforceForRoles).toBeUndefined();
     expect(providerPayload.protocol).toBe('oidc');
     expect(providerPayload.label).toBe('Campus OIDC');
   });
