@@ -2,10 +2,12 @@ import type {
   BadgeIssuanceRuleRecord,
   BadgeIssuanceRuleVersionRecord,
   BadgeTemplateRecord,
+  DelegatedIssuingAuthorityGrantRecord,
   TenantBreakGlassAccountRecord,
   TenantApiKeyRecord,
   TenantAuthPolicyRecord,
   TenantAuthProviderRecord,
+  TenantMembershipOrgUnitScopeRecord,
   TenantMembershipRole,
   TenantOrgUnitRecord,
   TenantRecord,
@@ -48,6 +50,19 @@ const formatJsonTextareaValue = (value: string): string => {
   }
 };
 
+const formatDelegatedIssuingActionLabel = (action: string): string => {
+  switch (action) {
+    case "issue_badge":
+      return "Issue badges";
+    case "revoke_badge":
+      return "Revoke badges";
+    case "manage_lifecycle":
+      return "Change badge status";
+    default:
+      return action;
+  }
+};
+
 type InstitutionAdminView =
   | "home"
   | "operations"
@@ -56,6 +71,7 @@ type InstitutionAdminView =
   | "operationsBadgeStatus"
   | "rules"
   | "access"
+  | "accessGovernance"
   | "accessApiKeys"
   | "accessOrgUnits";
 
@@ -66,6 +82,8 @@ interface InstitutionAdminPageInput {
   membershipRole: TenantMembershipRole;
   badgeTemplates: readonly BadgeTemplateRecord[];
   orgUnits: readonly TenantOrgUnitRecord[];
+  membershipOrgUnitScopes: readonly TenantMembershipOrgUnitScopeRecord[];
+  delegatedIssuingAuthorityGrants: readonly DelegatedIssuingAuthorityGrantRecord[];
   activeApiKeys: readonly TenantApiKeyRecord[];
   revokedApiKeyCount: number;
   badgeRules: readonly BadgeIssuanceRuleRecord[];
@@ -81,6 +99,7 @@ const renderInstitutionAdminPage = (
   view: InstitutionAdminView,
 ): string => {
   const templateById = new Map(input.badgeTemplates.map((template) => [template.id, template]));
+  const orgUnitById = new Map(input.orgUnits.map((orgUnit) => [orgUnit.id, orgUnit]));
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
   const tenantAdminPath = `/tenants/${encodeURIComponent(input.tenant.id)}/admin`;
   const operationsPath = `${tenantAdminPath}/operations`;
@@ -89,9 +108,43 @@ const renderInstitutionAdminPage = (
   const operationsBadgeStatusPath = `${operationsPath}/badge-status`;
   const rulesWorkspacePath = `${tenantAdminPath}/rules`;
   const accessPath = `${tenantAdminPath}/access`;
+  const accessGovernancePath = `${accessPath}/governance`;
   const accessApiKeysPath = `${accessPath}/api-keys`;
   const accessOrgUnitsPath = `${accessPath}/org-units`;
   const ruleBuilderPath = `${tenantAdminPath}/rules/new`;
+  const badgeTemplateCount = String(input.badgeTemplates.length);
+  const orgUnitCount = String(input.orgUnits.length);
+  const activeApiKeyCount = String(input.activeApiKeys.length);
+  const revokedApiKeyCount = String(input.revokedApiKeyCount);
+  const ruleCount = String(input.badgeRules.length);
+  const scopedRoleCount = String(input.membershipOrgUnitScopes.length);
+  const activeDelegationCount = String(
+    input.delegatedIssuingAuthorityGrants.filter(
+      (grant) => grant.status === "active" || grant.status === "scheduled",
+    ).length,
+  );
+  const userLabel = input.userEmail ?? input.userId;
+  const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
+  const renderOrgUnitSummary = (orgUnitId: string): string => {
+    const orgUnit = orgUnitById.get(orgUnitId);
+
+    if (orgUnit === undefined) {
+      return `<strong>${escapeHtml(orgUnitId)}</strong>`;
+    }
+
+    return `<strong>${escapeHtml(orgUnit.displayName)}</strong><div class="ct-admin__meta">${escapeHtml(
+      `${orgUnit.id} · ${orgUnit.unitType}`,
+    )}</div>`;
+  };
+  const renderBadgeTemplateScopeSummary = (badgeTemplateIds: readonly string[]): string => {
+    if (badgeTemplateIds.length === 0) {
+      return "All badge templates in scope";
+    }
+
+    return badgeTemplateIds
+      .map((badgeTemplateId) => templateById.get(badgeTemplateId)?.title ?? badgeTemplateId)
+      .join(", ");
+  };
 
   for (const version of input.badgeRuleVersions) {
     const versions = versionsByRuleId.get(version.ruleId);
@@ -180,6 +233,97 @@ const renderInstitutionAdminPage = (
                 >
                   Revoke
                 </button>
+              </td>
+            </tr>`;
+          })
+          .join("\n");
+
+  const membershipScopeRows =
+    input.membershipOrgUnitScopes.length === 0
+      ? `<tr><td colspan="5" class="ct-admin__empty">No scoped roles assigned yet.</td></tr>`
+      : input.membershipOrgUnitScopes
+          .map((scope) => {
+            const scopeLabel = orgUnitById.get(scope.orgUnitId)?.displayName ?? scope.orgUnitId;
+
+            return `<tr>
+              <td><strong>${escapeHtml(scope.userId)}</strong></td>
+              <td>${renderOrgUnitSummary(scope.orgUnitId)}</td>
+              <td><span class="ct-admin__status-pill">${escapeHtml(scope.role)}</span></td>
+              <td>${escapeHtml(formatIsoTimestamp(scope.updatedAt))}</td>
+              <td>
+                <button
+                  type="button"
+                  class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger"
+                  data-membership-scope-remove-user-id="${escapeHtml(scope.userId)}"
+                  data-membership-scope-remove-org-unit-id="${escapeHtml(scope.orgUnitId)}"
+                  data-membership-scope-remove-label="${escapeHtml(`${scope.userId} · ${scopeLabel}`)}"
+                >
+                  Remove
+                </button>
+              </td>
+            </tr>`;
+          })
+          .join("\n");
+
+  const delegatedGrantRows =
+    input.delegatedIssuingAuthorityGrants.length === 0
+      ? `<tr><td colspan="6" class="ct-admin__empty">No delegated authority grants exist yet.</td></tr>`
+      : input.delegatedIssuingAuthorityGrants
+          .map((grant) => {
+            const canRemove = grant.status === "active" || grant.status === "scheduled";
+            const statusMeta =
+              grant.status === "revoked"
+                ? grant.revokedAt === null
+                  ? "Removed"
+                  : `Removed ${formatIsoTimestamp(grant.revokedAt)}`
+                : `Ends ${formatIsoTimestamp(grant.endsAt)}`;
+            const revokedReasonMarkup =
+              grant.revokedReason === null
+                ? ""
+                : `<div class="ct-admin__meta">Reason: ${escapeHtml(grant.revokedReason)}</div>`;
+
+            return `<tr>
+              <td>
+                <strong>${escapeHtml(grant.delegateUserId)}</strong>
+                <div class="ct-admin__meta">${escapeHtml(grant.id)}</div>
+              </td>
+              <td>${renderOrgUnitSummary(grant.orgUnitId)}</td>
+              <td>
+                ${escapeHtml(
+                  grant.allowedActions.map((action) => formatDelegatedIssuingActionLabel(action)).join(", "),
+                )}
+                <div class="ct-admin__meta">${escapeHtml(
+                  renderBadgeTemplateScopeSummary(grant.badgeTemplateIds),
+                )}</div>
+              </td>
+              <td>
+                <strong>${escapeHtml(formatIsoTimestamp(grant.startsAt))}</strong>
+                <div class="ct-admin__meta">Starts</div>
+                <div class="ct-admin__meta">Granted by ${escapeHtml(
+                  grant.delegatedByUserId ?? "system",
+                )}</div>
+              </td>
+              <td>
+                <span class="ct-admin__status-pill ct-admin__status-pill--${escapeHtml(
+                  grant.status,
+                )}">${escapeHtml(grant.status)}</span>
+                <div class="ct-admin__meta">${escapeHtml(statusMeta)}</div>
+                ${revokedReasonMarkup}
+              </td>
+              <td>
+                ${
+                  canRemove
+                    ? `<button
+                        type="button"
+                        class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger"
+                        data-delegated-grant-remove-user-id="${escapeHtml(grant.delegateUserId)}"
+                        data-delegated-grant-remove-id="${escapeHtml(grant.id)}"
+                        data-delegated-grant-remove-label="${escapeHtml(`${grant.delegateUserId} · ${grant.id}`)}"
+                      >
+                        Remove
+                      </button>`
+                    : '<span class="ct-admin__meta">No action</span>'
+                }
               </td>
             </tr>`;
           })
@@ -278,13 +422,6 @@ const renderInstitutionAdminPage = (
   const tenantUsersApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/users`;
   const adminAuditLogPath = `/admin/audit-logs?tenantId=${encodeURIComponent(input.tenant.id)}`;
   const showcasePath = `/showcase/${encodeURIComponent(input.tenant.id)}`;
-  const badgeTemplateCount = String(input.badgeTemplates.length);
-  const orgUnitCount = String(input.orgUnits.length);
-  const activeApiKeyCount = String(input.activeApiKeys.length);
-  const revokedApiKeyCount = String(input.revokedApiKeyCount);
-  const ruleCount = String(input.badgeRules.length);
-  const userLabel = input.userEmail ?? input.userId;
-  const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
   const orgUnitParentOptions = input.orgUnits
     .filter((orgUnit) => orgUnit.isActive)
     .map((orgUnit) => {
@@ -675,7 +812,10 @@ const renderInstitutionAdminPage = (
       view === "operationsIssuedBadges" ||
       view === "operationsBadgeStatus";
     const accessCurrent =
-      view === "access" || view === "accessApiKeys" || view === "accessOrgUnits";
+      view === "access" ||
+      view === "accessGovernance" ||
+      view === "accessApiKeys" ||
+      view === "accessOrgUnits";
     const links = [
       { href: tenantAdminPath, label: "Home", isCurrent: view === "home" },
       { href: operationsPath, label: "Operations", isCurrent: operationsCurrent },
@@ -818,6 +958,18 @@ const renderInstitutionAdminPage = (
 
   const accessWorkspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Access pages">
     <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Delegation</p>
+      <h2>Governance</h2>
+      <p>Assign org-unit roles and time-boxed badge authority from one dedicated page with current assignments visible.</p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${scopedRoleCount} scoped roles</span>
+        <span class="ct-admin__status-pill">${activeDelegationCount} active delegations</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(accessGovernancePath)}">Open governance</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
       <p class="ct-admin__eyebrow">Integrations</p>
       <h2>API Keys</h2>
       <p>Create, review, and revoke scoped tenant API keys without mixing the workflow with org setup.</p>
@@ -936,14 +1088,32 @@ const renderInstitutionAdminPage = (
     <p id="org-unit-status" class="ct-admin__status"></p>
   </article>`;
 
-  const governancePanelMarkup = `<article id="governance-panel" class="ct-admin__panel ct-stack">
-    <h2>Governance Delegation</h2>
-    <p>Assign org-unit scope and delegated issuing authority from this browser session.</p>
+  const governanceGuidePanelMarkup = `<article id="governance-panel" class="ct-admin__panel ct-stack">
+    <h2>Before you delegate</h2>
+    <p>
+      Use this page to give an existing tenant member limited access inside a selected org unit.
+      Choosing a parent org unit also covers the child units beneath it.
+    </p>
+    <p class="ct-admin__hint">
+      The user ID on this page belongs to the person receiving access. This workflow does not create
+      tenant membership, so the person must already exist in this tenant.
+    </p>
+    <ul>
+      <li>Use a scoped role for standing access inside an org unit.</li>
+      <li>Use delegated authority for temporary badge actions with an end date.</li>
+      <li>Leave badge template IDs blank when the delegation should cover every template in scope.</li>
+    </ul>
+  </article>`;
+
+  const membershipScopePanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <h2>Scoped Roles</h2>
+    <p>Assign the smallest org-unit role that matches the person’s ongoing responsibilities.</p>
     <form id="membership-scope-form" class="ct-admin__form ct-stack">
       <label>
-        User ID
+        Tenant member user ID
         <input name="userId" type="text" required placeholder="usr_issuer" />
       </label>
+      <p class="ct-admin__hint">This is the person receiving access. They must already belong to this tenant.</p>
       <label>
         Org unit
         <select name="orgUnitId" required>
@@ -956,31 +1126,49 @@ const renderInstitutionAdminPage = (
           <option value="viewer">viewer</option>
           <option value="issuer">issuer</option>
           <option value="admin">admin</option>
-          <option value="owner">owner</option>
         </select>
       </label>
-      <button type="submit">Assign org-unit scope</button>
+      <ul>
+        <li><strong>viewer</strong> can view in-scope templates and governance context.</li>
+        <li><strong>issuer</strong> includes viewer access and issuer workflows inside the selected scope.</li>
+        <li><strong>admin</strong> is the highest org-unit role and covers issuer and viewer checks.</li>
+      </ul>
+      <button type="submit">Save scoped role</button>
     </form>
     <p id="membership-scope-status" class="ct-admin__status"></p>
-    <form id="membership-scope-remove-form" class="ct-admin__form ct-stack">
-      <label>
-        User ID
-        <input name="userId" type="text" required placeholder="usr_issuer" />
-      </label>
-      <label>
-        Org unit
-        <select name="orgUnitId" required>
-          ${activeOrgUnitSelectOptions}
-        </select>
-      </label>
-      <button type="submit" class="ct-admin__button--danger">Remove org-unit scope</button>
-    </form>
-    <p id="membership-scope-remove-status" class="ct-admin__status"></p>
+  </article>`;
+
+  const membershipScopeTableMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Current Scoped Roles (${scopedRoleCount})</h2>
+    <p>Remove access directly from the list instead of re-entering the same identifiers.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Org unit</th>
+            <th>Role</th>
+            <th>Updated</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="membership-scope-body">
+          ${membershipScopeRows}
+        </tbody>
+      </table>
+    </div>
+    <p id="membership-scope-list-status" class="ct-admin__status"></p>
+  </article>`;
+
+  const delegatedGrantPanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <h2>Delegated Authority</h2>
+    <p>Grant time-boxed badge authority without changing the person’s standing org-unit role.</p>
     <form id="delegated-grant-form" class="ct-admin__form ct-stack">
       <label>
         Delegate user ID
         <input name="delegateUserId" type="text" required placeholder="usr_issuer" />
       </label>
+      <p class="ct-admin__hint">This is the tenant member receiving the delegation.</p>
       <label>
         Org unit
         <select name="orgUnitId" required>
@@ -988,55 +1176,67 @@ const renderInstitutionAdminPage = (
         </select>
       </label>
       <fieldset class="ct-admin__fieldset ct-stack">
-        <legend>Allowed actions</legend>
+        <legend>Allowed badge actions</legend>
         <label class="ct-admin__checkbox-row ct-checkbox-row">
           <input name="allowedAction" type="checkbox" value="issue_badge" checked />
-          issue_badge
+          Issue badges
         </label>
         <label class="ct-admin__checkbox-row ct-checkbox-row">
           <input name="allowedAction" type="checkbox" value="revoke_badge" />
-          revoke_badge
+          Revoke badges
         </label>
         <label class="ct-admin__checkbox-row ct-checkbox-row">
           <input name="allowedAction" type="checkbox" value="manage_lifecycle" />
-          manage_lifecycle
+          Change badge status
         </label>
       </fieldset>
+      <p class="ct-admin__hint">
+        “Change badge status” covers non-revocation lifecycle changes such as suspend, expire, or restore.
+      </p>
       <label>
-        Badge template IDs (optional, comma separated)
+        Limit to badge template IDs (optional)
         <input
           name="badgeTemplateIds"
           type="text"
           placeholder="badge_template_001,badge_template_002"
         />
       </label>
+      <p class="ct-admin__hint">Leave blank to allow all badge templates inside the selected org-unit scope.</p>
       <label>
-        Ends at (optional)
-        <input name="endsAt" type="datetime-local" />
+        Ends at
+        <input name="endsAt" type="datetime-local" required />
       </label>
+      <p class="ct-admin__hint">Delegations are time-boxed. Choose when this authority should expire.</p>
       <label>
         Reason (optional)
-        <input name="reason" type="text" placeholder="Delegated for spring term operations." />
+        <input name="reason" type="text" placeholder="Coverage for spring term operations." />
       </label>
-      <button type="submit">Grant authority</button>
+      <button type="submit">Save delegation</button>
     </form>
     <p id="delegated-grant-status" class="ct-admin__status"></p>
-    <form id="delegated-revoke-form" class="ct-admin__form ct-stack">
-      <label>
-        Delegate user ID
-        <input name="delegateUserId" type="text" required placeholder="usr_issuer" />
-      </label>
-      <label>
-        Grant ID
-        <input name="grantId" type="text" required placeholder="dag_123" />
-      </label>
-      <label>
-        Revocation reason (optional)
-        <input name="reason" type="text" placeholder="Authority transfer complete." />
-      </label>
-      <button type="submit" class="ct-admin__button--danger">Revoke delegated grant</button>
-    </form>
-    <p id="delegated-revoke-status" class="ct-admin__status"></p>
+  </article>`;
+
+  const delegatedGrantTableMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Current Delegations (${String(input.delegatedIssuingAuthorityGrants.length)})</h2>
+    <p>Remove active or scheduled delegations directly from the list.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Delegate</th>
+            <th>Org unit</th>
+            <th>Allowed actions</th>
+            <th>Granted</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="delegated-grant-body">
+          ${delegatedGrantRows}
+        </tbody>
+      </table>
+    </div>
+    <p id="delegated-grant-list-status" class="ct-admin__status"></p>
   </article>`;
 
   const ruleBuilderPanelMarkup = `<article id="rule-builder-panel" class="ct-admin__panel ct-stack">
@@ -1394,7 +1594,9 @@ const renderInstitutionAdminPage = (
                 ? `Rules · Institution Admin · ${input.tenant.displayName}`
                 : view === "access"
                   ? `Access · Institution Admin · ${input.tenant.displayName}`
-                  : view === "accessApiKeys"
+                  : view === "accessGovernance"
+                    ? `Governance Delegation · Institution Admin · ${input.tenant.displayName}`
+                    : view === "accessApiKeys"
                     ? `API Keys · Institution Admin · ${input.tenant.displayName}`
                     : `Org Units · Institution Admin · ${input.tenant.displayName}`;
 
@@ -1478,15 +1680,29 @@ const renderInstitutionAdminPage = (
                   ? `<section class="ct-admin ct-stack">
                 ${renderHero(
                   "Access",
-                  "Manage permissions and enterprise auth here. API keys and org units each have their own page.",
+                  "Choose the access workspace you need. Governance, API keys, and org units now live on focused pages.",
                 )}
                 ${accessWorkspaceCardsMarkup}
-                <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-                  <div class="ct-admin__grid ct-stack">
-                    ${governancePanelMarkup}
-                    ${enterpriseAuthPanelMarkup}
-                  </div>
-                </section>
+                ${enterpriseAuthPanelMarkup}
+                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+              </section>`
+                  : view === "accessGovernance"
+                    ? `<section class="ct-admin ct-stack">
+                ${renderHero(
+                  "Governance Delegation",
+                  "Grant org-unit access and time-boxed badge authority with clearer guidance and direct removal from the current assignments list.",
+                  `<aside class="ct-admin__hero-note ct-stack">
+                    <h2>Choose The Smallest Access</h2>
+                    <p>Use scoped roles for standing access. Use delegated authority when someone only needs temporary badge operations.</p>
+                    <p class="ct-admin__hint">Every user ID on this page is the person receiving access, and they must already belong to this tenant.</p>
+                  </aside>`,
+                )}
+                ${accessWorkspaceCardsMarkup}
+                ${governanceGuidePanelMarkup}
+                ${membershipScopePanelMarkup}
+                ${membershipScopeTableMarkup}
+                ${delegatedGrantPanelMarkup}
+                ${delegatedGrantTableMarkup}
                 <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
               </section>`
                   : view === "accessApiKeys"
@@ -1558,6 +1774,10 @@ export const institutionAdminRulesPage = (input: InstitutionAdminPageInput): str
 
 export const institutionAdminAccessPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, "access");
+};
+
+export const institutionAdminGovernancePage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, "accessGovernance");
 };
 
 export const institutionAdminApiKeysPage = (input: InstitutionAdminPageInput): string => {

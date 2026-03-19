@@ -156,12 +156,12 @@ export const INSTITUTION_ADMIN_JS = `
   const issuedBadgesActionStatus = document.getElementById('issued-badges-action-status');
   const membershipScopeForm = document.getElementById('membership-scope-form');
   const membershipScopeStatus = document.getElementById('membership-scope-status');
-  const membershipScopeRemoveForm = document.getElementById('membership-scope-remove-form');
-  const membershipScopeRemoveStatus = document.getElementById('membership-scope-remove-status');
+  const membershipScopeBody = document.getElementById('membership-scope-body');
+  const membershipScopeListStatus = document.getElementById('membership-scope-list-status');
   const delegatedGrantForm = document.getElementById('delegated-grant-form');
   const delegatedGrantStatus = document.getElementById('delegated-grant-status');
-  const delegatedRevokeForm = document.getElementById('delegated-revoke-form');
-  const delegatedRevokeStatus = document.getElementById('delegated-revoke-status');
+  const delegatedGrantBody = document.getElementById('delegated-grant-body');
+  const delegatedGrantListStatus = document.getElementById('delegated-grant-list-status');
   const assertionLifecycleViewForm = document.getElementById('assertion-lifecycle-view-form');
   const assertionLifecycleViewStatus = document.getElementById('assertion-lifecycle-view-status');
   const assertionLifecycleOutput = document.getElementById('assertion-lifecycle-output');
@@ -221,6 +221,9 @@ export const INSTITUTION_ADMIN_JS = `
 
     el.hidden = false;
     el.textContent = value;
+  };
+  const reloadCurrentPage = () => {
+    window.location.assign(window.location.pathname + window.location.search);
   };
   const escapeHtml = (value) => {
     return String(value)
@@ -1512,7 +1515,7 @@ export const INSTITUTION_ADMIN_JS = `
   if (membershipScopeForm instanceof HTMLFormElement && membershipScopeStatus instanceof HTMLElement) {
     membershipScopeForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      setStatus(membershipScopeStatus, 'Assigning org-unit scope...', false);
+      setStatus(membershipScopeStatus, 'Saving scoped role...', false);
       const data = new FormData(membershipScopeForm);
       const userIdRaw = data.get('userId');
       const orgUnitIdRaw = data.get('orgUnitId');
@@ -1522,14 +1525,18 @@ export const INSTITUTION_ADMIN_JS = `
       const role = typeof roleRaw === 'string' ? roleRaw.trim() : '';
 
       if (userId.length === 0 || orgUnitId.length === 0 || role.length === 0) {
-        setStatus(membershipScopeStatus, 'User ID, org unit, and role are required.', true);
+        setStatus(
+          membershipScopeStatus,
+          'Tenant member user ID, org unit, and scoped role are required.',
+          true,
+        );
         return;
       }
 
-      const validRoles = new Set(['owner', 'admin', 'issuer', 'viewer']);
+      const validRoles = new Set(['admin', 'issuer', 'viewer']);
 
       if (!validRoles.has(role)) {
-        setStatus(membershipScopeStatus, 'Invalid role. Use owner/admin/issuer/viewer.', true);
+        setStatus(membershipScopeStatus, 'Invalid role. Use admin, issuer, or viewer.', true);
         return;
       }
 
@@ -1557,34 +1564,48 @@ export const INSTITUTION_ADMIN_JS = `
           return;
         }
 
-        setStatus(membershipScopeStatus, 'Org-unit scope assigned for ' + userId + '.', false);
+        setStatus(membershipScopeStatus, 'Scoped role saved for ' + userId + '.', false, 'success');
+        setTimeout(() => {
+          reloadCurrentPage();
+        }, 700);
       } catch {
         setStatus(
           membershipScopeStatus,
-          'Unable to assign org-unit scope from this browser session.',
+          'Unable to save the scoped role from this browser session.',
           true,
         );
       }
     });
   }
 
-  if (
-    membershipScopeRemoveForm instanceof HTMLFormElement &&
-    membershipScopeRemoveStatus instanceof HTMLElement
-  ) {
-    membershipScopeRemoveForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setStatus(membershipScopeRemoveStatus, 'Removing org-unit scope...', false);
-      const data = new FormData(membershipScopeRemoveForm);
-      const userIdRaw = data.get('userId');
-      const orgUnitIdRaw = data.get('orgUnitId');
-      const userId = typeof userIdRaw === 'string' ? userIdRaw.trim() : '';
-      const orgUnitId = typeof orgUnitIdRaw === 'string' ? orgUnitIdRaw.trim() : '';
+  if (membershipScopeBody instanceof HTMLElement && membershipScopeListStatus instanceof HTMLElement) {
+    membershipScopeBody.addEventListener('click', async (event) => {
+      const target = event.target;
 
-      if (userId.length === 0 || orgUnitId.length === 0) {
-        setStatus(membershipScopeRemoveStatus, 'User ID and org unit are required.', true);
+      if (!(target instanceof HTMLElement)) {
         return;
       }
+
+      const removeButton = target.closest('[data-membership-scope-remove-user-id]');
+
+      if (!(removeButton instanceof HTMLElement)) {
+        return;
+      }
+
+      const userId = removeButton.dataset.membershipScopeRemoveUserId ?? '';
+      const orgUnitId = removeButton.dataset.membershipScopeRemoveOrgUnitId ?? '';
+      const label = removeButton.dataset.membershipScopeRemoveLabel ?? 'this scoped role';
+
+      if (userId.length === 0 || orgUnitId.length === 0) {
+        setStatus(membershipScopeListStatus, 'Scoped role identifiers are missing.', true);
+        return;
+      }
+
+      if (!window.confirm('Remove scoped role for ' + label + '?')) {
+        return;
+      }
+
+      setStatus(membershipScopeListStatus, 'Removing scoped role...', false);
 
       try {
         const response = await fetch(
@@ -1600,23 +1621,25 @@ export const INSTITUTION_ADMIN_JS = `
         const payload = await parseJsonBody(response);
 
         if (!response.ok) {
-          setStatus(membershipScopeRemoveStatus, errorDetailFromPayload(payload), true);
+          setStatus(membershipScopeListStatus, errorDetailFromPayload(payload), true);
           return;
         }
 
-        const removed =
-          payload && typeof payload.removed === 'boolean' ? payload.removed : false;
-        setStatus(
-          membershipScopeRemoveStatus,
-          removed
-            ? 'Org-unit scope removed for ' + userId + '.'
-            : 'No matching org-unit scope was found.',
-          false,
-        );
+        const removed = payload && typeof payload.removed === 'boolean' ? payload.removed : false;
+
+        if (!removed) {
+          setStatus(membershipScopeListStatus, 'No matching scoped role was found.', true);
+          return;
+        }
+
+        setStatus(membershipScopeListStatus, 'Scoped role removed.', false, 'success');
+        setTimeout(() => {
+          reloadCurrentPage();
+        }, 700);
       } catch {
         setStatus(
-          membershipScopeRemoveStatus,
-          'Unable to remove org-unit scope from this browser session.',
+          membershipScopeListStatus,
+          'Unable to remove the scoped role from this browser session.',
           true,
         );
       }
@@ -1626,7 +1649,7 @@ export const INSTITUTION_ADMIN_JS = `
   if (delegatedGrantForm instanceof HTMLFormElement && delegatedGrantStatus instanceof HTMLElement) {
     delegatedGrantForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      setStatus(delegatedGrantStatus, 'Granting delegated authority...', false);
+      setStatus(delegatedGrantStatus, 'Saving delegation...', false);
       const data = new FormData(delegatedGrantForm);
       const delegateUserIdRaw = data.get('delegateUserId');
       const orgUnitIdRaw = data.get('orgUnitId');
@@ -1665,18 +1688,19 @@ export const INSTITUTION_ADMIN_JS = `
         return;
       }
 
-      let endsAtIso = null;
-
-      if (endsAtLocal.length > 0) {
-        const parsedEndsAtMs = Date.parse(endsAtLocal);
-
-        if (!Number.isFinite(parsedEndsAtMs)) {
-          setStatus(delegatedGrantStatus, 'Ends at must be a valid date/time.', true);
-          return;
-        }
-
-        endsAtIso = new Date(parsedEndsAtMs).toISOString();
+      if (endsAtLocal.length === 0) {
+        setStatus(delegatedGrantStatus, 'Choose when this delegation should end.', true);
+        return;
       }
+
+      const parsedEndsAtMs = Date.parse(endsAtLocal);
+
+      if (!Number.isFinite(parsedEndsAtMs)) {
+        setStatus(delegatedGrantStatus, 'Ends at must be a valid date/time.', true);
+        return;
+      }
+
+      const endsAtIso = new Date(parsedEndsAtMs).toISOString();
 
       try {
         const response = await fetch(
@@ -1693,7 +1717,7 @@ export const INSTITUTION_ADMIN_JS = `
               orgUnitId,
               allowedActions,
               ...(badgeTemplateIds.length > 0 ? { badgeTemplateIds } : {}),
-              ...(endsAtIso === null ? {} : { endsAt: endsAtIso }),
+              endsAt: endsAtIso,
               ...(reason.length > 0 ? { reason } : {}),
             }),
           },
@@ -1711,35 +1735,51 @@ export const INSTITUTION_ADMIN_JS = `
             : '';
         setStatus(
           delegatedGrantStatus,
-          'Delegated authority granted.' + (grantId.length > 0 ? ' Grant ID: ' + grantId + '.' : ''),
+          'Delegation saved.' + (grantId.length > 0 ? ' Grant ID: ' + grantId + '.' : ''),
           false,
+          'success',
         );
+        setTimeout(() => {
+          reloadCurrentPage();
+        }, 700);
       } catch {
         setStatus(
           delegatedGrantStatus,
-          'Unable to grant delegated authority from this browser session.',
+          'Unable to save the delegation from this browser session.',
           true,
         );
       }
     });
   }
 
-  if (delegatedRevokeForm instanceof HTMLFormElement && delegatedRevokeStatus instanceof HTMLElement) {
-    delegatedRevokeForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setStatus(delegatedRevokeStatus, 'Revoking delegated grant...', false);
-      const data = new FormData(delegatedRevokeForm);
-      const delegateUserIdRaw = data.get('delegateUserId');
-      const grantIdRaw = data.get('grantId');
-      const reasonRaw = data.get('reason');
-      const delegateUserId = typeof delegateUserIdRaw === 'string' ? delegateUserIdRaw.trim() : '';
-      const grantId = typeof grantIdRaw === 'string' ? grantIdRaw.trim() : '';
-      const reason = typeof reasonRaw === 'string' ? reasonRaw.trim() : '';
+  if (delegatedGrantBody instanceof HTMLElement && delegatedGrantListStatus instanceof HTMLElement) {
+    delegatedGrantBody.addEventListener('click', async (event) => {
+      const target = event.target;
 
-      if (delegateUserId.length === 0 || grantId.length === 0) {
-        setStatus(delegatedRevokeStatus, 'Delegate user ID and grant ID are required.', true);
+      if (!(target instanceof HTMLElement)) {
         return;
       }
+
+      const removeButton = target.closest('[data-delegated-grant-remove-id]');
+
+      if (!(removeButton instanceof HTMLElement)) {
+        return;
+      }
+
+      const delegateUserId = removeButton.dataset.delegatedGrantRemoveUserId ?? '';
+      const grantId = removeButton.dataset.delegatedGrantRemoveId ?? '';
+      const label = removeButton.dataset.delegatedGrantRemoveLabel ?? 'this delegation';
+
+      if (delegateUserId.length === 0 || grantId.length === 0) {
+        setStatus(delegatedGrantListStatus, 'Delegation identifiers are missing.', true);
+        return;
+      }
+
+      if (!window.confirm('Remove delegation for ' + label + '?')) {
+        return;
+      }
+
+      setStatus(delegatedGrantListStatus, 'Removing delegation...', false);
 
       try {
         const response = await fetch(
@@ -1754,28 +1794,24 @@ export const INSTITUTION_ADMIN_JS = `
             headers: {
               'content-type': 'application/json',
             },
-            body: JSON.stringify({
-              ...(reason.length > 0 ? { reason } : {}),
-            }),
+            body: JSON.stringify({}),
           },
         );
         const payload = await parseJsonBody(response);
 
         if (!response.ok) {
-          setStatus(delegatedRevokeStatus, errorDetailFromPayload(payload), true);
+          setStatus(delegatedGrantListStatus, errorDetailFromPayload(payload), true);
           return;
         }
 
-        const status = payload && typeof payload.status === 'string' ? payload.status : 'updated';
-        setStatus(
-          delegatedRevokeStatus,
-          'Delegated grant status: ' + status + '.',
-          false,
-        );
+        setStatus(delegatedGrantListStatus, 'Delegation removed.', false, 'success');
+        setTimeout(() => {
+          reloadCurrentPage();
+        }, 700);
       } catch {
         setStatus(
-          delegatedRevokeStatus,
-          'Unable to revoke delegated grant from this browser session.',
+          delegatedGrantListStatus,
+          'Unable to remove the delegation from this browser session.',
           true,
         );
       }

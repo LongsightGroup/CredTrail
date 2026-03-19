@@ -70,6 +70,7 @@ import {
   institutionAdminApiKeysPage,
   institutionAdminBadgeStatusPage,
   institutionAdminDashboardPage,
+  institutionAdminGovernancePage,
   institutionAdminIssuedBadgesPage,
   institutionAdminOperationsReviewQueuePage,
   institutionAdminOperationsPage,
@@ -245,6 +246,8 @@ export const registerTenantGovernanceRoutes = (
       currentUser,
       badgeTemplates,
       orgUnits,
+      membershipOrgUnitScopes,
+      delegatedIssuingAuthorityGrants,
       apiKeys,
       badgeRules,
       authPolicy,
@@ -259,6 +262,14 @@ export const registerTenantGovernanceRoutes = (
       listTenantOrgUnits(db, {
         tenantId,
         includeInactive: true,
+      }),
+      listTenantMembershipOrgUnitScopes(db, {
+        tenantId,
+      }),
+      listDelegatedIssuingAuthorityGrants(db, {
+        tenantId,
+        includeRevoked: true,
+        includeExpired: true,
       }),
       listTenantApiKeys(db, {
         tenantId,
@@ -301,6 +312,8 @@ export const registerTenantGovernanceRoutes = (
       membershipRole,
       badgeTemplates,
       orgUnits,
+      membershipOrgUnitScopes,
+      delegatedIssuingAuthorityGrants,
       activeApiKeys,
       revokedApiKeyCount,
       badgeRules,
@@ -429,6 +442,16 @@ export const registerTenantGovernanceRoutes = (
       pathParams.tenantId,
       `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access`,
       institutionAdminAccessPage,
+    );
+  });
+
+  app.get("/tenants/:tenantId/admin/access/governance", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access/governance`,
+      institutionAdminGovernancePage,
     );
   });
 

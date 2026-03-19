@@ -27,10 +27,12 @@ vi.mock("@credtrail/db", async () => {
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    listDelegatedIssuingAuthorityGrants: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
     listTenantBreakGlassAccounts: mockedListTenantBreakGlassAccounts,
+    listTenantMembershipOrgUnitScopes: vi.fn(),
     listTenantAuthProviders: mockedListTenantAuthProviders,
     listBadgeTemplates: vi.fn(),
     listTenantApiKeys: vi.fn(),
@@ -66,10 +68,12 @@ import {
   findTenantById,
   findTenantMembership,
   findUserById,
+  listDelegatedIssuingAuthorityGrants,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
   listTenantApiKeys,
+  listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
   type SqlDatabase,
   type TenantMembershipRecord,
@@ -81,11 +85,13 @@ import { app } from "./index";
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
 const mockedFindUserById = vi.mocked(findUserById);
+const mockedListDelegatedIssuingAuthorityGrants = vi.mocked(listDelegatedIssuingAuthorityGrants);
 const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
 const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
+const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -216,6 +222,18 @@ beforeEach(() => {
       updatedAt: "2026-02-18T12:00:00.000Z",
     },
   ]);
+  mockedListTenantMembershipOrgUnitScopes.mockReset();
+  mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
+    {
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      orgUnitId: "tenant_123:org:institution",
+      role: "issuer",
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:30:00.000Z",
+    },
+  ]);
   mockedListTenantApiKeys.mockReset();
   mockedListTenantApiKeys.mockResolvedValue([
     {
@@ -245,6 +263,26 @@ beforeEach(() => {
       revokedAt: "2026-02-18T12:30:00.000Z",
       createdAt: "2026-02-18T12:00:00.000Z",
       updatedAt: "2026-02-18T12:30:00.000Z",
+    },
+  ]);
+  mockedListDelegatedIssuingAuthorityGrants.mockReset();
+  mockedListDelegatedIssuingAuthorityGrants.mockResolvedValue([
+    {
+      id: "dag_123",
+      tenantId: "tenant_123",
+      delegateUserId: "usr_delegate",
+      delegatedByUserId: "usr_admin",
+      orgUnitId: "tenant_123:org:institution",
+      allowedActions: ["issue_badge"],
+      badgeTemplateIds: [],
+      startsAt: "2026-02-18T12:00:00.000Z",
+      endsAt: "2026-05-18T12:00:00.000Z",
+      revokedAt: null,
+      revokedByUserId: null,
+      revokedReason: null,
+      status: "active",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
     },
   ]);
   mockedListTenantAuthProviders.mockReset();
@@ -668,12 +706,14 @@ describe("GET /tenants/:tenantId/admin/access", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body).toContain(">Access<");
-    expect(body).toContain("Governance Delegation");
-    expect(body).toContain('id="membership-scope-form"');
+    expect(body).toContain("Open governance");
+    expect(body).toContain('href="/tenants/tenant_123/admin/access/governance"');
     expect(body).toContain("Open API keys");
     expect(body).toContain("Open org units");
     expect(body).toContain('href="/tenants/tenant_123/admin/access/api-keys"');
     expect(body).toContain('href="/tenants/tenant_123/admin/access/org-units"');
+    expect(body).not.toContain("Save scoped role");
+    expect(body).not.toContain('id="membership-scope-form"');
     expect(body).not.toContain('id="api-key-form"');
     expect(body).not.toContain('id="org-unit-form"');
     expect(body).not.toContain("Manual Issue Badge");
@@ -711,6 +751,7 @@ describe("GET /tenants/:tenantId/admin/access", () => {
     expect(body).toContain("Campus OIDC");
     expect(body).toContain("Hosted enterprise sign-in supports OIDC providers.");
     expect(body).toContain("Legacy SAML compatibility");
+    expect(body).toContain("Open governance");
     expect(body).toContain("Open API keys");
     expect(body).toContain("Open org units");
     expect(body).not.toContain("OIDC or SAML connection metadata");
@@ -723,6 +764,36 @@ describe("GET /tenants/:tenantId/admin/access", () => {
     expect(body).toContain("/v1/tenants/tenant_123/break-glass-accounts");
     expect(body).toContain("/v1/tenants/tenant_123/auth-policy");
     expect(body).toContain("/v1/tenants/tenant_123/auth-providers");
+  });
+});
+
+describe("GET /tenants/:tenantId/admin/access/governance", () => {
+  it("renders governance delegation on its own page with current assignments", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/access/governance",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Governance Delegation");
+    expect(body).toContain("must already exist in this tenant");
+    expect(body).toContain('id="membership-scope-form"');
+    expect(body).toContain("Scoped Roles");
+    expect(body).toContain("Current Scoped Roles (1)");
+    expect(body).toContain('data-membership-scope-remove-user-id="usr_issuer"');
+    expect(body).toContain("Current Delegations (1)");
+    expect(body).toContain('data-delegated-grant-remove-id="dag_123"');
+    expect(body).toContain("Issue badges");
+    expect(body).not.toContain('id="api-key-form"');
+    expect(body).not.toContain('id="org-unit-form"');
   });
 });
 
