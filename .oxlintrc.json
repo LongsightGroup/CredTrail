@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true
+  },
+  "plugins": ["unicorn", "typescript", "oxc", "jest", "vitest"],
+  "ignorePatterns": [
+    ".github/**",
+    ".wrangler/**",
+    "coverage/**",
+    "dist/**",
+    "node_modules/**",
+    "**/.astro/**"
+  ],
+  "overrides": [
+    {
+      "files": ["packages/lti/src/index.test.ts", "packages/validation/src/index.test.ts"],
+      "rules": {
+        "jest/require-to-throw-message": "off"
+      }
+    }
+  ]
+}
