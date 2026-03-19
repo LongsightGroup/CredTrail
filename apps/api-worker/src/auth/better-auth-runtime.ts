@@ -51,8 +51,26 @@ const tableNameForModel = (model: string): string => {
   throw new Error(`Unsupported Better Auth model: ${model}`);
 };
 
-const columnName = (field: string): string => {
-  return quoteIdentifier(field);
+const toSnakeCase = (value: string): string => {
+  return value.replace(/[A-Z]/g, (character) => `_${character.toLowerCase()}`);
+};
+
+const toCamelCase = (value: string): string => {
+  return value.replace(/_([a-z])/g, (_match, character: string) => character.toUpperCase());
+};
+
+const columnName = (_model: string, field: string): string => {
+  return quoteIdentifier(toSnakeCase(field));
+};
+
+const normalizeRowKeys = <RowType extends Record<string, unknown>>(row: RowType): RowType => {
+  const normalized = Object.create(null) as RowType;
+
+  for (const [key, value] of Object.entries(row)) {
+    normalized[toCamelCase(key) as keyof RowType] = value as RowType[keyof RowType];
+  }
+
+  return normalized;
 };
 
 const normalizeValue = (value: unknown): unknown => {
@@ -83,6 +101,7 @@ const filterSelectedFields = <RowType extends Record<string, unknown>>(
 };
 
 const whereClauseToSql = (
+  model: string,
   where: CleanedWhere[] | undefined,
 ): {
   sql: string;
@@ -101,7 +120,7 @@ const whereClauseToSql = (
   for (const clause of where) {
     const connector =
       fragments.length === 0 ? '' : clause.connector === 'OR' ? ' OR ' : ' AND ';
-    const field = columnName(clause.field);
+    const field = columnName(model, clause.field);
 
     switch (clause.operator) {
       case 'in':
@@ -190,13 +209,15 @@ const listRows = async (
 ): Promise<Record<string, unknown>[]> => {
   const selectSql =
     input.select !== undefined && input.select.length > 0
-      ? input.select.map(columnName).join(', ')
+      ? input.select
+          .map((field) => `${columnName(input.model, field)} AS ${quoteIdentifier(field)}`)
+          .join(', ')
       : '*';
-  const whereClause = whereClauseToSql(input.where);
+  const whereClause = whereClauseToSql(input.model, input.where);
   const orderBySql =
     input.sortBy === undefined
       ? ''
-      : ` ORDER BY ${columnName(input.sortBy.field)} ${input.sortBy.direction.toUpperCase()}`;
+      : ` ORDER BY ${columnName(input.model, input.sortBy.field)} ${input.sortBy.direction.toUpperCase()}`;
   const limitSql = input.limit === undefined ? '' : ' LIMIT ?';
   const offsetSql = input.offset === undefined ? '' : ' OFFSET ?';
   const params = [...whereClause.params];
@@ -214,7 +235,7 @@ const listRows = async (
     .bind(...params)
     .all<Record<string, unknown>>();
 
-  return result.results;
+  return result.results.map((row) => normalizeRowKeys(row));
 };
 
 const attachJoinedRows = async (
@@ -278,7 +299,7 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       const dataRecord = data as Record<string, unknown>;
       const keys = Object.keys(dataRecord);
       const values = keys.map((key) => dataRecord[key]);
-      const columnsSql = keys.map(columnName).join(', ');
+      const columnsSql = keys.map((key) => columnName(model, key)).join(', ');
       const placeholders = keys.map(() => '?').join(', ');
 
       await db
@@ -309,8 +330,8 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         return (rows[0] ?? null) as never;
       }
 
-      const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
-      const whereClause = whereClauseToSql(where);
+      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(', ');
+      const whereClause = whereClauseToSql(model, where);
       const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
 
       await db
@@ -338,8 +359,8 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         return matchingRows.length;
       }
 
-      const assignments = keys.map((key) => `${columnName(key)} = ?`).join(', ');
-      const whereClause = whereClauseToSql(where);
+      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(', ');
+      const whereClause = whereClauseToSql(model, where);
       const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
 
       await db
@@ -385,7 +406,7 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       return (await attachJoinedRows(db, rows, join)) as never;
     },
     delete: async ({ model, where }) => {
-      const whereClause = whereClauseToSql(where);
+      const whereClause = whereClauseToSql(model, where);
       await db
         .prepare(`DELETE FROM ${tableNameForModel(model)}${whereClause.sql}`)
         .bind(...whereClause.params)
@@ -396,7 +417,7 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         model,
         where,
       });
-      const whereClause = whereClauseToSql(where);
+      const whereClause = whereClauseToSql(model, where);
 
       await db
         .prepare(`DELETE FROM ${tableNameForModel(model)}${whereClause.sql}`)
@@ -406,7 +427,7 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       return matchingRows.length;
     },
     count: async ({ model, where }) => {
-      const whereClause = whereClauseToSql(where);
+      const whereClause = whereClauseToSql(model, where);
       const row = await db
         .prepare(`SELECT COUNT(*) AS count FROM ${tableNameForModel(model)}${whereClause.sql}`)
         .bind(...whereClause.params)
@@ -496,7 +517,7 @@ export const parseHostedMagicLinkToken = (
 };
 
 export const tenantIdFromNextPath = (nextPath: string | undefined): string | null => {
-  if (nextPath === undefined || !nextPath.startsWith('/')) {
+  if (!nextPath?.startsWith('/')) {
     return null;
   }
 
@@ -753,10 +774,12 @@ export const createCredtrailBetterAuth = (input: {
       token: string;
     },
   ) => Promise<void>;
-}) => {
-  const plugins: Array<
-    ReturnType<typeof magicLink> | ReturnType<typeof genericOAuth> | ReturnType<typeof twoFactor>
-  > = [
+}): ReturnType<typeof betterAuth> => {
+  const plugins: (
+    | ReturnType<typeof magicLink>
+    | ReturnType<typeof genericOAuth>
+    | ReturnType<typeof twoFactor>
+  )[] = [
     magicLink({
       expiresIn: input.magicLinkTtlSeconds,
       generateToken: () => {
