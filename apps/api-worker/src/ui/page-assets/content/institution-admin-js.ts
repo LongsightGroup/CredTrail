@@ -1924,21 +1924,32 @@ export const INSTITUTION_ADMIN_JS = `
               ? ''
               : '<div class="ct-admin__meta">public: ' + escapeHtml(publicId) + '</div>') +
             '</td>' +
-            '<td><div class="ct-admin__actions">' +
-            '<a class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary" href="' +
+            '<td class="ct-admin__issued-actions-cell"><div class="ct-admin__issued-actions">' +
+            '<div class="ct-admin__action-bar" role="group" aria-label="Actions for assertion ' +
+            escapeHtml(assertionId) +
+            '">' +
+            '<a class="ct-admin__action-pill ct-admin__action-pill--primary" href="' +
             escapeHtml(viewBadgeHref) +
-            '" target="_blank" rel="noopener noreferrer">View badge</a>' +
-            '<a class="ct-admin__button ct-admin__button--tiny ct-admin__button--ghost" href="' +
-            escapeHtml(rawJsonHref) +
-            '" target="_blank" rel="noopener noreferrer">JSON-LD</a>' +
-            '<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--secondary" data-issued-action="audit" data-assertion-id="' +
+            '" target="_blank" rel="noopener noreferrer">Open</a>' +
+            '<button type="button" class="ct-admin__action-pill" data-issued-action="audit" data-assertion-id="' +
             escapeHtml(assertionId) +
             '">Audit</button>' +
+            '<details class="ct-admin__action-menu">' +
+            '<summary class="ct-admin__action-pill ct-admin__action-pill--menu" aria-label="More actions for assertion ' +
+            escapeHtml(assertionId) +
+            '">...</summary>' +
+            '<div class="ct-admin__action-menu-popover">' +
+            '<a class="ct-admin__action-menu-item" href="' +
+            escapeHtml(rawJsonHref) +
+            '" target="_blank" rel="noopener noreferrer">Open JSON-LD</a>' +
             (canRevoke
-              ? '<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger" data-issued-action="revoke" data-assertion-id="' +
+              ? '<button type="button" class="ct-admin__action-menu-item ct-admin__action-menu-item--danger" data-issued-action="revoke" data-assertion-id="' +
                 escapeHtml(assertionId) +
-                '">Revoke</button>'
+                '">Revoke badge</button>'
               : '') +
+            '</div>' +
+            '</details>' +
+            '</div>' +
             '</div></td>' +
             '</tr>'
           );
@@ -2000,6 +2011,18 @@ export const INSTITUTION_ADMIN_JS = `
 
     refreshIssuedBadges = loadIssuedBadges;
 
+    const closeIssuedActionMenus = (exceptMenu) => {
+      const openMenus = issuedBadgesBody.querySelectorAll('details.ct-admin__action-menu[open]');
+
+      openMenus.forEach((menu) => {
+        if (!(menu instanceof HTMLDetailsElement) || menu === exceptMenu) {
+          return;
+        }
+
+        menu.open = false;
+      });
+    };
+
     const revokeAssertion = async (assertionId) => {
       const reasonPrompt = window.prompt(
         'Optional revocation reason for ' + assertionId + ':',
@@ -2054,10 +2077,48 @@ export const INSTITUTION_ADMIN_JS = `
       await loadIssuedBadges();
     });
 
+    document.addEventListener('click', (event) => {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+
+      if (issuedBadgesBody.contains(event.target)) {
+        return;
+      }
+
+      closeIssuedActionMenus();
+    });
+
     issuedBadgesBody.addEventListener('click', async (event) => {
       const target = event.target;
 
       if (!(target instanceof HTMLElement)) {
+        return;
+      }
+
+      const menuTrigger = target.closest('summary.ct-admin__action-pill--menu');
+
+      if (menuTrigger instanceof HTMLElement) {
+        const menu = menuTrigger.parentElement;
+
+        if (menu instanceof HTMLDetailsElement) {
+          window.setTimeout(() => {
+            closeIssuedActionMenus(menu.open ? menu : undefined);
+          }, 0);
+        }
+
+        return;
+      }
+
+      const menuLink = target.closest('a.ct-admin__action-menu-item');
+
+      if (menuLink instanceof HTMLAnchorElement) {
+        const menu = menuLink.closest('details.ct-admin__action-menu');
+
+        if (menu instanceof HTMLDetailsElement) {
+          menu.open = false;
+        }
+
         return;
       }
 
@@ -2073,6 +2134,12 @@ export const INSTITUTION_ADMIN_JS = `
       if (typeof assertionId !== 'string' || assertionId.trim().length === 0) {
         setStatus(issuedBadgesActionStatus, 'Missing assertion ID for selected action.', true);
         return;
+      }
+
+      const parentMenu = actionButton.closest('details.ct-admin__action-menu');
+
+      if (parentMenu instanceof HTMLDetailsElement) {
+        parentMenu.open = false;
       }
 
       if (action === 'audit') {

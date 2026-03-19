@@ -11,7 +11,7 @@ RUN corepack enable
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY tsconfig.json vitest.config.ts eslint.config.mjs ./
+COPY tsconfig.json vitest.config.ts .oxlintrc.json ./
 COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts

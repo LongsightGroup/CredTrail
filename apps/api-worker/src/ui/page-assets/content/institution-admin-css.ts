@@ -574,6 +574,28 @@ export const INSTITUTION_ADMIN_CSS = `
     box-shadow: var(--ct-shadow-soft);
     filter: brightness(1.03);
   }
+
+  .ct-admin__table .ct-admin__action-pill:hover,
+  .ct-admin__action-menu-item:hover {
+    transform: translateY(-1px);
+  }
+
+  .ct-admin__table .ct-admin__action-pill--primary:hover {
+    box-shadow: var(--ct-shadow-card);
+    filter: brightness(1.03);
+  }
+
+  .ct-admin__table .ct-admin__action-pill:not(.ct-admin__action-pill--primary):hover {
+    background: var(--ct-theme-surface-info);
+  }
+
+  .ct-admin__action-menu-item:hover {
+    background: var(--ct-theme-surface-info);
+  }
+
+  .ct-admin__action-menu-item--danger:hover {
+    background: var(--ct-theme-surface-danger);
+  }
 }
 .ct-admin__form button:focus-visible,
 .ct-admin__button:focus-visible {
@@ -581,11 +603,20 @@ export const INSTITUTION_ADMIN_CSS = `
   outline-offset: 3px;
   box-shadow: var(--ct-shadow-soft);
 }
+.ct-admin__table .ct-admin__action-pill:focus-visible,
+.ct-admin__action-menu-item:focus-visible {
+  outline: 2px solid var(--ct-theme-border-focus);
+  outline-offset: 2px;
+}
 .ct-admin__form button:active:not(:disabled),
 .ct-admin__button:active {
   transform: translateY(0);
   box-shadow: none;
   filter: none;
+}
+.ct-admin__table .ct-admin__action-pill:active,
+.ct-admin__action-menu-item:active {
+  transform: translateY(0);
 }
 .ct-admin__form button:disabled {
   opacity: 0.66;
@@ -732,6 +763,115 @@ export const INSTITUTION_ADMIN_CSS = `
   font-size: 0.78rem;
   color: var(--ct-theme-text-subtle);
   overflow-wrap: anywhere;
+}
+.ct-admin__issued-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+.ct-admin__issued-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+}
+.ct-admin__action-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border: 1px solid var(--ct-border-soft);
+  border-radius: var(--ct-radius-pill);
+  background: linear-gradient(
+    180deg,
+    var(--ct-theme-surface-card-strong),
+    var(--ct-theme-surface-shell)
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.ct-admin__table .ct-admin__action-pill,
+.ct-admin__table button.ct-admin__action-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.1rem;
+  padding: 0.45rem 0.78rem;
+  border: none;
+  border-radius: var(--ct-radius-pill);
+  background: transparent;
+  color: var(--ct-theme-text-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ct-duration-fast) var(--ct-ease-standard),
+    color var(--ct-duration-fast) var(--ct-ease-standard),
+    box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
+    transform var(--ct-duration-fast) var(--ct-ease-standard);
+}
+.ct-admin__table button.ct-admin__action-pill {
+  font: inherit;
+}
+.ct-admin__table .ct-admin__action-pill--primary {
+  color: var(--ct-theme-text-on-brand);
+  background: var(--ct-theme-gradient-action);
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__action-pill--menu {
+  min-width: 2.1rem;
+  padding-inline: 0.62rem;
+}
+.ct-admin__action-menu > summary {
+  list-style: none;
+}
+.ct-admin__action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.ct-admin__action-menu[open] > .ct-admin__action-pill--menu {
+  background: var(--ct-theme-surface-info);
+}
+.ct-admin__action-menu-popover {
+  display: none;
+}
+.ct-admin__action-menu[open] .ct-admin__action-menu-popover {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 11rem;
+  margin-top: 0.42rem;
+  padding: 0.32rem;
+  border: 1px solid var(--ct-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: linear-gradient(
+    180deg,
+    var(--ct-theme-surface-card-strong),
+    var(--ct-theme-surface-soft)
+  );
+  box-shadow: var(--ct-shadow-card);
+}
+.ct-admin__table .ct-admin__action-menu-item,
+.ct-admin__table button.ct-admin__action-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 0;
+  padding: 0.55rem 0.7rem;
+  border: none;
+  border-radius: var(--ct-radius-sm);
+  background: transparent;
+  color: var(--ct-theme-text-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ct-admin__table button.ct-admin__action-menu-item {
+  font: inherit;
+}
+.ct-admin__action-menu-item--danger {
+  color: var(--ct-theme-state-danger);
 }
 .ct-admin__actions {
   display: inline-flex;
