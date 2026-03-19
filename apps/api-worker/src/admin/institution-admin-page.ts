@@ -1318,7 +1318,7 @@ const renderInstitutionAdminPage = (
             'Choose a workspace instead of forcing every task onto one page.',
             `<aside class="ct-admin__hero-note ct-stack">
               <h2>Start Here</h2>
-              <p>Operations is the primary daily workspace. Rules and access setup now live on dedicated pages.</p>
+              <p>Operations is the primary daily workspace. Use the Rules and Access pages to configure policy and permissions.</p>
               <p><a class="ct-admin__cta-link" href="${escapeHtml(operationsPath)}">Open operations</a></p>
             </aside>`,
           )}
