@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { runImmutableCredentialStoreContract } from './immutable-credential-store-contract';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runImmutableCredentialStoreContract } from "./immutable-credential-store-contract";
 
 interface MockCommand {
-  commandType: 'head' | 'get' | 'put' | 'delete';
+  commandType: "head" | "get" | "put" | "delete";
   input: Record<string, unknown>;
 }
 
@@ -24,21 +24,21 @@ const s3MockState = vi.hoisted(() => {
 });
 
 const notFoundError = (): Error & { name: string; $metadata: { httpStatusCode: number } } => {
-  const error = new Error('Not found') as Error & {
+  const error = new Error("Not found") as Error & {
     name: string;
     $metadata: { httpStatusCode: number };
   };
-  error.name = 'NotFound';
+  error.name = "NotFound";
   error.$metadata = { httpStatusCode: 404 };
   return error;
 };
 
 const preconditionError = (): Error & { name: string; $metadata: { httpStatusCode: number } } => {
-  const error = new Error('Precondition failed') as Error & {
+  const error = new Error("Precondition failed") as Error & {
     name: string;
     $metadata: { httpStatusCode: number };
   };
-  error.name = 'PreconditionFailed';
+  error.name = "PreconditionFailed";
   error.$metadata = { httpStatusCode: 412 };
   return error;
 };
@@ -47,12 +47,12 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
   const bucket = command.input.Bucket;
   const key = command.input.Key;
 
-  if (typeof bucket !== 'string' || typeof key !== 'string') {
-    throw new Error('Bucket and Key are required');
+  if (typeof bucket !== "string" || typeof key !== "string") {
+    throw new Error("Bucket and Key are required");
   }
 
   switch (command.commandType) {
-    case 'head': {
+    case "head": {
       const found = s3MockState.objects.get(`${bucket}/${key}`);
 
       if (found === undefined) {
@@ -63,7 +63,7 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
         ETag: found.etag,
       });
     }
-    case 'get': {
+    case "get": {
       const found = s3MockState.objects.get(`${bucket}/${key}`);
 
       if (found === undefined) {
@@ -76,19 +76,19 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
         },
       });
     }
-    case 'put': {
+    case "put": {
       const objectKey = `${bucket}/${key}`;
       const ifNoneMatch = command.input.IfNoneMatch;
       const existing = s3MockState.objects.get(objectKey);
 
-      if (ifNoneMatch === '*' && existing !== undefined) {
+      if (ifNoneMatch === "*" && existing !== undefined) {
         return Promise.reject(preconditionError());
       }
 
       const body = command.input.Body;
 
-      if (typeof body !== 'string') {
-        throw new Error('Mock S3 put expects string body');
+      if (typeof body !== "string") {
+        throw new Error("Mock S3 put expects string body");
       }
 
       s3MockState.sequence += 1;
@@ -100,11 +100,9 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
             ? (command.input.Metadata as Record<string, string>)
             : undefined,
         contentType:
-          typeof command.input.ContentType === 'string' ? command.input.ContentType : undefined,
+          typeof command.input.ContentType === "string" ? command.input.ContentType : undefined,
         cacheControl:
-          typeof command.input.CacheControl === 'string'
-            ? command.input.CacheControl
-            : undefined,
+          typeof command.input.CacheControl === "string" ? command.input.CacheControl : undefined,
         etag: `"etag-${nextSequence}"`,
         versionId: `version-${nextSequence}`,
       };
@@ -115,7 +113,7 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
         VersionId: stored.versionId,
       });
     }
-    case 'delete': {
+    case "delete": {
       const objectKey = `${bucket}/${key}`;
       const existing = s3MockState.objects.get(objectKey);
 
@@ -129,7 +127,7 @@ const defaultSendHandler = (command: MockCommand): Promise<unknown> => {
   }
 };
 
-vi.mock('@aws-sdk/client-s3', () => {
+vi.mock("@aws-sdk/client-s3", () => {
   class S3Client {
     public send(command: MockCommand): Promise<unknown> {
       s3MockState.sentCommands.push(command);
@@ -138,7 +136,7 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
 
   class HeadObjectCommand {
-    public readonly commandType = 'head' as const;
+    public readonly commandType = "head" as const;
     public readonly input: Record<string, unknown>;
 
     public constructor(input: Record<string, unknown>) {
@@ -147,7 +145,7 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
 
   class GetObjectCommand {
-    public readonly commandType = 'get' as const;
+    public readonly commandType = "get" as const;
     public readonly input: Record<string, unknown>;
 
     public constructor(input: Record<string, unknown>) {
@@ -156,7 +154,7 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
 
   class PutObjectCommand {
-    public readonly commandType = 'put' as const;
+    public readonly commandType = "put" as const;
     public readonly input: Record<string, unknown>;
 
     public constructor(input: Record<string, unknown>) {
@@ -165,7 +163,7 @@ vi.mock('@aws-sdk/client-s3', () => {
   }
 
   class DeleteObjectCommand {
-    public readonly commandType = 'delete' as const;
+    public readonly commandType = "delete" as const;
     public readonly input: Record<string, unknown>;
 
     public constructor(input: Record<string, unknown>) {
@@ -182,9 +180,9 @@ vi.mock('@aws-sdk/client-s3', () => {
   };
 });
 
-import { createS3ImmutableCredentialStore } from './s3-immutable-credential-store';
+import { createS3ImmutableCredentialStore } from "./s3-immutable-credential-store";
 
-describe('createS3ImmutableCredentialStore', () => {
+describe("createS3ImmutableCredentialStore", () => {
   beforeEach(() => {
     s3MockState.sentCommands.length = 0;
     s3MockState.objects.clear();
@@ -193,50 +191,52 @@ describe('createS3ImmutableCredentialStore', () => {
 
   const createStore = (): ReturnType<typeof createS3ImmutableCredentialStore> => {
     return createS3ImmutableCredentialStore({
-      bucket: 'credtrail-objects',
-      region: 'us-east-1',
-      accessKeyId: 'test-access-key',
-      secretAccessKey: 'test-secret-key',
-      endpoint: 'http://minio:9000',
+      bucket: "credtrail-objects",
+      region: "us-east-1",
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+      endpoint: "http://minio:9000",
       forcePathStyle: true,
     });
   };
 
-  describe('contract', () => {
+  describe("contract", () => {
     runImmutableCredentialStoreContract({
       createStore,
     });
   });
 
-  it('sets immutable-write and metadata fields on put', async () => {
+  it("sets immutable-write and metadata fields on put", async () => {
     const store = createStore();
-    const stored = await store.put('tenants/a/assertions/1.jsonld', '{"v":1}', {
+    const stored = await store.put("tenants/a/assertions/1.jsonld", '{"v":1}', {
       httpMetadata: {
-        contentType: 'application/ld+json',
-        cacheControl: 'public, max-age=31536000, immutable',
+        contentType: "application/ld+json",
+        cacheControl: "public, max-age=31536000, immutable",
       },
       customMetadata: {
-        tenantId: 'a',
+        tenantId: "a",
       },
     });
 
     expect(stored).not.toBeNull();
-    const putCommand = s3MockState.sentCommands.find((command) => command.commandType === 'put');
+    const putCommand = s3MockState.sentCommands.find((command) => command.commandType === "put");
     expect(putCommand?.input).toMatchObject({
-      Bucket: 'credtrail-objects',
-      Key: 'tenants/a/assertions/1.jsonld',
-      IfNoneMatch: '*',
-      ContentType: 'application/ld+json',
-      CacheControl: 'public, max-age=31536000, immutable',
+      Bucket: "credtrail-objects",
+      Key: "tenants/a/assertions/1.jsonld",
+      IfNoneMatch: "*",
+      ContentType: "application/ld+json",
+      CacheControl: "public, max-age=31536000, immutable",
       Metadata: {
-        tenantId: 'a',
+        tenantId: "a",
       },
     });
-    expect(s3MockState.objects.get('credtrail-objects/tenants/a/assertions/1.jsonld')).toMatchObject({
-      contentType: 'application/ld+json',
-      cacheControl: 'public, max-age=31536000, immutable',
+    expect(
+      s3MockState.objects.get("credtrail-objects/tenants/a/assertions/1.jsonld"),
+    ).toMatchObject({
+      contentType: "application/ld+json",
+      cacheControl: "public, max-age=31536000, immutable",
       metadata: {
-        tenantId: 'a',
+        tenantId: "a",
       },
     });
   });

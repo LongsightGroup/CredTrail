@@ -1,23 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
     createAuditLog: vi.fn(),
     findActiveDelegatedIssuingAuthorityGrantForAction: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findAssertionById: vi.fn(),
     findBadgeTemplateById: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -28,21 +32,20 @@ vi.mock('@credtrail/db', async () => {
     listAssertionLifecycleEvents: vi.fn(),
     recordAssertionLifecycleTransition: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -52,7 +55,7 @@ vi.mock('./auth/better-auth-adapter', async () => {
       createLtiSession: vi.fn(),
       resolveAuthenticatedPrincipal: mockedResolveBetterAuthPrincipal,
       resolveRequestedTenantContext: mockedResolveBetterAuthRequestedTenant,
-      revokeCurrentSession: vi.fn(async () => {}),
+      revokeCurrentSession: vi.fn().mockResolvedValue(undefined),
     })),
   };
 });
@@ -60,7 +63,6 @@ vi.mock('./auth/better-auth-adapter', async () => {
 import {
   createAuditLog,
   findActiveDelegatedIssuingAuthorityGrantForAction,
-  findActiveSessionByHash,
   findAssertionById,
   findBadgeTemplateById,
   findTenantMembership,
@@ -70,7 +72,6 @@ import {
   listAssertionLifecycleEvents,
   recordAssertionLifecycleTransition,
   resolveAssertionLifecycleState,
-  touchSession,
   type AssertionRecord,
   type AuditLogRecord,
   type BadgeTemplateRecord,
@@ -78,16 +79,15 @@ import {
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedFindActiveDelegatedIssuingAuthorityGrantForAction = vi.mocked(
   findActiveDelegatedIssuingAuthorityGrantForAction,
 );
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindAssertionById = vi.mocked(findAssertionById);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -99,7 +99,6 @@ const mockedListTenantAssertions = vi.mocked(listTenantAssertions);
 const mockedListAssertionLifecycleEvents = vi.mocked(listAssertionLifecycleEvents);
 const mockedRecordAssertionLifecycleTransition = vi.mocked(recordAssertionLifecycleTransition);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -112,10 +111,10 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -124,52 +123,52 @@ const sampleAssertion = (overrides?: {
   statusListIndex?: number | null;
 }): AssertionRecord => {
   return {
-    id: 'tenant_123:assertion_456',
-    tenantId: 'tenant_123',
-    publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-    learnerProfileId: 'lpr_123',
-    badgeTemplateId: 'badge_template_001',
-    recipientIdentity: 'learner@example.edu',
-    recipientIdentityType: 'email',
-    vcR2Key: 'tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld',
+    id: "tenant_123:assertion_456",
+    tenantId: "tenant_123",
+    publicId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+    learnerProfileId: "lpr_123",
+    badgeTemplateId: "badge_template_001",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
+    vcR2Key: "tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld",
     statusListIndex: overrides?.statusListIndex === undefined ? 0 : overrides.statusListIndex,
-    idempotencyKey: 'idem_abc',
-    issuedAt: '2026-02-10T22:00:00.000Z',
-    issuedByUserId: 'usr_123',
+    idempotencyKey: "idem_abc",
+    issuedAt: "2026-02-10T22:00:00.000Z",
+    issuedByUserId: "usr_123",
     revokedAt: overrides?.revokedAt ?? null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
+    id: "ses_123",
+    tenantId: overrides?.tenantId ?? "tenant_123",
+    userId: overrides?.userId ?? "usr_123",
+    sessionTokenHash: "session-hash",
+    expiresAt: "2026-02-11T22:00:00.000Z",
+    lastSeenAt: "2026-02-10T22:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for completing TS basics.',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for completing TS basics.",
     criteriaUri: null,
     imageUri: null,
-    createdByUserId: 'usr_issuer',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_issuer",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: '{"stability":"institution_registry"}',
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -178,11 +177,11 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'issuer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "issuer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -191,21 +190,21 @@ const sampleDelegatedIssuingAuthorityGrant = (
   overrides?: Partial<DelegatedIssuingAuthorityGrantRecord>,
 ): DelegatedIssuingAuthorityGrantRecord => {
   return {
-    id: 'dag_123',
-    tenantId: 'tenant_123',
-    delegateUserId: 'usr_delegate',
-    delegatedByUserId: 'usr_admin',
-    orgUnitId: 'tenant_123:org:department-math',
-    allowedActions: ['issue_badge'],
-    badgeTemplateIds: ['badge_template_001'],
-    startsAt: '2026-02-13T00:00:00.000Z',
-    endsAt: '2026-03-13T00:00:00.000Z',
+    id: "dag_123",
+    tenantId: "tenant_123",
+    delegateUserId: "usr_delegate",
+    delegatedByUserId: "usr_admin",
+    orgUnitId: "tenant_123:org:department-math",
+    allowedActions: ["issue_badge"],
+    badgeTemplateIds: ["badge_template_001"],
+    startsAt: "2026-02-13T00:00:00.000Z",
+    endsAt: "2026-03-13T00:00:00.000Z",
     revokedAt: null,
     revokedByUserId: null,
     revokedReason: null,
-    status: 'active',
-    createdAt: '2026-02-13T00:00:00.000Z',
-    updatedAt: '2026-02-13T00:00:00.000Z',
+    status: "active",
+    createdAt: "2026-02-13T00:00:00.000Z",
+    updatedAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -213,15 +212,15 @@ const sampleDelegatedIssuingAuthorityGrant = (
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
     ...overrides,
-    id: 'aud_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'assertion.issued',
-    targetType: 'assertion',
-    targetId: 'tenant_123:assertion_456',
+    id: "aud_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "assertion.issued",
+    targetType: "assertion",
+    targetId: "tenant_123:assertion_456",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
@@ -230,26 +229,26 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
-    async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+    (context: { req: { header(name: string): string | undefined } }) => {
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
-        return null;
+      if (!cookieHeader.includes("better-auth.session_token=")) {
+        return Promise.resolve(null);
       }
 
-      return {
-        userId: 'usr_123',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-02-11T22:00:00.000Z',
-      };
+      return Promise.resolve({
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-02-11T22:00:00.000Z",
+      });
     },
   );
   mockedResolveBetterAuthRequestedTenant.mockReset();
   mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
 });
 
-describe('assertion lifecycle endpoints', () => {
+describe("assertion lifecycle endpoints", () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
     mockedTouchSession.mockReset();
@@ -274,26 +273,26 @@ describe('assertion lifecycle endpoints', () => {
     mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
-  it('lists tenant assertions for issuer roles', async () => {
+  it("lists tenant assertions for issuer roles", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListTenantAssertions.mockResolvedValue([
       {
-        assertionId: 'tenant_123:assertion_456',
-        tenantId: 'tenant_123',
-        publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-        badgeTemplateId: 'badge_template_001',
-        badgeTitle: 'TypeScript Foundations',
-        badgeImageUri: 'https://example.edu/badges/typescript.png',
-        recipientIdentity: 'learner@example.edu',
-        recipientIdentityType: 'email',
-        issuedAt: '2026-02-10T22:00:00.000Z',
-        issuedByUserId: 'usr_issuer',
+        assertionId: "tenant_123:assertion_456",
+        tenantId: "tenant_123",
+        publicId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+        badgeTemplateId: "badge_template_001",
+        badgeTitle: "TypeScript Foundations",
+        badgeImageUri: "https://example.edu/badges/typescript.png",
+        recipientIdentity: "learner@example.edu",
+        recipientIdentityType: "email",
+        issuedAt: "2026-02-10T22:00:00.000Z",
+        issuedByUserId: "usr_issuer",
         revokedAt: null,
-        state: 'active',
-        source: 'default_active',
+        state: "active",
+        source: "default_active",
         reasonCode: null,
         reason: null,
         transitionedAt: null,
@@ -301,11 +300,11 @@ describe('assertion lifecycle endpoints', () => {
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions?badgeTemplateId=badge_template_001&state=active&limit=25',
+      "/v1/tenants/tenant_123/assertions?badgeTemplateId=badge_template_001&state=active&limit=25",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -313,28 +312,28 @@ describe('assertion lifecycle endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.count).toBe(1);
     expect(Array.isArray(body.assertions)).toBe(true);
     expect(mockedListTenantAssertions).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'badge_template_001',
-      state: 'active',
+      tenantId: "tenant_123",
+      badgeTemplateId: "badge_template_001",
+      state: "active",
       limit: 25,
     });
   });
 
-  it('returns 400 for invalid assertion list query filters', async () => {
+  it("returns 400 for invalid assertion list query filters", async () => {
     const env = createEnv();
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions?state=paused',
+      "/v1/tenants/tenant_123/assertions?state=paused",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -342,46 +341,46 @@ describe('assertion lifecycle endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe('Invalid assertion list query parameters');
+    expect(body.error).toBe("Invalid assertion list query parameters");
     expect(mockedListTenantAssertions).not.toHaveBeenCalled();
   });
 
-  it('returns assertion lifecycle state and history for issuer roles', async () => {
+  it("returns assertion lifecycle state and history for issuer roles", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedResolveAssertionLifecycleState.mockResolvedValue({
-      state: 'suspended',
-      source: 'lifecycle_event',
-      reasonCode: 'administrative_hold',
-      reason: 'Pending registrar review',
-      transitionedAt: '2026-02-12T23:10:00.000Z',
+      state: "suspended",
+      source: "lifecycle_event",
+      reasonCode: "administrative_hold",
+      reason: "Pending registrar review",
+      transitionedAt: "2026-02-12T23:10:00.000Z",
       revokedAt: null,
     });
     mockedListAssertionLifecycleEvents.mockResolvedValue([
       {
-        id: 'ale_123',
-        tenantId: 'tenant_123',
-        assertionId: 'tenant_123:assertion_456',
-        fromState: 'active',
-        toState: 'suspended',
-        reasonCode: 'administrative_hold',
-        reason: 'Pending registrar review',
-        transitionSource: 'manual',
-        actorUserId: 'usr_123',
-        transitionedAt: '2026-02-12T23:10:00.000Z',
-        createdAt: '2026-02-12T23:10:00.000Z',
+        id: "ale_123",
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        fromState: "active",
+        toState: "suspended",
+        reasonCode: "administrative_hold",
+        reason: "Pending registrar review",
+        transitionSource: "manual",
+        actorUserId: "usr_123",
+        transitionedAt: "2026-02-12T23:10:00.000Z",
+        createdAt: "2026-02-12T23:10:00.000Z",
       },
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle',
+      "/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -389,55 +388,55 @@ describe('assertion lifecycle endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body.state).toBe('suspended');
-    expect(body.reasonCode).toBe('administrative_hold');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.state).toBe("suspended");
+    expect(body.reasonCode).toBe("administrative_hold");
     expect(Array.isArray(body.events)).toBe(true);
     expect(mockedResolveAssertionLifecycleState).toHaveBeenCalledWith(
       fakeDb,
-      'tenant_123',
-      'tenant_123:assertion_456',
+      "tenant_123",
+      "tenant_123:assertion_456",
     );
   });
 
-  it('applies manual lifecycle transition and writes audit log', async () => {
+  it("applies manual lifecycle transition and writes audit log", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedRecordAssertionLifecycleTransition.mockResolvedValue({
-      status: 'transitioned',
-      fromState: 'active',
-      toState: 'suspended',
-      currentState: 'suspended',
+      status: "transitioned",
+      fromState: "active",
+      toState: "suspended",
+      currentState: "suspended",
       message: null,
       event: {
-        id: 'ale_456',
-        tenantId: 'tenant_123',
-        assertionId: 'tenant_123:assertion_456',
-        fromState: 'active',
-        toState: 'suspended',
-        reasonCode: 'administrative_hold',
-        reason: 'Registrar hold',
-        transitionSource: 'manual',
-        actorUserId: 'usr_123',
-        transitionedAt: '2026-02-12T23:15:00.000Z',
-        createdAt: '2026-02-12T23:15:00.000Z',
+        id: "ale_456",
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        fromState: "active",
+        toState: "suspended",
+        reasonCode: "administrative_hold",
+        reason: "Registrar hold",
+        transitionSource: "manual",
+        actorUserId: "usr_123",
+        transitionedAt: "2026-02-12T23:15:00.000Z",
+        createdAt: "2026-02-12T23:15:00.000Z",
       },
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      "/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          toState: 'suspended',
-          reasonCode: 'administrative_hold',
-          reason: 'Registrar hold',
+          toState: "suspended",
+          reasonCode: "administrative_hold",
+          reason: "Registrar hold",
         }),
       },
       env,
@@ -445,82 +444,82 @@ describe('assertion lifecycle endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body.status).toBe('transitioned');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.status).toBe("transitioned");
     expect(mockedRecordAssertionLifecycleTransition).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        assertionId: 'tenant_123:assertion_456',
-        toState: 'suspended',
-        reasonCode: 'administrative_hold',
-        transitionSource: 'manual',
-        actorUserId: 'usr_123',
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        toState: "suspended",
+        reasonCode: "administrative_hold",
+        transitionSource: "manual",
+        actorUserId: "usr_123",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        action: 'assertion.lifecycle_transitioned',
-        targetType: 'assertion',
-        targetId: 'tenant_123:assertion_456',
+        tenantId: "tenant_123",
+        action: "assertion.lifecycle_transitioned",
+        targetType: "assertion",
+        targetId: "tenant_123:assertion_456",
       }),
     );
   });
 
-  it('allows viewer lifecycle revocation when delegated authority grant is active', async () => {
+  it("allows viewer lifecycle revocation when delegated authority grant is active", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
     mockedFindTenantMembership.mockResolvedValue(
       sampleTenantMembership({
-        role: 'viewer',
+        role: "viewer",
       }),
     );
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockResolvedValue(
       sampleDelegatedIssuingAuthorityGrant({
-        delegateUserId: 'usr_123',
-        allowedActions: ['revoke_badge'],
-        badgeTemplateIds: ['badge_template_001'],
+        delegateUserId: "usr_123",
+        allowedActions: ["revoke_badge"],
+        badgeTemplateIds: ["badge_template_001"],
       }),
     );
     mockedRecordAssertionLifecycleTransition.mockResolvedValue({
-      status: 'transitioned',
-      fromState: 'active',
-      toState: 'revoked',
-      currentState: 'revoked',
+      status: "transitioned",
+      fromState: "active",
+      toState: "revoked",
+      currentState: "revoked",
       message: null,
       event: {
-        id: 'ale_rev_123',
-        tenantId: 'tenant_123',
-        assertionId: 'tenant_123:assertion_456',
-        fromState: 'active',
-        toState: 'revoked',
-        reasonCode: 'policy_violation',
-        reason: 'Integrity failure',
-        transitionSource: 'manual',
-        actorUserId: 'usr_123',
-        transitionedAt: '2026-02-12T23:15:00.000Z',
-        createdAt: '2026-02-12T23:15:00.000Z',
+        id: "ale_rev_123",
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        fromState: "active",
+        toState: "revoked",
+        reasonCode: "policy_violation",
+        reason: "Integrity failure",
+        transitionSource: "manual",
+        actorUserId: "usr_123",
+        transitionedAt: "2026-02-12T23:15:00.000Z",
+        createdAt: "2026-02-12T23:15:00.000Z",
       },
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      "/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          toState: 'revoked',
-          reasonCode: 'policy_violation',
-          reason: 'Integrity failure',
+          toState: "revoked",
+          reasonCode: "policy_violation",
+          reason: "Integrity failure",
         }),
       },
       env,
@@ -530,33 +529,33 @@ describe('assertion lifecycle endpoints', () => {
     expect(mockedFindActiveDelegatedIssuingAuthorityGrantForAction).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        userId: 'usr_123',
-        badgeTemplateId: 'badge_template_001',
-        requiredAction: 'revoke_badge',
+        tenantId: "tenant_123",
+        userId: "usr_123",
+        badgeTemplateId: "badge_template_001",
+        requiredAction: "revoke_badge",
       }),
     );
     expect(mockedRecordAssertionLifecycleTransition).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 422 when caller attempts automation transition source', async () => {
+  it("returns 422 when caller attempts automation transition source", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      "/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          toState: 'expired',
-          reasonCode: 'credential_expired',
-          transitionSource: 'automation',
+          toState: "expired",
+          reasonCode: "credential_expired",
+          transitionSource: "automation",
         }),
       },
       env,
@@ -565,37 +564,37 @@ describe('assertion lifecycle endpoints', () => {
 
     expect(response.status).toBe(422);
     expect(body.error).toBe(
-      'Automation lifecycle transitions are only allowed via trusted internal jobs',
+      "Automation lifecycle transitions are only allowed via trusted internal jobs",
     );
     expect(mockedRecordAssertionLifecycleTransition).not.toHaveBeenCalled();
     expect(mockedCreateAuditLog).not.toHaveBeenCalled();
   });
 
-  it('returns 409 when lifecycle transition is not allowed', async () => {
+  it("returns 409 when lifecycle transition is not allowed", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedRecordAssertionLifecycleTransition.mockResolvedValue({
-      status: 'invalid_transition',
-      fromState: 'revoked',
-      toState: 'active',
-      currentState: 'revoked',
+      status: "invalid_transition",
+      fromState: "revoked",
+      toState: "active",
+      currentState: "revoked",
       event: null,
-      message: 'transition from revoked to active is not allowed',
+      message: "transition from revoked to active is not allowed",
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition',
+      "/v1/tenants/tenant_123/assertions/tenant_123%3Aassertion_456/lifecycle/transition",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          toState: 'active',
-          reasonCode: 'appeal_resolved',
+          toState: "active",
+          reasonCode: "appeal_resolved",
         }),
       },
       env,
@@ -603,7 +602,7 @@ describe('assertion lifecycle endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(409);
-    expect(body.error).toBe('Lifecycle transition not allowed');
+    expect(body.error).toBe("Lifecycle transition not allowed");
     expect(mockedCreateAuditLog).not.toHaveBeenCalled();
   });
 });

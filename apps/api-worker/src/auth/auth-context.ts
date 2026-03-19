@@ -1,4 +1,4 @@
-export type AuthMethod = 'better_auth';
+export type AuthMethod = "better_auth";
 
 export interface AuthenticatedPrincipal {
   userId: string;
@@ -9,7 +9,7 @@ export interface AuthenticatedPrincipal {
 
 export interface RequestedTenantContext {
   tenantId: string;
-  source: 'route' | 'legacy_session';
+  source: "route" | "legacy_session";
   authoritative: boolean;
 }
 

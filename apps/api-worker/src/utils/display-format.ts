@@ -27,11 +27,11 @@ const linkedInIssuedDateFromIso = (
 
 export const escapeHtml = (value: string): string => {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 };
 
 export const formatIsoTimestamp = (timestampIso: string): string => {
@@ -41,36 +41,36 @@ export const formatIsoTimestamp = (timestampIso: string): string => {
     return timestampIso;
   }
 
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'UTC',
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
   }).format(new Date(timestampMs));
 };
 
 export const linkedInAddToProfileUrl = (input: LinkedInAddToProfileInput): string => {
-  const linkedInUrl = new URL('https://www.linkedin.com/profile/add');
-  linkedInUrl.searchParams.set('startTask', 'CERTIFICATION_NAME');
-  linkedInUrl.searchParams.set('name', input.badgeName);
-  linkedInUrl.searchParams.set('certUrl', input.credentialUrl);
+  const linkedInUrl = new URL("https://www.linkedin.com/profile/add");
+  linkedInUrl.searchParams.set("startTask", "CERTIFICATION_NAME");
+  linkedInUrl.searchParams.set("name", input.badgeName);
+  linkedInUrl.searchParams.set("certUrl", input.credentialUrl);
 
   const credentialId = input.credentialId.trim();
 
   if (credentialId.length > 0) {
-    linkedInUrl.searchParams.set('certId', credentialId);
+    linkedInUrl.searchParams.set("certId", credentialId);
   }
 
   const issuerName = input.issuerName.trim();
 
-  if (issuerName.length > 0 && issuerName !== 'Unknown issuer') {
-    linkedInUrl.searchParams.set('organizationName', issuerName);
+  if (issuerName.length > 0 && issuerName !== "Unknown issuer") {
+    linkedInUrl.searchParams.set("organizationName", issuerName);
   }
 
   const issuedDate = linkedInIssuedDateFromIso(input.issuedAtIso);
 
   if (issuedDate !== null) {
-    linkedInUrl.searchParams.set('issueYear', issuedDate.issueYear);
-    linkedInUrl.searchParams.set('issueMonth', issuedDate.issueMonth);
+    linkedInUrl.searchParams.set("issueYear", issuedDate.issueYear);
+    linkedInUrl.searchParams.set("issueMonth", issuedDate.issueMonth);
   }
 
   return linkedInUrl.toString();

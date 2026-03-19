@@ -9,8 +9,8 @@ import {
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   ob2ImportConversionRequestSchema,
   parseMigrationBatchPathParams,
@@ -19,27 +19,27 @@ import {
   parseMigrationBatchUploadQuery,
   parseOb2ImportConversionRequest,
   parseTenantPathParams,
-} from '@credtrail/validation';
-import type { AppContext, AppEnv } from '../app';
+} from "@credtrail/validation";
+import type { AppContext, AppEnv } from "../app";
 import {
   type Ob2ImportConversionResult,
   Ob2ImportError,
   prepareOb2ImportConversion,
-} from '../migrations/ob2-import';
+} from "../migrations/ob2-import";
 import {
   MigrationBatchFileParseError,
   parseMigrationBatchUploadFile,
   type MigrationBatchFileFormat,
-} from '../migrations/batch-upload';
-import { CredlyExportFileParseError, parseCredlyExportFile } from '../migrations/credly-export';
+} from "../migrations/batch-upload";
+import { CredlyExportFileParseError, parseCredlyExportFile } from "../migrations/credly-export";
 import {
   ParchmentExportFileParseError,
   parseParchmentExportFile,
-} from '../migrations/parchment-export';
+} from "../migrations/parchment-export";
 
 interface RegisterMigrationRoutesInput {
   app: Hono<AppEnv>;
-  resolveDatabase: (bindings: AppContext['env']) => SqlDatabase;
+  resolveDatabase: (bindings: AppContext["env"]) => SqlDatabase;
   requireTenantRole: (
     c: AppContext,
     tenantId: string,
@@ -56,21 +56,21 @@ interface RegisterMigrationRoutesInput {
 
 interface DryRunDiffPreview {
   badgeTemplate: {
-    operation: 'create' | 'update';
+    operation: "create" | "update";
     existingTemplateId?: string;
     changedFields: string[];
-    proposed: Ob2ImportConversionResult['createBadgeTemplateRequest'];
+    proposed: Ob2ImportConversionResult["createBadgeTemplateRequest"];
   };
   learnerProfile: {
-    operation: 'create' | 'reuse';
+    operation: "create" | "reuse";
     existingProfileId?: string;
     recipientIdentity: string;
-    recipientIdentityType: Ob2ImportConversionResult['manualIssueRequest']['recipientIdentityType'];
+    recipientIdentityType: Ob2ImportConversionResult["manualIssueRequest"]["recipientIdentityType"];
   };
   assertionIssue: {
-    operation: 'queue_issue';
+    operation: "queue_issue";
     recipientIdentity: string;
-    recipientIdentityType: Ob2ImportConversionResult['manualIssueRequest']['recipientIdentityType'];
+    recipientIdentityType: Ob2ImportConversionResult["manualIssueRequest"]["recipientIdentityType"];
   };
   summary: {
     creates: number;
@@ -80,7 +80,7 @@ interface DryRunDiffPreview {
 
 interface BatchUploadRowValidationResult {
   rowNumber: number;
-  status: 'valid' | 'invalid';
+  status: "valid" | "invalid";
   errors: string[];
   warnings: string[];
   diffPreview: DryRunDiffPreview | null;
@@ -88,7 +88,7 @@ interface BatchUploadRowValidationResult {
 
 interface MigrationBatchProgressSummary {
   batchId: string;
-  source: 'file_upload' | 'credly_export' | 'parchment_export' | 'unknown';
+  source: "file_upload" | "credly_export" | "parchment_export" | "unknown";
   fileName: string | null;
   format: string | null;
   totalRows: number;
@@ -104,21 +104,21 @@ interface MigrationBatchProgressSummary {
 }
 
 const learnerIdentityTypeFromRecipientIdentityType = (
-  identityType: Ob2ImportConversionResult['manualIssueRequest']['recipientIdentityType'],
+  identityType: Ob2ImportConversionResult["manualIssueRequest"]["recipientIdentityType"],
 ): LearnerIdentityType => {
-  if (identityType === 'email') {
-    return 'email';
+  if (identityType === "email") {
+    return "email";
   }
 
-  if (identityType === 'email_sha256') {
-    return 'email_sha256';
+  if (identityType === "email_sha256") {
+    return "email_sha256";
   }
 
-  if (identityType === 'did') {
-    return 'did';
+  if (identityType === "did") {
+    return "did";
   }
 
-  return 'url';
+  return "url";
 };
 
 const zodIssueMessages = (
@@ -128,7 +128,7 @@ const zodIssueMessages = (
   }[],
 ): string[] => {
   return issues.map((issue) => {
-    const path = issue.path.length > 0 ? issue.path.join('.') : 'request';
+    const path = issue.path.length > 0 ? issue.path.join(".") : "request";
     return `${path}: ${issue.message}`;
   });
 };
@@ -149,28 +149,31 @@ const dryRunDiffPreview = async (input: {
 
   if (existingTemplate !== undefined) {
     if (existingTemplate.title !== input.conversion.createBadgeTemplateRequest.title) {
-      changedFields.push('title');
+      changedFields.push("title");
     }
 
     if (
       (existingTemplate.description ?? undefined) !==
       input.conversion.createBadgeTemplateRequest.description
     ) {
-      changedFields.push('description');
+      changedFields.push("description");
     }
 
     if (
       (existingTemplate.criteriaUri ?? undefined) !==
       input.conversion.createBadgeTemplateRequest.criteriaUri
     ) {
-      changedFields.push('criteriaUri');
+      changedFields.push("criteriaUri");
     }
 
-    if ((existingTemplate.imageUri ?? undefined) !== input.conversion.createBadgeTemplateRequest.imageUri) {
-      changedFields.push('imageUri');
+    if (
+      (existingTemplate.imageUri ?? undefined) !==
+      input.conversion.createBadgeTemplateRequest.imageUri
+    ) {
+      changedFields.push("imageUri");
     }
   } else {
-    changedFields.push('new_template');
+    changedFields.push("new_template");
   }
 
   const learnerIdentityType = learnerIdentityTypeFromRecipientIdentityType(
@@ -187,19 +190,19 @@ const dryRunDiffPreview = async (input: {
 
   return {
     badgeTemplate: {
-      operation: existingTemplate === undefined ? 'create' : 'update',
+      operation: existingTemplate === undefined ? "create" : "update",
       ...(existingTemplate === undefined ? {} : { existingTemplateId: existingTemplate.id }),
       changedFields,
       proposed: input.conversion.createBadgeTemplateRequest,
     },
     learnerProfile: {
-      operation: existingProfile === null ? 'create' : 'reuse',
+      operation: existingProfile === null ? "create" : "reuse",
       ...(existingProfile === null ? {} : { existingProfileId: existingProfile.id }),
       recipientIdentity: input.conversion.manualIssueRequest.recipientIdentity,
       recipientIdentityType: input.conversion.manualIssueRequest.recipientIdentityType,
     },
     assertionIssue: {
-      operation: 'queue_issue',
+      operation: "queue_issue",
       recipientIdentity: input.conversion.manualIssueRequest.recipientIdentity,
       recipientIdentityType: input.conversion.manualIssueRequest.recipientIdentityType,
     },
@@ -214,7 +217,7 @@ const runBatchRowValidation = async (input: {
   db: SqlDatabase;
   tenantId: string;
   dryRun: boolean;
-  source: 'file_upload' | 'credly_export' | 'parchment_export';
+  source: "file_upload" | "credly_export" | "parchment_export";
   fileName: string;
   format: MigrationBatchFileFormat;
   batchId: string;
@@ -235,7 +238,7 @@ const runBatchRowValidation = async (input: {
     if (!parsedRequest.success) {
       reports.push({
         rowNumber: row.rowNumber,
-        status: 'invalid',
+        status: "invalid",
         errors: zodIssueMessages(parsedRequest.error.issues),
         warnings: [],
         diffPreview: null,
@@ -259,7 +262,7 @@ const runBatchRowValidation = async (input: {
       if (error instanceof Ob2ImportError) {
         reports.push({
           rowNumber: row.rowNumber,
-          status: 'invalid',
+          status: "invalid",
           errors: [error.message],
           warnings: [],
           diffPreview: null,
@@ -273,8 +276,8 @@ const runBatchRowValidation = async (input: {
     if (conversionResult.conversion === null) {
       reports.push({
         rowNumber: row.rowNumber,
-        status: 'invalid',
-        errors: ['Conversion could not be completed from supplied payload'],
+        status: "invalid",
+        errors: ["Conversion could not be completed from supplied payload"],
         warnings: conversionResult.warnings,
         diffPreview: null,
       });
@@ -284,7 +287,7 @@ const runBatchRowValidation = async (input: {
     if (!input.dryRun) {
       await enqueueJobQueueMessage(input.db, {
         tenantId: input.tenantId,
-        jobType: 'import_migration_batch',
+        jobType: "import_migration_batch",
         payload: {
           source: input.source,
           batchId: input.batchId,
@@ -301,7 +304,7 @@ const runBatchRowValidation = async (input: {
 
     reports.push({
       rowNumber: row.rowNumber,
-      status: 'valid',
+      status: "valid",
       errors: [],
       warnings: conversionResult.warnings,
       diffPreview: input.dryRun
@@ -378,11 +381,11 @@ const summarizeMigrationBatchProgress = (
       summary.latestError = message.lastError;
     }
 
-    if (message.status === 'pending') {
+    if (message.status === "pending") {
       summary.pendingRows += 1;
-    } else if (message.status === 'processing') {
+    } else if (message.status === "processing") {
       summary.processingRows += 1;
-    } else if (message.status === 'completed') {
+    } else if (message.status === "completed") {
       summary.completedRows += 1;
     } else {
       summary.failedRows += 1;
@@ -438,7 +441,7 @@ const summarizeMigrationBatchProgress = (
 export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): void => {
   const { app, resolveDatabase, requireTenantRole, ISSUER_ROLES } = input;
 
-  app.post('/v1/tenants/:tenantId/migrations/ob2/convert', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/ob2/convert", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -453,7 +456,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid OB2 import conversion request payload',
+          error: "Invalid OB2 import conversion request payload",
         },
         400,
       );
@@ -489,7 +492,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
   });
 
-  app.post('/v1/tenants/:tenantId/migrations/ob2/dry-run', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/ob2/dry-run", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -504,7 +507,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       return c.json(
         {
           tenantId: pathParams.tenantId,
-          status: 'invalid',
+          status: "invalid",
           validationReport: {
             errors: zodIssueMessages(parsedRequest.error.issues),
             warnings: [],
@@ -537,11 +540,11 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       return c.json(
         {
           tenantId: pathParams.tenantId,
-          status: result.conversion === null ? 'invalid' : 'valid',
+          status: result.conversion === null ? "invalid" : "valid",
           validationReport: {
             errors:
               result.conversion === null
-                ? ['Conversion could not be completed from supplied payload']
+                ? ["Conversion could not be completed from supplied payload"]
                 : [],
             warnings: result.warnings,
             ...(result.extractedFromBakedBadge === undefined
@@ -557,7 +560,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         return c.json(
           {
             tenantId: pathParams.tenantId,
-            status: 'invalid',
+            status: "invalid",
             validationReport: {
               errors: [error.message],
               warnings: [],
@@ -572,7 +575,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
   });
 
-  app.post('/v1/tenants/:tenantId/migrations/ob2/batch-upload', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/ob2/batch-upload", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -584,20 +587,20 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
 
     try {
       query = parseMigrationBatchUploadQuery({
-        dryRun: c.req.query('dryRun'),
+        dryRun: c.req.query("dryRun"),
       });
     } catch {
       return c.json(
         {
-          error: 'Invalid batch upload query parameters',
+          error: "Invalid batch upload query parameters",
         },
         400,
       );
     }
 
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
 
-    if (!contentType.includes('multipart/form-data')) {
+    if (!contentType.includes("multipart/form-data")) {
       return c.json(
         {
           error: 'Batch upload requires multipart/form-data with a file field named "file"',
@@ -607,7 +610,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
 
     const formData = await c.req.formData();
-    const upload = formData.get('file');
+    const upload = formData.get("file");
 
     if (!(upload instanceof File)) {
       return c.json(
@@ -623,7 +626,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     if (fileContent.trim().length === 0) {
       return c.json(
         {
-          error: 'Uploaded file is empty',
+          error: "Uploaded file is empty",
         },
         422,
       );
@@ -656,13 +659,13 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       db,
       tenantId: pathParams.tenantId,
       dryRun: query.dryRun,
-      source: 'file_upload',
+      source: "file_upload",
       fileName: upload.name,
       format: parsedFile.format,
       batchId,
       rows: parsedFile.rows,
     });
-    const validRows = reports.filter((report) => report.status === 'valid').length;
+    const validRows = reports.filter((report) => report.status === "valid").length;
     const invalidRows = reports.length - validRows;
 
     return c.json(
@@ -682,7 +685,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     );
   });
 
-  app.post('/v1/tenants/:tenantId/migrations/credly/ingest', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/credly/ingest", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -694,20 +697,20 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
 
     try {
       query = parseMigrationBatchUploadQuery({
-        dryRun: c.req.query('dryRun'),
+        dryRun: c.req.query("dryRun"),
       });
     } catch {
       return c.json(
         {
-          error: 'Invalid credly ingest query parameters',
+          error: "Invalid credly ingest query parameters",
         },
         400,
       );
     }
 
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
 
-    if (!contentType.includes('multipart/form-data')) {
+    if (!contentType.includes("multipart/form-data")) {
       return c.json(
         {
           error: 'Credly ingest requires multipart/form-data with a file field named "file"',
@@ -717,7 +720,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
 
     const formData = await c.req.formData();
-    const upload = formData.get('file');
+    const upload = formData.get("file");
 
     if (!(upload instanceof File)) {
       return c.json(
@@ -733,7 +736,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     if (fileContent.trim().length === 0) {
       return c.json(
         {
-          error: 'Uploaded file is empty',
+          error: "Uploaded file is empty",
         },
         422,
       );
@@ -766,13 +769,13 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       db,
       tenantId: pathParams.tenantId,
       dryRun: query.dryRun,
-      source: 'credly_export',
+      source: "credly_export",
       fileName: upload.name,
       format: parsedFile.format,
       batchId,
       rows: parsedFile.rows,
     });
-    const validRows = reports.filter((report) => report.status === 'valid').length;
+    const validRows = reports.filter((report) => report.status === "valid").length;
     const invalidRows = reports.length - validRows;
 
     return c.json(
@@ -782,7 +785,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         fileName: upload.name,
         format: parsedFile.format,
         dryRun: query.dryRun,
-        source: 'credly_export',
+        source: "credly_export",
         totalRows: reports.length,
         validRows,
         invalidRows,
@@ -793,7 +796,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     );
   });
 
-  app.post('/v1/tenants/:tenantId/migrations/parchment/ingest', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/parchment/ingest", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -805,20 +808,20 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
 
     try {
       query = parseMigrationBatchUploadQuery({
-        dryRun: c.req.query('dryRun'),
+        dryRun: c.req.query("dryRun"),
       });
     } catch {
       return c.json(
         {
-          error: 'Invalid parchment ingest query parameters',
+          error: "Invalid parchment ingest query parameters",
         },
         400,
       );
     }
 
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
 
-    if (!contentType.includes('multipart/form-data')) {
+    if (!contentType.includes("multipart/form-data")) {
       return c.json(
         {
           error: 'Parchment ingest requires multipart/form-data with a file field named "file"',
@@ -828,7 +831,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
 
     const formData = await c.req.formData();
-    const upload = formData.get('file');
+    const upload = formData.get("file");
 
     if (!(upload instanceof File)) {
       return c.json(
@@ -844,7 +847,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     if (fileContent.trim().length === 0) {
       return c.json(
         {
-          error: 'Uploaded file is empty',
+          error: "Uploaded file is empty",
         },
         422,
       );
@@ -877,13 +880,13 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       db,
       tenantId: pathParams.tenantId,
       dryRun: query.dryRun,
-      source: 'parchment_export',
+      source: "parchment_export",
       fileName: upload.name,
       format: parsedFile.format,
       batchId,
       rows: parsedFile.rows,
     });
-    const validRows = reports.filter((report) => report.status === 'valid').length;
+    const validRows = reports.filter((report) => report.status === "valid").length;
     const invalidRows = reports.length - validRows;
 
     return c.json(
@@ -893,7 +896,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         fileName: upload.name,
         format: parsedFile.format,
         dryRun: query.dryRun,
-        source: 'parchment_export',
+        source: "parchment_export",
         totalRows: reports.length,
         validRows,
         invalidRows,
@@ -904,7 +907,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     );
   });
 
-  app.get('/v1/tenants/:tenantId/migrations/progress', async (c) => {
+  app.get("/v1/tenants/:tenantId/migrations/progress", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -916,13 +919,13 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
 
     try {
       query = parseMigrationProgressQuery({
-        source: c.req.query('source'),
-        limit: c.req.query('limit'),
+        source: c.req.query("source"),
+        limit: c.req.query("limit"),
       });
     } catch {
       return c.json(
         {
-          error: 'Invalid migration progress query parameters',
+          error: "Invalid migration progress query parameters",
         },
         400,
       );
@@ -930,7 +933,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
 
     const messages = await listImportMigrationBatchQueueMessages(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      ...(query.source === 'all' ? {} : { source: query.source }),
+      ...(query.source === "all" ? {} : { source: query.source }),
       limit: query.limit,
     });
     const progress = summarizeMigrationBatchProgress(messages);
@@ -949,7 +952,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     );
   });
 
-  app.post('/v1/tenants/:tenantId/migrations/batches/:batchId/retry', async (c) => {
+  app.post("/v1/tenants/:tenantId/migrations/batches/:batchId/retry", async (c) => {
     const pathParams = parseMigrationBatchPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -958,9 +961,9 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     }
 
     let rawBody: unknown = {};
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
 
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       const bodyText = await c.req.text();
 
       if (bodyText.trim().length > 0) {
@@ -969,7 +972,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
         } catch {
           return c.json(
             {
-              error: 'Invalid retry request payload',
+              error: "Invalid retry request payload",
             },
             400,
           );
@@ -981,7 +984,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
       } catch {
         return c.json(
           {
-            error: 'Invalid retry request payload',
+            error: "Invalid retry request payload",
           },
           400,
         );
@@ -995,7 +998,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid retry request payload',
+          error: "Invalid retry request payload",
         },
         400,
       );
@@ -1011,7 +1014,7 @@ export const registerMigrationRoutes = (input: RegisterMigrationRoutesInput): vo
     if (retryResult.matched === 0) {
       return c.json(
         {
-          error: 'Migration batch was not found for tenant',
+          error: "Migration batch was not found for tenant",
         },
         404,
       );

@@ -1,12 +1,12 @@
-import { once } from 'node:events';
-import { createServer } from 'node:http';
+import { once } from "node:events";
+import { createServer } from "node:http";
 
-import { Oid4vciClient } from '@animo-id/oid4vci';
-import { CredentialOfferClient } from '@sphereon/oid4vci-client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Oid4vciClient } from "@animo-id/oid4vci";
+import { CredentialOfferClient } from "@sphereon/oid4vci-client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -24,9 +24,9 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/core-domain', async () => {
+vi.mock("@credtrail/core-domain", async () => {
   const actual =
-    await vi.importActual<typeof import('@credtrail/core-domain')>('@credtrail/core-domain');
+    await vi.importActual<typeof import("@credtrail/core-domain")>("@credtrail/core-domain");
 
   return {
     ...actual,
@@ -34,13 +34,13 @@ vi.mock('@credtrail/core-domain', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-import { type JsonObject, getImmutableCredentialObject } from '@credtrail/core-domain';
+import { type JsonObject, getImmutableCredentialObject } from "@credtrail/core-domain";
 import {
   consumeOid4vciPreAuthorizedCode,
   createOid4vciAccessToken,
@@ -58,10 +58,10 @@ import {
   type Oid4vciAccessTokenRecord,
   type Oid4vciPreAuthorizedCodeRecord,
   type SqlDatabase,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedFindAssertionById = vi.mocked(findAssertionById);
 const mockedFindAssertionByPublicId = vi.mocked(findAssertionByPublicId);
@@ -86,10 +86,10 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -98,53 +98,51 @@ const sampleAssertion = (overrides?: {
   statusListIndex?: number | null;
 }): AssertionRecord => {
   return {
-    id: 'tenant_123:assertion_456',
-    tenantId: 'tenant_123',
-    publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-    learnerProfileId: 'lpr_123',
-    badgeTemplateId: 'badge_template_001',
-    recipientIdentity: 'learner@example.edu',
-    recipientIdentityType: 'email',
-    vcR2Key: 'tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld',
+    id: "tenant_123:assertion_456",
+    tenantId: "tenant_123",
+    publicId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+    learnerProfileId: "lpr_123",
+    badgeTemplateId: "badge_template_001",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
+    vcR2Key: "tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld",
     statusListIndex: overrides?.statusListIndex === undefined ? 0 : overrides.statusListIndex,
-    idempotencyKey: 'idem_abc',
-    issuedAt: '2026-02-10T22:00:00.000Z',
-    issuedByUserId: 'usr_123',
+    idempotencyKey: "idem_abc",
+    issuedAt: "2026-02-10T22:00:00.000Z",
+    issuedByUserId: "usr_123",
     revokedAt: overrides?.revokedAt ?? null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleLearnerProfile = (overrides?: Partial<LearnerProfileRecord>): LearnerProfileRecord => {
   return {
-    id: 'lpr_123',
-    tenantId: 'tenant_123',
-    subjectId: 'urn:credtrail:learner:tenant_123:lpr_123',
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
     displayName: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
-const sampleBadgeTemplate = (
-  overrides?: Partial<BadgeTemplateRecord>,
-): BadgeTemplateRecord => {
+const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for completing TypeScript fundamentals.',
-    criteriaUri: 'https://example.edu/badges/typescript-foundations/criteria',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for completing TypeScript fundamentals.",
+    criteriaUri: "https://example.edu/badges/typescript-foundations/criteria",
     imageUri: null,
-    createdByUserId: 'usr_123',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_123",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: null,
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -153,14 +151,14 @@ const sampleOid4vciPreAuthorizedCodeRecord = (
   overrides?: Partial<Oid4vciPreAuthorizedCodeRecord>,
 ): Oid4vciPreAuthorizedCodeRecord => {
   return {
-    id: 'ovp_123',
-    codeHash: 'offer-code-hash',
-    tenantId: 'tenant_123',
-    assertionId: 'tenant_123:assertion_456',
-    publicBadgeId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-    expiresAt: '2026-02-10T22:10:00.000Z',
+    id: "ovp_123",
+    codeHash: "offer-code-hash",
+    tenantId: "tenant_123",
+    assertionId: "tenant_123:assertion_456",
+    publicBadgeId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+    expiresAt: "2026-02-10T22:10:00.000Z",
     usedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -169,13 +167,13 @@ const sampleOid4vciAccessTokenRecord = (
   overrides?: Partial<Oid4vciAccessTokenRecord>,
 ): Oid4vciAccessTokenRecord => {
   return {
-    id: 'ova_123',
-    accessTokenHash: 'oid4vci-access-hash',
-    tenantId: 'tenant_123',
-    assertionId: 'tenant_123:assertion_456',
-    expiresAt: '2026-02-10T22:10:00.000Z',
+    id: "ova_123",
+    accessTokenHash: "oid4vci-access-hash",
+    tenantId: "tenant_123",
+    assertionId: "tenant_123:assertion_456",
+    expiresAt: "2026-02-10T22:10:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -186,22 +184,22 @@ const createAnimoOid4vciClient = (): Oid4vciClient =>
       fetch: globalThis.fetch,
       hash: async (data, alg) => {
         const algorithms: Record<string, AlgorithmIdentifier> = {
-          SHA1: 'SHA-1',
-          SHA256: 'SHA-256',
-          SHA384: 'SHA-384',
-          SHA512: 'SHA-512',
-          'SHA-1': 'SHA-1',
-          'SHA-256': 'SHA-256',
-          'SHA-384': 'SHA-384',
-          'SHA-512': 'SHA-512',
+          SHA1: "SHA-1",
+          SHA256: "SHA-256",
+          SHA384: "SHA-384",
+          SHA512: "SHA-512",
+          "SHA-1": "SHA-1",
+          "SHA-256": "SHA-256",
+          "SHA-384": "SHA-384",
+          "SHA-512": "SHA-512",
         };
-        const algorithm = algorithms[alg as keyof typeof algorithms] ?? 'SHA-256';
+        const algorithm = algorithms[alg as keyof typeof algorithms] ?? "SHA-256";
         const digestInput = new Uint8Array(data.byteLength);
         digestInput.set(data);
         const digest = await crypto.subtle.digest(algorithm, digestInput);
         return new Uint8Array(digest);
       },
-      signJwt: () => 'unused-signature',
+      signJwt: () => "unused-signature",
       generateRandom: (byteLength) => crypto.getRandomValues(new Uint8Array(byteLength)),
     },
   });
@@ -212,28 +210,24 @@ beforeEach(() => {
   mockedFindAssertionByPublicId.mockReset();
   mockedFindAssertionById.mockReset();
   mockedCreateOid4vciPreAuthorizedCode.mockReset();
-  mockedCreateOid4vciPreAuthorizedCode.mockResolvedValue(
-    sampleOid4vciPreAuthorizedCodeRecord(),
-  );
+  mockedCreateOid4vciPreAuthorizedCode.mockResolvedValue(sampleOid4vciPreAuthorizedCodeRecord());
   mockedConsumeOid4vciPreAuthorizedCode.mockReset();
   mockedConsumeOid4vciPreAuthorizedCode.mockResolvedValue(
     sampleOid4vciPreAuthorizedCodeRecord({
-      usedAt: '2026-02-10T22:01:00.000Z',
+      usedAt: "2026-02-10T22:01:00.000Z",
     }),
   );
   mockedCreateOid4vciAccessToken.mockReset();
   mockedCreateOid4vciAccessToken.mockResolvedValue(sampleOid4vciAccessTokenRecord());
   mockedFindActiveOid4vciAccessTokenByHash.mockReset();
-  mockedFindActiveOid4vciAccessTokenByHash.mockResolvedValue(
-    sampleOid4vciAccessTokenRecord(),
-  );
+  mockedFindActiveOid4vciAccessTokenByHash.mockResolvedValue(sampleOid4vciAccessTokenRecord());
   mockedFindBadgeTemplateById.mockReset();
   mockedFindBadgeTemplateById.mockResolvedValue(null);
   mockedFindLearnerProfileById.mockReset();
   mockedResolveAssertionLifecycleState.mockReset();
   mockedResolveAssertionLifecycleState.mockResolvedValue({
-    state: 'active',
-    source: 'default_active',
+    state: "active",
+    source: "default_active",
     reasonCode: null,
     reason: null,
     transitionedAt: null,
@@ -244,38 +238,38 @@ beforeEach(() => {
   mockedListLtiIssuerRegistrations.mockResolvedValue([]);
 });
 
-describe('GET /badges/:badgeIdentifier', () => {
-  it('renders a public badge page with verified status for canonical public permalink', async () => {
+describe("GET /badges/:badgeIdentifier", () => {
+  it("renders a public badge page with verified status for canonical public permalink", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
       issuer: {
-        id: 'did:web:credtrail.test:tenant_123',
-        name: 'Example University',
-        url: 'https://example.edu',
+        id: "did:web:credtrail.test:tenant_123",
+        name: "Example University",
+        url: "https://example.edu",
       },
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
         achievement: {
-          id: 'https://example.edu/badges/typescript-foundations',
-          name: 'TypeScript Foundations',
-          description: 'Awarded for completing TypeScript fundamentals.',
+          id: "https://example.edu/badges/typescript-foundations",
+          name: "TypeScript Foundations",
+          description: "Awarded for completing TypeScript fundamentals.",
           criteria: {
-            id: 'https://example.edu/badges/typescript-foundations/criteria',
+            id: "https://example.edu/badges/typescript-foundations/criteria",
           },
           image: {
-            id: 'https://example.edu/badges/typescript-foundations/image.png',
+            id: "https://example.edu/badges/typescript-foundations/image.png",
           },
         },
         evidence: [
           {
-            id: 'https://example.edu/evidence/123',
-            name: 'Capstone Submission',
-            description: 'Final capstone reviewed by instructor.',
+            id: "https://example.edu/evidence/123",
+            name: "Capstone Submission",
+            description: "Final capstone reviewed by instructor.",
           },
-          'https://example.edu/evidence/gradebook/123',
+          "https://example.edu/evidence/gradebook/123",
         ],
       },
     };
@@ -283,98 +277,100 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedFindLearnerProfileById.mockResolvedValue(
       sampleLearnerProfile({
-        displayName: 'Ada Lovelace',
+        displayName: "Ada Lovelace",
       }),
     );
     mockedFindBadgeTemplateById.mockResolvedValue(
       sampleBadgeTemplate({
-        imageUri: 'https://cdn.example.edu/badges/typescript-foundations/template.png',
+        imageUri: "https://cdn.example.edu/badges/typescript-foundations/template.png",
       }),
     );
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body).toContain('TypeScript Foundations');
-    expect(body).toContain('Verified');
-    expect(body).toContain('Example University');
-    expect(body).toContain('https://example.edu');
-    expect(body).toContain('Ada Lovelace');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification');
-    expect(body).toContain('Share this credential');
-    expect(body).toContain('Copy public URL');
-    expect(body).toContain('Summary JSON');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld');
-    expect(body).toContain('/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
-    expect(body).toContain('Download PDF');
-    expect(body).toContain('Download .jsonld VC');
-    expect(body).toContain('OpenID4VCI Offer');
-    expect(body).toContain('Add to Browser Wallet');
-    expect(body).toContain('Claim in Wallet');
-    expect(body).toContain('Open in DCC Learner Wallet');
-    expect(body).toContain('Wallet, downloads, and advanced tools');
-    expect(body).toContain('openid-credential-offer:');
-    expect(body).toContain('credential_offer_uri=');
-    expect(body).toContain('https://lcw.app/request?request=');
-    expect(body).toContain('/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
-    expect(body).toContain('Add to LinkedIn Profile');
-    expect(body).toContain('Prefer a wallet? Scan the QR code or use the wallet tools below.');
-    expect(body).toContain('linkedin.com/profile/add');
-    expect(body).toContain('startTask=CERTIFICATION_NAME');
-    expect(body).toContain('name=TypeScript+Foundations');
-    expect(body).toContain('organizationName=Example+University');
-    expect(body).toContain('issueYear=2026');
-    expect(body).toContain('issueMonth=2');
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toContain("TypeScript Foundations");
+    expect(body).toContain("Verified");
+    expect(body).toContain("Example University");
+    expect(body).toContain("https://example.edu");
+    expect(body).toContain("Ada Lovelace");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification");
+    expect(body).toContain("Share this credential");
+    expect(body).toContain("Copy public URL");
+    expect(body).toContain("Summary JSON");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld");
+    expect(body).toContain("/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
+    expect(body).toContain("Download PDF");
+    expect(body).toContain("Download .jsonld VC");
+    expect(body).toContain("OpenID4VCI Offer");
+    expect(body).toContain("Add to Browser Wallet");
+    expect(body).toContain("Claim in Wallet");
+    expect(body).toContain("Open in DCC Learner Wallet");
+    expect(body).toContain("Wallet, downloads, and advanced tools");
+    expect(body).toContain("openid-credential-offer:");
+    expect(body).toContain("credential_offer_uri=");
+    expect(body).toContain("https://lcw.app/request?request=");
+    expect(body).toContain("/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
+    expect(body).toContain("Add to LinkedIn Profile");
+    expect(body).toContain("Prefer a wallet? Scan the QR code or use the wallet tools below.");
+    expect(body).toContain("linkedin.com/profile/add");
+    expect(body).toContain("startTask=CERTIFICATION_NAME");
+    expect(body).toContain("name=TypeScript+Foundations");
+    expect(body).toContain("organizationName=Example+University");
+    expect(body).toContain("issueYear=2026");
+    expect(body).toContain("issueMonth=2");
     expect(body).toContain(
-      'certUrl=http%3A%2F%2Flocalhost%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "certUrl=http%3A%2F%2Flocalhost%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
-    expect(body).toContain('certId=urn%3Acredtrail%3Aassertion%3Atenant_123%253Aassertion_456');
-    expect(body).toContain('Share on LinkedIn Feed');
-    expect(body).toContain('linkedin.com/sharing/share-offsite');
-    expect(body).not.toContain('Validate Assertion (IMS)');
-    expect(body).not.toContain('Validate Badge Class (IMS)');
-    expect(body).not.toContain('Validate Issuer (IMS)');
-    expect(body).not.toContain('openbadgesvalidator.imsglobal.org/?url=');
-    expect(body).not.toContain('vc.1ed.tech/upload?validatorId=OB30Inspector');
-    expect(body).toContain('api.qrserver.com/v1/create-qr-code');
-    expect(body).toContain('QR code for OpenID4VCI credential offer endpoint');
-    expect(body).toContain('Open Badges 3.0 JSON');
+    expect(body).toContain("certId=urn%3Acredtrail%3Aassertion%3Atenant_123%253Aassertion_456");
+    expect(body).toContain("Share on LinkedIn Feed");
+    expect(body).toContain("linkedin.com/sharing/share-offsite");
+    expect(body).not.toContain("Validate Assertion (IMS)");
+    expect(body).not.toContain("Validate Badge Class (IMS)");
+    expect(body).not.toContain("Validate Issuer (IMS)");
+    expect(body).not.toContain("openbadgesvalidator.imsglobal.org/?url=");
+    expect(body).not.toContain("vc.1ed.tech/upload?validatorId=OB30Inspector");
+    expect(body).toContain("api.qrserver.com/v1/create-qr-code");
+    expect(body).toContain("QR code for OpenID4VCI credential offer endpoint");
+    expect(body).toContain("Open Badges 3.0 JSON");
     expect(body).toContain(
       '<link rel="alternate" type="application/ld+json" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld"',
     );
     expect(body).toContain(
       '<link rel="alternate" type="application/json" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary"',
     );
-    expect(body).toContain('Awarded for completing TypeScript fundamentals.');
-    expect(body).toContain('https://example.edu/badges/typescript-foundations/criteria');
-    expect(body).toContain('/showcase/tenant_123/criteria?badgeTemplateId=badge_template_001');
+    expect(body).toContain("Awarded for completing TypeScript fundamentals.");
+    expect(body).toContain("https://example.edu/badges/typescript-foundations/criteria");
+    expect(body).toContain("/showcase/tenant_123/criteria?badgeTemplateId=badge_template_001");
     expect(body).toContain(
       'src="https://cdn.example.edu/badges/typescript-foundations/template.png"',
     );
     expect(body).toContain(
       'data-fallback-src="https://example.edu/badges/typescript-foundations/image.png"',
     );
-    expect(body).toContain('Capstone Submission');
-    expect(body).toContain('https://example.edu/evidence/gradebook/123');
-    expect(body).toContain('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+    expect(body).toContain("Capstone Submission");
+    expect(body).toContain("https://example.edu/evidence/gradebook/123");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(body).toContain(
       '<link rel="canonical" href="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22"',
     );
     expect(body).toContain(
       '<meta name="description" content="Awarded for completing TypeScript fundamentals."',
     );
-    expect(body).toContain('<meta property="og:title" content="TypeScript Foundations | CredTrail"');
+    expect(body).toContain(
+      '<meta property="og:title" content="TypeScript Foundations | CredTrail"',
+    );
     expect(body).toContain(
       '<meta property="og:url" content="http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22"',
     );
@@ -387,25 +383,25 @@ describe('GET /badges/:badgeIdentifier', () => {
     );
   });
 
-  it('shows IMS validation links for non-VC-v2 credentials', async () => {
+  it("shows IMS validation links for non-VC-v2 credentials", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://w3id.org/openbadges/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      "@context": ["https://w3id.org/openbadges/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       issuer: {
-        id: 'https://issuer.example.edu',
-        name: 'Example University',
-        url: 'https://example.edu',
+        id: "https://issuer.example.edu",
+        name: "Example University",
+        url: "https://example.edu",
       },
       credentialSubject: {
         achievement: {
-          id: 'https://example.edu/badges/typescript-foundations',
-          name: 'TypeScript Foundations',
+          id: "https://example.edu/badges/typescript-foundations",
+          name: "TypeScript Foundations",
           criteria: {
-            id: 'https://example.edu/badges/typescript-foundations/criteria',
+            id: "https://example.edu/badges/typescript-foundations/criteria",
           },
           image: {
-            id: 'https://example.edu/badges/typescript-foundations/image.png',
+            id: "https://example.edu/badges/typescript-foundations/image.png",
           },
         },
       },
@@ -415,27 +411,27 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Validate Assertion (IMS)');
-    expect(body).toContain('Validate Badge Class (IMS)');
-    expect(body).toContain('Validate Issuer (IMS)');
-    expect(body).toContain('vc.1ed.tech/upload?validatorId=OB30Inspector');
-    expect(body).toContain('&amp;uri=');
+    expect(body).toContain("Validate Assertion (IMS)");
+    expect(body).toContain("Validate Badge Class (IMS)");
+    expect(body).toContain("Validate Issuer (IMS)");
+    expect(body).toContain("vc.1ed.tech/upload?validatorId=OB30Inspector");
+    expect(body).toContain("&amp;uri=");
   });
 
-  it('keeps public badge pages available after LMS course deletion', async () => {
+  it("keeps public badge pages available after LMS course deletion", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -445,28 +441,28 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedListLtiIssuerRegistrations.mockResolvedValue([]);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('TypeScript Foundations');
-    expect(body).toContain('Verified');
+    expect(body).toContain("TypeScript Foundations");
+    expect(body).toContain("Verified");
     expect(mockedListLtiIssuerRegistrations).not.toHaveBeenCalled();
   });
 
-  it('rebuilds canonical and LinkedIn links for the current platform host after platform move', async () => {
+  it("rebuilds canonical and LinkedIn links for the current platform host after platform move", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       issuer: {
-        name: 'Example University',
+        name: "Example University",
       },
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -475,7 +471,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      'http://badges.newcredtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "http://badges.newcredtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
@@ -492,67 +488,63 @@ describe('GET /badges/:badgeIdentifier', () => {
       '<meta name="description" content="TypeScript Foundations credential issued by Example University."',
     );
     expect(body).toContain(
-      'certUrl=http%3A%2F%2Fbadges.newcredtrail.test%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "certUrl=http%3A%2F%2Fbadges.newcredtrail.test%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
   });
 
-  it('redirects legacy tenant-scoped badge URLs to canonical public permalink', async () => {
+  it("redirects legacy tenant-scoped badge URLs to canonical public permalink", async () => {
     const env = createEnv();
 
     mockedFindAssertionByPublicId.mockResolvedValue(null);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
 
-    const response = await app.request('/badges/tenant_123%3Aassertion_456', undefined, env);
+    const response = await app.request("/badges/tenant_123%3Aassertion_456", undefined, env);
 
     expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+    expect(response.headers.get("location")).toBe("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 
-  it('redirects /public_url alias path to canonical public permalink', async () => {
+  it("redirects /public_url alias path to canonical public permalink", async () => {
     const env = createEnv();
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/public_url',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/public_url",
       undefined,
       env,
     );
 
     expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+    expect(response.headers.get("location")).toBe("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
   });
 
-  it('redirects legacy tenant-scoped badge asset URLs to canonical public alias URLs', async () => {
+  it("redirects legacy tenant-scoped badge asset URLs to canonical public alias URLs", async () => {
     const env = createEnv();
 
     mockedFindAssertionByPublicId.mockResolvedValue(null);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
 
-    const response = await app.request(
-      '/badges/tenant_123%3Aassertion_456/jsonld',
-      undefined,
-      env,
-    );
+    const response = await app.request("/badges/tenant_123%3Aassertion_456/jsonld", undefined, env);
 
     expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
+    expect(response.headers.get("location")).toBe(
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld",
     );
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 
-  it('returns verification JSON through the canonical public alias route', async () => {
+  it("returns verification JSON through the canonical public alias route", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification",
       undefined,
       env,
     );
@@ -563,63 +555,63 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body.verification.status).toBe('active');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.verification.status).toBe("active");
   });
 
-  it('returns JSON-LD and PDF downloads through canonical public alias routes', async () => {
+  it("returns JSON-LD and PDF downloads through canonical public alias routes", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const jsonldResponse = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld",
       undefined,
       env,
     );
     const jsonldBody = await jsonldResponse.text();
     const pdfResponse = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download.pdf",
       undefined,
       env,
     );
     const pdfBody = await pdfResponse.arrayBuffer();
 
     expect(jsonldResponse.status).toBe(200);
-    expect(jsonldResponse.headers.get('content-type')).toContain('application/ld+json');
+    expect(jsonldResponse.headers.get("content-type")).toContain("application/ld+json");
     expect(jsonldBody).toContain('"OpenBadgeCredential"');
     expect(pdfResponse.status).toBe(200);
-    expect(pdfResponse.headers.get('content-type')).toContain('application/pdf');
-    expect(new TextDecoder().decode(pdfBody.slice(0, 5))).toBe('%PDF-');
+    expect(pdfResponse.headers.get("content-type")).toContain("application/pdf");
+    expect(new TextDecoder().decode(pdfBody.slice(0, 5))).toBe("%PDF-");
   });
 
-  it('returns public summary JSON payload for canonical public badge identifier', async () => {
+  it("returns public summary JSON payload for canonical public badge identifier", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
       issuer: {
-        id: 'did:web:credtrail.test:tenant_123',
-        name: 'Example University',
-        url: 'https://example.edu',
+        id: "did:web:credtrail.test:tenant_123",
+        name: "Example University",
+        url: "https://example.edu",
       },
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
         achievement: {
-          id: 'https://example.edu/badges/typescript-foundations',
-          name: 'TypeScript Foundations',
-          description: 'Awarded for completing TypeScript fundamentals.',
+          id: "https://example.edu/badges/typescript-foundations",
+          name: "TypeScript Foundations",
+          description: "Awarded for completing TypeScript fundamentals.",
           criteria: {
-            id: 'https://example.edu/badges/typescript-foundations/criteria',
+            id: "https://example.edu/badges/typescript-foundations/criteria",
           },
           image: {
-            id: 'https://example.edu/badges/typescript-foundations/image.png',
+            id: "https://example.edu/badges/typescript-foundations/image.png",
           },
         },
       },
@@ -628,13 +620,13 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedFindLearnerProfileById.mockResolvedValue(
       sampleLearnerProfile({
-        displayName: 'Ada Lovelace',
+        displayName: "Ada Lovelace",
       }),
     );
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary",
       undefined,
       env,
     );
@@ -667,50 +659,50 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body.badge.name).toBe('TypeScript Foundations');
-    expect(body.badge.tenantId).toBe('tenant_123');
-    expect(body.badge.badgeTemplateId).toBe('badge_template_001');
-    expect(body.badge.issuedAt).toBe('2026-02-10T22:00:00.000Z');
-    expect(body.recipient.identity).toBe('learner@example.edu');
-    expect(body.recipient.displayName).toBe('Ada Lovelace');
-    expect(body.issuer.name).toBe('Example University');
-    expect(body.lifecycle.state).toBe('active');
-    expect(body.verification.label).toBe('verified');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.badge.name).toBe("TypeScript Foundations");
+    expect(body.badge.tenantId).toBe("tenant_123");
+    expect(body.badge.badgeTemplateId).toBe("badge_template_001");
+    expect(body.badge.issuedAt).toBe("2026-02-10T22:00:00.000Z");
+    expect(body.recipient.identity).toBe("learner@example.edu");
+    expect(body.recipient.displayName).toBe("Ada Lovelace");
+    expect(body.issuer.name).toBe("Example University");
+    expect(body.lifecycle.state).toBe("active");
+    expect(body.verification.label).toBe("verified");
     expect(body.verification.isValid).toBe(true);
-    expect(body.links.summaryPath).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary');
-    expect(body.links.badgePagePath).toBe('/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
+    expect(body.links.summaryPath).toBe("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary");
+    expect(body.links.badgePagePath).toBe("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(body.links.criteriaRegistryPath).toBe(
-      '/showcase/tenant_123/criteria?badgeTemplateId=badge_template_001',
+      "/showcase/tenant_123/criteria?badgeTemplateId=badge_template_001",
     );
   });
 
-  it('redirects legacy tenant-scoped summary URL to canonical summary URL', async () => {
+  it("redirects legacy tenant-scoped summary URL to canonical summary URL", async () => {
     const env = createEnv();
 
     mockedFindAssertionByPublicId.mockResolvedValue(null);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
 
     const response = await app.request(
-      '/badges/tenant_123%3Aassertion_456/summary',
+      "/badges/tenant_123%3Aassertion_456/summary",
       undefined,
       env,
     );
 
     expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary',
+    expect(response.headers.get("location")).toBe(
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/summary",
     );
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 
-  it('returns OpenID4VCI credential offer payload for canonical public badge identifier', async () => {
+  it("returns OpenID4VCI credential offer payload for canonical public badge identifier", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -719,7 +711,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
@@ -727,8 +719,8 @@ describe('GET /badges/:badgeIdentifier', () => {
       credential_issuer: string;
       credential_configuration_ids: string[];
       grants: {
-        'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
-          'pre-authorized_code': string;
+        "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+          "pre-authorized_code": string;
         };
       };
       x_credtrail: {
@@ -743,36 +735,38 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.credential_issuer).toBe('http://localhost');
-    expect(body.credential_configuration_ids).toContain('OpenBadgeCredential');
-    expect(body.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code']['pre-authorized_code']).toMatch(
-      /^oid4vci_pc_/,
+    expect(body.credential_issuer).toBe("http://localhost");
+    expect(body.credential_configuration_ids).toContain("OpenBadgeCredential");
+    expect(
+      body.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"]["pre-authorized_code"],
+    ).toMatch(/^oid4vci_pc_/);
+    expect(body.x_credtrail.token_endpoint).toBe("http://localhost/credentials/v1/token");
+    expect(body.x_credtrail.credential_endpoint).toBe(
+      "http://localhost/credentials/v1/credentials",
     );
-    expect(body.x_credtrail.token_endpoint).toBe('http://localhost/credentials/v1/token');
-    expect(body.x_credtrail.credential_endpoint).toBe('http://localhost/credentials/v1/credentials');
     expect(body.x_credtrail.offer_expires_at).toMatch(/^20/);
     expect(body.x_credtrail.public_badge_url).toBe(
-      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
     expect(body.x_credtrail.verification_url).toBe(
-      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification',
+      "http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/verification",
     );
     expect(body.x_credtrail.credential_jsonld_url).toBe(
-      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld',
+      "http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/jsonld",
     );
     expect(body.x_credtrail.credential_download_url).toBe(
-      'http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download',
+      "http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/download",
     );
     expect(mockedCreateOid4vciPreAuthorizedCode).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves credential_offer_uri with two wallet implementations (Sphereon and Animo)', async () => {
+  it("resolves credential_offer_uri with two wallet implementations (Sphereon and Animo)", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -781,7 +775,7 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const offerResponse = await app.request(
-      'https://credtrail.test/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "https://credtrail.test/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
@@ -790,9 +784,9 @@ describe('GET /badges/:badgeIdentifier', () => {
 
     let offerRequestCount = 0;
     const server = createServer((request, response) => {
-      if (request.url === '/wallet-offer') {
+      if (request.url === "/wallet-offer") {
         offerRequestCount += 1;
-        response.writeHead(200, { 'content-type': 'application/json' });
+        response.writeHead(200, { "content-type": "application/json" });
         response.end(offerPayload);
         return;
       }
@@ -800,18 +794,17 @@ describe('GET /badges/:badgeIdentifier', () => {
       response.end();
     });
 
-    server.listen(0, '127.0.0.1');
-    await once(server, 'listening');
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
 
     const address = server.address();
-    if (address === null || typeof address === 'string') {
+    if (address === null || typeof address === "string") {
       server.close();
-      throw new Error('Failed to determine wallet offer server address');
+      throw new Error("Failed to determine wallet offer server address");
     }
 
     const walletOfferUrl = `http://127.0.0.1:${String(address.port)}/wallet-offer`;
-    const walletOfferUri =
-      `openid-credential-offer://?credential_offer_uri=${encodeURIComponent(walletOfferUrl)}`;
+    const walletOfferUri = `openid-credential-offer://?credential_offer_uri=${encodeURIComponent(walletOfferUrl)}`;
 
     try {
       const sphereonOffer = await CredentialOfferClient.fromURI(walletOfferUri, { resolve: true });
@@ -819,57 +812,65 @@ describe('GET /badges/:badgeIdentifier', () => {
 
       expect(offerRequestCount).toBe(2);
       expect(sphereonOffer.credential_offer.credential_configuration_ids).toContain(
-        'OpenBadgeCredential',
+        "OpenBadgeCredential",
       );
-      expect(sphereonOffer.credential_offer.credential_issuer).toBe('https://credtrail.test');
+      expect(sphereonOffer.credential_offer.credential_issuer).toBe("https://credtrail.test");
       expect(sphereonOffer.preAuthorizedCode).toMatch(/^oid4vci_pc_/);
-      expect(sphereonOffer.supportedFlows).toContain('Pre-Authorized Code Flow');
+      expect(sphereonOffer.supportedFlows).toContain("Pre-Authorized Code Flow");
       expect(
         sphereonOffer.credential_offer.grants?.[
-          'urn:ietf:params:oauth:grant-type:pre-authorized_code'
-        ]?.['pre-authorized_code'],
+          "urn:ietf:params:oauth:grant-type:pre-authorized_code"
+        ]?.["pre-authorized_code"],
       ).toBe(sphereonOffer.preAuthorizedCode);
 
-      expect(animoOffer.credential_configuration_ids).toContain('OpenBadgeCredential');
-      expect(animoOffer.credential_issuer).toBe('https://credtrail.test');
+      expect(animoOffer.credential_configuration_ids).toContain("OpenBadgeCredential");
+      expect(animoOffer.credential_issuer).toBe("https://credtrail.test");
       expect(animoOffer.credentials).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            format: 'ldp_vc',
+            format: "ldp_vc",
           }),
         ]),
       );
       expect(
-        animoOffer.grants?.['urn:ietf:params:oauth:grant-type:pre-authorized_code']?.[
-          'pre-authorized_code'
+        animoOffer.grants?.["urn:ietf:params:oauth:grant-type:pre-authorized_code"]?.[
+          "pre-authorized_code"
         ],
       ).toBe(sphereonOffer.preAuthorizedCode);
     } finally {
       server.close();
-      await once(server, 'close');
+      await once(server, "close");
     }
   });
 
-  it('redirects legacy tenant-scoped offer URL to canonical offer URL', async () => {
+  it("redirects legacy tenant-scoped offer URL to canonical offer URL", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(null);
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
-    const response = await app.request('/credentials/v1/offers/tenant_123%3Aassertion_456', undefined, env);
+    const response = await app.request(
+      "/credentials/v1/offers/tenant_123%3Aassertion_456",
+      undefined,
+      env,
+    );
 
     expect(response.status).toBe(308);
-    expect(response.headers.get('location')).toBe(
-      '/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+    expect(response.headers.get("location")).toBe(
+      "/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
   });
 
-  it('serves OpenID4VCI issuer metadata for wallet discovery', async () => {
-    const response = await app.request('/.well-known/openid-credential-issuer', undefined, createEnv());
+  it("serves OpenID4VCI issuer metadata for wallet discovery", async () => {
+    const response = await app.request(
+      "/.well-known/openid-credential-issuer",
+      undefined,
+      createEnv(),
+    );
     const body = await response.json<{
       credential_issuer: string;
       token_endpoint: string;
@@ -882,19 +883,19 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.credential_issuer).toBe('http://localhost');
-    expect(body.token_endpoint).toBe('http://localhost/credentials/v1/token');
-    expect(body.credential_endpoint).toBe('http://localhost/credentials/v1/credentials');
-    expect(body.credential_configurations_supported.OpenBadgeCredential?.format).toBe('ldp_vc');
+    expect(body.credential_issuer).toBe("http://localhost");
+    expect(body.token_endpoint).toBe("http://localhost/credentials/v1/token");
+    expect(body.credential_endpoint).toBe("http://localhost/credentials/v1/credentials");
+    expect(body.credential_configurations_supported.OpenBadgeCredential?.format).toBe("ldp_vc");
   });
 
-  it('creates offer URIs through POST /credentials/offer', async () => {
+  it("creates offer URIs through POST /credentials/offer", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -903,14 +904,14 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/offer',
+      "/credentials/offer",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          badgeIdentifier: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+          badgeIdentifier: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
         }),
       },
       env,
@@ -919,8 +920,8 @@ describe('GET /badges/:badgeIdentifier', () => {
       credential_offer_uri: string;
       credential_offer: {
         grants: {
-          'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
-            'pre-authorized_code': string;
+          "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+            "pre-authorized_code": string;
           };
         };
       };
@@ -928,27 +929,27 @@ describe('GET /badges/:badgeIdentifier', () => {
 
     expect(response.status).toBe(201);
     expect(body.credential_offer_uri).toBe(
-      'http://localhost/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "http://localhost/credentials/v1/offers/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
     expect(
-      body.credential_offer.grants['urn:ietf:params:oauth:grant-type:pre-authorized_code'][
-        'pre-authorized_code'
+      body.credential_offer.grants["urn:ietf:params:oauth:grant-type:pre-authorized_code"][
+        "pre-authorized_code"
       ],
     ).toMatch(/^oid4vci_pc_/);
   });
 
-  it('returns DCC wallet request payload with vcapi exchange URL and deep-link aliases', async () => {
+  it("returns DCC wallet request payload with vcapi exchange URL and deep-link aliases", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/dcc/request/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/credentials/v1/dcc/request/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
@@ -962,33 +963,33 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.credentialRequestOrigin).toBe('http://localhost');
+    expect(body.credentialRequestOrigin).toBe("http://localhost");
     expect(body.protocols.vcapi).toBe(
-      'http://localhost/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "http://localhost/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
-    expect(body.app_link_deep_link_url).toContain('https://lcw.app/request?request=');
-    expect(body.custom_protocol_deep_link_url).toContain('dccrequest://');
+    expect(body.app_link_deep_link_url).toContain("https://lcw.app/request?request=");
+    expect(body.custom_protocol_deep_link_url).toContain("dccrequest://");
 
-    const deepLinkPayload = new URL(body.app_link_deep_link_url).searchParams.get('request');
+    const deepLinkPayload = new URL(body.app_link_deep_link_url).searchParams.get("request");
     expect(deepLinkPayload).not.toBeNull();
-    const parsedRequestPayload = JSON.parse(deepLinkPayload ?? '{}') as {
+    const parsedRequestPayload = JSON.parse(deepLinkPayload ?? "{}") as {
       protocols?: {
         vcapi?: string;
       };
       credentialRequestOrigin?: string;
     };
-    expect(parsedRequestPayload.credentialRequestOrigin).toBe('http://localhost');
+    expect(parsedRequestPayload.credentialRequestOrigin).toBe("http://localhost");
     expect(parsedRequestPayload.protocols?.vcapi).toBe(body.protocols.vcapi);
   });
 
-  it('returns DCC VC-API exchange offer payload that wraps badge credential as a VP offer', async () => {
+  it("returns DCC VC-API exchange offer payload that wraps badge credential as a VP offer", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
@@ -997,13 +998,13 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
-        body: '{}',
+        body: "{}",
       },
       env,
     );
@@ -1011,34 +1012,34 @@ describe('GET /badges/:badgeIdentifier', () => {
       credentialRequestOrigin: string;
       redirectUrl: string;
       verifiablePresentation: {
-        '@context': string[];
+        "@context": string[];
         type: string[];
         verifiableCredential: JsonObject[];
       };
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.credentialRequestOrigin).toBe('http://localhost');
-    expect(body.redirectUrl).toBe('http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22');
-    expect(body.verifiablePresentation.type).toEqual(['VerifiablePresentation']);
+    expect(body.credentialRequestOrigin).toBe("http://localhost");
+    expect(body.redirectUrl).toBe("http://localhost/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
+    expect(body.verifiablePresentation.type).toEqual(["VerifiablePresentation"]);
     expect(body.verifiablePresentation.verifiableCredential).toEqual([credential]);
   });
 
-  it('exchanges pre-authorized code for access token and returns credential via OID4VCI endpoints', async () => {
+  it("exchanges pre-authorized code for access token and returns credential via OID4VCI endpoints", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
 
     mockedConsumeOid4vciPreAuthorizedCode.mockResolvedValue(
       sampleOid4vciPreAuthorizedCodeRecord({
-        usedAt: '2026-02-10T22:00:30.000Z',
+        usedAt: "2026-02-10T22:00:30.000Z",
       }),
     );
     mockedCreateOid4vciAccessToken.mockResolvedValue(sampleOid4vciAccessTokenRecord());
@@ -1047,15 +1048,15 @@ describe('GET /badges/:badgeIdentifier', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const tokenResponse = await app.request(
-      '/credentials/v1/token',
+      "/credentials/v1/token",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          grant_type: 'urn:ietf:params:oauth:grant-type:pre-authorized_code',
-          'pre-authorized_code': 'oid4vci_pc_example',
+          grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+          "pre-authorized_code": "oid4vci_pc_example",
         }).toString(),
       },
       env,
@@ -1068,21 +1069,21 @@ describe('GET /badges/:badgeIdentifier', () => {
 
     expect(tokenResponse.status).toBe(200);
     expect(tokenBody.access_token).toMatch(/^oid4vci_at_/);
-    expect(tokenBody.token_type).toBe('Bearer');
+    expect(tokenBody.token_type).toBe("Bearer");
     expect(tokenBody.expires_in).toBe(600);
     expect(mockedConsumeOid4vciPreAuthorizedCode).toHaveBeenCalledTimes(1);
     expect(mockedCreateOid4vciAccessToken).toHaveBeenCalledTimes(1);
 
     const credentialResponse = await app.request(
-      '/credentials/v1/credentials',
+      "/credentials/v1/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           authorization: `Bearer ${tokenBody.access_token}`,
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          format: 'ldp_vc',
+          format: "ldp_vc",
         }),
       },
       env,
@@ -1094,118 +1095,118 @@ describe('GET /badges/:badgeIdentifier', () => {
     }>();
 
     expect(credentialResponse.status).toBe(200);
-    expect(credentialBody.format).toBe('ldp_vc');
-    expect(credentialBody.credential_identifier).toBe('tenant_123:assertion_456');
+    expect(credentialBody.format).toBe("ldp_vc");
+    expect(credentialBody.credential_identifier).toBe("tenant_123:assertion_456");
     expect(credentialBody.credential).toEqual(credential);
   });
 
-  it('renders revoked state for revoked credentials', async () => {
+  it("renders revoked state for revoked credentials", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(
       sampleAssertion({
-        revokedAt: '2026-02-11T01:00:00.000Z',
+        revokedAt: "2026-02-11T01:00:00.000Z",
       }),
     );
     mockedResolveAssertionLifecycleState.mockResolvedValue({
-      state: 'revoked',
-      source: 'lifecycle_event',
-      reasonCode: 'issuer_requested',
-      reason: 'Issuer requested revocation',
-      transitionedAt: '2026-02-11T01:00:00.000Z',
-      revokedAt: '2026-02-11T01:00:00.000Z',
+      state: "revoked",
+      source: "lifecycle_event",
+      reasonCode: "issuer_requested",
+      reason: "Issuer requested revocation",
+      transitionedAt: "2026-02-11T01:00:00.000Z",
+      revokedAt: "2026-02-11T01:00:00.000Z",
     });
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Revoked');
-    expect(body).toContain('Revoked at');
-    expect(body).not.toContain('Evidence</h2>');
+    expect(body).toContain("Revoked");
+    expect(body).toContain("Revoked at");
+    expect(body).not.toContain("Evidence</h2>");
   });
 
-  it('renders suspended lifecycle state with reason text', async () => {
+  it("renders suspended lifecycle state with reason text", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
       credentialSubject: {
         achievement: {
-          name: 'TypeScript Foundations',
+          name: "TypeScript Foundations",
         },
       },
     };
 
     mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
     mockedResolveAssertionLifecycleState.mockResolvedValue({
-      state: 'suspended',
-      source: 'lifecycle_event',
-      reasonCode: 'administrative_hold',
-      reason: 'Suspended pending conduct review',
-      transitionedAt: '2026-02-12T02:30:00.000Z',
+      state: "suspended",
+      source: "lifecycle_event",
+      reasonCode: "administrative_hold",
+      reason: "Suspended pending conduct review",
+      transitionedAt: "2026-02-12T02:30:00.000Z",
       revokedAt: null,
     });
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Suspended');
-    expect(body).toContain('Suspended pending conduct review');
-    expect(body).toContain('since');
+    expect(body).toContain("Suspended");
+    expect(body).toContain("Suspended pending conduct review");
+    expect(body).toContain("since");
   });
 
-  it('returns not found page when credential does not exist', async () => {
+  it("returns not found page when credential does not exist", async () => {
     const env = createEnv();
     mockedFindAssertionByPublicId.mockResolvedValue(null);
     mockedFindAssertionById.mockResolvedValue(null);
 
-    const response = await app.request('/badges/tenant_123%3Aassertion_456', undefined, env);
+    const response = await app.request("/badges/tenant_123%3Aassertion_456", undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(404);
-    expect(body).toContain('Badge not found');
+    expect(body).toContain("Badge not found");
     expect(body).toContain('<meta name="robots" content="noindex, nofollow"');
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 
-  it('returns not found page for unknown public badge identifiers', async () => {
+  it("returns not found page for unknown public badge identifiers", async () => {
     const env = createEnv();
     mockedFindAssertionByPublicId.mockResolvedValue(null);
 
-    const response = await app.request('/badges/assertion_456', undefined, env);
+    const response = await app.request("/badges/assertion_456", undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(404);
-    expect(body).toContain('Badge not found');
+    expect(body).toContain("Badge not found");
     expect(mockedFindAssertionById).not.toHaveBeenCalled();
   });
 
-  it('returns not found page when public_url alias is empty', async () => {
+  it("returns not found page when public_url alias is empty", async () => {
     const env = createEnv();
-    const response = await app.request('/badges/%20/public_url', undefined, env);
+    const response = await app.request("/badges/%20/public_url", undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(404);
-    expect(body).toContain('Badge not found');
+    expect(body).toContain("Badge not found");
     expect(mockedFindAssertionById).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 
 export const asJsonObject = (value: unknown): JsonObject | null => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
@@ -9,7 +9,7 @@ export const asJsonObject = (value: unknown): JsonObject | null => {
 };
 
 export const asString = (value: unknown): string | null => {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
 

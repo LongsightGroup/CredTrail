@@ -1,13 +1,13 @@
-import { createDidDocument, createDidWeb, type JsonObject } from '@credtrail/core-domain';
-import type { TenantSigningRegistryEntry } from '@credtrail/validation';
-import type { HistoricalSigningKeyEntry } from './registry';
+import { createDidDocument, createDidWeb, type JsonObject } from "@credtrail/core-domain";
+import type { TenantSigningRegistryEntry } from "@credtrail/validation";
+import type { HistoricalSigningKeyEntry } from "./registry";
 import {
   isEd25519SigningPublicJwk,
   isP256SigningPublicJwk,
   toEd25519PublicJwk,
   toP256PublicJwk,
   type SigningPublicJwk,
-} from './key-material';
+} from "./key-material";
 
 export const didForWellKnownRequest = (requestUrl: string): string => {
   const request = new URL(requestUrl);
@@ -35,12 +35,12 @@ export const didDocumentForSigningEntry = (input: {
 
   if (isP256SigningPublicJwk(input.signingEntry.publicJwk)) {
     const didDocument: JsonObject = {
-      '@context': ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/suites/jws-2020/v1'],
+      "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/jws-2020/v1"],
       id: input.did,
       verificationMethod: [
         {
           id: verificationMethodId,
-          type: 'JsonWebKey2020',
+          type: "JsonWebKey2020",
           controller: input.did,
           publicKeyJwk: toP256PublicJwk(input.signingEntry.publicJwk) as unknown as JsonObject,
         },

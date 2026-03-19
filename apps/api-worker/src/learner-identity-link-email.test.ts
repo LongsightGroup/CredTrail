@@ -1,44 +1,47 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
     addLearnerIdentityAlias: vi.fn(),
     createLearnerIdentityLinkProof: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findLearnerIdentityLinkProofByHash: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
     markLearnerIdentityLinkProofUsed: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -56,32 +59,30 @@ vi.mock('./auth/better-auth-adapter', async () => {
 import {
   addLearnerIdentityAlias,
   createLearnerIdentityLinkProof,
-  findActiveSessionByHash,
   findLearnerIdentityLinkProofByHash,
   findLearnerProfileByIdentity,
   findTenantMembership,
   findUserById,
   markLearnerIdentityLinkProofUsed,
   resolveLearnerProfileForIdentity,
-  touchSession,
   type LearnerIdentityLinkProofRecord,
   type LearnerProfileRecord,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface ErrorResponse {
   error: string;
 }
 
 interface IdentityLinkRequestResponse {
-  status: 'sent' | 'already_linked';
+  status: "sent" | "already_linked";
   tenantId: string;
-  identityType: 'email';
+  identityType: "email";
   identityValue: string;
   learnerProfileId?: string | undefined;
   expiresAt?: string | undefined;
@@ -89,23 +90,21 @@ interface IdentityLinkRequestResponse {
 }
 
 interface IdentityLinkVerifyResponse {
-  status: 'linked' | 'already_linked';
+  status: "linked" | "already_linked";
   tenantId: string;
   learnerProfileId: string;
-  identityType: 'email';
+  identityType: "email";
   identityValue: string;
 }
 
 const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedCreateLearnerIdentityLinkProof = vi.mocked(createLearnerIdentityLinkProof);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindLearnerIdentityLinkProofByHash = vi.mocked(findLearnerIdentityLinkProofByHash);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedMarkLearnerIdentityLinkProofUsed = vi.mocked(markLearnerIdentityLinkProofUsed);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -118,34 +117,34 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
+    id: "ses_123",
+    tenantId: overrides?.tenantId ?? "tenant_123",
+    userId: overrides?.userId ?? "usr_123",
+    sessionTokenHash: "session-hash",
+    expiresAt: "2026-02-11T22:00:00.000Z",
+    lastSeenAt: "2026-02-10T22:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleLearnerProfile = (overrides?: Partial<LearnerProfileRecord>): LearnerProfileRecord => {
   return {
-    id: 'lpr_123',
-    tenantId: 'tenant_123',
-    subjectId: 'urn:credtrail:learner:tenant_123:lpr_123',
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
     displayName: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -154,16 +153,16 @@ const sampleIdentityLinkProof = (
   overrides?: Partial<LearnerIdentityLinkProofRecord>,
 ): LearnerIdentityLinkProofRecord => {
   return {
-    id: 'lip_123',
-    tenantId: 'tenant_123',
-    learnerProfileId: 'lpr_123',
-    requestedByUserId: 'usr_123',
-    identityType: 'email',
-    identityValue: 'learner@gmail.com',
-    tokenHash: 'proof-token-hash',
-    expiresAt: '2099-01-01T00:00:00.000Z',
+    id: "lip_123",
+    tenantId: "tenant_123",
+    learnerProfileId: "lpr_123",
+    requestedByUserId: "usr_123",
+    identityType: "email",
+    identityValue: "learner@gmail.com",
+    tokenHash: "proof-token-hash",
+    expiresAt: "2099-01-01T00:00:00.000Z",
     usedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -172,11 +171,11 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'viewer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "viewer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -187,17 +186,17 @@ beforeEach(() => {
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
+      if (!cookieHeader.includes("better-auth.session_token=")) {
         return null;
       }
 
       return {
-        userId: 'usr_123',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-02-11T22:00:00.000Z',
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-02-11T22:00:00.000Z",
       };
     },
   );
@@ -207,7 +206,7 @@ beforeEach(() => {
   mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
 });
 
-describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
+describe("POST /v1/tenants/:tenantId/learner/identity-links/email", () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
     mockedTouchSession.mockReset();
@@ -220,45 +219,45 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     mockedMarkLearnerIdentityLinkProofUsed.mockReset();
   });
 
-  it('links a new verified email alias after proof verification', async () => {
+  it("links a new verified email alias after proof verification", async () => {
     const env = {
       ...createEnv(),
-      APP_ENV: 'development',
+      APP_ENV: "development",
     };
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindUserById.mockResolvedValue({
-      id: 'usr_123',
-      email: 'student@umich.edu',
+      id: "usr_123",
+      email: "student@umich.edu",
     });
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     mockedCreateLearnerIdentityLinkProof.mockResolvedValue(sampleIdentityLinkProof());
     mockedFindLearnerIdentityLinkProofByHash.mockResolvedValue(sampleIdentityLinkProof());
     mockedAddLearnerIdentityAlias.mockResolvedValue({
-      id: 'lid_new',
-      tenantId: 'tenant_123',
-      learnerProfileId: 'lpr_123',
-      identityType: 'email',
-      identityValue: 'learner@gmail.com',
+      id: "lid_new",
+      tenantId: "tenant_123",
+      learnerProfileId: "lpr_123",
+      identityType: "email",
+      identityValue: "learner@gmail.com",
       isPrimary: true,
       isVerified: true,
-      createdAt: '2026-02-10T22:00:00.000Z',
-      updatedAt: '2026-02-10T22:00:00.000Z',
+      createdAt: "2026-02-10T22:00:00.000Z",
+      updatedAt: "2026-02-10T22:00:00.000Z",
     });
-    mockedMarkLearnerIdentityLinkProofUsed.mockResolvedValue();
+    mockedMarkLearnerIdentityLinkProofUsed.mockResolvedValue(undefined);
 
     const requestResponse = await app.request(
-      '/v1/tenants/tenant_123/learner/identity-links/email/request',
+      "/v1/tenants/tenant_123/learner/identity-links/email/request",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          email: 'Learner@Gmail.com',
+          email: "Learner@Gmail.com",
         }),
       },
       env,
@@ -266,30 +265,30 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     const requestBody = await requestResponse.json<IdentityLinkRequestResponse>();
 
     expect(requestResponse.status).toBe(202);
-    expect(requestBody.status).toBe('sent');
-    expect(requestBody.identityValue).toBe('learner@gmail.com');
-    expect(typeof requestBody.token).toBe('string');
+    expect(requestBody.status).toBe("sent");
+    expect(requestBody.identityValue).toBe("learner@gmail.com");
+    expect(typeof requestBody.token).toBe("string");
     expect(mockedCreateLearnerIdentityLinkProof).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        learnerProfileId: 'lpr_123',
-        identityType: 'email',
-        identityValue: 'learner@gmail.com',
+        tenantId: "tenant_123",
+        learnerProfileId: "lpr_123",
+        identityType: "email",
+        identityValue: "learner@gmail.com",
       }),
     );
 
     if (requestBody.token === undefined) {
-      throw new Error('Expected proof token in development environment');
+      throw new Error("Expected proof token in development environment");
     }
 
     const verifyResponse = await app.request(
-      '/v1/tenants/tenant_123/learner/identity-links/email/verify',
+      "/v1/tenants/tenant_123/learner/identity-links/email/verify",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
           token: requestBody.token,
@@ -300,44 +299,44 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     const verifyBody = await verifyResponse.json<IdentityLinkVerifyResponse>();
 
     expect(verifyResponse.status).toBe(200);
-    expect(verifyBody.status).toBe('linked');
-    expect(verifyBody.identityValue).toBe('learner@gmail.com');
+    expect(verifyBody.status).toBe("linked");
+    expect(verifyBody.identityValue).toBe("learner@gmail.com");
     expect(mockedAddLearnerIdentityAlias).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      learnerProfileId: 'lpr_123',
-      identityType: 'email',
-      identityValue: 'learner@gmail.com',
+      tenantId: "tenant_123",
+      learnerProfileId: "lpr_123",
+      identityType: "email",
+      identityValue: "learner@gmail.com",
       isPrimary: true,
       isVerified: true,
     });
     expect(mockedMarkLearnerIdentityLinkProofUsed).toHaveBeenCalledWith(
       fakeDb,
-      'lip_123',
+      "lip_123",
       expect.any(String),
     );
   });
 
-  it('rejects verification when token does not belong to authenticated user', async () => {
+  it("rejects verification when token does not belong to authenticated user", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindLearnerIdentityLinkProofByHash.mockResolvedValue(
       sampleIdentityLinkProof({
-        requestedByUserId: 'usr_other',
+        requestedByUserId: "usr_other",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/learner/identity-links/email/verify',
+      "/v1/tenants/tenant_123/learner/identity-links/email/verify",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          token: '0123456789012345678901234567890123456789',
+          token: "0123456789012345678901234567890123456789",
         }),
       },
       env,
@@ -345,7 +344,7 @@ describe('POST /v1/tenants/:tenantId/learner/identity-links/email', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe('Forbidden identity link token');
+    expect(body.error).toBe("Forbidden identity link token");
     expect(mockedAddLearnerIdentityAlias).not.toHaveBeenCalled();
     expect(mockedMarkLearnerIdentityLinkProofUsed).not.toHaveBeenCalled();
   });

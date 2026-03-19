@@ -4,10 +4,10 @@ import {
   verifyCredentialProofWithEd25519Signature2020,
   type Ed25519PublicJwk,
   type JsonObject,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 
 interface CredentialProofVerificationSummary {
-  status: 'valid' | 'invalid' | 'unchecked';
+  status: "valid" | "invalid" | "unchecked";
   format: string | null;
   cryptosuite: string | null;
   verificationMethod: string | null;
@@ -15,7 +15,7 @@ interface CredentialProofVerificationSummary {
 }
 
 interface CredentialLifecycleVerificationSummary {
-  state: 'active' | 'expired' | 'revoked';
+  state: "active" | "expired" | "revoked";
   reason: string | null;
   checkedAt: string;
   expiresAt: string | null;
@@ -25,13 +25,13 @@ interface CredentialLifecycleVerificationSummary {
 interface CredentialStatusListReference extends JsonObject {
   id: string;
   type: string;
-  statusPurpose: 'revocation';
+  statusPurpose: "revocation";
   statusListIndex: string;
   statusListCredential: string;
 }
 
 interface CredentialVerificationCheckSummary {
-  status: 'valid' | 'invalid' | 'unchecked';
+  status: "valid" | "invalid" | "unchecked";
   reason: string | null;
 }
 
@@ -57,7 +57,7 @@ interface CredentialVerificationChecksSummary {
 }
 
 export interface PresentationCredentialBindingSummary {
-  status: 'valid' | 'invalid';
+  status: "valid" | "invalid";
   reason: string | null;
 }
 
@@ -68,7 +68,7 @@ export interface PresentationCredentialVerificationResult {
   proof: CredentialProofVerificationSummary;
   checks: CredentialVerificationChecksSummary;
   lifecycle: CredentialLifecycleVerificationSummary;
-  status: 'valid' | 'invalid';
+  status: "valid" | "invalid";
 }
 
 interface CreatePresentationVerificationHelpersInput<ContextType> {
@@ -94,17 +94,17 @@ interface CreatePresentationVerificationHelpersInput<ContextType> {
 }
 
 const didKeyMultibaseFromDid = (did: string): string | null => {
-  if (!did.startsWith('did:key:')) {
+  if (!did.startsWith("did:key:")) {
     return null;
   }
 
-  const multibase = did.slice('did:key:'.length).trim();
+  const multibase = did.slice("did:key:".length).trim();
   return multibase.length === 0 ? null : multibase;
 };
 
 export const didKeyVerificationMethod = (did: string): string | null => {
   const multibase = didKeyMultibaseFromDid(did);
-  return multibase === null ? null : did + '#' + multibase;
+  return multibase === null ? null : did + "#" + multibase;
 };
 
 export const ed25519PublicJwkFromDidKey = (did: string): Ed25519PublicJwk | null => {
@@ -116,8 +116,8 @@ export const ed25519PublicJwkFromDidKey = (did: string): Ed25519PublicJwk | null
 
   try {
     return {
-      kty: 'OKP',
-      crv: 'Ed25519',
+      kty: "OKP",
+      crv: "Ed25519",
       x: decodeJwkPublicKeyMultibase(multibase),
     };
   } catch {
@@ -162,7 +162,7 @@ const statusListReferenceFromCredentialForPresentation = (
   }
 
   const type = asNonEmptyString(credentialStatus.type);
-  const statusPurpose = asNonEmptyString(credentialStatus.statusPurpose) ?? 'revocation';
+  const statusPurpose = asNonEmptyString(credentialStatus.statusPurpose) ?? "revocation";
   const statusListIndex = asNonEmptyString(credentialStatus.statusListIndex);
   const statusListCredential = asNonEmptyString(credentialStatus.statusListCredential);
 
@@ -170,15 +170,15 @@ const statusListReferenceFromCredentialForPresentation = (
     type === null ||
     statusListIndex === null ||
     statusListCredential === null ||
-    statusPurpose !== 'revocation'
+    statusPurpose !== "revocation"
   ) {
     return null;
   }
 
   return {
-    id: statusListCredential + '#' + statusListIndex,
+    id: statusListCredential + "#" + statusListIndex,
     type,
-    statusPurpose: 'revocation',
+    statusPurpose: "revocation",
     statusListIndex,
     statusListCredential,
   };
@@ -188,11 +188,11 @@ const credentialChecksPassPresentationPolicy = (
   checks: CredentialVerificationChecksSummary,
 ): boolean => {
   return (
-    checks.jsonLdSafeMode.status === 'valid' &&
-    checks.credentialSchema.status !== 'invalid' &&
-    checks.credentialSubject.status === 'valid' &&
-    checks.dates.status === 'valid' &&
-    checks.credentialStatus.status !== 'invalid'
+    checks.jsonLdSafeMode.status === "valid" &&
+    checks.credentialSchema.status !== "invalid" &&
+    checks.credentialSubject.status === "valid" &&
+    checks.dates.status === "valid" &&
+    checks.credentialStatus.status !== "invalid"
   );
 };
 
@@ -221,11 +221,11 @@ export const createPresentationVerificationHelpers = <ContextType>(
 
     if (proof === null) {
       return {
-        status: 'unchecked',
+        status: "unchecked",
         format: null,
         cryptosuite: null,
         verificationMethod: null,
-        reason: 'presentation has no proof object',
+        reason: "presentation has no proof object",
       };
     }
 
@@ -242,31 +242,31 @@ export const createPresentationVerificationHelpers = <ContextType>(
       verificationMethod === null
     ) {
       return {
-        status: 'invalid',
+        status: "invalid",
         format: proofType,
         cryptosuite: input.asNonEmptyString(proof.cryptosuite),
         verificationMethod,
-        reason: 'proof object is missing required fields',
+        reason: "proof object is missing required fields",
       };
     }
 
     if (expectedVerificationMethod === null || verificationMethod !== expectedVerificationMethod) {
       return {
-        status: 'invalid',
+        status: "invalid",
         format: proofType,
         cryptosuite: input.asNonEmptyString(proof.cryptosuite),
         verificationMethod,
-        reason: 'verificationMethod must match the did:key holder DID',
+        reason: "verificationMethod must match the did:key holder DID",
       };
     }
 
-    if (proofPurpose !== 'assertionMethod') {
+    if (proofPurpose !== "assertionMethod") {
       return {
-        status: 'invalid',
+        status: "invalid",
         format: proofType,
         cryptosuite: input.asNonEmptyString(proof.cryptosuite),
         verificationMethod,
-        reason: 'proofPurpose must be assertionMethod',
+        reason: "proofPurpose must be assertionMethod",
       };
     }
 
@@ -274,22 +274,22 @@ export const createPresentationVerificationHelpers = <ContextType>(
 
     if (holderPublicJwk === null) {
       return {
-        status: 'invalid',
+        status: "invalid",
         format: proofType,
         cryptosuite: input.asNonEmptyString(proof.cryptosuite),
         verificationMethod,
-        reason: 'holder DID did:key value is not a valid Ed25519 multibase key',
+        reason: "holder DID did:key value is not a valid Ed25519 multibase key",
       };
     }
 
-    if (proofType === 'Ed25519Signature2020') {
+    if (proofType === "Ed25519Signature2020") {
       const isValid = await verifyCredentialProofWithEd25519Signature2020({
         credential: {
           ...presentation,
           proof: {
-            type: 'Ed25519Signature2020',
-            created: input.asString(proof.created) ?? '',
-            proofPurpose: 'assertionMethod',
+            type: "Ed25519Signature2020",
+            created: input.asString(proof.created) ?? "",
+            proofPurpose: "assertionMethod",
             verificationMethod,
             proofValue,
           },
@@ -298,24 +298,24 @@ export const createPresentationVerificationHelpers = <ContextType>(
       });
 
       return {
-        status: isValid ? 'valid' : 'invalid',
+        status: isValid ? "valid" : "invalid",
         format: proofType,
         cryptosuite: null,
         verificationMethod,
-        reason: isValid ? null : 'signature verification failed',
+        reason: isValid ? null : "signature verification failed",
       };
     }
 
-    if (proofType === 'DataIntegrityProof') {
+    if (proofType === "DataIntegrityProof") {
       const cryptosuite = input.asNonEmptyString(proof.cryptosuite);
 
-      if (cryptosuite !== 'eddsa-rdfc-2022') {
+      if (cryptosuite !== "eddsa-rdfc-2022") {
         return {
-          status: 'invalid',
+          status: "invalid",
           format: proofType,
           cryptosuite,
           verificationMethod,
-          reason: 'did:key holder proofs only support DataIntegrity cryptosuite eddsa-rdfc-2022',
+          reason: "did:key holder proofs only support DataIntegrity cryptosuite eddsa-rdfc-2022",
         };
       }
 
@@ -323,10 +323,10 @@ export const createPresentationVerificationHelpers = <ContextType>(
         credential: {
           ...presentation,
           proof: {
-            type: 'DataIntegrityProof',
+            type: "DataIntegrityProof",
             cryptosuite,
-            created: input.asString(proof.created) ?? '',
-            proofPurpose: 'assertionMethod',
+            created: input.asString(proof.created) ?? "",
+            proofPurpose: "assertionMethod",
             verificationMethod,
             proofValue,
           },
@@ -335,20 +335,20 @@ export const createPresentationVerificationHelpers = <ContextType>(
       });
 
       return {
-        status: isValid ? 'valid' : 'invalid',
+        status: isValid ? "valid" : "invalid",
         format: proofType,
         cryptosuite,
         verificationMethod,
-        reason: isValid ? null : 'signature verification failed',
+        reason: isValid ? null : "signature verification failed",
       };
     }
 
     return {
-      status: 'unchecked',
+      status: "unchecked",
       format: proofType,
       cryptosuite: input.asNonEmptyString(proof.cryptosuite),
       verificationMethod,
-      reason: 'proof format is not currently supported',
+      reason: "proof format is not currently supported",
     };
   };
 
@@ -357,7 +357,7 @@ export const createPresentationVerificationHelpers = <ContextType>(
     presentation: JsonObject,
     holderDid: string,
   ): Promise<CredentialProofVerificationSummary> => {
-    if (holderDid.startsWith('did:key:')) {
+    if (holderDid.startsWith("did:key:")) {
       return verifyDidKeyHolderProofSummary(presentation, holderDid);
     }
 
@@ -379,16 +379,16 @@ export const createPresentationVerificationHelpers = <ContextType>(
     const binding: PresentationCredentialBindingSummary =
       subjectId === null
         ? {
-            status: 'invalid',
-            reason: 'credentialSubject.id is missing',
+            status: "invalid",
+            reason: "credentialSubject.id is missing",
           }
         : subjectId !== request.holderDid
           ? {
-              status: 'invalid',
-              reason: 'credentialSubject.id must match presentation holder DID',
+              status: "invalid",
+              reason: "credentialSubject.id must match presentation holder DID",
             }
           : {
-              status: 'valid',
+              status: "valid",
               reason: null,
             };
     const checks = await input.summarizeCredentialVerificationChecks({
@@ -402,7 +402,7 @@ export const createPresentationVerificationHelpers = <ContextType>(
       ),
     });
     const resolvedRevokedAt =
-      checks.credentialStatus.status === 'valid'
+      checks.credentialStatus.status === "valid"
         ? checks.credentialStatus.revoked
           ? request.checkedAt
           : null
@@ -413,13 +413,13 @@ export const createPresentationVerificationHelpers = <ContextType>(
       request.checkedAt,
     );
     const proof = await input.verifyCredentialProofSummary(request.context, request.credential);
-    const status: 'valid' | 'invalid' =
-      binding.status === 'valid' &&
-      proof.status === 'valid' &&
+    const status: "valid" | "invalid" =
+      binding.status === "valid" &&
+      proof.status === "valid" &&
       credentialChecksPassPresentationPolicy(checks) &&
-      lifecycle.state === 'active'
-        ? 'valid'
-        : 'invalid';
+      lifecycle.state === "active"
+        ? "valid"
+        : "invalid";
 
     return {
       credentialId,

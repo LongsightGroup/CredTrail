@@ -1,7 +1,7 @@
-import type { JsonObject } from '@credtrail/core-domain';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import type { JsonObject } from "@credtrail/core-domain";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
-export type MigrationBatchFileFormat = 'csv' | 'json';
+export type MigrationBatchFileFormat = "csv" | "json";
 
 export interface MigrationBatchUploadRow {
   rowNumber: number;
@@ -16,32 +16,35 @@ export interface ParseMigrationBatchUploadFileResult {
 export class MigrationBatchFileParseError extends Error {
   public constructor(message: string) {
     super(message);
-    this.name = 'MigrationBatchFileParseError';
+    this.name = "MigrationBatchFileParseError";
   }
 }
 
 const MAX_BATCH_ROWS = 500;
 
 const normalizeHeader = (value: string): string => {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 };
 
 const canonicalFieldForHeader = (header: string): string | null => {
   switch (header) {
-    case 'ob2assertion':
-    case 'assertion':
-      return 'ob2Assertion';
-    case 'ob2badgeclass':
-    case 'badgeclass':
-    case 'badge':
-      return 'ob2BadgeClass';
-    case 'ob2issuer':
-    case 'issuer':
-      return 'ob2Issuer';
-    case 'bakedbadgeimage':
-    case 'bakedbadge':
-    case 'baked':
-      return 'bakedBadgeImage';
+    case "ob2assertion":
+    case "assertion":
+      return "ob2Assertion";
+    case "ob2badgeclass":
+    case "badgeclass":
+    case "badge":
+      return "ob2BadgeClass";
+    case "ob2issuer":
+    case "issuer":
+      return "ob2Issuer";
+    case "bakedbadgeimage":
+    case "bakedbadge":
+    case "baked":
+      return "bakedBadgeImage";
     default:
       return null;
   }
@@ -51,7 +54,7 @@ const parseJsonCellValue = (value: string): JsonObject | string => {
   const trimmed = value.trim();
 
   if (trimmed.length === 0) {
-    return '';
+    return "";
   }
 
   try {
@@ -85,7 +88,7 @@ const normalizeRowCandidate = (rawRow: Record<string, unknown>): Record<string, 
     const textValue = asNonEmptyString(rawValue);
 
     if (textValue === null) {
-      if (canonicalField !== 'bakedBadgeImage') {
+      if (canonicalField !== "bakedBadgeImage") {
         const jsonValue = asJsonObject(rawValue);
 
         if (jsonValue !== null) {
@@ -96,7 +99,7 @@ const normalizeRowCandidate = (rawRow: Record<string, unknown>): Record<string, 
       continue;
     }
 
-    if (canonicalField === 'bakedBadgeImage') {
+    if (canonicalField === "bakedBadgeImage") {
       candidate[canonicalField] = textValue;
       continue;
     }
@@ -115,30 +118,30 @@ const detectFormat = (input: {
   const fileName = input.fileName.trim().toLowerCase();
   const mimeType = input.mimeType.trim().toLowerCase();
 
-  if (fileName.endsWith('.json') || mimeType.includes('application/json')) {
-    return 'json';
+  if (fileName.endsWith(".json") || mimeType.includes("application/json")) {
+    return "json";
   }
 
-  if (fileName.endsWith('.csv') || mimeType.includes('text/csv')) {
-    return 'csv';
+  if (fileName.endsWith(".csv") || mimeType.includes("text/csv")) {
+    return "csv";
   }
 
   try {
     JSON.parse(input.content);
-    return 'json';
+    return "json";
   } catch {
-    return 'csv';
+    return "csv";
   }
 };
 
 const parseCsvMatrix = (input: string): string[][] => {
   const rows: string[][] = [];
   let currentRow: string[] = [];
-  let currentField = '';
+  let currentField = "";
   let insideQuotes = false;
 
   for (let index = 0; index < input.length; index += 1) {
-    const character = input[index] ?? '';
+    const character = input[index] ?? "";
 
     if (insideQuotes) {
       if (character === '"') {
@@ -162,21 +165,21 @@ const parseCsvMatrix = (input: string): string[][] => {
       continue;
     }
 
-    if (character === ',') {
+    if (character === ",") {
       currentRow.push(currentField);
-      currentField = '';
+      currentField = "";
       continue;
     }
 
-    if (character === '\n') {
+    if (character === "\n") {
       currentRow.push(currentField);
       rows.push(currentRow);
       currentRow = [];
-      currentField = '';
+      currentField = "";
       continue;
     }
 
-    if (character === '\r') {
+    if (character === "\r") {
       continue;
     }
 
@@ -184,7 +187,7 @@ const parseCsvMatrix = (input: string): string[][] => {
   }
 
   if (insideQuotes) {
-    throw new MigrationBatchFileParseError('Invalid CSV: unclosed quoted value');
+    throw new MigrationBatchFileParseError("Invalid CSV: unclosed quoted value");
   }
 
   currentRow.push(currentField);
@@ -204,7 +207,7 @@ const parseCsvRows = (input: string): MigrationBatchUploadRow[] => {
   const rows = parseCsvMatrix(input);
 
   if (rows.length === 0) {
-    throw new MigrationBatchFileParseError('CSV upload is empty');
+    throw new MigrationBatchFileParseError("CSV upload is empty");
   }
 
   const headerRow = rows[0] ?? [];
@@ -215,7 +218,7 @@ const parseCsvRows = (input: string): MigrationBatchUploadRow[] => {
 
   if (!hasRecognizedHeader) {
     throw new MigrationBatchFileParseError(
-      'CSV header must include at least one supported column: ob2Assertion, ob2BadgeClass, ob2Issuer, bakedBadgeImage',
+      "CSV header must include at least one supported column: ob2Assertion, ob2BadgeClass, ob2Issuer, bakedBadgeImage",
     );
   }
 
@@ -233,7 +236,7 @@ const parseCsvRows = (input: string): MigrationBatchUploadRow[] => {
         continue;
       }
 
-      const cellValue = row[columnIndex] ?? '';
+      const cellValue = row[columnIndex] ?? "";
 
       if (cellValue.trim().length > 0) {
         hasData = true;
@@ -261,7 +264,7 @@ const parseJsonRows = (input: string): MigrationBatchUploadRow[] => {
   try {
     parsed = JSON.parse(input) as unknown;
   } catch {
-    throw new MigrationBatchFileParseError('JSON upload is not valid JSON');
+    throw new MigrationBatchFileParseError("JSON upload is not valid JSON");
   }
 
   let rowsValue: unknown;
@@ -272,14 +275,14 @@ const parseJsonRows = (input: string): MigrationBatchUploadRow[] => {
     const objectValue = asJsonObject(parsed);
 
     if (objectValue === null) {
-      throw new MigrationBatchFileParseError('JSON upload must be an array of row objects');
+      throw new MigrationBatchFileParseError("JSON upload must be an array of row objects");
     }
 
     rowsValue = objectValue.rows;
   }
 
   if (!Array.isArray(rowsValue)) {
-    throw new MigrationBatchFileParseError('JSON upload must provide rows as an array');
+    throw new MigrationBatchFileParseError("JSON upload must provide rows as an array");
   }
 
   const rows = rowsValue as unknown[];
@@ -317,10 +320,10 @@ export const parseMigrationBatchUploadFile = (input: {
   content: string;
 }): ParseMigrationBatchUploadFileResult => {
   const format = detectFormat(input);
-  const rows = format === 'json' ? parseJsonRows(input.content) : parseCsvRows(input.content);
+  const rows = format === "json" ? parseJsonRows(input.content) : parseCsvRows(input.content);
 
   if (rows.length === 0) {
-    throw new MigrationBatchFileParseError('Batch upload does not contain any data rows');
+    throw new MigrationBatchFileParseError("Batch upload does not contain any data rows");
   }
 
   if (rows.length > MAX_BATCH_ROWS) {

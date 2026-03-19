@@ -1,15 +1,15 @@
-import type { JsonObject } from '@credtrail/core-domain';
-import { bytesToBase64Url } from '../utils/crypto';
+import type { JsonObject } from "@credtrail/core-domain";
+import { bytesToBase64Url } from "../utils/crypto";
 
-const BITSTRING_STATUS_LIST_CONTEXT = 'https://www.w3.org/ns/credentials/status/v1';
-const ED25519_SIGNATURE_2020_CONTEXT = 'https://w3id.org/security/suites/ed25519-2020/v1';
+const BITSTRING_STATUS_LIST_CONTEXT = "https://www.w3.org/ns/credentials/status/v1";
+const ED25519_SIGNATURE_2020_CONTEXT = "https://w3id.org/security/suites/ed25519-2020/v1";
 const MINIMUM_STATUS_LIST_ENTRIES = 131_072;
 const MINIMUM_STATUS_LIST_BYTES = MINIMUM_STATUS_LIST_ENTRIES / 8;
 
 interface StatusListEntryReference extends JsonObject {
   id: string;
-  type: 'BitstringStatusListEntry';
-  statusPurpose: 'revocation';
+  type: "BitstringStatusListEntry";
+  statusPurpose: "revocation";
   statusListIndex: string;
   statusListCredential: string;
 }
@@ -27,7 +27,7 @@ const gzipBytes = async (bytes: Uint8Array): Promise<Uint8Array> => {
       controller.close();
     },
   });
-  const compressedStream = sourceStream.pipeThrough(new CompressionStream('gzip'));
+  const compressedStream = sourceStream.pipeThrough(new CompressionStream("gzip"));
   const compressedBuffer = await new Response(compressedStream).arrayBuffer();
   return new Uint8Array(compressedBuffer);
 };
@@ -37,8 +37,8 @@ const base64UrlToBytes = (value: string): Uint8Array | null => {
     return null;
   }
 
-  const normalizedBase64 = value.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedBase64 = `${normalizedBase64}${'='.repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
+  const normalizedBase64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = `${normalizedBase64}${"=".repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
 
   try {
     const raw = atob(paddedBase64);
@@ -63,7 +63,7 @@ const gunzipBytes = async (bytes: Uint8Array): Promise<Uint8Array | null> => {
         controller.close();
       },
     });
-    const decompressedStream = sourceStream.pipeThrough(new DecompressionStream('gzip'));
+    const decompressedStream = sourceStream.pipeThrough(new DecompressionStream("gzip"));
     const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
     return new Uint8Array(decompressedBuffer);
   } catch {
@@ -87,8 +87,8 @@ export const credentialStatusForAssertion = (
 
   return {
     id: `${statusListCredentialUrl}#entry-${statusListIndexString}`,
-    type: 'BitstringStatusListEntry',
-    statusPurpose: 'revocation',
+    type: "BitstringStatusListEntry",
+    statusPurpose: "revocation",
     statusListIndex: statusListIndexString,
     statusListCredential: statusListCredentialUrl,
   };
@@ -149,19 +149,19 @@ export const buildRevocationStatusListCredential = async (
   return {
     issuedAt,
     credential: {
-      '@context': [
-        'https://www.w3.org/ns/credentials/v2',
+      "@context": [
+        "https://www.w3.org/ns/credentials/v2",
         BITSTRING_STATUS_LIST_CONTEXT,
         ED25519_SIGNATURE_2020_CONTEXT,
       ],
       id: statusListCredentialUrl,
-      type: ['VerifiableCredential', 'BitstringStatusListCredential'],
+      type: ["VerifiableCredential", "BitstringStatusListCredential"],
       issuer: input.issuerDid,
       validFrom: issuedAt,
       credentialSubject: {
         id: `${statusListCredentialUrl}#list`,
-        type: 'BitstringStatusList',
-        statusPurpose: 'revocation',
+        type: "BitstringStatusList",
+        statusPurpose: "revocation",
         encodedList,
       },
     },
@@ -181,7 +181,7 @@ export const decodedRevocationStatusBit = async (
   encodedList: string,
   statusListIndex: number,
 ): Promise<boolean | null> => {
-  if (!encodedList.startsWith('u')) {
+  if (!encodedList.startsWith("u")) {
     return null;
   }
 

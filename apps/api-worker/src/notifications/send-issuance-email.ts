@@ -26,31 +26,31 @@ export const sendIssuanceEmailNotification = async (
     return;
   }
 
-  const baseUrl = input.mailtrapApiBaseUrl ?? 'https://sandbox.api.mailtrap.io/api/send';
-  const endpoint = `${baseUrl.replaceAll(/\/+$/g, '')}/${encodeURIComponent(input.mailtrapInboxId)}`;
+  const baseUrl = input.mailtrapApiBaseUrl ?? "https://sandbox.api.mailtrap.io/api/send";
+  const endpoint = `${baseUrl.replaceAll(/\/+$/g, "")}/${encodeURIComponent(input.mailtrapInboxId)}`;
   const subject = `You've earned a new badge: ${input.badgeTitle}`;
   const textBody = [
     `You have earned the "${input.badgeTitle}" badge.`,
-    '',
+    "",
     `Issued at: ${input.issuedAtIso}`,
     `Assertion ID: ${input.assertionId}`,
     `Tenant ID: ${input.tenantId}`,
-    '',
+    "",
     `Public badge page: ${input.publicBadgeUrl}`,
     `Verification JSON: ${input.verificationUrl}`,
     `Download VC: ${input.credentialDownloadUrl}`,
-  ].join('\n');
+  ].join("\n");
 
   const response = await fetch(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${input.mailtrapApiToken}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       from: {
-        email: input.mailtrapFromEmail ?? 'no-reply@credtrail.org',
-        name: input.mailtrapFromName ?? 'CredTrail',
+        email: input.mailtrapFromEmail ?? "no-reply@credtrail.org",
+        name: input.mailtrapFromName ?? "CredTrail",
       },
       to: [
         {
@@ -59,7 +59,7 @@ export const sendIssuanceEmailNotification = async (
       ],
       subject,
       text: textBody,
-      category: 'Issuance Notification',
+      category: "Issuance Notification",
     }),
   });
 

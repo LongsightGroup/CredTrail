@@ -26,7 +26,7 @@ interface Ob3ErrorResponses<ContextType extends Ob3ResponseContext> {
     context: ContextType,
     payload: {
       access_token: string;
-      token_type: 'Bearer';
+      token_type: "Bearer";
       expires_in: number;
       scope: string;
       refresh_token?: string | undefined;
@@ -42,7 +42,9 @@ interface Ob3ErrorResponses<ContextType extends Ob3ResponseContext> {
   ) => Response;
 }
 
-export const createOb3ErrorResponses = <ContextType extends Ob3ResponseContext>(): Ob3ErrorResponses<ContextType> => {
+export const createOb3ErrorResponses = <
+  ContextType extends Ob3ResponseContext,
+>(): Ob3ErrorResponses<ContextType> => {
   const oauthErrorJson = (
     context: ContextType,
     status: 400 | 401 | 403 | 500,
@@ -65,11 +67,11 @@ export const createOb3ErrorResponses = <ContextType extends Ob3ResponseContext>(
     errorDescription?: string,
     includeWwwAuthenticate = false,
   ): Response => {
-    context.header('Cache-Control', 'no-store');
-    context.header('Pragma', 'no-cache');
+    context.header("Cache-Control", "no-store");
+    context.header("Pragma", "no-cache");
 
     if (includeWwwAuthenticate) {
-      context.header('WWW-Authenticate', 'Basic realm="OAuth2 Token Endpoint"');
+      context.header("WWW-Authenticate", 'Basic realm="OAuth2 Token Endpoint"');
     }
 
     return oauthErrorJson(context, status, error, errorDescription);
@@ -79,14 +81,14 @@ export const createOb3ErrorResponses = <ContextType extends Ob3ResponseContext>(
     context: ContextType,
     payload: {
       access_token: string;
-      token_type: 'Bearer';
+      token_type: "Bearer";
       expires_in: number;
       scope: string;
       refresh_token?: string | undefined;
     },
   ): Response => {
-    context.header('Cache-Control', 'no-store');
-    context.header('Pragma', 'no-cache');
+    context.header("Cache-Control", "no-store");
+    context.header("Pragma", "no-cache");
     return context.json(payload);
   };
 
@@ -99,13 +101,13 @@ export const createOb3ErrorResponses = <ContextType extends Ob3ResponseContext>(
     },
   ): Response => {
     if (options?.includeWwwAuthenticate === true) {
-      context.header('WWW-Authenticate', 'Bearer realm="Open Badges API"');
+      context.header("WWW-Authenticate", 'Bearer realm="Open Badges API"');
     }
 
     return context.json(
       {
-        imsx_codeMajor: 'failure',
-        imsx_severity: 'error',
+        imsx_codeMajor: "failure",
+        imsx_severity: "error",
         imsx_description: description,
       },
       status,

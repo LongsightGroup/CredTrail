@@ -1,17 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -21,7 +25,7 @@ vi.mock('@credtrail/db', async () => {
     createTenantOrgUnit: vi.fn(),
     deleteTenantSsoSamlConfiguration: vi.fn(),
     findActiveDelegatedIssuingAuthorityGrantForAction: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findBadgeTemplateById: vi.fn(),
     findDelegatedIssuingAuthorityGrantById: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -39,24 +43,23 @@ vi.mock('@credtrail/db', async () => {
     removeTenantMembershipOrgUnitScope: vi.fn(),
     revokeTenantApiKey: vi.fn(),
     revokeDelegatedIssuingAuthorityGrant: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
     transferBadgeTemplateOwnership: vi.fn(),
     upsertTenantSsoSamlConfiguration: vi.fn(),
     upsertTenantMembershipOrgUnitScope: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -78,7 +81,6 @@ import {
   createTenantOrgUnit,
   deleteTenantSsoSamlConfiguration,
   findActiveDelegatedIssuingAuthorityGrantForAction,
-  findActiveSessionByHash,
   findBadgeTemplateById,
   findDelegatedIssuingAuthorityGrantById,
   findTenantMembership,
@@ -96,7 +98,6 @@ import {
   removeTenantMembershipOrgUnitScope,
   revokeTenantApiKey,
   revokeDelegatedIssuingAuthorityGrant,
-  touchSession,
   transferBadgeTemplateOwnership,
   upsertTenantSsoSamlConfiguration,
   upsertTenantMembershipOrgUnitScope,
@@ -113,10 +114,10 @@ import {
   type TenantMembershipRecord,
   type TenantOrgUnitRecord,
   type TenantSsoSamlConfigurationRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface ErrorResponse {
   error: string;
@@ -130,7 +131,6 @@ const mockedDeleteTenantSsoSamlConfiguration = vi.mocked(deleteTenantSsoSamlConf
 const mockedFindActiveDelegatedIssuingAuthorityGrantForAction = vi.mocked(
   findActiveDelegatedIssuingAuthorityGrantForAction,
 );
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindDelegatedIssuingAuthorityGrantById = vi.mocked(
   findDelegatedIssuingAuthorityGrantById,
@@ -154,7 +154,6 @@ const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedRemoveTenantMembershipOrgUnitScope = vi.mocked(removeTenantMembershipOrgUnitScope);
 const mockedRevokeTenantApiKey = vi.mocked(revokeTenantApiKey);
 const mockedRevokeDelegatedIssuingAuthorityGrant = vi.mocked(revokeDelegatedIssuingAuthorityGrant);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedTransferBadgeTemplateOwnership = vi.mocked(transferBadgeTemplateOwnership);
 const mockedUpsertTenantSsoSamlConfiguration = vi.mocked(upsertTenantSsoSamlConfiguration);
 const mockedUpsertTenantMembershipOrgUnitScope = vi.mocked(upsertTenantMembershipOrgUnitScope);
@@ -185,10 +184,10 @@ const createEnv = (): {
   LTI_STATE_SIGNING_SECRET?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -196,12 +195,12 @@ const loadAppWithMockedAuthProviders = async (input: {
   betterAuthPrincipal?: {
     userId: string;
     authSessionId: string;
-    authMethod: 'better_auth';
+    authMethod: "better_auth";
     expiresAt: string;
   } | null;
   betterAuthRequestedTenant?: {
     tenantId: string;
-    source: 'route' | 'legacy_session';
+    source: "route" | "legacy_session";
     authoritative: boolean;
   } | null;
 }): Promise<{
@@ -215,15 +214,16 @@ const loadAppWithMockedAuthProviders = async (input: {
     createMagicLinkSession: vi.fn(),
     createLtiSession: vi.fn(),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
+    resolveRequestedTenantContext: vi.fn(() =>
+      Promise.resolve(input.betterAuthRequestedTenant ?? null),
+    ),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
-  vi.doMock('./auth/better-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-        './auth/better-auth-adapter',
-      );
+  vi.doMock("./auth/better-auth-adapter", async () => {
+    const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+      "./auth/better-auth-adapter",
+    );
 
     return {
       ...actual,
@@ -231,7 +231,7 @@ const loadAppWithMockedAuthProviders = async (input: {
     };
   });
 
-  const { app: isolatedApp } = await import('./index');
+  const { app: isolatedApp } = await import("./index");
 
   return {
     app: isolatedApp,
@@ -250,8 +250,8 @@ beforeEach(() => {
   mockedFindTenantSsoSamlConfiguration.mockResolvedValue(null);
   mockedFindUserById.mockReset();
   mockedFindUserById.mockResolvedValue({
-    id: 'usr_123',
-    email: 'learner@example.edu',
+    id: "usr_123",
+    email: "learner@example.edu",
   });
   mockedFindDelegatedIssuingAuthorityGrantById.mockReset();
   mockedFindDelegatedIssuingAuthorityGrantById.mockResolvedValue(null);
@@ -266,17 +266,17 @@ beforeEach(() => {
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
+      if (!cookieHeader.includes("better-auth.session_token=")) {
         return null;
       }
 
       return {
-        userId: 'usr_123',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-03-17T22:00:00.000Z',
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-03-17T22:00:00.000Z",
       };
     },
   );
@@ -312,51 +312,51 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock("./auth/better-auth-adapter");
 });
 
 const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
+    id: "ses_123",
+    tenantId: overrides?.tenantId ?? "tenant_123",
+    userId: overrides?.userId ?? "usr_123",
+    sessionTokenHash: "session-hash",
+    expiresAt: "2026-02-11T22:00:00.000Z",
+    lastSeenAt: "2026-02-10T22:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleTenant = (overrides?: Partial<TenantRecord>): TenantRecord => {
   return {
-    id: 'tenant_123',
-    slug: 'tenant-123',
-    displayName: 'Tenant 123',
-    planTier: 'enterprise',
-    issuerDomain: 'tenant-123.credtrail.test',
-    didWeb: 'did:web:credtrail.test:tenant_123',
+    id: "tenant_123",
+    slug: "tenant-123",
+    displayName: "Tenant 123",
+    planTier: "enterprise",
+    issuerDomain: "tenant-123.credtrail.test",
+    didWeb: "did:web:credtrail.test:tenant_123",
     isActive: true,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleTenantApiKey = (overrides?: Partial<TenantApiKeyRecord>): TenantApiKeyRecord => {
   return {
-    id: 'tak_123',
-    tenantId: 'tenant_123',
-    label: 'Integration key',
-    keyPrefix: 'ctak_abc12345',
-    keyHash: 'hash_123',
+    id: "tak_123",
+    tenantId: "tenant_123",
+    label: "Integration key",
+    keyPrefix: "ctak_abc12345",
+    keyHash: "hash_123",
     scopesJson: '["queue.issue","queue.revoke"]',
-    createdByUserId: 'usr_123',
+    createdByUserId: "usr_123",
     expiresAt: null,
     lastUsedAt: null,
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -365,52 +365,52 @@ const sampleTenantSsoSamlConfiguration = (
   overrides?: Partial<TenantSsoSamlConfigurationRecord>,
 ): TenantSsoSamlConfigurationRecord => {
   return {
-    tenantId: 'tenant_123',
-    idpEntityId: 'https://idp.example.edu/entity',
-    ssoLoginUrl: 'https://idp.example.edu/sso/login',
-    idpCertificatePem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
-    idpMetadataUrl: 'https://idp.example.edu/metadata',
-    spEntityId: 'https://credtrail.test/saml/sp',
-    assertionConsumerServiceUrl: 'https://credtrail.test/saml/acs',
-    nameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+    tenantId: "tenant_123",
+    idpEntityId: "https://idp.example.edu/entity",
+    ssoLoginUrl: "https://idp.example.edu/sso/login",
+    idpCertificatePem: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----",
+    idpMetadataUrl: "https://idp.example.edu/metadata",
+    spEntityId: "https://credtrail.test/saml/sp",
+    assertionConsumerServiceUrl: "https://credtrail.test/saml/acs",
+    nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
     enforced: true,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for completing TS basics.',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for completing TS basics.",
     criteriaUri: null,
     imageUri: null,
-    createdByUserId: 'usr_issuer',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_issuer",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: '{"stability":"institution_registry"}',
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleTenantOrgUnit = (overrides?: Partial<TenantOrgUnitRecord>): TenantOrgUnitRecord => {
   return {
-    id: 'tenant_123:org:institution',
-    tenantId: 'tenant_123',
-    unitType: 'institution',
-    slug: 'institution',
-    displayName: 'Tenant 123 Institution',
+    id: "tenant_123:org:institution",
+    tenantId: "tenant_123",
+    unitType: "institution",
+    slug: "institution",
+    displayName: "Tenant 123 Institution",
     parentOrgUnitId: null,
-    createdByUserId: 'usr_123',
+    createdByUserId: "usr_123",
     isActive: true,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -419,13 +419,13 @@ const sampleTenantMembershipOrgUnitScope = (
   overrides?: Partial<TenantMembershipOrgUnitScopeRecord>,
 ): TenantMembershipOrgUnitScopeRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    orgUnitId: 'tenant_123:org:department-math',
-    role: 'issuer',
-    createdByUserId: 'usr_admin',
-    createdAt: '2026-02-13T00:00:00.000Z',
-    updatedAt: '2026-02-13T00:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    orgUnitId: "tenant_123:org:department-math",
+    role: "issuer",
+    createdByUserId: "usr_admin",
+    createdAt: "2026-02-13T00:00:00.000Z",
+    updatedAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -434,21 +434,21 @@ const sampleDelegatedIssuingAuthorityGrant = (
   overrides?: Partial<DelegatedIssuingAuthorityGrantRecord>,
 ): DelegatedIssuingAuthorityGrantRecord => {
   return {
-    id: 'dag_123',
-    tenantId: 'tenant_123',
-    delegateUserId: 'usr_delegate',
-    delegatedByUserId: 'usr_admin',
-    orgUnitId: 'tenant_123:org:department-math',
-    allowedActions: ['issue_badge'],
-    badgeTemplateIds: ['badge_template_001'],
-    startsAt: '2026-02-13T00:00:00.000Z',
-    endsAt: '2026-03-13T00:00:00.000Z',
+    id: "dag_123",
+    tenantId: "tenant_123",
+    delegateUserId: "usr_delegate",
+    delegatedByUserId: "usr_admin",
+    orgUnitId: "tenant_123:org:department-math",
+    allowedActions: ["issue_badge"],
+    badgeTemplateIds: ["badge_template_001"],
+    startsAt: "2026-02-13T00:00:00.000Z",
+    endsAt: "2026-03-13T00:00:00.000Z",
     revokedAt: null,
     revokedByUserId: null,
     revokedReason: null,
-    status: 'active',
-    createdAt: '2026-02-13T00:00:00.000Z',
-    updatedAt: '2026-02-13T00:00:00.000Z',
+    status: "active",
+    createdAt: "2026-02-13T00:00:00.000Z",
+    updatedAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -457,14 +457,14 @@ const sampleDelegatedIssuingAuthorityGrantEvent = (
   overrides?: Partial<DelegatedIssuingAuthorityGrantEventRecord>,
 ): DelegatedIssuingAuthorityGrantEventRecord => {
   return {
-    id: 'dage_123',
-    tenantId: 'tenant_123',
-    grantId: 'dag_123',
-    eventType: 'granted',
-    actorUserId: 'usr_admin',
+    id: "dage_123",
+    tenantId: "tenant_123",
+    grantId: "dag_123",
+    eventType: "granted",
+    actorUserId: "usr_admin",
     detailsJson: '{"reason":"Spring delegation"}',
-    occurredAt: '2026-02-13T00:00:00.000Z',
-    createdAt: '2026-02-13T00:00:00.000Z',
+    occurredAt: "2026-02-13T00:00:00.000Z",
+    createdAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -473,17 +473,17 @@ const sampleBadgeTemplateOwnershipEvent = (
   overrides?: Partial<BadgeTemplateOwnershipEventRecord>,
 ): BadgeTemplateOwnershipEventRecord => {
   return {
-    id: 'btoe_123',
-    tenantId: 'tenant_123',
-    badgeTemplateId: 'badge_template_001',
-    fromOrgUnitId: 'tenant_123:org:institution',
-    toOrgUnitId: 'tenant_123:org:department-math',
-    reasonCode: 'administrative_transfer',
-    reason: 'Moved to Math governance',
+    id: "btoe_123",
+    tenantId: "tenant_123",
+    badgeTemplateId: "badge_template_001",
+    fromOrgUnitId: "tenant_123:org:institution",
+    toOrgUnitId: "tenant_123:org:department-math",
+    reasonCode: "administrative_transfer",
+    reason: "Moved to Math governance",
     governanceMetadataJson: '{"governancePolicyVersion":"2026-02-13"}',
-    transferredByUserId: 'usr_123',
-    transferredAt: '2026-02-13T00:00:00.000Z',
-    createdAt: '2026-02-13T00:00:00.000Z',
+    transferredByUserId: "usr_123",
+    transferredAt: "2026-02-13T00:00:00.000Z",
+    createdAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -492,31 +492,31 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'issuer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "issuer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
-    id: 'aud_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'assertion.issued',
-    targetType: 'assertion',
-    targetId: 'tenant_123:assertion_456',
+    id: "aud_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "assertion.issued",
+    targetType: "assertion",
+    targetId: "tenant_123:assertion_456",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
-describe('org unit and badge ownership governance endpoints', () => {
+describe("org unit and badge ownership governance endpoints", () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
     mockedTouchSession.mockReset();
@@ -532,27 +532,27 @@ describe('org unit and badge ownership governance endpoints', () => {
     mockedCreateAuditLog.mockClear();
   });
 
-  it('lists tenant org units for issuer roles', async () => {
+  it("lists tenant org units for issuer roles", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListTenantOrgUnits.mockResolvedValue([
       sampleTenantOrgUnit(),
       sampleTenantOrgUnit({
-        id: 'tenant_123:org:department-math',
-        unitType: 'department',
-        slug: 'math',
-        displayName: 'Department of Mathematics',
+        id: "tenant_123:org:department-math",
+        unitType: "department",
+        slug: "math",
+        displayName: "Department of Mathematics",
       }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/org-units',
+      "/v1/tenants/tenant_123/org-units",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -561,32 +561,32 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
+    expect(body.tenantId).toBe("tenant_123");
     expect(Array.isArray(body.orgUnits)).toBe(true);
     expect(mockedListTenantOrgUnits).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       includeInactive: false,
     });
   });
 
-  it('authorizes requested tenant governance routes even when the legacy session tenant differs', async () => {
+  it("authorizes requested tenant governance routes even when the legacy session tenant differs", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'issuer' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
     mockedFindActiveSessionByHash.mockResolvedValue(
       sampleSession({
-        tenantId: 'tenant_other',
+        tenantId: "tenant_other",
       }),
     );
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListTenantOrgUnits.mockResolvedValue([sampleTenantOrgUnit()]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/org-units',
+      "/v1/tenants/tenant_123/org-units",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -594,64 +594,68 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
-    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(body.tenantId).toBe("tenant_123");
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, "tenant_123", "usr_123");
   });
 
-  it('authorizes requested tenant governance routes from Better Auth without a legacy session cookie', async () => {
+  it("authorizes requested tenant governance routes from Better Auth without a legacy session cookie", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders({
-        betterAuthPrincipal: {
-          userId: 'usr_123',
-          authSessionId: 'ba_ses_123',
-          authMethod: 'better_auth',
-          expiresAt: '2026-03-17T22:00:00.000Z',
-        },
-      });
+      betterAuthPrincipal: {
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth",
+        expiresAt: "2026-03-17T22:00:00.000Z",
+      },
+    });
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'issuer' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
     mockedListTenantOrgUnits.mockResolvedValue([sampleTenantOrgUnit()]);
 
-    const response = await isolatedApp.request('/v1/tenants/tenant_123/org-units', {
-      method: 'GET',
-    }, env);
+    const response = await isolatedApp.request(
+      "/v1/tenants/tenant_123/org-units",
+      {
+        method: "GET",
+      },
+      env,
+    );
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
+    expect(body.tenantId).toBe("tenant_123");
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
-    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, "tenant_123", "usr_123");
     expect(mockedFindActiveSessionByHash).not.toHaveBeenCalled();
   });
 
-  it('creates a tenant org unit for admin roles and writes audit log', async () => {
+  it("creates a tenant org unit for admin roles and writes audit log", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedCreateTenantOrgUnit.mockResolvedValue(
       sampleTenantOrgUnit({
-        id: 'ou_department_math',
-        unitType: 'department',
-        slug: 'math',
-        displayName: 'Department of Mathematics',
+        id: "ou_department_math",
+        unitType: "department",
+        slug: "math",
+        displayName: "Department of Mathematics",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/org-units',
+      "/v1/tenants/tenant_123/org-units",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          unitType: 'department',
-          slug: 'math',
-          displayName: 'Department of Mathematics',
-          parentOrgUnitId: 'tenant_123:org:institution',
+          unitType: "department",
+          slug: "math",
+          displayName: "Department of Mathematics",
+          parentOrgUnitId: "tenant_123:org:institution",
         }),
       },
       env,
@@ -660,53 +664,53 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('tenant_123');
+    expect(body.tenantId).toBe("tenant_123");
     expect(mockedCreateTenantOrgUnit).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        unitType: 'department',
-        slug: 'math',
-        displayName: 'Department of Mathematics',
-        parentOrgUnitId: 'tenant_123:org:institution',
-        createdByUserId: 'usr_123',
+        tenantId: "tenant_123",
+        unitType: "department",
+        slug: "math",
+        displayName: "Department of Mathematics",
+        parentOrgUnitId: "tenant_123:org:institution",
+        createdByUserId: "usr_123",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        action: 'tenant.org_unit_created',
-        targetType: 'org_unit',
+        tenantId: "tenant_123",
+        action: "tenant.org_unit_created",
+        targetType: "org_unit",
       }),
     );
   });
 
-  it('upserts enterprise tenant SAML SSO configuration and writes audit log', async () => {
+  it("upserts enterprise tenant SAML SSO configuration and writes audit log", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
-    mockedFindTenantById.mockResolvedValue(sampleTenant({ planTier: 'enterprise' }));
+    mockedTouchSession.mockResolvedValue(undefined);
+    mockedFindTenantById.mockResolvedValue(sampleTenant({ planTier: "enterprise" }));
     mockedUpsertTenantSsoSamlConfiguration.mockResolvedValue(sampleTenantSsoSamlConfiguration());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/sso/saml',
+      "/v1/tenants/tenant_123/sso/saml",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          idpEntityId: 'https://idp.example.edu/entity',
-          ssoLoginUrl: 'https://idp.example.edu/sso/login',
-          idpCertificatePem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
-          idpMetadataUrl: 'https://idp.example.edu/metadata',
-          spEntityId: 'https://credtrail.test/saml/sp',
-          assertionConsumerServiceUrl: 'https://credtrail.test/saml/acs',
-          nameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+          idpEntityId: "https://idp.example.edu/entity",
+          ssoLoginUrl: "https://idp.example.edu/sso/login",
+          idpCertificatePem: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----",
+          idpMetadataUrl: "https://idp.example.edu/metadata",
+          spEntityId: "https://credtrail.test/saml/sp",
+          assertionConsumerServiceUrl: "https://credtrail.test/saml/acs",
+          nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
           enforced: true,
         }),
       },
@@ -715,24 +719,24 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(410);
-    expect(body.error).toContain('deprecated');
+    expect(body.error).toContain("deprecated");
     expect(mockedUpsertTenantSsoSamlConfiguration).not.toHaveBeenCalled();
   });
 
-  it('returns 403 for SAML SSO configuration on non-enterprise plans', async () => {
+  it("returns 403 for SAML SSO configuration on non-enterprise plans", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
-    mockedFindTenantById.mockResolvedValue(sampleTenant({ planTier: 'team' }));
+    mockedTouchSession.mockResolvedValue(undefined);
+    mockedFindTenantById.mockResolvedValue(sampleTenant({ planTier: "team" }));
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/sso/saml',
+      "/v1/tenants/tenant_123/sso/saml",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -740,28 +744,28 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toContain('enterprise');
+    expect(body.error).toContain("enterprise");
   });
 
-  it('creates tenant API keys for admin roles and writes audit log', async () => {
+  it("creates tenant API keys for admin roles and writes audit log", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedCreateTenantApiKey.mockResolvedValue(sampleTenantApiKey());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/api-keys',
+      "/v1/tenants/tenant_123/api-keys",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          label: 'Integration key',
-          scopes: ['queue.issue', 'queue.revoke'],
+          label: "Integration key",
+          scopes: ["queue.issue", "queue.revoke"],
         }),
       },
       env,
@@ -769,38 +773,38 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('tenant_123');
-    expect(typeof body.apiKey).toBe('string');
+    expect(body.tenantId).toBe("tenant_123");
+    expect(typeof body.apiKey).toBe("string");
     expect(mockedCreateTenantApiKey).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        label: 'Integration key',
+        tenantId: "tenant_123",
+        label: "Integration key",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'tenant.api_key_created',
+        action: "tenant.api_key_created",
       }),
     );
   });
 
-  it('lists and revokes tenant API keys for admin roles', async () => {
+  it("lists and revokes tenant API keys for admin roles", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListTenantApiKeys.mockResolvedValue([sampleTenantApiKey()]);
     mockedRevokeTenantApiKey.mockResolvedValue(true);
 
     const listResponse = await app.request(
-      '/v1/tenants/tenant_123/api-keys?includeRevoked=true',
+      "/v1/tenants/tenant_123/api-keys?includeRevoked=true",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -810,20 +814,20 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listBody.keys)).toBe(true);
     expect(mockedListTenantApiKeys).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       includeRevoked: true,
     });
 
     const revokeResponse = await app.request(
-      '/v1/tenants/tenant_123/api-keys/tak_123/revoke',
+      "/v1/tenants/tenant_123/api-keys/tak_123/revoke",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          revokedAt: '2026-02-20T00:00:00.000Z',
+          revokedAt: "2026-02-20T00:00:00.000Z",
         }),
       },
       env,
@@ -833,32 +837,32 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(revokeResponse.status).toBe(200);
     expect(revokeBody.revoked).toBe(true);
     expect(mockedRevokeTenantApiKey).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      apiKeyId: 'tak_123',
-      revokedAt: '2026-02-20T00:00:00.000Z',
+      tenantId: "tenant_123",
+      apiKeyId: "tak_123",
+      revokedAt: "2026-02-20T00:00:00.000Z",
     });
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'tenant.api_key_revoked',
+        action: "tenant.api_key_revoked",
       }),
     );
   });
 
-  it('returns badge template ownership history', async () => {
+  it("returns badge template ownership history", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedListBadgeTemplateOwnershipEvents.mockResolvedValue([sampleBadgeTemplateOwnershipEvent()]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-history',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-history",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -866,43 +870,43 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
+    expect(body.tenantId).toBe("tenant_123");
     expect(Array.isArray(body.events)).toBe(true);
     expect(mockedListBadgeTemplateOwnershipEvents).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'badge_template_001',
+      tenantId: "tenant_123",
+      badgeTemplateId: "badge_template_001",
     });
   });
 
-  it('transfers badge template ownership and writes audit log', async () => {
+  it("transfers badge template ownership and writes audit log", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedTransferBadgeTemplateOwnership.mockResolvedValue({
-      status: 'transferred',
+      status: "transferred",
       template: sampleBadgeTemplate({
-        ownerOrgUnitId: 'tenant_123:org:department-math',
+        ownerOrgUnitId: "tenant_123:org:department-math",
         governanceMetadataJson: '{"governancePolicyVersion":"2026-02-13"}',
       }),
       event: sampleBadgeTemplateOwnershipEvent(),
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-transfer',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-transfer",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          toOrgUnitId: 'tenant_123:org:department-math',
-          reasonCode: 'administrative_transfer',
-          reason: 'Moved to Math governance',
+          toOrgUnitId: "tenant_123:org:department-math",
+          reasonCode: "administrative_transfer",
+          reason: "Moved to Math governance",
           governanceMetadata: {
-            governancePolicyVersion: '2026-02-13',
+            governancePolicyVersion: "2026-02-13",
           },
         }),
       },
@@ -912,43 +916,43 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.status).toBe('transferred');
+    expect(body.status).toBe("transferred");
     expect(mockedTransferBadgeTemplateOwnership).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        badgeTemplateId: 'badge_template_001',
-        toOrgUnitId: 'tenant_123:org:department-math',
-        reasonCode: 'administrative_transfer',
-        transferredByUserId: 'usr_123',
+        tenantId: "tenant_123",
+        badgeTemplateId: "badge_template_001",
+        toOrgUnitId: "tenant_123:org:department-math",
+        reasonCode: "administrative_transfer",
+        transferredByUserId: "usr_123",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        action: 'badge_template.ownership_transferred',
-        targetType: 'badge_template',
+        tenantId: "tenant_123",
+        action: "badge_template.ownership_transferred",
+        targetType: "badge_template",
       }),
     );
   });
 
-  it('lists scoped org-unit grants for a tenant user', async () => {
+  it("lists scoped org-unit grants for a tenant user", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
-      sampleTenantMembershipOrgUnitScope({ userId: 'usr_issuer' }),
+      sampleTenantMembershipOrgUnitScope({ userId: "usr_issuer" }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes',
+      "/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -957,40 +961,40 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.userId).toBe('usr_issuer');
+    expect(body.userId).toBe("usr_issuer");
     expect(Array.isArray(body.scopes)).toBe(true);
     expect(mockedListTenantMembershipOrgUnitScopes).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      userId: 'usr_issuer',
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
     });
   });
 
-  it('upserts scoped org-unit grants for a tenant user', async () => {
+  it("upserts scoped org-unit grants for a tenant user", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedUpsertTenantMembershipOrgUnitScope.mockResolvedValue({
       scope: sampleTenantMembershipOrgUnitScope({
-        userId: 'usr_issuer',
-        orgUnitId: 'tenant_123:org:department-math',
-        role: 'issuer',
+        userId: "usr_issuer",
+        orgUnitId: "tenant_123:org:department-math",
+        role: "issuer",
       }),
       previousRole: null,
       changed: true,
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes/tenant_123:org:department-math',
+      "/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes/tenant_123:org:department-math",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          role: 'issuer',
+          role: "issuer",
         }),
       },
       env,
@@ -1003,36 +1007,36 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(mockedUpsertTenantMembershipOrgUnitScope).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        userId: 'usr_issuer',
-        orgUnitId: 'tenant_123:org:department-math',
-        role: 'issuer',
-        createdByUserId: 'usr_123',
+        tenantId: "tenant_123",
+        userId: "usr_issuer",
+        orgUnitId: "tenant_123:org:department-math",
+        role: "issuer",
+        createdByUserId: "usr_123",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'membership.org_scope_assigned',
-        targetType: 'membership_org_scope',
+        action: "membership.org_scope_assigned",
+        targetType: "membership_org_scope",
       }),
     );
   });
 
-  it('deletes scoped org-unit grants for a tenant user', async () => {
+  it("deletes scoped org-unit grants for a tenant user", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedRemoveTenantMembershipOrgUnitScope.mockResolvedValue(true);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes/tenant_123:org:department-math',
+      "/v1/tenants/tenant_123/users/usr_issuer/org-unit-scopes/tenant_123:org:department-math",
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -1043,35 +1047,35 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(response.status).toBe(200);
     expect(body.removed).toBe(true);
     expect(mockedRemoveTenantMembershipOrgUnitScope).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      userId: 'usr_issuer',
-      orgUnitId: 'tenant_123:org:department-math',
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      orgUnitId: "tenant_123:org:department-math",
     });
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'membership.org_scope_removed',
-        targetType: 'membership_org_scope',
+        action: "membership.org_scope_removed",
+        targetType: "membership_org_scope",
       }),
     );
   });
 
-  it('lists delegated issuing authority grants for a tenant user', async () => {
+  it("lists delegated issuing authority grants for a tenant user", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedListDelegatedIssuingAuthorityGrants.mockResolvedValue([
-      sampleDelegatedIssuingAuthorityGrant({ delegateUserId: 'usr_issuer' }),
+      sampleDelegatedIssuingAuthorityGrant({ delegateUserId: "usr_issuer" }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants?includeRevoked=true',
+      "/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants?includeRevoked=true",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -1080,44 +1084,44 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.userId).toBe('usr_issuer');
+    expect(body.userId).toBe("usr_issuer");
     expect(Array.isArray(body.grants)).toBe(true);
     expect(mockedListDelegatedIssuingAuthorityGrants).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      delegateUserId: 'usr_issuer',
+      tenantId: "tenant_123",
+      delegateUserId: "usr_issuer",
       includeRevoked: true,
       includeExpired: false,
     });
   });
 
-  it('creates delegated issuing authority grants and writes audit logs', async () => {
+  it("creates delegated issuing authority grants and writes audit logs", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedCreateDelegatedIssuingAuthorityGrant.mockResolvedValue(
       sampleDelegatedIssuingAuthorityGrant({
-        id: 'dag_new',
-        delegateUserId: 'usr_issuer',
-        allowedActions: ['issue_badge', 'revoke_badge'],
+        id: "dag_new",
+        delegateUserId: "usr_issuer",
+        allowedActions: ["issue_badge", "revoke_badge"],
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants',
+      "/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          orgUnitId: 'tenant_123:org:department-math',
-          badgeTemplateIds: ['badge_template_001'],
-          allowedActions: ['issue_badge', 'revoke_badge'],
-          endsAt: '2026-03-13T00:00:00.000Z',
-          reason: 'Spring term authority',
+          orgUnitId: "tenant_123:org:department-math",
+          badgeTemplateIds: ["badge_template_001"],
+          allowedActions: ["issue_badge", "revoke_badge"],
+          endsAt: "2026-03-13T00:00:00.000Z",
+          reason: "Spring term authority",
         }),
       },
       env,
@@ -1126,63 +1130,63 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(201);
-    expect(body.userId).toBe('usr_issuer');
+    expect(body.userId).toBe("usr_issuer");
     expect(mockedCreateDelegatedIssuingAuthorityGrant).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        delegateUserId: 'usr_issuer',
-        delegatedByUserId: 'usr_123',
-        orgUnitId: 'tenant_123:org:department-math',
-        allowedActions: ['issue_badge', 'revoke_badge'],
-        badgeTemplateIds: ['badge_template_001'],
-        endsAt: '2026-03-13T00:00:00.000Z',
+        tenantId: "tenant_123",
+        delegateUserId: "usr_issuer",
+        delegatedByUserId: "usr_123",
+        orgUnitId: "tenant_123:org:department-math",
+        allowedActions: ["issue_badge", "revoke_badge"],
+        badgeTemplateIds: ["badge_template_001"],
+        endsAt: "2026-03-13T00:00:00.000Z",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'delegated_issuing_authority.granted',
-        targetType: 'delegated_issuing_authority_grant',
+        action: "delegated_issuing_authority.granted",
+        targetType: "delegated_issuing_authority_grant",
       }),
     );
   });
 
-  it('revokes delegated issuing authority grants and writes audit logs', async () => {
+  it("revokes delegated issuing authority grants and writes audit logs", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindDelegatedIssuingAuthorityGrantById.mockResolvedValue(
       sampleDelegatedIssuingAuthorityGrant({
-        id: 'dag_123',
-        delegateUserId: 'usr_issuer',
+        id: "dag_123",
+        delegateUserId: "usr_issuer",
       }),
     );
     mockedRevokeDelegatedIssuingAuthorityGrant.mockResolvedValue({
-      status: 'revoked',
+      status: "revoked",
       grant: sampleDelegatedIssuingAuthorityGrant({
-        id: 'dag_123',
-        delegateUserId: 'usr_issuer',
-        revokedAt: '2026-02-20T00:00:00.000Z',
-        revokedByUserId: 'usr_123',
-        revokedReason: 'Policy update',
-        status: 'revoked',
+        id: "dag_123",
+        delegateUserId: "usr_issuer",
+        revokedAt: "2026-02-20T00:00:00.000Z",
+        revokedByUserId: "usr_123",
+        revokedReason: "Policy update",
+        status: "revoked",
       }),
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants/dag_123/revoke',
+      "/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants/dag_123/revoke",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          reason: 'Policy update',
-          revokedAt: '2026-02-20T00:00:00.000Z',
+          reason: "Policy update",
+          revokedAt: "2026-02-20T00:00:00.000Z",
         }),
       },
       env,
@@ -1191,50 +1195,50 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(body.status).toBe('revoked');
+    expect(body.status).toBe("revoked");
     expect(mockedRevokeDelegatedIssuingAuthorityGrant).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        grantId: 'dag_123',
-        revokedByUserId: 'usr_123',
-        revokedReason: 'Policy update',
-        revokedAt: '2026-02-20T00:00:00.000Z',
+        tenantId: "tenant_123",
+        grantId: "dag_123",
+        revokedByUserId: "usr_123",
+        revokedReason: "Policy update",
+        revokedAt: "2026-02-20T00:00:00.000Z",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        action: 'delegated_issuing_authority.revoked',
-        targetType: 'delegated_issuing_authority_grant',
+        action: "delegated_issuing_authority.revoked",
+        targetType: "delegated_issuing_authority_grant",
       }),
     );
   });
 
-  it('returns delegated issuing authority grant lifecycle events', async () => {
+  it("returns delegated issuing authority grant lifecycle events", async () => {
     const env = createEnv();
 
-    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: 'admin' }));
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindDelegatedIssuingAuthorityGrantById.mockResolvedValue(
       sampleDelegatedIssuingAuthorityGrant({
-        id: 'dag_123',
-        delegateUserId: 'usr_issuer',
+        id: "dag_123",
+        delegateUserId: "usr_issuer",
       }),
     );
     mockedListDelegatedIssuingAuthorityGrantEvents.mockResolvedValue([
       sampleDelegatedIssuingAuthorityGrantEvent({
-        grantId: 'dag_123',
+        grantId: "dag_123",
       }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants/dag_123/events?limit=25',
+      "/v1/tenants/tenant_123/users/usr_issuer/issuing-authority-grants/dag_123/events?limit=25",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -1245,27 +1249,27 @@ describe('org unit and badge ownership governance endpoints', () => {
     expect(response.status).toBe(200);
     expect(Array.isArray(body.events)).toBe(true);
     expect(mockedListDelegatedIssuingAuthorityGrantEvents).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      grantId: 'dag_123',
+      tenantId: "tenant_123",
+      grantId: "dag_123",
       limit: 25,
     });
   });
 
-  it('rejects ownership history when issuer lacks scoped viewer access', async () => {
+  it("rejects ownership history when issuer lacks scoped viewer access", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedHasTenantMembershipOrgUnitScopeAssignments.mockResolvedValue(true);
     mockedHasTenantMembershipOrgUnitAccess.mockResolvedValue(false);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-history',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/ownership-history",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -1273,6 +1277,6 @@ describe('org unit and badge ownership governance endpoints', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toContain('Insufficient org-unit scope');
+    expect(body.error).toContain("Insufficient org-unit scope");
   });
 });

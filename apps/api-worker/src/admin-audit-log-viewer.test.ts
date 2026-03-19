@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -9,16 +9,16 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-import { listAuditLogs, type AuditLogRecord, type SqlDatabase } from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+import { listAuditLogs, type AuditLogRecord, type SqlDatabase } from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedListAuditLogs = vi.mocked(listAuditLogs);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -34,24 +34,24 @@ const createEnv = (): {
   BOOTSTRAP_ADMIN_TOKEN?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
-    id: 'aud_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'membership.role_changed',
-    targetType: 'membership',
-    targetId: 'tenant_123:usr_456',
+    id: "aud_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "membership.role_changed",
+    targetType: "membership",
+    targetId: "tenant_123:usr_456",
     metadataJson: '{"role":"admin"}',
-    occurredAt: '2026-02-13T12:00:00.000Z',
-    createdAt: '2026-02-13T12:00:00.000Z',
+    occurredAt: "2026-02-13T12:00:00.000Z",
+    createdAt: "2026-02-13T12:00:00.000Z",
     ...overrides,
   };
 };
@@ -64,19 +64,19 @@ beforeEach(() => {
   mockedListAuditLogs.mockResolvedValue([]);
 });
 
-describe('admin audit log viewer', () => {
-  it('lists audit logs via bootstrap admin API', async () => {
+describe("admin audit log viewer", () => {
+  it("lists audit logs via bootstrap admin API", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     mockedListAuditLogs.mockResolvedValue([sampleAuditLogRecord()]);
 
     const response = await app.request(
-      '/v1/admin/audit-logs?tenantId=tenant_123&action=membership.role_changed&limit=5',
+      "/v1/admin/audit-logs?tenantId=tenant_123&action=membership.role_changed&limit=5",
       {
         headers: {
-          authorization: 'Bearer bootstrap-secret',
+          authorization: "Bearer bootstrap-secret",
         },
       },
       env,
@@ -89,28 +89,28 @@ describe('admin audit log viewer', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
-    expect(body.action).toBe('membership.role_changed');
+    expect(body.tenantId).toBe("tenant_123");
+    expect(body.action).toBe("membership.role_changed");
     expect(body.limit).toBe(5);
     expect(body.logs).toHaveLength(1);
     expect(mockedListAuditLogs).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      action: 'membership.role_changed',
+      tenantId: "tenant_123",
+      action: "membership.role_changed",
       limit: 5,
     });
   });
 
-  it('returns 400 for invalid audit-log query filters on admin API', async () => {
+  it("returns 400 for invalid audit-log query filters on admin API", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
 
     const response = await app.request(
-      '/v1/admin/audit-logs?tenantId=tenant_123&limit=1000',
+      "/v1/admin/audit-logs?tenantId=tenant_123&limit=1000",
       {
         headers: {
-          authorization: 'Bearer bootstrap-secret',
+          authorization: "Bearer bootstrap-secret",
         },
       },
       env,
@@ -120,41 +120,41 @@ describe('admin audit log viewer', () => {
     expect(mockedListAuditLogs).not.toHaveBeenCalled();
   });
 
-  it('renders audit log viewer page and applies filters', async () => {
+  it("renders audit log viewer page and applies filters", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     mockedListAuditLogs.mockResolvedValue([sampleAuditLogRecord()]);
 
     const response = await app.request(
-      '/admin/audit-logs?token=bootstrap-secret&tenantId=tenant_123&action=membership.role_changed&limit=5',
+      "/admin/audit-logs?token=bootstrap-secret&tenantId=tenant_123&action=membership.role_changed&limit=5",
       undefined,
       env,
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Audit log viewer');
-    expect(body).toContain('membership.role_changed');
+    expect(body).toContain("Audit log viewer");
+    expect(body).toContain("membership.role_changed");
     expect(mockedListAuditLogs).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      action: 'membership.role_changed',
+      tenantId: "tenant_123",
+      action: "membership.role_changed",
       limit: 5,
     });
   });
 
-  it('renders viewer page shell without querying when tenant filter is absent', async () => {
+  it("renders viewer page shell without querying when tenant filter is absent", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
 
-    const response = await app.request('/admin/audit-logs?token=bootstrap-secret', undefined, env);
+    const response = await app.request("/admin/audit-logs?token=bootstrap-secret", undefined, env);
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Enter a tenant ID to load audit logs.');
+    expect(body).toContain("Enter a tenant ID to load audit logs.");
     expect(mockedListAuditLogs).not.toHaveBeenCalled();
   });
 });

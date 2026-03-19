@@ -1,10 +1,10 @@
-import jsonld from 'jsonld';
+import jsonld from "jsonld";
 
 export type QueueJobType =
-  | 'issue_badge'
-  | 'revoke_badge'
-  | 'rebuild_verification_cache'
-  | 'import_migration_batch';
+  | "issue_badge"
+  | "revoke_badge"
+  | "rebuild_verification_cache"
+  | "import_migration_batch";
 
 export interface TenantScopedResourceId {
   tenantId: string;
@@ -19,8 +19,8 @@ export interface JsonObject {
 }
 
 export interface Ed25519PublicJwk {
-  kty: 'OKP';
-  crv: 'Ed25519';
+  kty: "OKP";
+  crv: "Ed25519";
   x: string;
   kid?: string;
 }
@@ -30,8 +30,8 @@ export interface Ed25519PrivateJwk extends Ed25519PublicJwk {
 }
 
 export interface P256PublicJwk {
-  kty: 'EC';
-  crv: 'P-256';
+  kty: "EC";
+  crv: "P-256";
   x: string;
   y: string;
   kid?: string;
@@ -55,13 +55,16 @@ export interface GenerateTenantDidSigningMaterialInput {
 
 export interface DidVerificationMethod {
   id: string;
-  type: 'Ed25519VerificationKey2020';
+  type: "Ed25519VerificationKey2020";
   controller: string;
   publicKeyMultibase: string;
 }
 
 export interface DidDocument {
-  '@context': readonly ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/suites/ed25519-2020/v1'];
+  "@context": readonly [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1",
+  ];
   id: string;
   verificationMethod: readonly [DidVerificationMethod];
   assertionMethod: readonly [string];
@@ -79,36 +82,36 @@ export interface CreateDidDocumentInput {
 }
 
 export interface Ed25519Signature2020Proof extends JsonObject {
-  type: 'Ed25519Signature2020';
+  type: "Ed25519Signature2020";
   created: string;
-  proofPurpose: 'assertionMethod';
+  proofPurpose: "assertionMethod";
   verificationMethod: string;
   proofValue: string;
 }
 
-export type DataIntegrityCryptosuite = 'eddsa-rdfc-2022' | 'ecdsa-sd-2023';
+export type DataIntegrityCryptosuite = "eddsa-rdfc-2022" | "ecdsa-sd-2023";
 
 export interface DataIntegrityProof extends JsonObject {
-  type: 'DataIntegrityProof';
+  type: "DataIntegrityProof";
   cryptosuite: DataIntegrityCryptosuite;
   created: string;
-  proofPurpose: 'assertionMethod';
+  proofPurpose: "assertionMethod";
   verificationMethod: string;
   proofValue: string;
 }
 
 interface SigningProofOptions extends JsonObject {
-  type: 'Ed25519Signature2020';
+  type: "Ed25519Signature2020";
   created: string;
-  proofPurpose: 'assertionMethod';
+  proofPurpose: "assertionMethod";
   verificationMethod: string;
 }
 
 interface DataIntegritySigningProofOptions extends JsonObject {
-  type: 'DataIntegrityProof';
+  type: "DataIntegrityProof";
   cryptosuite: DataIntegrityCryptosuite;
   created: string;
-  proofPurpose: 'assertionMethod';
+  proofPurpose: "assertionMethod";
   verificationMethod: string;
 }
 
@@ -145,17 +148,17 @@ export interface VerifyCredentialWithDataIntegrityProofInput {
   publicJwk: Ed25519PublicJwk | P256PublicJwk;
 }
 
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 export const createTenantScopedId = (tenantId: string): string => {
   return `${tenantId}:${crypto.randomUUID()}`;
 };
 
 export const splitTenantScopedId = (value: string): TenantScopedResourceId => {
-  const [tenantId, resourceId] = value.split(':', 2);
+  const [tenantId, resourceId] = value.split(":", 2);
 
   if (tenantId === undefined || resourceId === undefined) {
-    throw new Error('Invalid tenant-scoped resource identifier');
+    throw new Error("Invalid tenant-scoped resource identifier");
   }
 
   return {
@@ -165,25 +168,25 @@ export const splitTenantScopedId = (value: string): TenantScopedResourceId => {
 };
 
 const ensureDidWeb = (did: string): void => {
-  if (!did.startsWith('did:web:')) {
-    throw new Error('Expected a did:web identifier');
+  if (!did.startsWith("did:web:")) {
+    throw new Error("Expected a did:web identifier");
   }
 };
 
 const toBase64Url = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const fromBase64Url = (value: string): Uint8Array => {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const padLength = (4 - (base64.length % 4)) % 4;
-  const padded = `${base64}${'='.repeat(padLength)}`;
+  const padded = `${base64}${"=".repeat(padLength)}`;
   const raw = atob(padded);
   const bytes = new Uint8Array(raw.length);
 
@@ -196,7 +199,7 @@ const fromBase64Url = (value: string): Uint8Array => {
 
 const base58Encode = (bytes: Uint8Array): string => {
   if (bytes.length === 0) {
-    return '';
+    return "";
   }
 
   const digits: number[] = [0];
@@ -216,14 +219,14 @@ const base58Encode = (bytes: Uint8Array): string => {
     }
   }
 
-  let encoded = '';
+  let encoded = "";
 
   for (let index = 0; index < bytes.length && bytes[index] === 0; index += 1) {
-    encoded += BASE58_ALPHABET[0] ?? '';
+    encoded += BASE58_ALPHABET[0] ?? "";
   }
 
   for (let index = digits.length - 1; index >= 0; index -= 1) {
-    encoded += BASE58_ALPHABET[digits[index] ?? 0] ?? '';
+    encoded += BASE58_ALPHABET[digits[index] ?? 0] ?? "";
   }
 
   return encoded;
@@ -240,7 +243,7 @@ const base58Decode = (value: string): Uint8Array => {
     const alphabetIndex = BASE58_ALPHABET.indexOf(char);
 
     if (alphabetIndex < 0) {
-      throw new Error('Invalid base58 character in proof value');
+      throw new Error("Invalid base58 character in proof value");
     }
 
     let carry = alphabetIndex;
@@ -282,28 +285,28 @@ const base58Decode = (value: string): Uint8Array => {
 
 const canonicalizeJson = (value: JsonValue): string => {
   if (value === null) {
-    return 'null';
+    return "null";
   }
 
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new Error('Credential payload contains a non-finite number');
+      throw new Error("Credential payload contains a non-finite number");
     }
 
     return JSON.stringify(value);
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return JSON.stringify(value);
   }
 
   if (Array.isArray(value)) {
     const serializedItems = value.map((item) => canonicalizeJson(item));
-    return `[${serializedItems.join(',')}]`;
+    return `[${serializedItems.join(",")}]`;
   }
 
   const keys = Object.keys(value).sort((left, right) => left.localeCompare(right));
@@ -311,50 +314,42 @@ const canonicalizeJson = (value: JsonValue): string => {
     const entryValue = value[key];
 
     if (entryValue === undefined) {
-      throw new Error('Credential payload contains an undefined object field');
+      throw new Error("Credential payload contains an undefined object field");
     }
 
     return `${JSON.stringify(key)}:${canonicalizeJson(entryValue)}`;
   });
 
-  return `{${serializedPairs.join(',')}}`;
+  return `{${serializedPairs.join(",")}}`;
 };
 
 const importEd25519PrivateKey = async (privateJwk: Ed25519PrivateJwk): Promise<CryptoKey> => {
-  return crypto.subtle.importKey('jwk', privateJwk, { name: 'Ed25519' }, false, ['sign']);
+  return crypto.subtle.importKey("jwk", privateJwk, { name: "Ed25519" }, false, ["sign"]);
 };
 
 const importEd25519PublicKey = async (publicJwk: Ed25519PublicJwk): Promise<CryptoKey> => {
-  return crypto.subtle.importKey('jwk', publicJwk, { name: 'Ed25519' }, false, ['verify']);
+  return crypto.subtle.importKey("jwk", publicJwk, { name: "Ed25519" }, false, ["verify"]);
 };
 
 const importP256PrivateKey = async (privateJwk: P256PrivateJwk): Promise<CryptoKey> => {
-  return crypto.subtle.importKey(
-    'jwk',
-    privateJwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign'],
-  );
+  return crypto.subtle.importKey("jwk", privateJwk, { name: "ECDSA", namedCurve: "P-256" }, false, [
+    "sign",
+  ]);
 };
 
 const importP256PublicKey = async (publicJwk: P256PublicJwk): Promise<CryptoKey> => {
-  return crypto.subtle.importKey(
-    'jwk',
-    publicJwk,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['verify'],
-  );
+  return crypto.subtle.importKey("jwk", publicJwk, { name: "ECDSA", namedCurve: "P-256" }, false, [
+    "verify",
+  ]);
 };
 
 const isEd25519PublicJwk = (value: unknown): value is Ed25519PublicJwk => {
-  if (value === null || typeof value !== 'object') {
+  if (value === null || typeof value !== "object") {
     return false;
   }
 
   const jwk = value as Record<string, unknown>;
-  return jwk.kty === 'OKP' && jwk.crv === 'Ed25519' && typeof jwk.x === 'string';
+  return jwk.kty === "OKP" && jwk.crv === "Ed25519" && typeof jwk.x === "string";
 };
 
 const isEd25519PrivateJwk = (value: unknown): value is Ed25519PrivateJwk => {
@@ -362,16 +357,21 @@ const isEd25519PrivateJwk = (value: unknown): value is Ed25519PrivateJwk => {
     return false;
   }
 
-  return typeof (value as { d?: unknown }).d === 'string';
+  return typeof (value as { d?: unknown }).d === "string";
 };
 
 const isP256PublicJwk = (value: unknown): value is P256PublicJwk => {
-  if (value === null || typeof value !== 'object') {
+  if (value === null || typeof value !== "object") {
     return false;
   }
 
   const jwk = value as Record<string, unknown>;
-  return jwk.kty === 'EC' && jwk.crv === 'P-256' && typeof jwk.x === 'string' && typeof jwk.y === 'string';
+  return (
+    jwk.kty === "EC" &&
+    jwk.crv === "P-256" &&
+    typeof jwk.x === "string" &&
+    typeof jwk.y === "string"
+  );
 };
 
 const isP256PrivateJwk = (value: unknown): value is P256PrivateJwk => {
@@ -379,17 +379,22 @@ const isP256PrivateJwk = (value: unknown): value is P256PrivateJwk => {
     return false;
   }
 
-  return typeof (value as { d?: unknown }).d === 'string';
+  return typeof (value as { d?: unknown }).d === "string";
 };
 
 const normalizePublicJwk = (jwk: JsonWebKey, keyId?: string): Ed25519PublicJwk => {
-  if (jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519' || typeof jwk.x !== 'string' || jwk.x.length === 0) {
-    throw new Error('Generated public key is not an Ed25519 JWK');
+  if (
+    jwk.kty !== "OKP" ||
+    jwk.crv !== "Ed25519" ||
+    typeof jwk.x !== "string" ||
+    jwk.x.length === 0
+  ) {
+    throw new Error("Generated public key is not an Ed25519 JWK");
   }
 
   const normalized: Ed25519PublicJwk = {
-    kty: 'OKP',
-    crv: 'Ed25519',
+    kty: "OKP",
+    crv: "Ed25519",
     x: jwk.x,
   };
 
@@ -402,19 +407,19 @@ const normalizePublicJwk = (jwk: JsonWebKey, keyId?: string): Ed25519PublicJwk =
 
 const normalizePrivateJwk = (jwk: JsonWebKey, keyId?: string): Ed25519PrivateJwk => {
   if (
-    jwk.kty !== 'OKP' ||
-    jwk.crv !== 'Ed25519' ||
-    typeof jwk.x !== 'string' ||
+    jwk.kty !== "OKP" ||
+    jwk.crv !== "Ed25519" ||
+    typeof jwk.x !== "string" ||
     jwk.x.length === 0 ||
-    typeof jwk.d !== 'string' ||
+    typeof jwk.d !== "string" ||
     jwk.d.length === 0
   ) {
-    throw new Error('Generated private key is not an Ed25519 JWK');
+    throw new Error("Generated private key is not an Ed25519 JWK");
   }
 
   const normalized: Ed25519PrivateJwk = {
-    kty: 'OKP',
-    crv: 'Ed25519',
+    kty: "OKP",
+    crv: "Ed25519",
     x: jwk.x,
     d: jwk.d,
   };
@@ -430,7 +435,7 @@ const unsignedCredential = (credential: JsonObject): JsonObject => {
   const nextCredential: JsonObject = {};
 
   for (const [key, value] of Object.entries(credential)) {
-    if (key === 'proof') {
+    if (key === "proof") {
       continue;
     }
 
@@ -440,14 +445,11 @@ const unsignedCredential = (credential: JsonObject): JsonObject => {
   return nextCredential;
 };
 
-const proofEnvelope = (
-  created: string,
-  verificationMethod: string,
-): SigningProofOptions => {
+const proofEnvelope = (created: string, verificationMethod: string): SigningProofOptions => {
   return {
-    type: 'Ed25519Signature2020',
+    type: "Ed25519Signature2020",
     created,
-    proofPurpose: 'assertionMethod',
+    proofPurpose: "assertionMethod",
     verificationMethod,
   };
 };
@@ -458,18 +460,15 @@ const dataIntegrityProofEnvelope = (
   cryptosuite: DataIntegrityCryptosuite,
 ): DataIntegritySigningProofOptions => {
   return {
-    type: 'DataIntegrityProof',
+    type: "DataIntegrityProof",
     cryptosuite,
     created,
-    proofPurpose: 'assertionMethod',
+    proofPurpose: "assertionMethod",
     verificationMethod,
   };
 };
 
-const legacySigningPayload = (
-  credential: JsonObject,
-  proof: JsonObject,
-): Uint8Array => {
+const legacySigningPayload = (credential: JsonObject, proof: JsonObject): Uint8Array => {
   const canonicalCredential = canonicalizeJson(unsignedCredential(credential));
   const canonicalProof = canonicalizeJson(proof);
   return new TextEncoder().encode(`${canonicalCredential}.${canonicalProof}`);
@@ -502,7 +501,7 @@ const jsonLdDocumentLoader = async (
   const next = (async (): Promise<JsonLdRemoteDocument> => {
     const response = await fetch(url, {
       headers: {
-        accept: 'application/ld+json, application/json;q=0.9, */*;q=0.8',
+        accept: "application/ld+json, application/json;q=0.9, */*;q=0.8",
       },
     });
 
@@ -541,20 +540,22 @@ const jsonLdDocumentLoader = async (
 };
 
 const canonicalizedJsonLd = async (value: JsonObject): Promise<string> => {
-  const canonize = (jsonld as unknown as {
-    canonize: (input: unknown, options: unknown) => Promise<string>;
-  }).canonize;
+  const canonize = (
+    jsonld as unknown as {
+      canonize: (input: unknown, options: unknown) => Promise<string>;
+    }
+  ).canonize;
 
   return canonize(value as Record<string, unknown>, {
-    algorithm: 'URDNA2015',
-    format: 'application/n-quads',
+    algorithm: "URDNA2015",
+    format: "application/n-quads",
     safe: false,
     documentLoader: jsonLdDocumentLoader,
   });
 };
 
 const sha256Bytes = async (bytes: Uint8Array): Promise<Uint8Array> => {
-  const digest = await crypto.subtle.digest('SHA-256', toArrayBuffer(bytes));
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(bytes));
   return new Uint8Array(digest);
 };
 
@@ -562,20 +563,20 @@ const linkedDataProofOptionsWithContext = (
   credential: JsonObject,
   proof: SigningProofOptions,
 ): JsonObject => {
-  const context = credential['@context'];
+  const context = credential["@context"];
 
   if (
     !(
-      typeof context === 'string' ||
+      typeof context === "string" ||
       Array.isArray(context) ||
-      (context !== null && typeof context === 'object')
+      (context !== null && typeof context === "object")
     )
   ) {
-    throw new Error('Credential is missing a valid @context for Linked Data proof signing');
+    throw new Error("Credential is missing a valid @context for Linked Data proof signing");
   }
 
   return {
-    '@context': context as JsonValue,
+    "@context": context as JsonValue,
     type: proof.type,
     created: proof.created,
     proofPurpose: proof.proofPurpose,
@@ -587,7 +588,9 @@ const linkedDataProofSigningPayload = async (
   credential: JsonObject,
   proof: SigningProofOptions,
 ): Promise<Uint8Array> => {
-  const canonicalProof = await canonicalizedJsonLd(linkedDataProofOptionsWithContext(credential, proof));
+  const canonicalProof = await canonicalizedJsonLd(
+    linkedDataProofOptionsWithContext(credential, proof),
+  );
   const canonicalCredential = await canonicalizedJsonLd(unsignedCredential(credential));
   const proofHash = await sha256Bytes(new TextEncoder().encode(canonicalProof));
   const credentialHash = await sha256Bytes(new TextEncoder().encode(canonicalCredential));
@@ -609,16 +612,16 @@ export const createDidWeb = (input: CreateDidWebInput): string => {
   const trimmedHost = input.host.trim().toLowerCase();
 
   if (trimmedHost.length === 0) {
-    throw new Error('host is required to build did:web');
+    throw new Error("host is required to build did:web");
   }
 
-  const encodedHost = trimmedHost.replace(/:/g, '%3A');
+  const encodedHost = trimmedHost.replace(/:/g, "%3A");
   const pathSegments = input.pathSegments ?? [];
   const encodedSegments = pathSegments.map((segment) => {
     const trimmedSegment = segment.trim();
 
     if (trimmedSegment.length === 0) {
-      throw new Error('did:web path segments must not be empty');
+      throw new Error("did:web path segments must not be empty");
     }
 
     return encodeURIComponent(trimmedSegment);
@@ -628,25 +631,25 @@ export const createDidWeb = (input: CreateDidWebInput): string => {
     return `did:web:${encodedHost}`;
   }
 
-  return `did:web:${encodedHost}:${encodedSegments.join(':')}`;
+  return `did:web:${encodedHost}:${encodedSegments.join(":")}`;
 };
 
 export const didWebDocumentPath = (did: string): string => {
   ensureDidWeb(did);
-  const [, , didSuffix] = did.split(':', 3);
+  const [, , didSuffix] = did.split(":", 3);
 
   if (didSuffix === undefined || didSuffix.length === 0) {
-    throw new Error('Invalid did:web identifier');
+    throw new Error("Invalid did:web identifier");
   }
 
-  const didParts = did.substring('did:web:'.length).split(':');
+  const didParts = did.substring("did:web:".length).split(":");
 
   if (didParts.length <= 1) {
-    return '/.well-known/did.json';
+    return "/.well-known/did.json";
   }
 
   const pathSegments = didParts.slice(1).map((segment) => decodeURIComponent(segment));
-  return `/${pathSegments.join('/')}/did.json`;
+  return `/${pathSegments.join("/")}/did.json`;
 };
 
 export const createDidDocument = (input: CreateDidDocumentInput): DidDocument => {
@@ -655,12 +658,15 @@ export const createDidDocument = (input: CreateDidDocumentInput): DidDocument =>
   const publicKeyMultibase = encodeJwkPublicKeyMultibase(input.publicJwk);
 
   return {
-    '@context': ['https://www.w3.org/ns/did/v1', 'https://w3id.org/security/suites/ed25519-2020/v1'],
+    "@context": [
+      "https://www.w3.org/ns/did/v1",
+      "https://w3id.org/security/suites/ed25519-2020/v1",
+    ],
     id: input.did,
     verificationMethod: [
       {
         id: verificationMethodId,
-        type: 'Ed25519VerificationKey2020',
+        type: "Ed25519VerificationKey2020",
         controller: input.did,
         publicKeyMultibase,
       },
@@ -673,9 +679,9 @@ export const generateTenantDidSigningMaterial = async (
   input: GenerateTenantDidSigningMaterialInput,
 ): Promise<TenantDidSigningMaterial> => {
   ensureDidWeb(input.did);
-  const generated = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
-  const exportedPublicKey = await crypto.subtle.exportKey('jwk', generated.publicKey);
-  const exportedPrivateKey = await crypto.subtle.exportKey('jwk', generated.privateKey);
+  const generated = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const exportedPublicKey = await crypto.subtle.exportKey("jwk", generated.publicKey);
+  const exportedPrivateKey = await crypto.subtle.exportKey("jwk", generated.privateKey);
   const publicJwkWithoutKid = normalizePublicJwk(exportedPublicKey);
   const keyId = input.keyId ?? encodeJwkPublicKeyMultibase(publicJwkWithoutKid);
   const publicJwk = normalizePublicJwk(exportedPublicKey, keyId);
@@ -697,7 +703,7 @@ export const signCredentialWithEd25519Signature2020 = async (
   const privateKey = await importEd25519PrivateKey(input.privateJwk);
   const payload = await linkedDataProofSigningPayload(input.credential, proof);
   const signatureBuffer = await crypto.subtle.sign(
-    { name: 'Ed25519' },
+    { name: "Ed25519" },
     privateKey,
     toArrayBuffer(payload),
   );
@@ -720,7 +726,7 @@ export const verifyCredentialProofWithEd25519Signature2020 = async (
 ): Promise<boolean> => {
   const proof = input.credential.proof;
 
-  if (!proof.proofValue.startsWith('z')) {
+  if (!proof.proofValue.startsWith("z")) {
     return false;
   }
 
@@ -735,7 +741,7 @@ export const verifyCredentialProofWithEd25519Signature2020 = async (
   });
 
   const linkedDataValid = await crypto.subtle.verify(
-    { name: 'Ed25519' },
+    { name: "Ed25519" },
     publicKey,
     toArrayBuffer(signature),
     toArrayBuffer(linkedDataPayload),
@@ -754,7 +760,7 @@ export const verifyCredentialProofWithEd25519Signature2020 = async (
   });
 
   return crypto.subtle.verify(
-    { name: 'Ed25519' },
+    { name: "Ed25519" },
     publicKey,
     toArrayBuffer(signature),
     toArrayBuffer(fallbackPayload),
@@ -769,13 +775,17 @@ export const signCredentialWithDataIntegrityProof = async (
   const payload = legacySigningPayload(input.credential, proof);
 
   switch (input.cryptosuite) {
-    case 'eddsa-rdfc-2022': {
+    case "eddsa-rdfc-2022": {
       if (!isEd25519PrivateJwk(input.privateJwk)) {
-        throw new Error('eddsa-rdfc-2022 requires an Ed25519 private JWK');
+        throw new Error("eddsa-rdfc-2022 requires an Ed25519 private JWK");
       }
 
       const privateKey = await importEd25519PrivateKey(input.privateJwk);
-      const signatureBuffer = await crypto.subtle.sign({ name: 'Ed25519' }, privateKey, toArrayBuffer(payload));
+      const signatureBuffer = await crypto.subtle.sign(
+        { name: "Ed25519" },
+        privateKey,
+        toArrayBuffer(payload),
+      );
       const signature = new Uint8Array(signatureBuffer);
 
       return {
@@ -786,14 +796,14 @@ export const signCredentialWithDataIntegrityProof = async (
         },
       };
     }
-    case 'ecdsa-sd-2023': {
+    case "ecdsa-sd-2023": {
       if (!isP256PrivateJwk(input.privateJwk)) {
-        throw new Error('ecdsa-sd-2023 requires a P-256 private JWK');
+        throw new Error("ecdsa-sd-2023 requires a P-256 private JWK");
       }
 
       const privateKey = await importP256PrivateKey(input.privateJwk);
       const signatureBuffer = await crypto.subtle.sign(
-        { name: 'ECDSA', hash: 'SHA-256' },
+        { name: "ECDSA", hash: "SHA-256" },
         privateKey,
         toArrayBuffer(payload),
       );
@@ -815,7 +825,7 @@ export const verifyCredentialProofWithDataIntegrity = async (
 ): Promise<boolean> => {
   const proof = input.credential.proof;
 
-  if (!proof.proofValue.startsWith('z')) {
+  if (!proof.proofValue.startsWith("z")) {
     return false;
   }
 
@@ -829,27 +839,27 @@ export const verifyCredentialProofWithDataIntegrity = async (
   const signature = base58Decode(proof.proofValue.slice(1));
 
   switch (proof.cryptosuite) {
-    case 'eddsa-rdfc-2022': {
+    case "eddsa-rdfc-2022": {
       if (!isEd25519PublicJwk(input.publicJwk)) {
         return false;
       }
 
       const publicKey = await importEd25519PublicKey(input.publicJwk);
       return crypto.subtle.verify(
-        { name: 'Ed25519' },
+        { name: "Ed25519" },
         publicKey,
         toArrayBuffer(signature),
         toArrayBuffer(payload),
       );
     }
-    case 'ecdsa-sd-2023': {
+    case "ecdsa-sd-2023": {
       if (!isP256PublicJwk(input.publicJwk)) {
         return false;
       }
 
       const publicKey = await importP256PublicKey(input.publicJwk);
       return crypto.subtle.verify(
-        { name: 'ECDSA', hash: 'SHA-256' },
+        { name: "ECDSA", hash: "SHA-256" },
         publicKey,
         toArrayBuffer(signature),
         toArrayBuffer(payload),
@@ -868,14 +878,14 @@ export const encodeJwkPublicKeyMultibase = (publicJwk: Ed25519PublicJwk): string
 };
 
 export const decodeJwkPublicKeyMultibase = (multibaseValue: string): string => {
-  if (!multibaseValue.startsWith('z')) {
-    throw new Error('Expected a base58btc multibase value');
+  if (!multibaseValue.startsWith("z")) {
+    throw new Error("Expected a base58btc multibase value");
   }
 
   const multicodecValue = base58Decode(multibaseValue.slice(1));
 
   if (multicodecValue.length < 3 || multicodecValue[0] !== 0xed || multicodecValue[1] !== 0x01) {
-    throw new Error('Expected multicodec value with Ed25519 0xed01 prefix');
+    throw new Error("Expected multicodec value with Ed25519 0xed01 prefix");
   }
 
   return toBase64Url(multicodecValue.slice(2));
@@ -889,7 +899,7 @@ export {
   type ImmutableCredentialStore,
   type StoreImmutableCredentialInput,
   type StoredImmutableCredentialObject,
-} from './r2';
+} from "./r2";
 
 export {
   captureSentryException,
@@ -900,4 +910,4 @@ export {
   type ObservabilityContext,
   type ObservabilityFields,
   type ObservabilityLevel,
-} from './observability';
+} from "./observability";

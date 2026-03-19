@@ -40,7 +40,7 @@ export interface SqlDatabase {
   prepare(sql: string): SqlPreparedStatement;
 }
 
-export type TenantPlanTier = 'free' | 'team' | 'institution' | 'enterprise';
+export type TenantPlanTier = "free" | "team" | "institution" | "enterprise";
 
 export interface TenantRecord {
   id: string;
@@ -78,8 +78,8 @@ export interface UpsertBadgeTemplateByIdInput {
 }
 
 export interface Ed25519PublicJwkRecord {
-  kty: 'OKP';
-  crv: 'Ed25519';
+  kty: "OKP";
+  crv: "Ed25519";
   x: string;
   kid?: string | undefined;
 }
@@ -152,7 +152,7 @@ export interface CreateAuthIdentityLinkInput {
   emailSnapshot?: string | null | undefined;
 }
 
-export type TenantMembershipRole = 'owner' | 'admin' | 'issuer' | 'viewer';
+export type TenantMembershipRole = "owner" | "admin" | "issuer" | "viewer";
 
 export interface TenantMembershipRecord {
   tenantId: string;
@@ -187,7 +187,7 @@ export interface EnsureTenantMembershipResult {
   created: boolean;
 }
 
-export type TenantMembershipOrgUnitScopeRole = 'admin' | 'issuer' | 'viewer';
+export type TenantMembershipOrgUnitScopeRole = "admin" | "issuer" | "viewer";
 
 export interface TenantMembershipOrgUnitScopeRecord {
   tenantId: string;
@@ -231,9 +231,9 @@ export interface CheckTenantMembershipOrgUnitAccessInput {
   requiredRole: TenantMembershipOrgUnitScopeRole;
 }
 
-export type DelegatedIssuingAuthorityAction = 'issue_badge' | 'revoke_badge' | 'manage_lifecycle';
+export type DelegatedIssuingAuthorityAction = "issue_badge" | "revoke_badge" | "manage_lifecycle";
 
-export type DelegatedIssuingAuthorityGrantStatus = 'scheduled' | 'active' | 'expired' | 'revoked';
+export type DelegatedIssuingAuthorityGrantStatus = "scheduled" | "active" | "expired" | "revoked";
 
 export interface DelegatedIssuingAuthorityGrantRecord {
   id: string;
@@ -253,7 +253,7 @@ export interface DelegatedIssuingAuthorityGrantRecord {
   updatedAt: string;
 }
 
-export type DelegatedIssuingAuthorityGrantEventType = 'granted' | 'revoked' | 'expired';
+export type DelegatedIssuingAuthorityGrantEventType = "granted" | "revoked" | "expired";
 
 export interface DelegatedIssuingAuthorityGrantEventRecord {
   id: string;
@@ -295,7 +295,7 @@ export interface RevokeDelegatedIssuingAuthorityGrantInput {
 }
 
 export interface RevokeDelegatedIssuingAuthorityGrantResult {
-  status: 'revoked' | 'already_revoked';
+  status: "revoked" | "already_revoked";
   grant: DelegatedIssuingAuthorityGrantRecord;
 }
 
@@ -383,12 +383,12 @@ export interface FindActiveTenantApiKeyByHashInput {
   nowIso: string;
 }
 
-export type TenantLoginMode = 'local' | 'hybrid' | 'sso_required';
+export type TenantLoginMode = "local" | "hybrid" | "sso_required";
 
-export type TenantAuthPolicyEnforceForRoles = 'all_users' | 'admins_only';
+export type TenantAuthPolicyEnforceForRoles = "all_users" | "admins_only";
 
 export const HOSTED_ENTERPRISE_OIDC_ONLY_ERROR =
-  'Hosted enterprise sign-in currently supports OIDC providers only. Legacy SAML compatibility remains available for visibility and cleanup.';
+  "Hosted enterprise sign-in currently supports OIDC providers only. Legacy SAML compatibility remains available for visibility and cleanup.";
 
 export interface TenantAuthPolicyRecord {
   tenantId: string;
@@ -410,7 +410,7 @@ export interface UpsertTenantAuthPolicyInput {
   enforceForRoles?: TenantAuthPolicyEnforceForRoles | undefined;
 }
 
-export type TenantAuthProviderProtocol = 'oidc' | 'saml';
+export type TenantAuthProviderProtocol = "oidc" | "saml";
 
 export interface TenantAuthProviderRecord {
   id: string;
@@ -547,27 +547,23 @@ export interface UpdateTenantCanvasGradebookIntegrationTokensInput {
 }
 
 export type BadgeIssuanceRuleLmsProviderKind =
-  | 'canvas'
-  | 'moodle'
-  | 'blackboard_ultra'
-  | 'd2l_brightspace'
-  | 'sakai';
+  | "canvas"
+  | "moodle"
+  | "blackboard_ultra"
+  | "d2l_brightspace"
+  | "sakai";
 
 export type BadgeIssuanceRuleVersionStatus =
-  | 'draft'
-  | 'pending_approval'
-  | 'approved'
-  | 'active'
-  | 'rejected'
-  | 'deprecated';
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "active"
+  | "rejected"
+  | "deprecated";
 
-export type BadgeIssuanceRuleApprovalStepStatus =
-  | 'queued'
-  | 'pending'
-  | 'approved'
-  | 'rejected';
+export type BadgeIssuanceRuleApprovalStepStatus = "queued" | "pending" | "approved" | "rejected";
 
-export type BadgeIssuanceRuleApprovalEventAction = 'submitted' | 'approved' | 'rejected';
+export type BadgeIssuanceRuleApprovalEventAction = "submitted" | "approved" | "rejected";
 
 export interface BadgeIssuanceRuleRecord {
   id: string;
@@ -636,7 +632,7 @@ export interface BadgeIssuanceRuleValueListRecord {
   id: string;
   tenantId: string;
   label: string;
-  kind: 'course_ids' | 'badge_template_ids';
+  kind: "course_ids" | "badge_template_ids";
   values: string[];
   createdByUserId: string | null;
   archivedAt: string | null;
@@ -651,13 +647,13 @@ export interface BadgeIssuanceRuleEvaluationRecord {
   versionId: string;
   learnerId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   matched: boolean;
   issuanceStatus: string | null;
   assertionId: string | null;
   evaluationJson: string;
-  reviewStatus: 'pending' | 'resolved' | null;
-  reviewDecision: 'issue' | 'dismiss' | null;
+  reviewStatus: "pending" | "resolved" | null;
+  reviewDecision: "issue" | "dismiss" | null;
   reviewComment: string | null;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
@@ -698,14 +694,14 @@ export interface ListBadgeIssuanceRuleVersionsInput {
 export interface CreateBadgeIssuanceRuleValueListInput {
   tenantId: string;
   label: string;
-  kind: 'course_ids' | 'badge_template_ids';
+  kind: "course_ids" | "badge_template_ids";
   values: readonly string[];
   createdByUserId?: string | undefined;
 }
 
 export interface ListBadgeIssuanceRuleValueListsInput {
   tenantId: string;
-  kind?: 'course_ids' | 'badge_template_ids' | undefined;
+  kind?: "course_ids" | "badge_template_ids" | undefined;
   includeArchived?: boolean | undefined;
 }
 
@@ -723,7 +719,7 @@ export interface DecideBadgeIssuanceRuleVersionInput {
   tenantId: string;
   ruleId: string;
   versionId: string;
-  decision: 'approved' | 'rejected';
+  decision: "approved" | "rejected";
   actorUserId: string;
   actorRole: TenantMembershipRole;
   comment?: string | undefined;
@@ -756,13 +752,13 @@ export interface CreateBadgeIssuanceRuleEvaluationInput {
   versionId: string;
   learnerId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   matched: boolean;
   issuanceStatus?: string | undefined;
   assertionId?: string | undefined;
   evaluationJson: string;
-  reviewStatus?: 'pending' | 'resolved' | undefined;
-  reviewDecision?: 'issue' | 'dismiss' | undefined;
+  reviewStatus?: "pending" | "resolved" | undefined;
+  reviewDecision?: "issue" | "dismiss" | undefined;
   reviewComment?: string | undefined;
   reviewedByUserId?: string | undefined;
   reviewedAt?: string | undefined;
@@ -775,14 +771,14 @@ export interface ListBadgeIssuanceRuleEvaluationsInput {
   versionId?: string | undefined;
   badgeTemplateId?: string | undefined;
   issuanceStatus?: string | undefined;
-  reviewStatus?: 'pending' | 'resolved' | undefined;
+  reviewStatus?: "pending" | "resolved" | undefined;
   limit?: number | undefined;
 }
 
 export interface ResolveBadgeIssuanceRuleEvaluationReviewInput {
   tenantId: string;
   evaluationId: string;
-  reviewDecision: 'issue' | 'dismiss';
+  reviewDecision: "issue" | "dismiss";
   reviewComment?: string | undefined;
   reviewedByUserId: string;
   reviewedAt?: string | undefined;
@@ -793,14 +789,15 @@ export interface ResolveBadgeIssuanceRuleEvaluationReviewInput {
 export interface ListIssuedBadgeTemplateIdsForRecipientInput {
   tenantId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
 }
 
 export interface DedicatedDbProvisioningRequestStatusInput {
-  status: 'pending' | 'provisioned' | 'failed' | 'canceled';
+  status: "pending" | "provisioned" | "failed" | "canceled";
 }
 
-export type DedicatedDbProvisioningRequestStatus = DedicatedDbProvisioningRequestStatusInput['status'];
+export type DedicatedDbProvisioningRequestStatus =
+  DedicatedDbProvisioningRequestStatusInput["status"];
 
 export interface DedicatedDbProvisioningRequestRecord {
   id: string;
@@ -832,7 +829,7 @@ export interface ListDedicatedDbProvisioningRequestsInput {
 export interface ResolveDedicatedDbProvisioningRequestInput {
   tenantId: string;
   requestId: string;
-  status: Exclude<DedicatedDbProvisioningRequestStatus, 'pending'>;
+  status: Exclude<DedicatedDbProvisioningRequestStatus, "pending">;
   dedicatedDatabaseUrl?: string | undefined;
   notes?: string | undefined;
   resolvedAt?: string | undefined;
@@ -1040,7 +1037,7 @@ export interface UpsertOb3SubjectCredentialInput {
 }
 
 export interface UpsertOb3SubjectCredentialResult {
-  status: 'created' | 'updated';
+  status: "created" | "updated";
   credential: Ob3SubjectCredentialRecord;
 }
 
@@ -1076,7 +1073,7 @@ export interface LearnerIdentityLinkProofRecord {
   tenantId: string;
   learnerProfileId: string;
   requestedByUserId: string;
-  identityType: 'email';
+  identityType: "email";
   identityValue: string;
   tokenHash: string;
   expiresAt: string;
@@ -1085,19 +1082,19 @@ export interface LearnerIdentityLinkProofRecord {
 }
 
 export type LearnerIdentityType =
-  | 'email'
-  | 'email_sha256'
-  | 'did'
-  | 'url'
-  | 'saml_subject'
-  | 'sourced_id';
+  | "email"
+  | "email_sha256"
+  | "did"
+  | "url"
+  | "saml_subject"
+  | "sourced_id";
 
 export type RecipientIdentifierType =
-  | 'emailAddress'
-  | 'sourcedId'
-  | 'did'
-  | 'nationalIdentityNumber'
-  | 'studentId';
+  | "emailAddress"
+  | "sourcedId"
+  | "did"
+  | "nationalIdentityNumber"
+  | "studentId";
 
 export interface RecipientIdentifierRecord {
   assertionId: string;
@@ -1176,7 +1173,7 @@ export interface ResolveLearnerProfileFromSamlInput {
   displayName?: string | undefined;
 }
 
-export type LearnerProfileResolutionStrategy = 'saml_subject' | 'verified_email' | 'created';
+export type LearnerProfileResolutionStrategy = "saml_subject" | "verified_email" | "created";
 
 export interface ResolveLearnerProfileFromSamlResult {
   profile: LearnerProfileRecord;
@@ -1187,7 +1184,7 @@ export interface CreateLearnerIdentityLinkProofInput {
   tenantId: string;
   learnerProfileId: string;
   requestedByUserId: string;
-  identityType: 'email';
+  identityType: "email";
   identityValue: string;
   tokenHash: string;
   expiresAt: string;
@@ -1242,7 +1239,7 @@ export interface SetBadgeTemplateArchiveStateInput {
   isArchived: boolean;
 }
 
-export type OrgUnitType = 'institution' | 'college' | 'department' | 'program';
+export type OrgUnitType = "institution" | "college" | "department" | "program";
 
 export interface TenantOrgUnitRecord {
   id: string;
@@ -1272,11 +1269,11 @@ export interface ListTenantOrgUnitsInput {
 }
 
 export type BadgeTemplateOwnershipReasonCode =
-  | 'initial_assignment'
-  | 'administrative_transfer'
-  | 'reorganization'
-  | 'governance_policy_update'
-  | 'other';
+  | "initial_assignment"
+  | "administrative_transfer"
+  | "reorganization"
+  | "governance_policy_update"
+  | "other";
 
 export interface BadgeTemplateOwnershipEventRecord {
   id: string;
@@ -1302,7 +1299,7 @@ export interface TransferBadgeTemplateOwnershipInput {
   tenantId: string;
   badgeTemplateId: string;
   toOrgUnitId: string;
-  reasonCode: Exclude<BadgeTemplateOwnershipReasonCode, 'initial_assignment'>;
+  reasonCode: Exclude<BadgeTemplateOwnershipReasonCode, "initial_assignment">;
   reason?: string | undefined;
   governanceMetadataJson?: string | undefined;
   transferredByUserId?: string | undefined;
@@ -1310,7 +1307,7 @@ export interface TransferBadgeTemplateOwnershipInput {
 }
 
 export interface TransferBadgeTemplateOwnershipResult {
-  status: 'transferred' | 'already_owned';
+  status: "transferred" | "already_owned";
   template: BadgeTemplateRecord;
   event: BadgeTemplateOwnershipEventRecord | null;
 }
@@ -1322,7 +1319,7 @@ export interface AssertionRecord {
   learnerProfileId: string | null;
   badgeTemplateId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   vcR2Key: string;
   statusListIndex: number | null;
   idempotencyKey: string;
@@ -1333,18 +1330,18 @@ export interface AssertionRecord {
   updatedAt: string;
 }
 
-export type AssertionLifecycleState = 'active' | 'suspended' | 'revoked' | 'expired';
+export type AssertionLifecycleState = "active" | "suspended" | "revoked" | "expired";
 
-export type AssertionLifecycleTransitionSource = 'manual' | 'automation';
+export type AssertionLifecycleTransitionSource = "manual" | "automation";
 
 export type AssertionLifecycleReasonCode =
-  | 'administrative_hold'
-  | 'policy_violation'
-  | 'appeal_pending'
-  | 'appeal_resolved'
-  | 'credential_expired'
-  | 'issuer_requested'
-  | 'other';
+  | "administrative_hold"
+  | "policy_violation"
+  | "appeal_pending"
+  | "appeal_resolved"
+  | "credential_expired"
+  | "issuer_requested"
+  | "other";
 
 export interface AssertionLifecycleEventRecord {
   id: string;
@@ -1368,7 +1365,7 @@ export interface ListAssertionLifecycleEventsInput {
 
 export interface ResolveAssertionLifecycleStateResult {
   state: AssertionLifecycleState;
-  source: 'assertion_revocation' | 'lifecycle_event' | 'default_active';
+  source: "assertion_revocation" | "lifecycle_event" | "default_active";
   reasonCode: AssertionLifecycleReasonCode | null;
   reason: string | null;
   transitionedAt: string | null;
@@ -1387,7 +1384,7 @@ export interface RecordAssertionLifecycleTransitionInput {
 }
 
 export interface RecordAssertionLifecycleTransitionResult {
-  status: 'transitioned' | 'already_in_state' | 'invalid_transition';
+  status: "transitioned" | "already_in_state" | "invalid_transition";
   fromState: AssertionLifecycleState;
   toState: AssertionLifecycleState;
   currentState: AssertionLifecycleState;
@@ -1415,7 +1412,7 @@ export interface PublicBadgeWallEntryRecord {
   badgeDescription: string | null;
   badgeImageUri: string | null;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   issuedAt: string;
   revokedAt: string | null;
 }
@@ -1427,7 +1424,7 @@ export interface CreateAssertionInput {
   learnerProfileId?: string | undefined;
   badgeTemplateId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   vcR2Key: string;
   statusListIndex: number;
   idempotencyKey: string;
@@ -1442,12 +1439,12 @@ export interface AssertionStatusListEntryRecord {
 }
 
 export type JobQueueMessageType =
-  | 'issue_badge'
-  | 'revoke_badge'
-  | 'rebuild_verification_cache'
-  | 'import_migration_batch';
+  | "issue_badge"
+  | "revoke_badge"
+  | "rebuild_verification_cache"
+  | "import_migration_batch";
 
-export type JobQueueMessageStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type JobQueueMessageStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface JobQueueMessageRecord {
   id: string;
@@ -1496,7 +1493,7 @@ export interface FailJobQueueMessageInput {
   retryDelaySeconds: number;
 }
 
-export type MigrationBatchSource = 'file_upload' | 'credly_export' | 'parchment_export' | 'unknown';
+export type MigrationBatchSource = "file_upload" | "credly_export" | "parchment_export" | "unknown";
 
 export interface ImportMigrationBatchQueueMessageRecord extends JobQueueMessageRecord {
   source: MigrationBatchSource;
@@ -1508,14 +1505,14 @@ export interface ImportMigrationBatchQueueMessageRecord extends JobQueueMessageR
 
 export interface ListImportMigrationBatchQueueMessagesInput {
   tenantId: string;
-  source?: Exclude<MigrationBatchSource, 'unknown'> | undefined;
+  source?: Exclude<MigrationBatchSource, "unknown"> | undefined;
   limit?: number | undefined;
 }
 
 export interface RetryFailedImportMigrationBatchQueueMessagesInput {
   tenantId: string;
   batchId: string;
-  source?: Exclude<MigrationBatchSource, 'unknown'> | undefined;
+  source?: Exclude<MigrationBatchSource, "unknown"> | undefined;
   rowNumbers?: readonly number[] | undefined;
   nowIso?: string | undefined;
 }
@@ -1537,7 +1534,7 @@ export interface RecordAssertionRevocationInput {
 }
 
 export interface RecordAssertionRevocationResult {
-  status: 'revoked' | 'already_revoked';
+  status: "revoked" | "already_revoked";
   revokedAt: string;
 }
 
@@ -1562,12 +1559,12 @@ export interface TenantAssertionSummaryRecord {
   badgeTitle: string;
   badgeImageUri: string | null;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   issuedAt: string;
   issuedByUserId: string | null;
   revokedAt: string | null;
   state: AssertionLifecycleState;
-  source: ResolveAssertionLifecycleStateResult['source'];
+  source: ResolveAssertionLifecycleStateResult["source"];
   reasonCode: AssertionLifecycleReasonCode | null;
   reason: string | null;
   transitionedAt: string | null;
@@ -1639,7 +1636,7 @@ interface BadgeIssuanceRuleValueListRow {
   id: string;
   tenantId: string;
   label: string;
-  kind: 'course_ids' | 'badge_template_ids';
+  kind: "course_ids" | "badge_template_ids";
   valuesJson: string;
   createdByUserId: string | null;
   archivedAt: string | null;
@@ -1699,13 +1696,13 @@ interface BadgeIssuanceRuleEvaluationRow {
   versionId: string;
   learnerId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   matched: number | boolean;
   issuanceStatus: string | null;
   assertionId: string | null;
   evaluationJson: string;
-  reviewStatus: 'pending' | 'resolved' | null;
-  reviewDecision: 'issue' | 'dismiss' | null;
+  reviewStatus: "pending" | "resolved" | null;
+  reviewDecision: "issue" | "dismiss" | null;
   reviewComment: string | null;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
@@ -2026,10 +2023,10 @@ const isMissingTenantSigningRegistrationsTableError = (error: unknown): boolean 
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_signing_registrations')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_signing_registrations")
   );
 };
 
@@ -2039,18 +2036,16 @@ const isMissingLtiIssuerRegistrationsTableError = (error: unknown): boolean => {
   }
 
   const missingTable =
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('lti_issuer_registrations');
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("lti_issuer_registrations");
   const missingNrpsColumns =
-    error.message.includes('column') &&
-    error.message.includes('does not exist') &&
-    (error.message.includes('token_endpoint') || error.message.includes('client_secret'));
+    error.message.includes("column") &&
+    error.message.includes("does not exist") &&
+    (error.message.includes("token_endpoint") || error.message.includes("client_secret"));
 
-  return (
-    missingTable || missingNrpsColumns
-  );
+  return missingTable || missingNrpsColumns;
 };
 
 const isMissingRecipientIdentifiersTableError = (error: unknown): boolean => {
@@ -2059,10 +2054,10 @@ const isMissingRecipientIdentifiersTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('recipient_identifiers')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("recipient_identifiers")
   );
 };
 
@@ -2072,10 +2067,10 @@ const isMissingAuditLogsTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('audit_logs')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("audit_logs")
   );
 };
 
@@ -2085,10 +2080,10 @@ const isMissingTenantApiKeysTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_api_keys')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_api_keys")
   );
 };
 
@@ -2098,10 +2093,10 @@ const isMissingTenantAuthPoliciesTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_auth_policies')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_auth_policies")
   );
 };
 
@@ -2111,10 +2106,10 @@ const isMissingTenantAuthProvidersTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_auth_providers')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_auth_providers")
   );
 };
 
@@ -2124,10 +2119,10 @@ const isMissingTenantBreakGlassAccountsTableError = (error: unknown): boolean =>
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_break_glass_accounts')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_break_glass_accounts")
   );
 };
 
@@ -2137,10 +2132,10 @@ const isMissingTenantSsoSamlConfigurationsTableError = (error: unknown): boolean
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_sso_saml_configurations')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_sso_saml_configurations")
   );
 };
 
@@ -2150,10 +2145,10 @@ const isMissingTenantCanvasGradebookIntegrationsTableError = (error: unknown): b
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_canvas_gradebook_integrations')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_canvas_gradebook_integrations")
   );
 };
 
@@ -2163,21 +2158,21 @@ const isMissingBadgeIssuanceRulesTablesError = (error: unknown): boolean => {
   }
 
   const tableMissing =
-    error.message.includes('badge_issuance_rules') ||
-    error.message.includes('badge_issuance_rule_value_lists') ||
-    error.message.includes('badge_issuance_rule_versions') ||
-    error.message.includes('badge_issuance_rule_evaluations') ||
-    error.message.includes('badge_issuance_rule_approval_steps') ||
-    error.message.includes('badge_issuance_rule_approval_events');
+    error.message.includes("badge_issuance_rules") ||
+    error.message.includes("badge_issuance_rule_value_lists") ||
+    error.message.includes("badge_issuance_rule_versions") ||
+    error.message.includes("badge_issuance_rule_evaluations") ||
+    error.message.includes("badge_issuance_rule_approval_steps") ||
+    error.message.includes("badge_issuance_rule_approval_events");
 
   if (!tableMissing) {
     return false;
   }
 
   return (
-    error.message.includes('no such table') ||
-    error.message.includes('relation') ||
-    error.message.includes('does not exist')
+    error.message.includes("no such table") ||
+    error.message.includes("relation") ||
+    error.message.includes("does not exist")
   );
 };
 
@@ -2187,10 +2182,10 @@ const isMissingDedicatedDbProvisioningRequestsTableError = (error: unknown): boo
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_dedicated_db_provisioning_requests')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_dedicated_db_provisioning_requests")
   );
 };
 
@@ -2200,10 +2195,10 @@ const isMissingAssertionLifecycleEventsTableError = (error: unknown): boolean =>
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('assertion_lifecycle_events')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("assertion_lifecycle_events")
   );
 };
 
@@ -2213,10 +2208,10 @@ const isMissingTenantOrgUnitsTableError = (error: unknown): boolean => {
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_org_units')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_org_units")
   );
 };
 
@@ -2226,10 +2221,10 @@ const isMissingTenantMembershipOrgUnitScopesTableError = (error: unknown): boole
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('tenant_membership_org_unit_scopes')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("tenant_membership_org_unit_scopes")
   );
 };
 
@@ -2239,18 +2234,18 @@ const isMissingDelegatedIssuingAuthorityTablesError = (error: unknown): boolean 
   }
 
   const tableMissing =
-    error.message.includes('delegated_issuing_authority_grants') ||
-    error.message.includes('delegated_issuing_authority_grant_badge_templates') ||
-    error.message.includes('delegated_issuing_authority_grant_events');
+    error.message.includes("delegated_issuing_authority_grants") ||
+    error.message.includes("delegated_issuing_authority_grant_badge_templates") ||
+    error.message.includes("delegated_issuing_authority_grant_events");
 
   if (!tableMissing) {
     return false;
   }
 
   return (
-    error.message.includes('no such table') ||
-    error.message.includes('relation') ||
-    error.message.includes('does not exist')
+    error.message.includes("no such table") ||
+    error.message.includes("relation") ||
+    error.message.includes("does not exist")
   );
 };
 
@@ -2260,10 +2255,10 @@ const isMissingBadgeTemplateOwnershipEventsTableError = (error: unknown): boolea
   }
 
   return (
-    (error.message.includes('no such table') ||
-      error.message.includes('relation') ||
-      error.message.includes('does not exist')) &&
-    error.message.includes('badge_template_ownership_events')
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("badge_template_ownership_events")
   );
 };
 
@@ -2273,21 +2268,21 @@ const isMissingOAuthTablesError = (error: unknown): boolean => {
   }
 
   const tableMissing =
-    error.message.includes('oauth_clients') ||
-    error.message.includes('oauth_authorization_codes') ||
-    error.message.includes('oauth_access_tokens') ||
-    error.message.includes('oauth_refresh_tokens') ||
-    error.message.includes('oid4vci_pre_authorized_codes') ||
-    error.message.includes('oid4vci_access_tokens');
+    error.message.includes("oauth_clients") ||
+    error.message.includes("oauth_authorization_codes") ||
+    error.message.includes("oauth_access_tokens") ||
+    error.message.includes("oauth_refresh_tokens") ||
+    error.message.includes("oid4vci_pre_authorized_codes") ||
+    error.message.includes("oid4vci_access_tokens");
 
   if (!tableMissing) {
     return false;
   }
 
   return (
-    error.message.includes('no such table') ||
-    error.message.includes('relation') ||
-    error.message.includes('does not exist')
+    error.message.includes("no such table") ||
+    error.message.includes("relation") ||
+    error.message.includes("does not exist")
   );
 };
 
@@ -2297,17 +2292,17 @@ const isMissingOb3ResourceTablesError = (error: unknown): boolean => {
   }
 
   const tableMissing =
-    error.message.includes('ob3_subject_credentials') ||
-    error.message.includes('ob3_subject_profiles');
+    error.message.includes("ob3_subject_credentials") ||
+    error.message.includes("ob3_subject_profiles");
 
   if (!tableMissing) {
     return false;
   }
 
   return (
-    error.message.includes('no such table') ||
-    error.message.includes('relation') ||
-    error.message.includes('does not exist')
+    error.message.includes("no such table") ||
+    error.message.includes("relation") ||
+    error.message.includes("does not exist")
   );
 };
 
@@ -2580,7 +2575,7 @@ const ensureTenantAuthProvidersTable = async (db: SqlDatabase): Promise<void> =>
         ON tenant_auth_providers (tenant_id)
         WHERE is_default = 1
     `,
-      )
+    )
     .run();
 };
 
@@ -2625,9 +2620,7 @@ const ensureTenantBreakGlassAccountsTable = async (db: SqlDatabase): Promise<voi
     .run();
 };
 
-const ensureTenantCanvasGradebookIntegrationsTable = async (
-  db: SqlDatabase,
-): Promise<void> => {
+const ensureTenantCanvasGradebookIntegrationsTable = async (db: SqlDatabase): Promise<void> => {
   await db
     .prepare(
       `
@@ -3503,7 +3496,7 @@ interface AssertionRow {
   learnerProfileId: string | null;
   badgeTemplateId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   vcR2Key: string;
   statusListIndex: number | null;
   idempotencyKey: string;
@@ -3547,7 +3540,7 @@ interface TenantAssertionSummaryRow {
   badgeTitle: string;
   badgeImageUri: string | null;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   issuedAt: string;
   issuedByUserId: string | null;
   revokedAt: string | null;
@@ -3566,7 +3559,7 @@ interface PublicBadgeWallEntryRow {
   badgeDescription: string | null;
   badgeImageUri: string | null;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   issuedAt: string;
   revokedAt: string | null;
 }
@@ -3604,7 +3597,7 @@ interface LearnerIdentityLinkProofRow {
   tenantId: string;
   learnerProfileId: string;
   requestedByUserId: string;
-  identityType: 'email';
+  identityType: "email";
   identityValue: string;
   tokenHash: string;
   expiresAt: string;
@@ -3643,7 +3636,7 @@ const addSecondsToIso = (fromIso: string, seconds: number): string => {
   const fromMs = Date.parse(fromIso);
 
   if (!Number.isFinite(fromMs)) {
-    throw new Error('Invalid ISO timestamp');
+    throw new Error("Invalid ISO timestamp");
   }
 
   return new Date(fromMs + seconds * 1000).toISOString();
@@ -3664,23 +3657,23 @@ const TENANT_MEMBERSHIP_ORG_UNIT_SCOPE_ROLE_PRIORITY: Record<
 
 const REQUIRED_PARENT_ORG_UNIT_TYPE: Record<OrgUnitType, OrgUnitType | null> = {
   institution: null,
-  college: 'institution',
-  department: 'college',
-  program: 'department',
+  college: "institution",
+  department: "college",
+  program: "department",
 };
 
 const BADGE_TEMPLATE_OWNERSHIP_REASON_CODES = new Set<BadgeTemplateOwnershipReasonCode>([
-  'initial_assignment',
-  'administrative_transfer',
-  'reorganization',
-  'governance_policy_update',
-  'other',
+  "initial_assignment",
+  "administrative_transfer",
+  "reorganization",
+  "governance_policy_update",
+  "other",
 ]);
 
 const DELEGATED_ISSUING_AUTHORITY_ACTIONS = new Set<DelegatedIssuingAuthorityAction>([
-  'issue_badge',
-  'revoke_badge',
-  'manage_lifecycle',
+  "issue_badge",
+  "revoke_badge",
+  "manage_lifecycle",
 ]);
 
 const normalizeDelegatedIssuingAuthorityActions = (
@@ -3689,7 +3682,7 @@ const normalizeDelegatedIssuingAuthorityActions = (
   const normalized = Array.from(new Set(actions));
 
   if (normalized.length === 0) {
-    throw new Error('Delegated issuing authority grant must include at least one allowed action');
+    throw new Error("Delegated issuing authority grant must include at least one allowed action");
   }
 
   for (const action of normalized) {
@@ -3709,11 +3702,11 @@ const parseDelegatedIssuingAuthorityActionsJson = (
   try {
     parsed = JSON.parse(rawJson) as unknown;
   } catch {
-    throw new Error('delegated_issuing_authority_grants.allowed_actions_json must be valid JSON');
+    throw new Error("delegated_issuing_authority_grants.allowed_actions_json must be valid JSON");
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error('delegated_issuing_authority_grants.allowed_actions_json must be a JSON array');
+    throw new Error("delegated_issuing_authority_grants.allowed_actions_json must be a JSON array");
   }
 
   const parsedArray = parsed as unknown[];
@@ -3721,10 +3714,10 @@ const parseDelegatedIssuingAuthorityActionsJson = (
 
   for (const candidate of parsedArray) {
     if (
-      typeof candidate !== 'string' ||
-      (candidate !== 'issue_badge' &&
-        candidate !== 'revoke_badge' &&
-        candidate !== 'manage_lifecycle')
+      typeof candidate !== "string" ||
+      (candidate !== "issue_badge" &&
+        candidate !== "revoke_badge" &&
+        candidate !== "manage_lifecycle")
     ) {
       throw new Error(
         `delegated_issuing_authority_grants.allowed_actions_json contains unsupported action: ${String(candidate)}`,
@@ -3767,64 +3760,64 @@ const delegatedIssuingAuthorityGrantStatusForRecord = (
   nowIso: string,
 ): DelegatedIssuingAuthorityGrantStatus => {
   if (grant.revokedAt !== null) {
-    return 'revoked';
+    return "revoked";
   }
 
-  const nowMs = assertValidIsoTimestamp(nowIso, 'nowIso');
-  const startsAtMs = assertValidIsoTimestamp(grant.startsAt, 'startsAt');
-  const endsAtMs = assertValidIsoTimestamp(grant.endsAt, 'endsAt');
+  const nowMs = assertValidIsoTimestamp(nowIso, "nowIso");
+  const startsAtMs = assertValidIsoTimestamp(grant.startsAt, "startsAt");
+  const endsAtMs = assertValidIsoTimestamp(grant.endsAt, "endsAt");
 
   if (nowMs < startsAtMs) {
-    return 'scheduled';
+    return "scheduled";
   }
 
   if (nowMs > endsAtMs) {
-    return 'expired';
+    return "expired";
   }
 
-  return 'active';
+  return "active";
 };
 
 const ASSERTION_LIFECYCLE_REASON_CODES = new Set<AssertionLifecycleReasonCode>([
-  'administrative_hold',
-  'policy_violation',
-  'appeal_pending',
-  'appeal_resolved',
-  'credential_expired',
-  'issuer_requested',
-  'other',
+  "administrative_hold",
+  "policy_violation",
+  "appeal_pending",
+  "appeal_resolved",
+  "credential_expired",
+  "issuer_requested",
+  "other",
 ]);
 
 const ASSERTION_LIFECYCLE_ALLOWED_TRANSITIONS: Record<
   AssertionLifecycleState,
   ReadonlySet<AssertionLifecycleState>
 > = {
-  active: new Set<AssertionLifecycleState>(['suspended', 'revoked', 'expired']),
-  suspended: new Set<AssertionLifecycleState>(['active', 'revoked', 'expired']),
-  expired: new Set<AssertionLifecycleState>(['active', 'revoked']),
+  active: new Set<AssertionLifecycleState>(["suspended", "revoked", "expired"]),
+  suspended: new Set<AssertionLifecycleState>(["active", "revoked", "expired"]),
+  expired: new Set<AssertionLifecycleState>(["active", "revoked"]),
   revoked: new Set<AssertionLifecycleState>(),
 };
 
 const BADGE_ISSUANCE_RULE_VERSION_STATUSES = new Set<BadgeIssuanceRuleVersionStatus>([
-  'draft',
-  'pending_approval',
-  'approved',
-  'active',
-  'rejected',
-  'deprecated',
+  "draft",
+  "pending_approval",
+  "approved",
+  "active",
+  "rejected",
+  "deprecated",
 ]);
 
 const BADGE_ISSUANCE_RULE_APPROVAL_STEP_STATUSES = new Set<BadgeIssuanceRuleApprovalStepStatus>([
-  'queued',
-  'pending',
-  'approved',
-  'rejected',
+  "queued",
+  "pending",
+  "approved",
+  "rejected",
 ]);
 
 const BADGE_ISSUANCE_RULE_APPROVAL_EVENT_ACTIONS = new Set<BadgeIssuanceRuleApprovalEventAction>([
-  'submitted',
-  'approved',
-  'rejected',
+  "submitted",
+  "approved",
+  "rejected",
 ]);
 
 const TENANT_ROLE_RANK: Record<TenantMembershipRole, number> = {
@@ -3845,12 +3838,12 @@ const assertionLifecycleStateFromRecords = (input: {
   assertion: AssertionRecord;
   latestEvent: AssertionLifecycleEventRecord | null;
 }): ResolveAssertionLifecycleStateResult => {
-  if (input.assertion.revokedAt !== null && input.latestEvent?.toState === 'revoked') {
+  if (input.assertion.revokedAt !== null && input.latestEvent?.toState === "revoked") {
     return {
-      state: 'revoked',
-      source: 'lifecycle_event',
+      state: "revoked",
+      source: "lifecycle_event",
       reasonCode: input.latestEvent.reasonCode,
-      reason: input.latestEvent.reason ?? 'credential has been revoked by issuer',
+      reason: input.latestEvent.reason ?? "credential has been revoked by issuer",
       transitionedAt: input.latestEvent.transitionedAt,
       revokedAt: input.assertion.revokedAt,
     };
@@ -3858,10 +3851,10 @@ const assertionLifecycleStateFromRecords = (input: {
 
   if (input.assertion.revokedAt !== null) {
     return {
-      state: 'revoked',
-      source: 'assertion_revocation',
+      state: "revoked",
+      source: "assertion_revocation",
       reasonCode: null,
-      reason: 'credential has been revoked by issuer',
+      reason: "credential has been revoked by issuer",
       transitionedAt: input.assertion.revokedAt,
       revokedAt: input.assertion.revokedAt,
     };
@@ -3870,7 +3863,7 @@ const assertionLifecycleStateFromRecords = (input: {
   if (input.latestEvent !== null) {
     return {
       state: input.latestEvent.toState,
-      source: 'lifecycle_event',
+      source: "lifecycle_event",
       reasonCode: input.latestEvent.reasonCode,
       reason: input.latestEvent.reason,
       transitionedAt: input.latestEvent.transitionedAt,
@@ -3879,8 +3872,8 @@ const assertionLifecycleStateFromRecords = (input: {
   }
 
   return {
-    state: 'active',
-    source: 'default_active',
+    state: "active",
+    source: "default_active",
     reasonCode: null,
     reason: null,
     transitionedAt: null,
@@ -3894,7 +3887,7 @@ export const normalizeEmail = (email: string): string => {
 
 export const upsertUserByEmail = async (db: SqlDatabase, email: string): Promise<UserRecord> => {
   const normalizedEmail = normalizeEmail(email);
-  const createdUserId = createPrefixedId('usr');
+  const createdUserId = createPrefixedId("usr");
 
   await db
     .prepare(
@@ -3926,7 +3919,10 @@ export const upsertUserByEmail = async (db: SqlDatabase, email: string): Promise
   return user;
 };
 
-export const findUserByEmail = async (db: SqlDatabase, email: string): Promise<UserRecord | null> => {
+export const findUserByEmail = async (
+  db: SqlDatabase,
+  email: string,
+): Promise<UserRecord | null> => {
   const normalizedEmail = normalizeEmail(email);
   const user = await db
     .prepare(
@@ -3963,7 +3959,7 @@ export const createAuthIdentityLink = async (
   db: SqlDatabase,
   input: CreateAuthIdentityLinkInput,
 ): Promise<AuthIdentityLinkRecord> => {
-  const id = createPrefixedId('ail');
+  const id = createPrefixedId("ail");
   const createdAt = new Date().toISOString();
   const emailSnapshot =
     input.emailSnapshot === undefined || input.emailSnapshot === null
@@ -4075,14 +4071,14 @@ export const normalizeLearnerIdentityValue = (
   const trimmed = identityValue.trim();
 
   switch (identityType) {
-    case 'email':
+    case "email":
       return normalizeEmail(trimmed);
-    case 'email_sha256':
+    case "email_sha256":
       return trimmed.toLowerCase();
-    case 'did':
-    case 'url':
-    case 'saml_subject':
-    case 'sourced_id':
+    case "did":
+    case "url":
+    case "saml_subject":
+    case "sourced_id":
       return trimmed;
   }
 };
@@ -4148,7 +4144,7 @@ export const addLearnerIdentityAlias = async (
   db: SqlDatabase,
   input: AddLearnerIdentityAliasInput,
 ): Promise<LearnerIdentityRecord> => {
-  const identityId = createPrefixedId('lid');
+  const identityId = createPrefixedId("lid");
   const nowIso = new Date().toISOString();
   const normalizedIdentityValue = normalizeLearnerIdentityValue(
     input.identityType,
@@ -4237,7 +4233,7 @@ export const removeLearnerIdentityAliasesByType = async (
 ): Promise<number> => {
   const result = await db
     .prepare(
-      'DELETE FROM learner_identities WHERE tenant_id = ? AND learner_profile_id = ? AND identity_type = ?',
+      "DELETE FROM learner_identities WHERE tenant_id = ? AND learner_profile_id = ? AND identity_type = ?",
     )
     .bind(input.tenantId, input.learnerProfileId, input.identityType)
     .run();
@@ -4249,7 +4245,7 @@ export const createLearnerProfile = async (
   db: SqlDatabase,
   input: CreateLearnerProfileInput,
 ): Promise<LearnerProfileRecord> => {
-  const learnerProfileId = createPrefixedId('lpr');
+  const learnerProfileId = createPrefixedId("lpr");
   const nowIso = new Date().toISOString();
   const subjectId =
     input.subjectId === undefined || input.subjectId.trim().length === 0
@@ -4407,14 +4403,14 @@ export const resolveLearnerProfileFromSaml = async (
   if (samlSubject !== null) {
     const profileBySamlSubject = await findLearnerProfileByIdentity(db, {
       tenantId: input.tenantId,
-      identityType: 'saml_subject',
+      identityType: "saml_subject",
       identityValue: samlSubject,
     });
 
     if (profileBySamlSubject !== null) {
       return {
         profile: profileBySamlSubject,
-        strategy: 'saml_subject',
+        strategy: "saml_subject",
       };
     }
   }
@@ -4422,7 +4418,7 @@ export const resolveLearnerProfileFromSaml = async (
   if (email !== null) {
     const profileByVerifiedEmail = await findLearnerProfileByVerifiedIdentity(db, {
       tenantId: input.tenantId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: email,
     });
 
@@ -4431,7 +4427,7 @@ export const resolveLearnerProfileFromSaml = async (
         await addLearnerIdentityAlias(db, {
           tenantId: input.tenantId,
           learnerProfileId: profileByVerifiedEmail.id,
-          identityType: 'saml_subject',
+          identityType: "saml_subject",
           identityValue: samlSubject,
           isPrimary: true,
           isVerified: true,
@@ -4440,20 +4436,20 @@ export const resolveLearnerProfileFromSaml = async (
 
       return {
         profile: profileByVerifiedEmail,
-        strategy: 'verified_email',
+        strategy: "verified_email",
       };
     }
   }
 
   if (samlSubject === null && email === null) {
-    throw new Error('Cannot resolve learner profile without SAML subject or email');
+    throw new Error("Cannot resolve learner profile without SAML subject or email");
   }
 
-  const primaryIdentityType: LearnerIdentityType = samlSubject === null ? 'email' : 'saml_subject';
+  const primaryIdentityType: LearnerIdentityType = samlSubject === null ? "email" : "saml_subject";
   const primaryIdentityValue = samlSubject ?? email;
 
   if (primaryIdentityValue === null) {
-    throw new Error('Primary learner identity is required');
+    throw new Error("Primary learner identity is required");
   }
 
   const createdProfile = await createLearnerProfile(db, {
@@ -4468,7 +4464,7 @@ export const resolveLearnerProfileFromSaml = async (
     await addLearnerIdentityAlias(db, {
       tenantId: input.tenantId,
       learnerProfileId: createdProfile.id,
-      identityType: 'email',
+      identityType: "email",
       identityValue: email,
       isPrimary: false,
       isVerified: true,
@@ -4477,7 +4473,7 @@ export const resolveLearnerProfileFromSaml = async (
 
   return {
     profile: createdProfile,
-    strategy: 'created',
+    strategy: "created",
   };
 };
 
@@ -4498,7 +4494,7 @@ export const ensureTenantMembership = async (
   const upserted = await upsertTenantMembershipRole(db, {
     tenantId,
     userId,
-    role: 'viewer',
+    role: "viewer",
   });
 
   return {
@@ -4610,7 +4606,7 @@ export const createAuditLog = async (
   db: SqlDatabase,
   input: CreateAuditLogInput,
 ): Promise<AuditLogRecord> => {
-  const id = createPrefixedId('aud');
+  const id = createPrefixedId("aud");
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   const metadataJson = input.metadata === undefined ? null : JSON.stringify(input.metadata);
 
@@ -4689,11 +4685,11 @@ export const listAuditLogs = async (
   input: ListAuditLogsInput,
 ): Promise<AuditLogRecord[]> => {
   const queryLimit = Math.max(1, Math.min(input.limit ?? 100, 200));
-  const whereClauses = ['tenant_id = ?'];
+  const whereClauses = ["tenant_id = ?"];
   const queryParams: unknown[] = [input.tenantId];
 
   if (input.action !== undefined) {
-    whereClauses.push('action = ?');
+    whereClauses.push("action = ?");
     queryParams.push(input.action);
   }
 
@@ -4712,7 +4708,7 @@ export const listAuditLogs = async (
           occurred_at AS occurredAt,
           created_at AS createdAt
         FROM audit_logs
-        WHERE ${whereClauses.join('\n          AND ')}
+        WHERE ${whereClauses.join("\n          AND ")}
         ORDER BY occurred_at DESC, created_at DESC, id DESC
         LIMIT ?
       `,
@@ -4740,7 +4736,7 @@ export const createTenantApiKey = async (
   db: SqlDatabase,
   input: CreateTenantApiKeyInput,
 ): Promise<TenantApiKeyRecord> => {
-  const id = createPrefixedId('tak');
+  const id = createPrefixedId("tak");
   const nowIso = new Date().toISOString();
   const insertStatement = (): Promise<SqlRunResult> =>
     db
@@ -4996,7 +4992,7 @@ export const createLearnerIdentityLinkProof = async (
   db: SqlDatabase,
   input: CreateLearnerIdentityLinkProofInput,
 ): Promise<LearnerIdentityLinkProofRecord> => {
-  const id = createPrefixedId('lip');
+  const id = createPrefixedId("lip");
   const createdAt = new Date().toISOString();
   const identityValue = normalizeEmail(input.identityValue);
 
@@ -5352,7 +5348,7 @@ export const createOAuthAuthorizationCode = async (
   db: SqlDatabase,
   input: CreateOAuthAuthorizationCodeInput,
 ): Promise<OAuthAuthorizationCodeRecord> => {
-  const id = createPrefixedId('oac');
+  const id = createPrefixedId("oac");
   const createdAt = new Date().toISOString();
 
   const insertStatement = (): Promise<SqlRunResult> =>
@@ -5474,7 +5470,7 @@ export const createOAuthAccessToken = async (
   db: SqlDatabase,
   input: CreateOAuthAccessTokenInput,
 ): Promise<OAuthAccessTokenRecord> => {
-  const id = createPrefixedId('oat');
+  const id = createPrefixedId("oat");
   const createdAt = new Date().toISOString();
 
   const insertStatement = (): Promise<SqlRunResult> =>
@@ -5549,7 +5545,7 @@ export const createOAuthRefreshToken = async (
   db: SqlDatabase,
   input: CreateOAuthRefreshTokenInput,
 ): Promise<OAuthRefreshTokenRecord> => {
-  const id = createPrefixedId('ort');
+  const id = createPrefixedId("ort");
   const createdAt = new Date().toISOString();
 
   const insertStatement = (): Promise<SqlRunResult> =>
@@ -5775,7 +5771,7 @@ export const createOid4vciPreAuthorizedCode = async (
   db: SqlDatabase,
   input: CreateOid4vciPreAuthorizedCodeInput,
 ): Promise<Oid4vciPreAuthorizedCodeRecord> => {
-  const id = createPrefixedId('ovp');
+  const id = createPrefixedId("ovp");
   const createdAt = new Date().toISOString();
 
   const insertStatement = (): Promise<SqlRunResult> =>
@@ -5875,7 +5871,7 @@ export const createOid4vciAccessToken = async (
   db: SqlDatabase,
   input: CreateOid4vciAccessTokenInput,
 ): Promise<Oid4vciAccessTokenRecord> => {
-  const id = createPrefixedId('ova');
+  const id = createPrefixedId("ova");
   const createdAt = new Date().toISOString();
 
   const insertStatement = (): Promise<SqlRunResult> =>
@@ -5973,7 +5969,7 @@ export const listOb3SubjectCredentials = async (
 ): Promise<ListOb3SubjectCredentialsResult> => {
   const normalizedLimit = Math.max(1, Math.trunc(input.limit));
   const normalizedOffset = Math.max(0, Math.trunc(input.offset));
-  const sinceFilter = input.since === undefined ? '' : ' AND issued_at > ?';
+  const sinceFilter = input.since === undefined ? "" : " AND issued_at > ?";
   const sharedParams: unknown[] =
     input.since === undefined
       ? [input.tenantId, input.userId]
@@ -6121,7 +6117,7 @@ export const upsertOb3SubjectCredential = async (
     existingCredential = await selectStatement();
   }
 
-  const credentialId = existingCredential?.id ?? createPrefixedId('ob3c');
+  const credentialId = existingCredential?.id ?? createPrefixedId("ob3c");
   await upsertStatement(credentialId);
   const persistedCredential = await selectStatement();
 
@@ -6132,7 +6128,7 @@ export const upsertOb3SubjectCredential = async (
   }
 
   return {
-    status: existingCredential === null ? 'created' : 'updated',
+    status: existingCredential === null ? "created" : "updated",
     credential: mapOb3SubjectCredentialRow(persistedCredential),
   };
 };
@@ -6376,7 +6372,7 @@ const mapTenantAuthPolicyRow = (row: TenantAuthPolicyRow): TenantAuthPolicyRecor
     breakGlassEnabled: row.breakGlassEnabled === 1 || row.breakGlassEnabled === true,
     localMfaRequired: row.localMfaRequired === 1 || row.localMfaRequired === true,
     defaultProviderId: row.defaultProviderId,
-    enforceForRoles: 'all_users',
+    enforceForRoles: "all_users",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -6410,8 +6406,7 @@ const mapTenantBreakGlassAccountRow = (
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     betterAuthUserId: row.betterAuthUserId,
-    localCredentialEnabled:
-      row.localCredentialEnabled === 1 || row.localCredentialEnabled === true,
+    localCredentialEnabled: row.localCredentialEnabled === 1 || row.localCredentialEnabled === true,
     twoFactorEnabled: row.twoFactorEnabled === 1 || row.twoFactorEnabled === true,
   };
 };
@@ -6444,11 +6439,11 @@ const buildDefaultTenantAuthPolicy = (
 ): TenantAuthPolicyRecord => {
   return {
     tenantId,
-    loginMode: 'local',
+    loginMode: "local",
     breakGlassEnabled: false,
     localMfaRequired: false,
     defaultProviderId: null,
-    enforceForRoles: 'all_users',
+    enforceForRoles: "all_users",
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -6459,11 +6454,11 @@ const buildLegacyTenantAuthPolicy = (
 ): TenantAuthPolicyRecord => {
   return {
     tenantId: configuration.tenantId,
-    loginMode: configuration.enforced ? 'sso_required' : 'hybrid',
+    loginMode: configuration.enforced ? "sso_required" : "hybrid",
     breakGlassEnabled: false,
     localMfaRequired: false,
     defaultProviderId: buildLegacyTenantAuthProviderId(configuration.tenantId),
-    enforceForRoles: 'all_users',
+    enforceForRoles: "all_users",
     createdAt: configuration.createdAt,
     updatedAt: configuration.updatedAt,
   };
@@ -6475,8 +6470,8 @@ const buildLegacyTenantAuthProvider = (
   return {
     id: buildLegacyTenantAuthProviderId(configuration.tenantId),
     tenantId: configuration.tenantId,
-    protocol: 'saml',
-    label: 'Legacy SAML (compatibility only)',
+    protocol: "saml",
+    label: "Legacy SAML (compatibility only)",
     enabled: true,
     isDefault: true,
     configJson: JSON.stringify({
@@ -6495,15 +6490,13 @@ const buildLegacyTenantAuthProvider = (
 };
 
 export const isHostedEnterpriseAuthProviderSupported = (
-  provider: Pick<TenantAuthProviderRecord, 'protocol'>,
+  provider: Pick<TenantAuthProviderRecord, "protocol">,
 ): boolean => {
-  return provider.protocol === 'oidc';
+  return provider.protocol === "oidc";
 };
 
-const assertHostedEnterpriseAuthProviderWritable = (
-  protocol: TenantAuthProviderProtocol,
-): void => {
-  if (protocol !== 'oidc') {
+const assertHostedEnterpriseAuthProviderWritable = (protocol: TenantAuthProviderProtocol): void => {
+  if (protocol !== "oidc") {
     throw new Error(HOSTED_ENTERPRISE_OIDC_ONLY_ERROR);
   }
 };
@@ -6610,7 +6603,7 @@ const mapBadgeIssuanceRuleValueListRow = (
     const parsed = JSON.parse(row.valuesJson) as unknown;
 
     if (Array.isArray(parsed)) {
-      values = parsed.filter((entry): entry is string => typeof entry === 'string');
+      values = parsed.filter((entry): entry is string => typeof entry === "string");
     }
   } catch {
     values = [];
@@ -6811,26 +6804,26 @@ const mapLearnerBadgeSummaryRow = (row: LearnerBadgeSummaryRow): LearnerBadgeSum
 const mapTenantAssertionSummaryRow = (
   row: TenantAssertionSummaryRow,
 ): TenantAssertionSummaryRecord => {
-  let state: AssertionLifecycleState = 'active';
-  let source: ResolveAssertionLifecycleStateResult['source'] = 'default_active';
+  let state: AssertionLifecycleState = "active";
+  let source: ResolveAssertionLifecycleStateResult["source"] = "default_active";
   let reasonCode: AssertionLifecycleReasonCode | null = null;
   let reason: string | null = null;
   let transitionedAt: string | null = null;
 
-  if (row.revokedAt !== null && row.latestToState === 'revoked') {
-    state = 'revoked';
-    source = 'lifecycle_event';
+  if (row.revokedAt !== null && row.latestToState === "revoked") {
+    state = "revoked";
+    source = "lifecycle_event";
     reasonCode = row.latestReasonCode;
-    reason = row.latestReason ?? 'credential has been revoked by issuer';
+    reason = row.latestReason ?? "credential has been revoked by issuer";
     transitionedAt = row.latestTransitionedAt ?? row.revokedAt;
   } else if (row.revokedAt !== null) {
-    state = 'revoked';
-    source = 'assertion_revocation';
-    reason = 'credential has been revoked by issuer';
+    state = "revoked";
+    source = "assertion_revocation";
+    reason = "credential has been revoked by issuer";
     transitionedAt = row.revokedAt;
   } else if (row.latestToState !== null) {
     state = row.latestToState;
-    source = 'lifecycle_event';
+    source = "lifecycle_event";
     reasonCode = row.latestReasonCode;
     reason = row.latestReason;
     transitionedAt = row.latestTransitionedAt;
@@ -7064,7 +7057,7 @@ export const upsertTenantAuthPolicy = async (
         input.breakGlassEnabled === true ? 1 : 0,
         input.localMfaRequired === true ? 1 : 0,
         input.defaultProviderId ?? null,
-        'all_users',
+        "all_users",
         nowIso,
         nowIso,
       )
@@ -7094,7 +7087,7 @@ const hydrateLegacyTenantAuthProvider = async (
   db: SqlDatabase,
   provider: TenantAuthProviderRecord,
 ): Promise<TenantAuthProviderRecord> => {
-  if (provider.protocol !== 'saml') {
+  if (provider.protocol !== "saml") {
     return provider;
   }
 
@@ -7162,7 +7155,9 @@ export const listTenantAuthProviders = async (
   }
 
   return Promise.all(
-    result.results.map(async (row) => hydrateLegacyTenantAuthProvider(db, mapTenantAuthProviderRow(row))),
+    result.results.map(async (row) =>
+      hydrateLegacyTenantAuthProvider(db, mapTenantAuthProviderRow(row)),
+    ),
   );
 };
 
@@ -7224,7 +7219,7 @@ export const createTenantAuthProvider = async (
   input: CreateTenantAuthProviderInput,
 ): Promise<TenantAuthProviderRecord> => {
   assertHostedEnterpriseAuthProviderWritable(input.protocol);
-  const id = input.id ?? createPrefixedId('tap');
+  const id = input.id ?? createPrefixedId("tap");
   const nowIso = new Date().toISOString();
   const enabled = input.enabled ?? true;
   const isDefault = input.isDefault ?? false;
@@ -7635,11 +7630,7 @@ export const upsertTenantBreakGlassAccount = async (
     await upsertStatement();
   }
 
-  const account = await findActiveTenantBreakGlassAccountByUserId(
-    db,
-    input.tenantId,
-    input.userId,
-  );
+  const account = await findActiveTenantBreakGlassAccountByUserId(db, input.tenantId, input.userId);
 
   if (account === null) {
     throw new Error(
@@ -8160,7 +8151,7 @@ export const createBadgeIssuanceRuleValueList = async (
   db: SqlDatabase,
   input: CreateBadgeIssuanceRuleValueListInput,
 ): Promise<BadgeIssuanceRuleValueListRecord> => {
-  const valueListId = createPrefixedId('brvl');
+  const valueListId = createPrefixedId("brvl");
   const nowIso = new Date().toISOString();
   const normalizedValues = Array.from(
     new Set(input.values.map((entry) => entry.trim()).filter((entry) => entry.length > 0)),
@@ -8263,12 +8254,7 @@ export const listBadgeIssuanceRuleValueLists = async (
         ORDER BY created_at DESC, id DESC
       `,
       )
-      .bind(
-        input.tenantId,
-        input.kind ?? null,
-        input.kind ?? null,
-        includeArchived ? 1 : 0,
-      )
+      .bind(input.tenantId, input.kind ?? null, input.kind ?? null, includeArchived ? 1 : 0)
       .all<BadgeIssuanceRuleValueListRow>();
 
   let result: SqlQueryResult<BadgeIssuanceRuleValueListRow>;
@@ -8560,18 +8546,19 @@ export const findActiveBadgeIssuanceRuleVersion = async (
 const DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN: readonly BadgeIssuanceRuleApprovalChainStepInput[] =
   [
     {
-      requiredRole: 'admin',
-      label: 'Administrative approval',
+      requiredRole: "admin",
+      label: "Administrative approval",
     },
   ] as const;
 
 const normalizeBadgeIssuanceRuleApprovalChain = (
   chain: readonly BadgeIssuanceRuleApprovalChainStepInput[] | undefined,
 ): BadgeIssuanceRuleApprovalChainStepInput[] => {
-  const normalizedChain = chain === undefined ? [...DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN] : [...chain];
+  const normalizedChain =
+    chain === undefined ? [...DEFAULT_BADGE_ISSUANCE_RULE_APPROVAL_CHAIN] : [...chain];
 
   if (normalizedChain.length === 0) {
-    throw new Error('Badge issuance rule approval chain must include at least one step');
+    throw new Error("Badge issuance rule approval chain must include at least one step");
   }
 
   for (const step of normalizedChain) {
@@ -8615,7 +8602,7 @@ const insertBadgeIssuanceRuleApprovalSteps = async (
         `,
         )
         .bind(
-          createPrefixedId('bras'),
+          createPrefixedId("bras"),
           input.tenantId,
           input.versionId,
           index + 1,
@@ -8673,7 +8660,7 @@ const insertBadgeIssuanceRuleApprovalEvent = async (
       `,
       )
       .bind(
-        createPrefixedId('brae'),
+        createPrefixedId("brae"),
         input.tenantId,
         input.versionId,
         input.stepNumber,
@@ -8728,8 +8715,8 @@ export const createBadgeIssuanceRule = async (
   input: CreateBadgeIssuanceRuleInput,
 ): Promise<CreateBadgeIssuanceRuleResult> => {
   const nowIso = new Date().toISOString();
-  const ruleId = createPrefixedId('brl');
-  const versionId = createPrefixedId('brv');
+  const ruleId = createPrefixedId("brl");
+  const versionId = createPrefixedId("brv");
   const approvalChain = normalizeBadgeIssuanceRuleApprovalChain(input.approvalChain);
   const insertRuleStatement = (): Promise<SqlRunResult> =>
     db
@@ -8839,7 +8826,7 @@ export const createBadgeIssuanceRuleVersion = async (
   input: CreateBadgeIssuanceRuleVersionInput,
 ): Promise<BadgeIssuanceRuleVersionRecord> => {
   const nowIso = new Date().toISOString();
-  const versionId = createPrefixedId('brv');
+  const versionId = createPrefixedId("brv");
   const approvalChain = normalizeBadgeIssuanceRuleApprovalChain(input.approvalChain);
   const nextVersionStatement = (): Promise<BadgeIssuanceRuleVersionNumberRow | null> =>
     db
@@ -8945,7 +8932,7 @@ export const submitBadgeIssuanceRuleVersionForApproval = async (
     return null;
   }
 
-  if (version.status !== 'draft' && version.status !== 'rejected') {
+  if (version.status !== "draft" && version.status !== "rejected") {
     return null;
   }
 
@@ -9029,7 +9016,7 @@ export const submitBadgeIssuanceRuleVersionForApproval = async (
     tenantId: input.tenantId,
     versionId: input.versionId,
     stepNumber: firstStep.stepNumber,
-    action: 'submitted',
+    action: "submitted",
     actorUserId: input.actorUserId ?? null,
     actorRole: input.actorRole ?? null,
     comment: input.comment ?? null,
@@ -9054,7 +9041,7 @@ export const decideBadgeIssuanceRuleVersion = async (
     versionId: input.versionId,
   });
 
-  if (currentVersion?.status !== 'pending_approval') {
+  if (currentVersion?.status !== "pending_approval") {
     return null;
   }
 
@@ -9063,7 +9050,7 @@ export const decideBadgeIssuanceRuleVersion = async (
     ruleId: input.ruleId,
     versionId: input.versionId,
   });
-  const currentStep = steps.find((step) => step.status === 'pending');
+  const currentStep = steps.find((step) => step.status === "pending");
 
   if (currentStep === undefined) {
     return null;
@@ -9076,7 +9063,7 @@ export const decideBadgeIssuanceRuleVersion = async (
   }
 
   const nextStep = steps.find((step) => step.stepNumber > currentStep.stepNumber);
-  const markCurrentStepStatement = (status: 'approved' | 'rejected'): Promise<SqlRunResult> =>
+  const markCurrentStepStatement = (status: "approved" | "rejected"): Promise<SqlRunResult> =>
     db
       .prepare(
         `
@@ -9176,11 +9163,11 @@ export const decideBadgeIssuanceRuleVersion = async (
       .run();
 
   try {
-    if (input.decision === 'rejected') {
-      await markCurrentStepStatement('rejected');
+    if (input.decision === "rejected") {
+      await markCurrentStepStatement("rejected");
       await updateVersionRejectedStatement();
     } else {
-      await markCurrentStepStatement('approved');
+      await markCurrentStepStatement("approved");
 
       if (nextStep === undefined) {
         await updateVersionApprovedStatement();
@@ -9195,11 +9182,11 @@ export const decideBadgeIssuanceRuleVersion = async (
     }
 
     await ensureBadgeIssuanceRulesTables(db);
-    if (input.decision === 'rejected') {
-      await markCurrentStepStatement('rejected');
+    if (input.decision === "rejected") {
+      await markCurrentStepStatement("rejected");
       await updateVersionRejectedStatement();
     } else {
-      await markCurrentStepStatement('approved');
+      await markCurrentStepStatement("approved");
 
       if (nextStep === undefined) {
         await updateVersionApprovedStatement();
@@ -9320,7 +9307,7 @@ export const createBadgeIssuanceRuleEvaluation = async (
   db: SqlDatabase,
   input: CreateBadgeIssuanceRuleEvaluationInput,
 ): Promise<BadgeIssuanceRuleEvaluationRecord> => {
-  const evaluationId = createPrefixedId('bre');
+  const evaluationId = createPrefixedId("bre");
   const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
   const insertStatement = (): Promise<SqlRunResult> =>
     db
@@ -9634,7 +9621,7 @@ export const createDedicatedDbProvisioningRequest = async (
   db: SqlDatabase,
   input: CreateDedicatedDbProvisioningRequestInput,
 ): Promise<DedicatedDbProvisioningRequestRecord> => {
-  const id = createPrefixedId('dpr');
+  const id = createPrefixedId("dpr");
   const requestedAt = input.requestedAt ?? new Date().toISOString();
   const insertStatement = (): Promise<SqlRunResult> =>
     db
@@ -9713,11 +9700,11 @@ export const listDedicatedDbProvisioningRequests = async (
   db: SqlDatabase,
   input: ListDedicatedDbProvisioningRequestsInput,
 ): Promise<DedicatedDbProvisioningRequestRecord[]> => {
-  const whereClauses = ['tenant_id = ?'];
+  const whereClauses = ["tenant_id = ?"];
   const queryParams: unknown[] = [input.tenantId];
 
   if (input.status !== undefined) {
-    whereClauses.push('status = ?');
+    whereClauses.push("status = ?");
     queryParams.push(input.status);
   }
 
@@ -9738,7 +9725,7 @@ export const listDedicatedDbProvisioningRequests = async (
           created_at AS createdAt,
           updated_at AS updatedAt
         FROM tenant_dedicated_db_provisioning_requests
-        WHERE ${whereClauses.join('\n          AND ')}
+        WHERE ${whereClauses.join("\n          AND ")}
         ORDER BY requested_at DESC, created_at DESC
       `,
       )
@@ -9958,7 +9945,7 @@ export const findTenantSigningRegistrationByDid = async (
 };
 
 const normalizeLtiIssuer = (issuer: string): string => {
-  return issuer.trim().replace(/\/+$/g, '');
+  return issuer.trim().replace(/\/+$/g, "");
 };
 
 export const upsertLtiIssuerRegistration = async (
@@ -10722,7 +10709,7 @@ const createDelegatedIssuingAuthorityGrantEvent = async (
     occurredAt: string;
   },
 ): Promise<DelegatedIssuingAuthorityGrantEventRecord> => {
-  const eventId = createPrefixedId('dage');
+  const eventId = createPrefixedId("dage");
   const nowIso = new Date().toISOString();
   const insertStatement = (): Promise<SqlRunResult> =>
     db
@@ -10821,7 +10808,7 @@ const recordExpiredDelegatedIssuingAuthorityGrantEvents = async (
     await createDelegatedIssuingAuthorityGrantEvent(db, {
       tenantId,
       grantId: row.grantId,
-      eventType: 'expired',
+      eventType: "expired",
       actorUserId: null,
       detailsJson: null,
       occurredAt: row.endsAt,
@@ -10879,11 +10866,11 @@ export const createDelegatedIssuingAuthorityGrant = async (
   db: SqlDatabase,
   input: CreateDelegatedIssuingAuthorityGrantInput,
 ): Promise<DelegatedIssuingAuthorityGrantRecord> => {
-  const startsAtMs = assertValidIsoTimestamp(input.startsAt, 'startsAt');
-  const endsAtMs = assertValidIsoTimestamp(input.endsAt, 'endsAt');
+  const startsAtMs = assertValidIsoTimestamp(input.startsAt, "startsAt");
+  const endsAtMs = assertValidIsoTimestamp(input.endsAt, "endsAt");
 
   if (endsAtMs <= startsAtMs) {
-    throw new Error('endsAt must be after startsAt');
+    throw new Error("endsAt must be after startsAt");
   }
 
   const allowedActions = normalizeDelegatedIssuingAuthorityActions(input.allowedActions);
@@ -10993,7 +10980,7 @@ export const createDelegatedIssuingAuthorityGrant = async (
     }
   }
 
-  const grantId = createPrefixedId('dag');
+  const grantId = createPrefixedId("dag");
   const nowIso = new Date().toISOString();
   const insertGrantStatement = (): Promise<SqlRunResult> =>
     db
@@ -11078,7 +11065,7 @@ export const createDelegatedIssuingAuthorityGrant = async (
   await createDelegatedIssuingAuthorityGrantEvent(db, {
     tenantId: input.tenantId,
     grantId,
-    eventType: 'granted',
+    eventType: "granted",
     actorUserId: input.delegatedByUserId ?? null,
     detailsJson,
     occurredAt: nowIso,
@@ -11171,11 +11158,11 @@ export const listDelegatedIssuingAuthorityGrants = async (
   }
 
   return mapped.filter((record) => {
-    if (input.includeRevoked !== true && record.status === 'revoked') {
+    if (input.includeRevoked !== true && record.status === "revoked") {
       return false;
     }
 
-    if (input.includeExpired !== true && record.status === 'expired') {
+    if (input.includeExpired !== true && record.status === "expired") {
       return false;
     }
 
@@ -11187,7 +11174,7 @@ export const revokeDelegatedIssuingAuthorityGrant = async (
   db: SqlDatabase,
   input: RevokeDelegatedIssuingAuthorityGrantInput,
 ): Promise<RevokeDelegatedIssuingAuthorityGrantResult> => {
-  assertValidIsoTimestamp(input.revokedAt, 'revokedAt');
+  assertValidIsoTimestamp(input.revokedAt, "revokedAt");
 
   const existing = await findDelegatedIssuingAuthorityGrantById(
     db,
@@ -11204,7 +11191,7 @@ export const revokeDelegatedIssuingAuthorityGrant = async (
 
   if (existing.revokedAt !== null) {
     return {
-      status: 'already_revoked',
+      status: "already_revoked",
       grant: existing,
     };
   }
@@ -11254,7 +11241,7 @@ export const revokeDelegatedIssuingAuthorityGrant = async (
     await createDelegatedIssuingAuthorityGrantEvent(db, {
       tenantId: input.tenantId,
       grantId: input.grantId,
-      eventType: 'revoked',
+      eventType: "revoked",
       actorUserId: input.revokedByUserId ?? null,
       detailsJson,
       occurredAt: input.revokedAt,
@@ -11275,7 +11262,7 @@ export const revokeDelegatedIssuingAuthorityGrant = async (
   }
 
   return {
-    status: (result.meta.rowsWritten ?? 0) > 0 ? 'revoked' : 'already_revoked',
+    status: (result.meta.rowsWritten ?? 0) > 0 ? "revoked" : "already_revoked",
     grant,
   };
 };
@@ -11336,7 +11323,7 @@ export const findActiveDelegatedIssuingAuthorityGrantForAction = async (
   input: ResolveDelegatedIssuingAuthorityInput,
 ): Promise<DelegatedIssuingAuthorityGrantRecord | null> => {
   const atIso = input.atIso ?? new Date().toISOString();
-  assertValidIsoTimestamp(atIso, 'atIso');
+  assertValidIsoTimestamp(atIso, "atIso");
   await recordExpiredDelegatedIssuingAuthorityGrantEvents(db, input.tenantId, atIso);
 
   const listStatement = (): Promise<SqlQueryResult<DelegatedIssuingAuthorityGrantRow>> =>
@@ -11437,7 +11424,7 @@ const createBadgeTemplateOwnershipEvent = async (
   db: SqlDatabase,
   input: CreateBadgeTemplateOwnershipEventInput,
 ): Promise<BadgeTemplateOwnershipEventRecord> => {
-  const eventId = createPrefixedId('btoe');
+  const eventId = createPrefixedId("btoe");
   const insertStatement = (): Promise<SqlRunResult> =>
     db
       .prepare(
@@ -11542,7 +11529,7 @@ export const createTenantOrgUnit = async (
       );
     }
 
-    const expectedParentType = requiredParentType ?? 'institution';
+    const expectedParentType = requiredParentType ?? "institution";
 
     if (parent.unitType !== expectedParentType) {
       throw new Error(
@@ -11557,7 +11544,7 @@ export const createTenantOrgUnit = async (
     }
   }
 
-  const id = createPrefixedId('ou');
+  const id = createPrefixedId("ou");
   const nowIso = new Date().toISOString();
   const insertStatement = (): Promise<SqlRunResult> =>
     db
@@ -11682,7 +11669,7 @@ export const upsertBadgeTemplateById = async (
     input.ownerOrgUnitId !== undefined &&
     input.ownerOrgUnitId !== previous.ownerOrgUnitId
   ) {
-    throw new Error('Badge template ownership changes must use transferBadgeTemplateOwnership');
+    throw new Error("Badge template ownership changes must use transferBadgeTemplateOwnership");
   }
 
   const fallbackOwnerOrgUnitId = await ensureInstitutionOrgUnitForTenant(db, input.tenantId);
@@ -11760,8 +11747,8 @@ export const upsertBadgeTemplateById = async (
       badgeTemplateId: template.id,
       fromOrgUnitId: null,
       toOrgUnitId: template.ownerOrgUnitId,
-      reasonCode: 'initial_assignment',
-      reason: 'Badge template ownership assigned at creation',
+      reasonCode: "initial_assignment",
+      reason: "Badge template ownership assigned at creation",
       governanceMetadataJson: template.governanceMetadataJson,
       transferredByUserId: template.createdByUserId,
       transferredAt: template.createdAt,
@@ -11775,7 +11762,7 @@ export const createBadgeTemplate = async (
   db: SqlDatabase,
   input: CreateBadgeTemplateInput,
 ): Promise<BadgeTemplateRecord> => {
-  const id = createPrefixedId('bt');
+  const id = createPrefixedId("bt");
   const nowIso = new Date().toISOString();
   const fallbackOwnerOrgUnitId = await ensureInstitutionOrgUnitForTenant(db, input.tenantId);
   const ownerOrgUnitId = input.ownerOrgUnitId ?? fallbackOwnerOrgUnitId;
@@ -11846,8 +11833,8 @@ export const createBadgeTemplate = async (
     badgeTemplateId: template.id,
     fromOrgUnitId: null,
     toOrgUnitId: template.ownerOrgUnitId,
-    reasonCode: 'initial_assignment',
-    reason: 'Badge template ownership assigned at creation',
+    reasonCode: "initial_assignment",
+    reason: "Badge template ownership assigned at creation",
     governanceMetadataJson: template.governanceMetadataJson,
     transferredByUserId: template.createdByUserId,
     transferredAt: template.createdAt,
@@ -11953,38 +11940,38 @@ export const updateBadgeTemplate = async (
   const params: (string | null)[] = [];
 
   if (input.slug !== undefined) {
-    setClauses.push('slug = ?');
+    setClauses.push("slug = ?");
     params.push(input.slug);
   }
 
   if (input.title !== undefined) {
-    setClauses.push('title = ?');
+    setClauses.push("title = ?");
     params.push(input.title);
   }
 
   if (input.description !== undefined) {
-    setClauses.push('description = ?');
+    setClauses.push("description = ?");
     params.push(input.description);
   }
 
   if (input.criteriaUri !== undefined) {
-    setClauses.push('criteria_uri = ?');
+    setClauses.push("criteria_uri = ?");
     params.push(input.criteriaUri);
   }
 
   if (input.imageUri !== undefined) {
-    setClauses.push('image_uri = ?');
+    setClauses.push("image_uri = ?");
     params.push(input.imageUri);
   }
 
   if (setClauses.length === 0) {
-    throw new Error('No badge template fields were provided for update');
+    throw new Error("No badge template fields were provided for update");
   }
 
   const updatedAt = new Date().toISOString();
   const sql = `
     UPDATE badge_templates
-    SET ${setClauses.join(', ')},
+    SET ${setClauses.join(", ")},
         updated_at = ?
     WHERE tenant_id = ?
       AND id = ?
@@ -12074,7 +12061,7 @@ export const transferBadgeTemplateOwnership = async (
   const transferredAtMs = Date.parse(input.transferredAt);
 
   if (!Number.isFinite(transferredAtMs)) {
-    throw new Error('transferredAt must be a valid ISO timestamp');
+    throw new Error("transferredAt must be a valid ISO timestamp");
   }
 
   if (!BADGE_TEMPLATE_OWNERSHIP_REASON_CODES.has(input.reasonCode)) {
@@ -12097,7 +12084,7 @@ export const transferBadgeTemplateOwnership = async (
 
   if (template.ownerOrgUnitId === input.toOrgUnitId) {
     return {
-      status: 'already_owned',
+      status: "already_owned",
       template,
       event: null,
     };
@@ -12149,7 +12136,7 @@ export const transferBadgeTemplateOwnership = async (
   });
 
   return {
-    status: 'transferred',
+    status: "transferred",
     template: updatedTemplate,
     event,
   };
@@ -12436,19 +12423,19 @@ export const recordAssertionLifecycleTransition = async (
   const transitionedAtMs = Date.parse(input.transitionedAt);
 
   if (!Number.isFinite(transitionedAtMs)) {
-    throw new Error('transitionedAt must be a valid ISO timestamp');
+    throw new Error("transitionedAt must be a valid ISO timestamp");
   }
 
   if (!ASSERTION_LIFECYCLE_REASON_CODES.has(input.reasonCode)) {
     throw new Error(`Unsupported assertion lifecycle reason code: ${input.reasonCode}`);
   }
 
-  if (input.transitionSource === 'manual' && input.actorUserId === undefined) {
-    throw new Error('Manual lifecycle transitions require actorUserId');
+  if (input.transitionSource === "manual" && input.actorUserId === undefined) {
+    throw new Error("Manual lifecycle transitions require actorUserId");
   }
 
-  if (input.transitionSource === 'automation' && input.actorUserId !== undefined) {
-    throw new Error('Automated lifecycle transitions must not set actorUserId');
+  if (input.transitionSource === "automation" && input.actorUserId !== undefined) {
+    throw new Error("Automated lifecycle transitions must not set actorUserId");
   }
 
   const assertion = await findAssertionById(db, input.tenantId, input.assertionId);
@@ -12469,7 +12456,7 @@ export const recordAssertionLifecycleTransition = async (
 
   if (current.state === input.toState) {
     return {
-      status: 'already_in_state',
+      status: "already_in_state",
       fromState: current.state,
       toState: input.toState,
       currentState: current.state,
@@ -12482,7 +12469,7 @@ export const recordAssertionLifecycleTransition = async (
 
   if (!allowedTransitions.has(input.toState)) {
     return {
-      status: 'invalid_transition',
+      status: "invalid_transition",
       fromState: current.state,
       toState: input.toState,
       currentState: current.state,
@@ -12496,32 +12483,32 @@ export const recordAssertionLifecycleTransition = async (
     normalizedReason === undefined || normalizedReason.length === 0 ? null : normalizedReason;
   let effectiveTransitionedAt = input.transitionedAt;
 
-  if (input.toState === 'revoked') {
+  if (input.toState === "revoked") {
     const revocationResult = await recordAssertionRevocation(db, {
       tenantId: input.tenantId,
       assertionId: input.assertionId,
-      revocationId: createPrefixedId('rev'),
+      revocationId: createPrefixedId("rev"),
       reason: reason ?? input.reasonCode,
-      idempotencyKey: createPrefixedId('idem'),
+      idempotencyKey: createPrefixedId("idem"),
       ...(input.actorUserId === undefined ? {} : { revokedByUserId: input.actorUserId }),
       revokedAt: input.transitionedAt,
     });
 
-    if (revocationResult.status === 'already_revoked') {
+    if (revocationResult.status === "already_revoked") {
       return {
-        status: 'already_in_state',
+        status: "already_in_state",
         fromState: current.state,
         toState: input.toState,
-        currentState: 'revoked',
+        currentState: "revoked",
         event: null,
-        message: 'assertion is already in revoked state',
+        message: "assertion is already in revoked state",
       };
     }
 
     effectiveTransitionedAt = revocationResult.revokedAt;
   }
 
-  const eventId = createPrefixedId('ale');
+  const eventId = createPrefixedId("ale");
   const insertStatement = (): Promise<SqlRunResult> =>
     db
       .prepare(
@@ -12587,7 +12574,7 @@ export const recordAssertionLifecycleTransition = async (
   }
 
   return {
-    status: 'transitioned',
+    status: "transitioned",
     fromState: current.state,
     toState: input.toState,
     currentState: input.toState,
@@ -12608,7 +12595,7 @@ export const listLearnerBadgeSummaries = async (
 
   const learnerProfile = await findLearnerProfileByIdentity(db, {
     tenantId: input.tenantId,
-    identityType: 'email',
+    identityType: "email",
     identityValue: user.email,
   });
 
@@ -12646,13 +12633,13 @@ export const listLearnerBadgeSummaries = async (
   emailAliases.add(normalizeEmail(user.email));
 
   for (const identity of identities) {
-    if (identity.identityType === 'email') {
+    if (identity.identityType === "email") {
       emailAliases.add(normalizeEmail(identity.identityValue));
     }
   }
 
   const aliasList = Array.from(emailAliases);
-  const emailPlaceholders = aliasList.map(() => '?').join(', ');
+  const emailPlaceholders = aliasList.map(() => "?").join(", ");
   const params: unknown[] = [input.tenantId, learnerProfile.id, ...aliasList];
   const result = await db
     .prepare(
@@ -12692,11 +12679,11 @@ export const listTenantAssertions = async (
   input: ListTenantAssertionsInput,
 ): Promise<TenantAssertionSummaryRecord[]> => {
   const queryLimit = Math.max(1, Math.min(input.limit ?? 100, 500));
-  const whereClauses = ['assertions.tenant_id = ?'];
+  const whereClauses = ["assertions.tenant_id = ?"];
   const params: unknown[] = [input.tenantId];
 
   if (input.badgeTemplateId !== undefined) {
-    whereClauses.push('assertions.badge_template_id = ?');
+    whereClauses.push("assertions.badge_template_id = ?");
     params.push(input.badgeTemplateId);
   }
 
@@ -12758,7 +12745,7 @@ export const listTenantAssertions = async (
             ORDER BY ale.transitioned_at DESC, ale.created_at DESC, ale.id DESC
             LIMIT 1
           )
-        WHERE ${whereClauses.join('\n          AND ')}
+        WHERE ${whereClauses.join("\n          AND ")}
         ORDER BY assertions.issued_at DESC, assertions.id DESC
         LIMIT ?
       `,
@@ -12854,7 +12841,7 @@ const normalizeRecipientIdentifierValue = (
 ): string => {
   const trimmedValue = identifierValue.trim();
 
-  if (identifierType === 'emailAddress') {
+  if (identifierType === "emailAddress") {
     return normalizeEmail(trimmedValue);
   }
 
@@ -13087,7 +13074,7 @@ export const listAssertionStatusListEntries = async (
 
 const serializeQueuePayload = (payload: unknown): string => {
   if (payload === undefined) {
-    throw new Error('Queue payload is not JSON serializable');
+    throw new Error("Queue payload is not JSON serializable");
   }
 
   return JSON.stringify(payload);
@@ -13114,7 +13101,9 @@ const mapJobQueueMessageRow = (row: JobQueueMessageRow): JobQueueMessageRecord =
   };
 };
 
-const migrationBatchPayloadFromJson = (payloadJson: string): {
+const migrationBatchPayloadFromJson = (
+  payloadJson: string,
+): {
   source: MigrationBatchSource;
   batchId: string;
   rowNumber: number | null;
@@ -13129,14 +13118,14 @@ const migrationBatchPayloadFromJson = (payloadJson: string): {
     return null;
   }
 
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
 
   const payload = parsed as Record<string, unknown>;
   const rawBatchId = payload.batchId;
 
-  if (typeof rawBatchId !== 'string') {
+  if (typeof rawBatchId !== "string") {
     return null;
   }
 
@@ -13147,22 +13136,22 @@ const migrationBatchPayloadFromJson = (payloadJson: string): {
   }
 
   const source =
-    payload.source === 'file_upload' ||
-    payload.source === 'credly_export' ||
-    payload.source === 'parchment_export'
+    payload.source === "file_upload" ||
+    payload.source === "credly_export" ||
+    payload.source === "parchment_export"
       ? payload.source
-      : 'unknown';
+      : "unknown";
   const rowNumberRaw = payload.rowNumber;
   const rowNumber =
-    typeof rowNumberRaw === 'number' && Number.isInteger(rowNumberRaw) && rowNumberRaw > 0
+    typeof rowNumberRaw === "number" && Number.isInteger(rowNumberRaw) && rowNumberRaw > 0
       ? rowNumberRaw
       : null;
   const fileName =
-    typeof payload.fileName === 'string' && payload.fileName.trim().length > 0
+    typeof payload.fileName === "string" && payload.fileName.trim().length > 0
       ? payload.fileName.trim()
       : null;
   const format =
-    typeof payload.format === 'string' && payload.format.trim().length > 0
+    typeof payload.format === "string" && payload.format.trim().length > 0
       ? payload.format.trim()
       : null;
 
@@ -13179,7 +13168,7 @@ export const enqueueJobQueueMessage = async (
   db: SqlDatabase,
   input: EnqueueJobQueueMessageInput,
 ): Promise<JobQueueMessageRecord> => {
-  const messageId = createPrefixedId('job');
+  const messageId = createPrefixedId("job");
   const nowIso = new Date().toISOString();
   const payloadJson = serializeQueuePayload(input.payload);
   const maxAttempts = input.maxAttempts ?? 8;
@@ -13235,7 +13224,7 @@ export const enqueueJobQueueMessage = async (
     lastError: null,
     completedAt: null,
     failedAt: null,
-    status: 'pending',
+    status: "pending",
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -13245,7 +13234,7 @@ export const leaseJobQueueMessages = async (
   db: SqlDatabase,
   input: LeaseJobQueueMessagesInput,
 ): Promise<JobQueueMessageRecord[]> => {
-  const leaseToken = createPrefixedId('lease');
+  const leaseToken = createPrefixedId("lease");
   const leaseExpiresAt = addSecondsToIso(input.nowIso, input.leaseSeconds);
   const candidateResult = await db
     .prepare(
@@ -13446,8 +13435,7 @@ export const retryFailedImportMigrationBatchQueueMessages = async (
   input: RetryFailedImportMigrationBatchQueueMessagesInput,
 ): Promise<RetryFailedImportMigrationBatchQueueMessagesResult> => {
   const nowIso = input.nowIso ?? new Date().toISOString();
-  const rowNumberFilter =
-    input.rowNumbers === undefined ? null : new Set<number>(input.rowNumbers);
+  const rowNumberFilter = input.rowNumbers === undefined ? null : new Set<number>(input.rowNumbers);
   const candidateRows = await listImportMigrationBatchQueueMessages(db, {
     tenantId: input.tenantId,
     ...(input.source === undefined ? {} : { source: input.source }),
@@ -13471,7 +13459,7 @@ export const retryFailedImportMigrationBatchQueueMessages = async (
 
     matched += 1;
 
-    if (row.status !== 'failed') {
+    if (row.status !== "failed") {
       skippedNotFailed += 1;
       continue;
     }
@@ -13563,7 +13551,7 @@ export const recordAssertionRevocation = async (
     .run();
 
   return {
-    status: assertion.revokedAt === null ? 'revoked' : 'already_revoked',
+    status: assertion.revokedAt === null ? "revoked" : "already_revoked",
     revokedAt: effectiveRevokedAt,
   };
 };

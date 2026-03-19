@@ -1,4 +1,4 @@
-import { logWarn, type JsonObject, type ObservabilityContext } from '@credtrail/core-domain';
+import { logWarn, type JsonObject, type ObservabilityContext } from "@credtrail/core-domain";
 import {
   consumeOAuthAuthorizationCode,
   consumeOAuthRefreshToken,
@@ -13,10 +13,10 @@ import {
   upsertOb3SubjectCredential,
   upsertOb3SubjectProfile,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
+} from "@credtrail/db";
+import type { Hono } from "hono";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "../auth/auth-context";
 import {
   OB3_BASE_PATH,
   OB3_DISCOVERY_CACHE_CONTROL,
@@ -35,7 +35,7 @@ import {
   OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
   OAUTH_TOKEN_TYPE_HINT_ACCESS_TOKEN,
   OAUTH_TOKEN_TYPE_HINT_REFRESH_TOKEN,
-} from '../ob3/constants';
+} from "../ob3/constants";
 import {
   allScopesSupported,
   defaultOb3Profile,
@@ -53,8 +53,8 @@ import {
   splitSpaceDelimited,
   validateRedirectUri,
   type OAuthClientMetadata,
-} from '../ob3/oauth-utils';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+} from "../ob3/oauth-utils";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
 interface OAuthAccessTokenContext {
   userId: string;
@@ -65,9 +65,7 @@ interface RegisterOb3RoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
   resolveAuthenticatedPrincipal: (context: AppContext) => Promise<AuthenticatedPrincipal | null>;
-  resolveRequestedTenantContext: (
-    context: AppContext,
-  ) => Promise<RequestedTenantContext | null>;
+  resolveRequestedTenantContext: (context: AppContext) => Promise<RequestedTenantContext | null>;
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
   ob3ServiceDescriptionDocument: (context: AppContext) => JsonObject;
   oauthErrorJson: (
@@ -87,7 +85,7 @@ interface RegisterOb3RoutesInput {
     context: AppContext,
     payload: {
       access_token: string;
-      token_type: 'Bearer';
+      token_type: "Bearer";
       expires_in: number;
       scope: string;
       refresh_token?: string | undefined;
@@ -153,7 +151,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
   } = input;
 
   app.get(OB3_DISCOVERY_PATH, (c) => {
-    c.header('Cache-Control', OB3_DISCOVERY_CACHE_CONTROL);
+    c.header("Cache-Control", OB3_DISCOVERY_CACHE_CONTROL);
     return c.json(ob3ServiceDescriptionDocument(c));
   });
 
@@ -162,7 +160,12 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     const body = asJsonObject(payload);
 
     if (body === null) {
-      return oauthErrorJson(c, 400, 'invalid_client_metadata', 'Request body must be a JSON object');
+      return oauthErrorJson(
+        c,
+        400,
+        "invalid_client_metadata",
+        "Request body must be a JSON object",
+      );
     }
 
     const redirectUris = parseStringArray(body.redirect_uris);
@@ -171,24 +174,29 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthErrorJson(
         c,
         400,
-        'invalid_client_metadata',
-        'redirect_uris is required and must be a non-empty array of URLs',
+        "invalid_client_metadata",
+        "redirect_uris is required and must be a non-empty array of URLs",
       );
     }
 
     for (const redirectUri of redirectUris) {
       const validationError = validateRedirectUri(redirectUri);
 
-      if (validationError === 'invalid_scheme') {
-        return oauthErrorJson(c, 400, 'invalid_redirect_uri', 'redirect_uris must use http or https');
-      }
-
-      if (validationError === 'invalid_url') {
+      if (validationError === "invalid_scheme") {
         return oauthErrorJson(
           c,
           400,
-          'invalid_redirect_uri',
-          'redirect_uris must contain valid URLs',
+          "invalid_redirect_uri",
+          "redirect_uris must use http or https",
+        );
+      }
+
+      if (validationError === "invalid_url") {
+        return oauthErrorJson(
+          c,
+          400,
+          "invalid_redirect_uri",
+          "redirect_uris must contain valid URLs",
         );
       }
     }
@@ -202,8 +210,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthErrorJson(
         c,
         400,
-        'invalid_client_metadata',
-        'Only authorization_code grant type is currently supported',
+        "invalid_client_metadata",
+        "Only authorization_code grant type is currently supported",
       );
     }
 
@@ -216,7 +224,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthErrorJson(
         c,
         400,
-        'invalid_client_metadata',
+        "invalid_client_metadata",
         'Only response_type "code" is currently supported',
       );
     }
@@ -229,7 +237,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthErrorJson(
         c,
         400,
-        'invalid_client_metadata',
+        "invalid_client_metadata",
         'Only token_endpoint_auth_method "client_secret_basic" is supported',
       );
     }
@@ -241,7 +249,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         : splitSpaceDelimited(scopeFromRequest);
 
     if (scopeTokens.length === 0 || !allScopesSupported(scopeTokens)) {
-      return oauthErrorJson(c, 400, 'invalid_scope', 'Requested scope contains unsupported values');
+      return oauthErrorJson(c, 400, "invalid_scope", "Requested scope contains unsupported values");
     }
 
     const clientId = `oc_${generateOpaqueToken()}`;
@@ -254,7 +262,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       redirectUrisJson: JSON.stringify(redirectUris),
       grantTypesJson: JSON.stringify(grantTypes),
       responseTypesJson: JSON.stringify(responseTypes),
-      scope: scopeTokens.join(' '),
+      scope: scopeTokens.join(" "),
       tokenEndpointAuthMethod,
     });
     const issuedAt = Math.floor(Date.parse(createdClient.createdAt) / 1000);
@@ -269,7 +277,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         grant_types: grantTypes,
         response_types: responseTypes,
         token_endpoint_auth_method: tokenEndpointAuthMethod,
-        scope: scopeTokens.join(' '),
+        scope: scopeTokens.join(" "),
         ...(createdClient.clientName === null ? {} : { client_name: createdClient.clientName }),
       },
       201,
@@ -277,58 +285,58 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
   });
 
   app.get(`${OB3_BASE_PATH}/oauth/authorize`, async (c) => {
-    const clientId = asNonEmptyString(c.req.query('client_id'));
-    const responseType = asNonEmptyString(c.req.query('response_type'));
-    const redirectUri = asNonEmptyString(c.req.query('redirect_uri'));
-    const state = c.req.query('state');
+    const clientId = asNonEmptyString(c.req.query("client_id"));
+    const responseType = asNonEmptyString(c.req.query("response_type"));
+    const redirectUri = asNonEmptyString(c.req.query("redirect_uri"));
+    const state = c.req.query("state");
     const db = resolveDatabase(c.env);
 
     if (clientId === null) {
-      return oauthErrorJson(c, 400, 'invalid_request', 'client_id is required');
+      return oauthErrorJson(c, 400, "invalid_request", "client_id is required");
     }
 
     const registeredClient = await findOAuthClientById(db, clientId);
 
     if (registeredClient === null) {
-      return oauthErrorJson(c, 400, 'invalid_client', 'Unknown client_id');
+      return oauthErrorJson(c, 400, "invalid_client", "Unknown client_id");
     }
 
     const clientMetadata = parseOAuthClientMetadata(registeredClient);
 
     if (clientMetadata === null) {
-      return oauthErrorJson(c, 500, 'server_error', 'Stored client metadata is invalid');
+      return oauthErrorJson(c, 500, "server_error", "Stored client metadata is invalid");
     }
 
     if (redirectUri === null || !clientMetadata.redirectUris.includes(redirectUri)) {
       return oauthErrorJson(
         c,
         400,
-        'invalid_redirect_uri',
-        'redirect_uri is required and must match a registered redirect URI',
+        "invalid_redirect_uri",
+        "redirect_uri is required and must match a registered redirect URI",
       );
     }
 
     if (state === undefined || state.length === 0) {
-      return oauthErrorJson(c, 400, 'invalid_request', 'state is required');
+      return oauthErrorJson(c, 400, "invalid_request", "state is required");
     }
 
     if (responseType !== OAUTH_RESPONSE_TYPE_CODE) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'unsupported_response_type',
+          error: "unsupported_response_type",
           state,
         }),
         302,
       );
     }
 
-    const requestedScopeRaw = asNonEmptyString(c.req.query('scope'));
+    const requestedScopeRaw = asNonEmptyString(c.req.query("scope"));
 
     if (requestedScopeRaw === null) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'invalid_scope',
-          error_description: 'scope is required',
+          error: "invalid_scope",
+          error_description: "scope is required",
           state,
         }),
         302,
@@ -344,15 +352,15 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     ) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'invalid_scope',
+          error: "invalid_scope",
           state,
         }),
         302,
       );
     }
 
-    const codeChallenge = c.req.query('code_challenge');
-    const codeChallengeMethod = c.req.query('code_challenge_method');
+    const codeChallenge = c.req.query("code_challenge");
+    const codeChallengeMethod = c.req.query("code_challenge_method");
 
     if (
       codeChallenge === undefined ||
@@ -362,8 +370,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     ) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'invalid_request',
-          error_description: 'code_challenge and code_challenge_method are required',
+          error: "invalid_request",
+          error_description: "code_challenge and code_challenge_method are required",
           state,
         }),
         302,
@@ -373,8 +381,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     if (codeChallengeMethod !== OAUTH_PKCE_CODE_CHALLENGE_METHOD_S256) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'invalid_request',
-          error_description: 'code_challenge_method must be S256',
+          error: "invalid_request",
+          error_description: "code_challenge_method must be S256",
           state,
         }),
         302,
@@ -384,8 +392,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     if (!isPkceCodeChallenge(codeChallenge)) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'invalid_request',
-          error_description: 'code_challenge must be a base64url-encoded SHA-256 digest',
+          error: "invalid_request",
+          error_description: "code_challenge must be a base64url-encoded SHA-256 digest",
           state,
         }),
         302,
@@ -397,8 +405,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     if (principal === null) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'access_denied',
-          error_description: 'Resource owner is not authenticated',
+          error: "access_denied",
+          error_description: "Resource owner is not authenticated",
           state,
         }),
         302,
@@ -410,8 +418,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     if (requestedTenant === null) {
       return c.redirect(
         oauthRedirectUriWithParams(redirectUri, {
-          error: 'access_denied',
-          error_description: 'Resource owner does not have an active tenant context',
+          error: "access_denied",
+          error_description: "Resource owner does not have an active tenant context",
           state,
         }),
         302,
@@ -427,7 +435,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       tenantId: requestedTenant.tenantId,
       codeHash: authorizationCodeHash,
       redirectUri,
-      scope: requestedScopeTokens.join(' '),
+      scope: requestedScopeTokens.join(" "),
       expiresAt: addSecondsToIso(new Date().toISOString(), OAUTH_AUTHORIZATION_CODE_TTL_SECONDS),
       codeChallenge,
       codeChallengeMethod,
@@ -436,7 +444,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     return c.redirect(
       oauthRedirectUriWithParams(redirectUri, {
         code: authorizationCode,
-        scope: requestedScopeTokens.join(' '),
+        scope: requestedScopeTokens.join(" "),
         state,
       }),
       302,
@@ -459,17 +467,17 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     const { clientMetadata } = authResult;
     const rawBody = await c.req.text();
     const formData = new URLSearchParams(rawBody);
-    const requestedGrantType = asNonEmptyString(formData.get('grant_type'));
+    const requestedGrantType = asNonEmptyString(formData.get("grant_type"));
     const forceRefreshGrant = options?.forceRefreshGrant === true;
     const grantType = forceRefreshGrant
       ? (requestedGrantType ?? OAUTH_GRANT_TYPE_REFRESH_TOKEN)
       : requestedGrantType;
 
     if (grantType === OAUTH_GRANT_TYPE_AUTHORIZATION_CODE) {
-      const code = asNonEmptyString(formData.get('code'));
-      const redirectUri = asNonEmptyString(formData.get('redirect_uri'));
-      const codeVerifier = formData.get('code_verifier');
-      const requestedScope = asNonEmptyString(formData.get('scope'));
+      const code = asNonEmptyString(formData.get("code"));
+      const redirectUri = asNonEmptyString(formData.get("redirect_uri"));
+      const codeVerifier = formData.get("code_verifier");
+      const requestedScope = asNonEmptyString(formData.get("scope"));
 
       if (
         code === null ||
@@ -480,13 +488,13 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         return oauthTokenErrorJson(
           c,
           400,
-          'invalid_request',
-          'code, redirect_uri, and code_verifier are required',
+          "invalid_request",
+          "code, redirect_uri, and code_verifier are required",
         );
       }
 
       if (!isPkceCodeVerifier(codeVerifier)) {
-        return oauthTokenErrorJson(c, 400, 'invalid_request', 'code_verifier is invalid');
+        return oauthTokenErrorJson(c, 400, "invalid_request", "code_verifier is invalid");
       }
 
       const nowIso = new Date().toISOString();
@@ -501,8 +509,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         return oauthTokenErrorJson(
           c,
           400,
-          'invalid_grant',
-          'Authorization code is invalid or expired',
+          "invalid_grant",
+          "Authorization code is invalid or expired",
         );
       }
 
@@ -513,19 +521,19 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         return oauthTokenErrorJson(
           c,
           400,
-          'invalid_grant',
-          'Authorization code is missing PKCE binding',
+          "invalid_grant",
+          "Authorization code is missing PKCE binding",
         );
       }
 
       const computedCodeChallenge = await sha256Base64Url(codeVerifier);
 
       if (computedCodeChallenge !== consumedAuthorizationCode.codeChallenge) {
-        return oauthTokenErrorJson(c, 400, 'invalid_grant', 'PKCE verification failed');
+        return oauthTokenErrorJson(c, 400, "invalid_grant", "PKCE verification failed");
       }
 
       if (requestedScope === null) {
-        return oauthTokenErrorJson(c, 400, 'invalid_request', 'scope is required');
+        return oauthTokenErrorJson(c, 400, "invalid_request", "scope is required");
       }
 
       const originalScopeTokens = splitSpaceDelimited(consumedAuthorizationCode.scope);
@@ -539,8 +547,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         return oauthTokenErrorJson(
           c,
           400,
-          'invalid_scope',
-          'Requested scope exceeds authorization grant',
+          "invalid_scope",
+          "Requested scope exceeds authorization grant",
         );
       }
 
@@ -556,18 +564,18 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthTokenSuccessJson(c, {
         access_token: issuedTokens.accessToken,
         refresh_token: issuedTokens.refreshToken,
-        token_type: 'Bearer',
+        token_type: "Bearer",
         expires_in: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-        scope: requestedScopeTokens.join(' '),
+        scope: requestedScopeTokens.join(" "),
       });
     }
 
     if (grantType === OAUTH_GRANT_TYPE_REFRESH_TOKEN) {
-      const refreshToken = asNonEmptyString(formData.get('refresh_token'));
-      const requestedScope = asNonEmptyString(formData.get('scope'));
+      const refreshToken = asNonEmptyString(formData.get("refresh_token"));
+      const requestedScope = asNonEmptyString(formData.get("scope"));
 
       if (refreshToken === null) {
-        return oauthTokenErrorJson(c, 400, 'invalid_request', 'refresh_token is required');
+        return oauthTokenErrorJson(c, 400, "invalid_request", "refresh_token is required");
       }
 
       const nowIso = new Date().toISOString();
@@ -578,12 +586,14 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       });
 
       if (consumedRefreshToken === null) {
-        return oauthTokenErrorJson(c, 400, 'invalid_grant', 'Refresh token is invalid or expired');
+        return oauthTokenErrorJson(c, 400, "invalid_grant", "Refresh token is invalid or expired");
       }
 
       const originallyGrantedScopeTokens = splitSpaceDelimited(consumedRefreshToken.scope);
       const grantedScopeTokens =
-        requestedScope === null ? originallyGrantedScopeTokens : splitSpaceDelimited(requestedScope);
+        requestedScope === null
+          ? originallyGrantedScopeTokens
+          : splitSpaceDelimited(requestedScope);
 
       if (
         grantedScopeTokens.length === 0 ||
@@ -593,8 +603,8 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         return oauthTokenErrorJson(
           c,
           400,
-          'invalid_scope',
-          'Requested scope exceeds refresh token grant',
+          "invalid_scope",
+          "Requested scope exceeds refresh token grant",
         );
       }
 
@@ -610,9 +620,9 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthTokenSuccessJson(c, {
         access_token: issuedTokens.accessToken,
         refresh_token: issuedTokens.refreshToken,
-        token_type: 'Bearer',
+        token_type: "Bearer",
         expires_in: OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-        scope: grantedScopeTokens.join(' '),
+        scope: grantedScopeTokens.join(" "),
       });
     }
 
@@ -624,16 +634,16 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       return oauthTokenErrorJson(
         c,
         400,
-        'invalid_request',
-        'grant_type must be refresh_token for this endpoint',
+        "invalid_request",
+        "grant_type must be refresh_token for this endpoint",
       );
     }
 
     return oauthTokenErrorJson(
       c,
       400,
-      'unsupported_grant_type',
-      'Supported grant_type values are authorization_code and refresh_token',
+      "unsupported_grant_type",
+      "Supported grant_type values are authorization_code and refresh_token",
     );
   };
 
@@ -657,11 +667,16 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
 
     const { clientMetadata } = authResult;
     const formData = new URLSearchParams(await c.req.text());
-    const token = asNonEmptyString(formData.get('token'));
-    const tokenTypeHint = asNonEmptyString(formData.get('token_type_hint'));
+    const token = asNonEmptyString(formData.get("token"));
+    const tokenTypeHint = asNonEmptyString(formData.get("token_type_hint"));
 
     if (token === null || tokenTypeHint === null) {
-      return oauthTokenErrorJson(c, 400, 'invalid_request', 'token and token_type_hint are required');
+      return oauthTokenErrorJson(
+        c,
+        400,
+        "invalid_request",
+        "token and token_type_hint are required",
+      );
     }
 
     const tokenHash = await sha256Hex(token);
@@ -688,35 +703,38 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     return oauthTokenErrorJson(
       c,
       400,
-      'unsupported_token_type',
-      'token_type_hint must be access_token or refresh_token',
+      "unsupported_token_type",
+      "token_type_hint must be access_token or refresh_token",
     );
   });
 
   app.get(`${OB3_BASE_PATH}/credentials`, async (c) => {
-    const accessTokenContext = await authenticateOb3AccessToken(c, OB3_OAUTH_SCOPE_CREDENTIAL_READONLY);
+    const accessTokenContext = await authenticateOb3AccessToken(
+      c,
+      OB3_OAUTH_SCOPE_CREDENTIAL_READONLY,
+    );
 
     if (accessTokenContext instanceof Response) {
       return accessTokenContext;
     }
 
-    const parsedLimit = parsePositiveIntegerQueryParam(c.req.query('limit'), {
+    const parsedLimit = parsePositiveIntegerQueryParam(c.req.query("limit"), {
       minimum: 1,
       fallback: 50,
     });
-    const parsedOffset = parsePositiveIntegerQueryParam(c.req.query('offset'), {
+    const parsedOffset = parsePositiveIntegerQueryParam(c.req.query("offset"), {
       minimum: 0,
       fallback: 0,
     });
 
     if (parsedLimit === null || parsedOffset === null) {
-      return ob3ErrorJson(c, 400, 'limit and offset query parameters must be valid integers');
+      return ob3ErrorJson(c, 400, "limit and offset query parameters must be valid integers");
     }
 
-    const since = normalizeSinceQueryParam(c.req.query('since'));
+    const since = normalizeSinceQueryParam(c.req.query("since"));
 
     if (since === null) {
-      return ob3ErrorJson(c, 400, 'since query parameter must be a valid ISO8601 timestamp');
+      return ob3ErrorJson(c, 400, "since query parameter must be a valid ISO8601 timestamp");
     }
 
     const limit = Math.min(parsedLimit, 200);
@@ -740,7 +758,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
             credential.push(parsedPayload);
           }
         } catch {
-          logWarn(observabilityContext(c.env), 'ob3_credentials_payload_parse_failed', {
+          logWarn(observabilityContext(c.env), "ob3_credentials_payload_parse_failed", {
             credentialId: entry.credentialId,
           });
         }
@@ -752,9 +770,9 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
       }
     }
 
-    c.header('X-Total-Count', String(credentialsResult.totalCount));
+    c.header("X-Total-Count", String(credentialsResult.totalCount));
     c.header(
-      'Link',
+      "Link",
       ob3CredentialsLinkHeader({
         requestUrl: c.req.url,
         limit,
@@ -771,31 +789,34 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
   });
 
   app.post(`${OB3_BASE_PATH}/credentials`, async (c) => {
-    const accessTokenContext = await authenticateOb3AccessToken(c, OB3_OAUTH_SCOPE_CREDENTIAL_UPSERT);
+    const accessTokenContext = await authenticateOb3AccessToken(
+      c,
+      OB3_OAUTH_SCOPE_CREDENTIAL_UPSERT,
+    );
 
     if (accessTokenContext instanceof Response) {
       return accessTokenContext;
     }
 
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
     const db = resolveDatabase(c.env);
     const isCredentialJsonContentType =
-      contentType.includes('application/json') ||
-      contentType.includes('application/ld+json') ||
-      contentType.includes('application/vc+ld+json');
+      contentType.includes("application/json") ||
+      contentType.includes("application/ld+json") ||
+      contentType.includes("application/vc+ld+json");
 
     if (isCredentialJsonContentType) {
       const requestPayload = await c.req.json<unknown>().catch(() => null);
       const credentialPayload = asJsonObject(requestPayload);
 
       if (credentialPayload === null) {
-        return ob3ErrorJson(c, 400, 'Request body must be a JSON object');
+        return ob3ErrorJson(c, 400, "Request body must be a JSON object");
       }
 
       const credentialId = asNonEmptyString(credentialPayload.id);
 
       if (credentialId === null) {
-        return ob3ErrorJson(c, 400, 'Credential payload must include a non-empty id');
+        return ob3ErrorJson(c, 400, "Credential payload must include a non-empty id");
       }
 
       const upsertResult = await upsertOb3SubjectCredential(db, {
@@ -809,20 +830,23 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
           undefined,
       });
 
-      const responseContentType = contentType.includes('application/vc+ld+json')
-        ? 'application/vc+ld+json; charset=utf-8'
-        : contentType.includes('application/ld+json')
-          ? 'application/ld+json; charset=utf-8'
-          : 'application/json; charset=utf-8';
-      c.header('Content-Type', responseContentType);
-      return c.body(JSON.stringify(credentialPayload), upsertResult.status === 'created' ? 201 : 200);
+      const responseContentType = contentType.includes("application/vc+ld+json")
+        ? "application/vc+ld+json; charset=utf-8"
+        : contentType.includes("application/ld+json")
+          ? "application/ld+json; charset=utf-8"
+          : "application/json; charset=utf-8";
+      c.header("Content-Type", responseContentType);
+      return c.body(
+        JSON.stringify(credentialPayload),
+        upsertResult.status === "created" ? 201 : 200,
+      );
     }
 
-    if (contentType.includes('text/plain')) {
+    if (contentType.includes("text/plain")) {
       const compactJws = (await c.req.text()).trim();
 
       if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+$/.test(compactJws)) {
-        return ob3ErrorJson(c, 400, 'Request body must be a compact JWS string');
+        return ob3ErrorJson(c, 400, "Request body must be a compact JWS string");
       }
 
       let credentialId: string;
@@ -835,7 +859,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
           400,
           error instanceof Error
             ? error.message
-            : 'Request body must contain a valid compact JWS payload',
+            : "Request body must contain a valid compact JWS payload",
         );
       }
 
@@ -846,19 +870,22 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
         compactJws,
       });
 
-      c.header('Content-Type', 'text/plain; charset=utf-8');
-      return c.body(compactJws, upsertResult.status === 'created' ? 201 : 200);
+      c.header("Content-Type", "text/plain; charset=utf-8");
+      return c.body(compactJws, upsertResult.status === "created" ? 201 : 200);
     }
 
     return ob3ErrorJson(
       c,
       400,
-      'content-type must be application/json, application/ld+json, application/vc+ld+json, or text/plain',
+      "content-type must be application/json, application/ld+json, application/vc+ld+json, or text/plain",
     );
   });
 
   app.get(`${OB3_BASE_PATH}/profile`, async (c) => {
-    const accessTokenContext = await authenticateOb3AccessToken(c, OB3_OAUTH_SCOPE_PROFILE_READONLY);
+    const accessTokenContext = await authenticateOb3AccessToken(
+      c,
+      OB3_OAUTH_SCOPE_PROFILE_READONLY,
+    );
 
     if (accessTokenContext instanceof Response) {
       return accessTokenContext;
@@ -913,7 +940,7 @@ export const registerOb3Routes = (input: RegisterOb3RoutesInput): void => {
     const requestProfile = asJsonObject(requestPayload);
 
     if (requestProfile === null) {
-      return ob3ErrorJson(c, 400, 'Request body must be a JSON object');
+      return ob3ErrorJson(c, 400, "Request body must be a JSON object");
     }
 
     const normalizedProfile = normalizeOb3Profile({

@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync } from "node:fs";
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   addLearnerIdentityAlias,
+  type AccessibleTenantContextRecord,
   createTenantAuthProvider,
   createAuthIdentityLink,
   createLearnerProfile,
@@ -34,7 +35,7 @@ import {
   type SqlExecutionMeta,
   type SqlQueryResult,
   type SqlRunResult,
-} from './index';
+} from "./index";
 
 interface FakeLearnerProfileRow {
   id: string;
@@ -75,11 +76,11 @@ interface FakeAuthIdentityLinkRow {
 
 interface FakeTenantAuthPolicyRow {
   tenant_id: string;
-  login_mode: 'local' | 'hybrid' | 'sso_required';
+  login_mode: "local" | "hybrid" | "sso_required";
   break_glass_enabled: number;
   local_mfa_required: number;
   default_provider_id: string | null;
-  enforce_for_roles: 'all_users' | 'admins_only';
+  enforce_for_roles: "all_users" | "admins_only";
   created_at: string;
   updated_at: string;
 }
@@ -87,7 +88,7 @@ interface FakeTenantAuthPolicyRow {
 interface FakeTenantAuthProviderRow {
   id: string;
   tenant_id: string;
-  protocol: 'oidc' | 'saml';
+  protocol: "oidc" | "saml";
   label: string;
   enabled: number;
   is_default: number;
@@ -125,14 +126,14 @@ interface FakeTenantRow {
   id: string;
   slug: string;
   display_name: string;
-  plan_tier: 'free' | 'team' | 'institution' | 'enterprise';
+  plan_tier: "free" | "team" | "institution" | "enterprise";
   is_active: number;
 }
 
 interface FakeMembershipRow {
   tenant_id: string;
   user_id: string;
-  role: 'owner' | 'admin' | 'issuer' | 'viewer';
+  role: "owner" | "admin" | "issuer" | "viewer";
 }
 
 class FakeStatement {
@@ -153,17 +154,17 @@ class FakeStatement {
   run(): Promise<SqlRunResult> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('INSERT INTO learner_profiles')) {
+    if (normalizedSql.includes("INSERT INTO learner_profiles")) {
       this.insertLearnerProfile();
       return Promise.resolve(this.successResult());
     }
 
-    if (normalizedSql.includes('UPDATE learner_identities SET is_primary = 0')) {
+    if (normalizedSql.includes("UPDATE learner_identities SET is_primary = 0")) {
       this.clearPrimaryIdentity();
       return Promise.resolve(this.successResult());
     }
 
-    if (normalizedSql.includes('INSERT INTO learner_identities')) {
+    if (normalizedSql.includes("INSERT INTO learner_identities")) {
       this.insertLearnerIdentity();
       return Promise.resolve(this.successResult());
     }
@@ -174,25 +175,25 @@ class FakeStatement {
   first<T>(): Promise<T | null> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('FROM learner_profiles WHERE tenant_id = ? AND id = ?')) {
+    if (normalizedSql.includes("FROM learner_profiles WHERE tenant_id = ? AND id = ?")) {
       return Promise.resolve(this.selectLearnerProfileById() as T | null);
     }
 
-    if (normalizedSql.includes('FROM learner_identities WHERE tenant_id = ? AND id = ?')) {
+    if (normalizedSql.includes("FROM learner_identities WHERE tenant_id = ? AND id = ?")) {
       return Promise.resolve(this.selectLearnerIdentityById() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM learner_profiles INNER JOIN learner_identities') &&
-      normalizedSql.includes('learner_identities.identity_type = ?') &&
-      normalizedSql.includes('learner_identities.is_verified = 1')
+      normalizedSql.includes("FROM learner_profiles INNER JOIN learner_identities") &&
+      normalizedSql.includes("learner_identities.identity_type = ?") &&
+      normalizedSql.includes("learner_identities.is_verified = 1")
     ) {
       return Promise.resolve(this.selectLearnerProfileByVerifiedIdentity() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM learner_profiles INNER JOIN learner_identities') &&
-      normalizedSql.includes('learner_identities.identity_type = ?')
+      normalizedSql.includes("FROM learner_profiles INNER JOIN learner_identities") &&
+      normalizedSql.includes("learner_identities.identity_type = ?")
     ) {
       return Promise.resolve(this.selectLearnerProfileByIdentity() as T | null);
     }
@@ -204,8 +205,8 @@ class FakeStatement {
     const normalizedSql = this.normalizedSql();
 
     if (
-      normalizedSql.includes('FROM learner_identities') &&
-      normalizedSql.includes('learner_profile_id = ?')
+      normalizedSql.includes("FROM learner_identities") &&
+      normalizedSql.includes("learner_profile_id = ?")
     ) {
       const rows = this.selectLearnerIdentitiesByProfile();
       return Promise.resolve({
@@ -218,21 +219,21 @@ class FakeStatement {
   }
 
   private normalizedSql(): string {
-    return this.sql.replace(/\s+/g, ' ').trim();
+    return this.sql.replace(/\s+/g, " ").trim();
   }
 
   private insertLearnerProfile(): void {
     const [id, tenantId, subjectId, displayName, createdAt, updatedAt] = this.boundParams;
 
     if (
-      typeof id !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof subjectId !== 'string' ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string' ||
-      (displayName !== null && typeof displayName !== 'string')
+      typeof id !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof subjectId !== "string" ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string" ||
+      (displayName !== null && typeof displayName !== "string")
     ) {
-      throw new Error('Invalid bound parameters for learner profile insert');
+      throw new Error("Invalid bound parameters for learner profile insert");
     }
 
     const duplicateSubject = this.db.learnerProfiles.find((row) => {
@@ -240,7 +241,9 @@ class FakeStatement {
     });
 
     if (duplicateSubject !== undefined) {
-      throw new Error('UNIQUE constraint failed: learner_profiles.tenant_id, learner_profiles.subject_id');
+      throw new Error(
+        "UNIQUE constraint failed: learner_profiles.tenant_id, learner_profiles.subject_id",
+      );
     }
 
     this.db.learnerProfiles.push({
@@ -257,15 +260,19 @@ class FakeStatement {
     const [updatedAt, tenantId, learnerProfileId] = this.boundParams;
 
     if (
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof learnerProfileId !== 'string'
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof learnerProfileId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for clearing primary identities');
+      throw new Error("Invalid bound parameters for clearing primary identities");
     }
 
     for (const row of this.db.learnerIdentities) {
-      if (row.tenant_id === tenantId && row.learner_profile_id === learnerProfileId && row.is_primary === 1) {
+      if (
+        row.tenant_id === tenantId &&
+        row.learner_profile_id === learnerProfileId &&
+        row.is_primary === 1
+      ) {
         row.is_primary = 0;
         row.updated_at = updatedAt;
       }
@@ -286,17 +293,17 @@ class FakeStatement {
     ] = this.boundParams;
 
     if (
-      typeof id !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof learnerProfileId !== 'string' ||
+      typeof id !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof learnerProfileId !== "string" ||
       !this.isLearnerIdentityType(identityType) ||
-      typeof identityValue !== 'string' ||
-      typeof isPrimary !== 'number' ||
-      typeof isVerified !== 'number' ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string'
+      typeof identityValue !== "string" ||
+      typeof isPrimary !== "number" ||
+      typeof isVerified !== "number" ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
     ) {
-      throw new Error('Invalid bound parameters for learner identity insert');
+      throw new Error("Invalid bound parameters for learner identity insert");
     }
 
     const profileExists = this.db.learnerProfiles.some((row) => {
@@ -304,7 +311,7 @@ class FakeStatement {
     });
 
     if (!profileExists) {
-      throw new Error('FOREIGN KEY constraint failed');
+      throw new Error("FOREIGN KEY constraint failed");
     }
 
     const duplicateIdentity = this.db.learnerIdentities.find((row) => {
@@ -317,16 +324,20 @@ class FakeStatement {
 
     if (duplicateIdentity !== undefined) {
       throw new Error(
-        'UNIQUE constraint failed: learner_identities.tenant_id, learner_identities.identity_type, learner_identities.identity_value',
+        "UNIQUE constraint failed: learner_identities.tenant_id, learner_identities.identity_type, learner_identities.identity_value",
       );
     }
 
     const duplicatePrimary = this.db.learnerIdentities.find((row) => {
-      return row.tenant_id === tenantId && row.learner_profile_id === learnerProfileId && row.is_primary === 1;
+      return (
+        row.tenant_id === tenantId &&
+        row.learner_profile_id === learnerProfileId &&
+        row.is_primary === 1
+      );
     });
 
     if (isPrimary === 1 && duplicatePrimary !== undefined) {
-      throw new Error('UNIQUE constraint failed: idx_learner_identities_primary_per_profile');
+      throw new Error("UNIQUE constraint failed: idx_learner_identities_primary_per_profile");
     }
 
     this.db.learnerIdentities.push({
@@ -345,8 +356,8 @@ class FakeStatement {
   private selectLearnerProfileById(): Record<string, unknown> | null {
     const [tenantId, learnerProfileId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof learnerProfileId !== 'string') {
-      throw new Error('Invalid bound parameters for learner profile select by id');
+    if (typeof tenantId !== "string" || typeof learnerProfileId !== "string") {
+      throw new Error("Invalid bound parameters for learner profile select by id");
     }
 
     const row = this.db.learnerProfiles.find((candidate) => {
@@ -370,8 +381,8 @@ class FakeStatement {
   private selectLearnerIdentityById(): Record<string, unknown> | null {
     const [tenantId, identityId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof identityId !== 'string') {
-      throw new Error('Invalid bound parameters for learner identity select by id');
+    if (typeof tenantId !== "string" || typeof identityId !== "string") {
+      throw new Error("Invalid bound parameters for learner identity select by id");
     }
 
     const row = this.db.learnerIdentities.find((candidate) => {
@@ -399,11 +410,11 @@ class FakeStatement {
     const [tenantId, identityType, identityValue] = this.boundParams;
 
     if (
-      typeof tenantId !== 'string' ||
+      typeof tenantId !== "string" ||
       !this.isLearnerIdentityType(identityType) ||
-      typeof identityValue !== 'string'
+      typeof identityValue !== "string"
     ) {
-      throw new Error('Invalid bound parameters for learner profile select by identity');
+      throw new Error("Invalid bound parameters for learner profile select by identity");
     }
 
     const identity = this.db.learnerIdentities.find((candidate) => {
@@ -440,11 +451,11 @@ class FakeStatement {
     const [tenantId, identityType, identityValue] = this.boundParams;
 
     if (
-      typeof tenantId !== 'string' ||
+      typeof tenantId !== "string" ||
       !this.isLearnerIdentityType(identityType) ||
-      typeof identityValue !== 'string'
+      typeof identityValue !== "string"
     ) {
-      throw new Error('Invalid bound parameters for verified learner profile select by identity');
+      throw new Error("Invalid bound parameters for verified learner profile select by identity");
     }
 
     const identity = this.db.learnerIdentities.find((candidate) => {
@@ -481,13 +492,15 @@ class FakeStatement {
   private selectLearnerIdentitiesByProfile(): Record<string, unknown>[] {
     const [tenantId, learnerProfileId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof learnerProfileId !== 'string') {
-      throw new Error('Invalid bound parameters for learner identity list by profile');
+    if (typeof tenantId !== "string" || typeof learnerProfileId !== "string") {
+      throw new Error("Invalid bound parameters for learner identity list by profile");
     }
 
     return this.db.learnerIdentities
       .filter((candidate) => {
-        return candidate.tenant_id === tenantId && candidate.learner_profile_id === learnerProfileId;
+        return (
+          candidate.tenant_id === tenantId && candidate.learner_profile_id === learnerProfileId
+        );
       })
       .sort((left, right) => {
         if (left.is_primary !== right.is_primary) {
@@ -513,11 +526,11 @@ class FakeStatement {
 
   private isLearnerIdentityType(value: unknown): value is LearnerIdentityType {
     return (
-      value === 'email' ||
-      value === 'email_sha256' ||
-      value === 'did' ||
-      value === 'url' ||
-      value === 'saml_subject'
+      value === "email" ||
+      value === "email_sha256" ||
+      value === "did" ||
+      value === "url" ||
+      value === "saml_subject"
     );
   }
 
@@ -560,12 +573,12 @@ class FakeAuthIdentityStatement {
   run(): Promise<SqlRunResult> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('INSERT INTO users')) {
+    if (normalizedSql.includes("INSERT INTO users")) {
       this.insertUser();
       return Promise.resolve(this.successResult());
     }
 
-    if (normalizedSql.includes('INSERT INTO auth_identity_links')) {
+    if (normalizedSql.includes("INSERT INTO auth_identity_links")) {
       this.insertAuthIdentityLink();
       return Promise.resolve(this.successResult());
     }
@@ -576,26 +589,26 @@ class FakeAuthIdentityStatement {
   first<T>(): Promise<T | null> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('FROM users WHERE email = ?')) {
+    if (normalizedSql.includes("FROM users WHERE email = ?")) {
       return Promise.resolve(this.selectUserByEmail() as T | null);
     }
 
-    if (normalizedSql.includes('FROM users WHERE id = ?')) {
+    if (normalizedSql.includes("FROM users WHERE id = ?")) {
       return Promise.resolve(this.selectUserById() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM auth_identity_links') &&
-      normalizedSql.includes('auth_system = ?') &&
-      normalizedSql.includes('auth_user_id = ?')
+      normalizedSql.includes("FROM auth_identity_links") &&
+      normalizedSql.includes("auth_system = ?") &&
+      normalizedSql.includes("auth_user_id = ?")
     ) {
       return Promise.resolve(this.selectAuthIdentityLinkByAuthUserId() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM auth_identity_links') &&
-      normalizedSql.includes('auth_system = ?') &&
-      normalizedSql.includes('credtrail_user_id = ?')
+      normalizedSql.includes("FROM auth_identity_links") &&
+      normalizedSql.includes("auth_system = ?") &&
+      normalizedSql.includes("credtrail_user_id = ?")
     ) {
       return Promise.resolve(this.selectAuthIdentityLinkByCredtrailUserId() as T | null);
     }
@@ -608,14 +621,14 @@ class FakeAuthIdentityStatement {
   }
 
   private normalizedSql(): string {
-    return this.sql.replace(/\s+/g, ' ').trim();
+    return this.sql.replace(/\s+/g, " ").trim();
   }
 
   private insertUser(): void {
     const [id, email] = this.boundParams;
 
-    if (typeof id !== 'string' || typeof email !== 'string') {
-      throw new Error('Invalid bound parameters for user insert');
+    if (typeof id !== "string" || typeof email !== "string") {
+      throw new Error("Invalid bound parameters for user insert");
     }
 
     const existingUser = this.db.users.find((row) => row.email === email);
@@ -641,16 +654,16 @@ class FakeAuthIdentityStatement {
     ] = this.boundParams;
 
     if (
-      typeof id !== 'string' ||
-      typeof authSystem !== 'string' ||
-      typeof authUserId !== 'string' ||
-      (authAccountId !== null && typeof authAccountId !== 'string') ||
-      typeof credtrailUserId !== 'string' ||
-      (emailSnapshot !== null && typeof emailSnapshot !== 'string') ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string'
+      typeof id !== "string" ||
+      typeof authSystem !== "string" ||
+      typeof authUserId !== "string" ||
+      (authAccountId !== null && typeof authAccountId !== "string") ||
+      typeof credtrailUserId !== "string" ||
+      (emailSnapshot !== null && typeof emailSnapshot !== "string") ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
     ) {
-      throw new Error('Invalid bound parameters for auth identity link insert');
+      throw new Error("Invalid bound parameters for auth identity link insert");
     }
 
     const existingLink = this.db.authIdentityLinks.find((row) => {
@@ -659,7 +672,7 @@ class FakeAuthIdentityStatement {
 
     if (existingLink !== undefined) {
       throw new Error(
-        'UNIQUE constraint failed: auth_identity_links.auth_system, auth_identity_links.auth_user_id',
+        "UNIQUE constraint failed: auth_identity_links.auth_system, auth_identity_links.auth_user_id",
       );
     }
 
@@ -678,8 +691,8 @@ class FakeAuthIdentityStatement {
   private selectUserByEmail(): Record<string, unknown> | null {
     const [email] = this.boundParams;
 
-    if (typeof email !== 'string') {
-      throw new Error('Invalid bound parameters for user select by email');
+    if (typeof email !== "string") {
+      throw new Error("Invalid bound parameters for user select by email");
     }
 
     const row = this.db.users.find((candidate) => candidate.email === email);
@@ -697,8 +710,8 @@ class FakeAuthIdentityStatement {
   private selectUserById(): Record<string, unknown> | null {
     const [userId] = this.boundParams;
 
-    if (typeof userId !== 'string') {
-      throw new Error('Invalid bound parameters for user select by id');
+    if (typeof userId !== "string") {
+      throw new Error("Invalid bound parameters for user select by id");
     }
 
     const row = this.db.users.find((candidate) => candidate.id === userId);
@@ -716,8 +729,8 @@ class FakeAuthIdentityStatement {
   private selectAuthIdentityLinkByAuthUserId(): Record<string, unknown> | null {
     const [authSystem, authUserId] = this.boundParams;
 
-    if (typeof authSystem !== 'string' || typeof authUserId !== 'string') {
-      throw new Error('Invalid bound parameters for auth identity link select by auth user id');
+    if (typeof authSystem !== "string" || typeof authUserId !== "string") {
+      throw new Error("Invalid bound parameters for auth identity link select by auth user id");
     }
 
     const row = this.db.authIdentityLinks.find((candidate) => {
@@ -730,14 +743,16 @@ class FakeAuthIdentityStatement {
   private selectAuthIdentityLinkByCredtrailUserId(): Record<string, unknown> | null {
     const [authSystem, credtrailUserId] = this.boundParams;
 
-    if (typeof authSystem !== 'string' || typeof credtrailUserId !== 'string') {
+    if (typeof authSystem !== "string" || typeof credtrailUserId !== "string") {
       throw new Error(
-        'Invalid bound parameters for auth identity link select by CredTrail user id',
+        "Invalid bound parameters for auth identity link select by CredTrail user id",
       );
     }
 
     const row = this.db.authIdentityLinks.find((candidate) => {
-      return candidate.auth_system === authSystem && candidate.credtrail_user_id === credtrailUserId;
+      return (
+        candidate.auth_system === authSystem && candidate.credtrail_user_id === credtrailUserId
+      );
     });
 
     return row === undefined ? null : this.mapAuthIdentityLink(row);
@@ -795,73 +810,73 @@ class FakeTenantAuthStatement {
   run(): Promise<SqlRunResult> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('INSERT INTO users')) {
+    if (normalizedSql.includes("INSERT INTO users")) {
       this.insertUser();
       return Promise.resolve(this.successResult(1));
     }
 
-    if (normalizedSql.includes('INSERT INTO tenant_auth_policies')) {
+    if (normalizedSql.includes("INSERT INTO tenant_auth_policies")) {
       return Promise.resolve(this.upsertTenantAuthPolicy());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_auth_providers') &&
-      normalizedSql.includes('SET is_default = 0') &&
-      normalizedSql.includes('AND id <> ?')
+      normalizedSql.includes("UPDATE tenant_auth_providers") &&
+      normalizedSql.includes("SET is_default = 0") &&
+      normalizedSql.includes("AND id <> ?")
     ) {
       return Promise.resolve(this.clearOtherDefaultProviders());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_auth_providers') &&
-      normalizedSql.includes('SET is_default = 0')
+      normalizedSql.includes("UPDATE tenant_auth_providers") &&
+      normalizedSql.includes("SET is_default = 0")
     ) {
       return Promise.resolve(this.clearTenantDefaultProviders());
     }
 
-    if (normalizedSql.includes('INSERT INTO tenant_auth_providers')) {
+    if (normalizedSql.includes("INSERT INTO tenant_auth_providers")) {
       return Promise.resolve(this.insertTenantAuthProvider());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_auth_providers') &&
-      normalizedSql.includes('SET protocol = ?')
+      normalizedSql.includes("UPDATE tenant_auth_providers") &&
+      normalizedSql.includes("SET protocol = ?")
     ) {
       return Promise.resolve(this.updateTenantAuthProvider());
     }
 
-    if (normalizedSql.includes('DELETE FROM tenant_auth_providers')) {
+    if (normalizedSql.includes("DELETE FROM tenant_auth_providers")) {
       return Promise.resolve(this.deleteTenantAuthProvider());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_auth_policies') &&
-      normalizedSql.includes('SET default_provider_id = NULL')
+      normalizedSql.includes("UPDATE tenant_auth_policies") &&
+      normalizedSql.includes("SET default_provider_id = NULL")
     ) {
       return Promise.resolve(this.clearPolicyDefaultProvider());
     }
 
-    if (normalizedSql.includes('INSERT INTO tenant_break_glass_accounts')) {
+    if (normalizedSql.includes("INSERT INTO tenant_break_glass_accounts")) {
       return Promise.resolve(this.upsertTenantBreakGlassAccount());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
-      normalizedSql.includes('SET revoked_at = ?')
+      normalizedSql.includes("UPDATE tenant_break_glass_accounts") &&
+      normalizedSql.includes("SET revoked_at = ?")
     ) {
       return Promise.resolve(this.revokeTenantBreakGlassAccount());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
-      normalizedSql.includes('SET last_used_at = ?')
+      normalizedSql.includes("UPDATE tenant_break_glass_accounts") &&
+      normalizedSql.includes("SET last_used_at = ?")
     ) {
       return Promise.resolve(this.markTenantBreakGlassAccountUsed());
     }
 
     if (
-      normalizedSql.includes('UPDATE tenant_break_glass_accounts') &&
-      normalizedSql.includes('SET last_enrollment_email_sent_at = ?')
+      normalizedSql.includes("UPDATE tenant_break_glass_accounts") &&
+      normalizedSql.includes("SET last_enrollment_email_sent_at = ?")
     ) {
       return Promise.resolve(this.markTenantBreakGlassEnrollmentEmailSent());
     }
@@ -872,39 +887,39 @@ class FakeTenantAuthStatement {
   first<T>(): Promise<T | null> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('FROM users WHERE email = ?')) {
+    if (normalizedSql.includes("FROM users WHERE email = ?")) {
       return Promise.resolve(this.selectUserByEmail() as T | null);
     }
 
-    if (normalizedSql.includes('FROM users WHERE id = ?')) {
+    if (normalizedSql.includes("FROM users WHERE id = ?")) {
       return Promise.resolve(this.selectUserById() as T | null);
     }
 
-    if (normalizedSql.includes('FROM tenant_auth_policies')) {
+    if (normalizedSql.includes("FROM tenant_auth_policies")) {
       return Promise.resolve(this.selectTenantAuthPolicy() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM tenant_auth_providers') &&
-      normalizedSql.includes('AND id = ?')
+      normalizedSql.includes("FROM tenant_auth_providers") &&
+      normalizedSql.includes("AND id = ?")
     ) {
       return Promise.resolve(this.selectTenantAuthProviderById() as T | null);
     }
 
-    if (normalizedSql.includes('FROM tenant_sso_saml_configurations')) {
+    if (normalizedSql.includes("FROM tenant_sso_saml_configurations")) {
       return Promise.resolve(this.selectLegacySamlConfiguration() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM tenant_break_glass_accounts AS account') &&
-      normalizedSql.includes('account.user_id = ?')
+      normalizedSql.includes("FROM tenant_break_glass_accounts AS account") &&
+      normalizedSql.includes("account.user_id = ?")
     ) {
       return Promise.resolve(this.selectTenantBreakGlassAccountByUserId() as T | null);
     }
 
     if (
-      normalizedSql.includes('FROM tenant_break_glass_accounts AS account') &&
-      normalizedSql.includes('users.email = ?')
+      normalizedSql.includes("FROM tenant_break_glass_accounts AS account") &&
+      normalizedSql.includes("users.email = ?")
     ) {
       return Promise.resolve(this.selectTenantBreakGlassAccountByEmail() as T | null);
     }
@@ -915,14 +930,14 @@ class FakeTenantAuthStatement {
   all<T>(): Promise<SqlQueryResult<T>> {
     const normalizedSql = this.normalizedSql();
 
-    if (normalizedSql.includes('FROM tenant_auth_providers')) {
+    if (normalizedSql.includes("FROM tenant_auth_providers")) {
       return Promise.resolve({
         ...this.successResult(),
         results: this.selectTenantAuthProviders() as T[],
       });
     }
 
-    if (normalizedSql.includes('FROM tenant_break_glass_accounts AS account')) {
+    if (normalizedSql.includes("FROM tenant_break_glass_accounts AS account")) {
       return Promise.resolve({
         ...this.successResult(),
         results: this.selectTenantBreakGlassAccounts() as T[],
@@ -930,9 +945,9 @@ class FakeTenantAuthStatement {
     }
 
     if (
-      normalizedSql.includes('FROM memberships') &&
-      normalizedSql.includes('INNER JOIN tenants') &&
-      normalizedSql.includes('tenants.is_active = 1')
+      normalizedSql.includes("FROM memberships") &&
+      normalizedSql.includes("INNER JOIN tenants") &&
+      normalizedSql.includes("tenants.is_active = 1")
     ) {
       return Promise.resolve({
         ...this.successResult(),
@@ -944,14 +959,14 @@ class FakeTenantAuthStatement {
   }
 
   private normalizedSql(): string {
-    return this.sql.replace(/\s+/g, ' ').trim();
+    return this.sql.replace(/\s+/g, " ").trim();
   }
 
   private insertUser(): void {
     const [id, email] = this.boundParams;
 
-    if (typeof id !== 'string' || typeof email !== 'string') {
-      throw new Error('Invalid bound parameters for user insert');
+    if (typeof id !== "string" || typeof email !== "string") {
+      throw new Error("Invalid bound parameters for user insert");
     }
 
     const existingUser = this.db.users.find((row) => row.email === email);
@@ -977,16 +992,16 @@ class FakeTenantAuthStatement {
     ] = this.boundParams;
 
     if (
-      typeof tenantId !== 'string' ||
-      (loginMode !== 'local' && loginMode !== 'hybrid' && loginMode !== 'sso_required') ||
-      typeof breakGlassEnabled !== 'number' ||
-      typeof localMfaRequired !== 'number' ||
-      (defaultProviderId !== null && typeof defaultProviderId !== 'string') ||
-      (enforceForRoles !== 'all_users' && enforceForRoles !== 'admins_only') ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string'
+      typeof tenantId !== "string" ||
+      (loginMode !== "local" && loginMode !== "hybrid" && loginMode !== "sso_required") ||
+      typeof breakGlassEnabled !== "number" ||
+      typeof localMfaRequired !== "number" ||
+      (defaultProviderId !== null && typeof defaultProviderId !== "string") ||
+      (enforceForRoles !== "all_users" && enforceForRoles !== "admins_only") ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant auth policy upsert');
+      throw new Error("Invalid bound parameters for tenant auth policy upsert");
     }
 
     const existingPolicy = this.db.tenantAuthPolicies.find((row) => row.tenant_id === tenantId);
@@ -1018,11 +1033,11 @@ class FakeTenantAuthStatement {
     const [updatedAt, tenantId, providerId] = this.boundParams;
 
     if (
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof providerId !== 'string'
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof providerId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for clearing tenant auth default providers');
+      throw new Error("Invalid bound parameters for clearing tenant auth default providers");
     }
 
     let rowsWritten = 0;
@@ -1041,8 +1056,8 @@ class FakeTenantAuthStatement {
   private clearTenantDefaultProviders(): SqlRunResult {
     const [updatedAt, tenantId] = this.boundParams;
 
-    if (typeof updatedAt !== 'string' || typeof tenantId !== 'string') {
-      throw new Error('Invalid bound parameters for clearing tenant auth defaults');
+    if (typeof updatedAt !== "string" || typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for clearing tenant auth defaults");
     }
 
     let rowsWritten = 0;
@@ -1063,17 +1078,17 @@ class FakeTenantAuthStatement {
       this.boundParams;
 
     if (
-      typeof id !== 'string' ||
-      typeof tenantId !== 'string' ||
-      (protocol !== 'oidc' && protocol !== 'saml') ||
-      typeof label !== 'string' ||
-      typeof enabled !== 'number' ||
-      typeof isDefault !== 'number' ||
-      typeof configJson !== 'string' ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string'
+      typeof id !== "string" ||
+      typeof tenantId !== "string" ||
+      (protocol !== "oidc" && protocol !== "saml") ||
+      typeof label !== "string" ||
+      typeof enabled !== "number" ||
+      typeof isDefault !== "number" ||
+      typeof configJson !== "string" ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant auth provider insert');
+      throw new Error("Invalid bound parameters for tenant auth provider insert");
     }
 
     this.db.tenantAuthProviders.push({
@@ -1096,16 +1111,16 @@ class FakeTenantAuthStatement {
       this.boundParams;
 
     if (
-      (protocol !== 'oidc' && protocol !== 'saml') ||
-      typeof label !== 'string' ||
-      typeof enabled !== 'number' ||
-      typeof isDefault !== 'number' ||
-      typeof configJson !== 'string' ||
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof providerId !== 'string'
+      (protocol !== "oidc" && protocol !== "saml") ||
+      typeof label !== "string" ||
+      typeof enabled !== "number" ||
+      typeof isDefault !== "number" ||
+      typeof configJson !== "string" ||
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof providerId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant auth provider update');
+      throw new Error("Invalid bound parameters for tenant auth provider update");
     }
 
     const row = this.db.tenantAuthProviders.find((candidate) => {
@@ -1129,8 +1144,8 @@ class FakeTenantAuthStatement {
   private deleteTenantAuthProvider(): SqlRunResult {
     const [tenantId, providerId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof providerId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant auth provider delete');
+    if (typeof tenantId !== "string" || typeof providerId !== "string") {
+      throw new Error("Invalid bound parameters for tenant auth provider delete");
     }
 
     const beforeCount = this.db.tenantAuthProviders.length;
@@ -1145,11 +1160,11 @@ class FakeTenantAuthStatement {
     const [updatedAt, tenantId, providerId] = this.boundParams;
 
     if (
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof providerId !== 'string'
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof providerId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for clearing auth policy default provider');
+      throw new Error("Invalid bound parameters for clearing auth policy default provider");
     }
 
     let rowsWritten = 0;
@@ -1170,14 +1185,14 @@ class FakeTenantAuthStatement {
       this.boundParams;
 
     if (
-      typeof tenantId !== 'string' ||
-      typeof userId !== 'string' ||
-      (createdByUserId !== null && typeof createdByUserId !== 'string') ||
-      (lastEnrollmentEmailSentAt !== null && typeof lastEnrollmentEmailSentAt !== 'string') ||
-      typeof createdAt !== 'string' ||
-      typeof updatedAt !== 'string'
+      typeof tenantId !== "string" ||
+      typeof userId !== "string" ||
+      (createdByUserId !== null && typeof createdByUserId !== "string") ||
+      (lastEnrollmentEmailSentAt !== null && typeof lastEnrollmentEmailSentAt !== "string") ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant break-glass account upsert');
+      throw new Error("Invalid bound parameters for tenant break-glass account upsert");
     }
 
     const existing = this.db.tenantBreakGlassAccounts.find((row) => {
@@ -1210,16 +1225,20 @@ class FakeTenantAuthStatement {
     const [revokedAt, updatedAt, tenantId, userId] = this.boundParams;
 
     if (
-      typeof revokedAt !== 'string' ||
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof userId !== 'string'
+      typeof revokedAt !== "string" ||
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof userId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant break-glass revoke');
+      throw new Error("Invalid bound parameters for tenant break-glass revoke");
     }
 
     const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
-      return candidate.tenant_id === tenantId && candidate.user_id === userId && candidate.revoked_at === null;
+      return (
+        candidate.tenant_id === tenantId &&
+        candidate.user_id === userId &&
+        candidate.revoked_at === null
+      );
     });
 
     if (row === undefined) {
@@ -1235,12 +1254,12 @@ class FakeTenantAuthStatement {
     const [usedAt, updatedAt, tenantId, userId] = this.boundParams;
 
     if (
-      typeof usedAt !== 'string' ||
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof userId !== 'string'
+      typeof usedAt !== "string" ||
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof userId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for tenant break-glass usage');
+      throw new Error("Invalid bound parameters for tenant break-glass usage");
     }
 
     const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
@@ -1260,12 +1279,12 @@ class FakeTenantAuthStatement {
     const [sentAt, updatedAt, tenantId, userId] = this.boundParams;
 
     if (
-      typeof sentAt !== 'string' ||
-      typeof updatedAt !== 'string' ||
-      typeof tenantId !== 'string' ||
-      typeof userId !== 'string'
+      typeof sentAt !== "string" ||
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof userId !== "string"
     ) {
-      throw new Error('Invalid bound parameters for break-glass enrollment email mark');
+      throw new Error("Invalid bound parameters for break-glass enrollment email mark");
     }
 
     const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
@@ -1284,8 +1303,8 @@ class FakeTenantAuthStatement {
   private selectUserByEmail(): Record<string, unknown> | null {
     const [email] = this.boundParams;
 
-    if (typeof email !== 'string') {
-      throw new Error('Invalid bound parameters for user select by email');
+    if (typeof email !== "string") {
+      throw new Error("Invalid bound parameters for user select by email");
     }
 
     const row = this.db.users.find((candidate) => candidate.email === email);
@@ -1301,8 +1320,8 @@ class FakeTenantAuthStatement {
   private selectUserById(): Record<string, unknown> | null {
     const [userId] = this.boundParams;
 
-    if (typeof userId !== 'string') {
-      throw new Error('Invalid bound parameters for user select by id');
+    if (typeof userId !== "string") {
+      throw new Error("Invalid bound parameters for user select by id");
     }
 
     const row = this.db.users.find((candidate) => candidate.id === userId);
@@ -1318,8 +1337,8 @@ class FakeTenantAuthStatement {
   private selectTenantAuthPolicy(): Record<string, unknown> | null {
     const [tenantId] = this.boundParams;
 
-    if (typeof tenantId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant auth policy select');
+    if (typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for tenant auth policy select");
     }
 
     const row = this.db.tenantAuthPolicies.find((candidate) => candidate.tenant_id === tenantId);
@@ -1343,8 +1362,8 @@ class FakeTenantAuthStatement {
   private selectTenantAuthProviders(): Record<string, unknown>[] {
     const [tenantId] = this.boundParams;
 
-    if (typeof tenantId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant auth provider list');
+    if (typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for tenant auth provider list");
     }
 
     return this.db.tenantAuthProviders
@@ -1362,8 +1381,8 @@ class FakeTenantAuthStatement {
   private selectTenantAuthProviderById(): Record<string, unknown> | null {
     const [tenantId, providerId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof providerId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant auth provider lookup');
+    if (typeof tenantId !== "string" || typeof providerId !== "string") {
+      throw new Error("Invalid bound parameters for tenant auth provider lookup");
     }
 
     const row = this.db.tenantAuthProviders.find((candidate) => {
@@ -1376,11 +1395,13 @@ class FakeTenantAuthStatement {
   private selectLegacySamlConfiguration(): Record<string, unknown> | null {
     const [tenantId] = this.boundParams;
 
-    if (typeof tenantId !== 'string') {
-      throw new Error('Invalid bound parameters for legacy SAML configuration lookup');
+    if (typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for legacy SAML configuration lookup");
     }
 
-    const row = this.db.legacySamlConfigurations.find((candidate) => candidate.tenant_id === tenantId);
+    const row = this.db.legacySamlConfigurations.find(
+      (candidate) => candidate.tenant_id === tenantId,
+    );
 
     if (row === undefined) {
       return null;
@@ -1404,12 +1425,16 @@ class FakeTenantAuthStatement {
   private selectTenantBreakGlassAccountByUserId(): Record<string, unknown> | null {
     const [tenantId, userId] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof userId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant break-glass lookup by user');
+    if (typeof tenantId !== "string" || typeof userId !== "string") {
+      throw new Error("Invalid bound parameters for tenant break-glass lookup by user");
     }
 
     const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
-      return candidate.tenant_id === tenantId && candidate.user_id === userId && candidate.revoked_at === null;
+      return (
+        candidate.tenant_id === tenantId &&
+        candidate.user_id === userId &&
+        candidate.revoked_at === null
+      );
     });
 
     return row === undefined ? null : this.mapTenantBreakGlassAccount(row);
@@ -1418,8 +1443,8 @@ class FakeTenantAuthStatement {
   private selectTenantBreakGlassAccountByEmail(): Record<string, unknown> | null {
     const [tenantId, email] = this.boundParams;
 
-    if (typeof tenantId !== 'string' || typeof email !== 'string') {
-      throw new Error('Invalid bound parameters for tenant break-glass lookup by email');
+    if (typeof tenantId !== "string" || typeof email !== "string") {
+      throw new Error("Invalid bound parameters for tenant break-glass lookup by email");
     }
 
     const user = this.db.users.find((candidate) => candidate.email === email);
@@ -1429,7 +1454,11 @@ class FakeTenantAuthStatement {
     }
 
     const row = this.db.tenantBreakGlassAccounts.find((candidate) => {
-      return candidate.tenant_id === tenantId && candidate.user_id === user.id && candidate.revoked_at === null;
+      return (
+        candidate.tenant_id === tenantId &&
+        candidate.user_id === user.id &&
+        candidate.revoked_at === null
+      );
     });
 
     return row === undefined ? null : this.mapTenantBreakGlassAccount(row);
@@ -1452,8 +1481,8 @@ class FakeTenantAuthStatement {
   private selectTenantBreakGlassAccounts(): Record<string, unknown>[] {
     const [tenantId] = this.boundParams;
 
-    if (typeof tenantId !== 'string') {
-      throw new Error('Invalid bound parameters for tenant break-glass list');
+    if (typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for tenant break-glass list");
     }
 
     return this.db.tenantBreakGlassAccounts
@@ -1470,13 +1499,15 @@ class FakeTenantAuthStatement {
       betterAuthUser === undefined
         ? undefined
         : this.db.betterAuthAccounts.find((candidate) => {
-            return candidate.user_id === betterAuthUser.id && candidate.provider_id === 'credential';
+            return (
+              candidate.user_id === betterAuthUser.id && candidate.provider_id === "credential"
+            );
           });
 
     return {
       tenantId: row.tenant_id,
       userId: row.user_id,
-      email: user?.email ?? '',
+      email: user?.email ?? "",
       createdByUserId: row.created_by_user_id,
       lastUsedAt: row.last_used_at,
       lastEnrollmentEmailSentAt: row.last_enrollment_email_sent_at,
@@ -1489,11 +1520,11 @@ class FakeTenantAuthStatement {
     };
   }
 
-  private selectAccessibleTenantContexts(): Record<string, unknown>[] {
+  private selectAccessibleTenantContexts(): AccessibleTenantContextRecord[] {
     const [userId] = this.boundParams;
 
-    if (typeof userId !== 'string') {
-      throw new Error('Invalid bound parameters for accessible tenant context list');
+    if (typeof userId !== "string") {
+      throw new Error("Invalid bound parameters for accessible tenant context list");
     }
 
     return this.db.memberships
@@ -1515,15 +1546,15 @@ class FakeTenantAuthStatement {
           membershipRole: membership.role,
         };
       })
-      .filter((row): row is Record<string, unknown> => row !== null)
+      .filter((row): row is AccessibleTenantContextRecord => row !== null)
       .sort((left, right) => {
-        const byName = String(left.tenantDisplayName).localeCompare(String(right.tenantDisplayName));
+        const byName = left.tenantDisplayName.localeCompare(right.tenantDisplayName);
 
         if (byName !== 0) {
           return byName;
         }
 
-        return String(left.tenantSlug).localeCompare(String(right.tenantSlug));
+        return left.tenantSlug.localeCompare(right.tenantSlug);
       });
   }
 
@@ -1565,325 +1596,331 @@ const createFakeTenantAuthDb = (): SqlDatabase => {
   return new FakeTenantAuthSqlDatabase() as unknown as SqlDatabase;
 };
 
-describe('normalizeLearnerIdentityValue', () => {
-  it('normalizes email and email_sha256 identity values', () => {
-    expect(normalizeLearnerIdentityValue('email', '  Student@Umich.edu ')).toBe('student@umich.edu');
-    expect(normalizeLearnerIdentityValue('email_sha256', ' AABBCC ')).toBe('aabbcc');
+describe("normalizeLearnerIdentityValue", () => {
+  it("normalizes email and email_sha256 identity values", () => {
+    expect(normalizeLearnerIdentityValue("email", "  Student@Umich.edu ")).toBe(
+      "student@umich.edu",
+    );
+    expect(normalizeLearnerIdentityValue("email_sha256", " AABBCC ")).toBe("aabbcc");
   });
 });
 
-describe('learner profiles and identity aliases', () => {
-  it('creates a learner profile and resolves it by normalized primary identity', async () => {
+describe("learner profiles and identity aliases", () => {
+  it("creates a learner profile and resolves it by normalized primary identity", async () => {
     const db = createFakeDb();
     const profile = await createLearnerProfile(db, {
-      tenantId: 'tenant_umich',
-      displayName: 'Jane Doe',
-      primaryIdentityType: 'email',
-      primaryIdentityValue: ' Jane.Doe@Umich.edu ',
+      tenantId: "tenant_umich",
+      displayName: "Jane Doe",
+      primaryIdentityType: "email",
+      primaryIdentityValue: " Jane.Doe@Umich.edu ",
       primaryIdentityVerified: true,
     });
 
-    expect(profile.tenantId).toBe('tenant_umich');
-    expect(profile.displayName).toBe('Jane Doe');
-    expect(profile.subjectId.startsWith('urn:credtrail:learner:tenant_umich:')).toBe(true);
+    expect(profile.tenantId).toBe("tenant_umich");
+    expect(profile.displayName).toBe("Jane Doe");
+    expect(profile.subjectId.startsWith("urn:credtrail:learner:tenant_umich:")).toBe(true);
 
     const resolved = await findLearnerProfileByIdentity(db, {
-      tenantId: 'tenant_umich',
-      identityType: 'email',
-      identityValue: 'jane.doe@umich.edu',
+      tenantId: "tenant_umich",
+      identityType: "email",
+      identityValue: "jane.doe@umich.edu",
     });
 
     expect(resolved?.id).toBe(profile.id);
 
-    const identities = await listLearnerIdentitiesByProfile(db, 'tenant_umich', profile.id);
+    const identities = await listLearnerIdentitiesByProfile(db, "tenant_umich", profile.id);
     expect(identities).toHaveLength(1);
     expect(identities[0]?.isPrimary).toBe(true);
     expect(identities[0]?.isVerified).toBe(true);
-    expect(identities[0]?.identityValue).toBe('jane.doe@umich.edu');
+    expect(identities[0]?.identityValue).toBe("jane.doe@umich.edu");
   });
 
-  it('links new aliases to the same learner and switches primary identity when requested', async () => {
+  it("links new aliases to the same learner and switches primary identity when requested", async () => {
     const db = createFakeDb();
     const profile = await createLearnerProfile(db, {
-      tenantId: 'tenant_umich',
-      primaryIdentityType: 'email',
-      primaryIdentityValue: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
       primaryIdentityVerified: true,
     });
 
     await addLearnerIdentityAlias(db, {
-      tenantId: 'tenant_umich',
+      tenantId: "tenant_umich",
       learnerProfileId: profile.id,
-      identityType: 'email',
-      identityValue: 'student@gmail.com',
+      identityType: "email",
+      identityValue: "student@gmail.com",
       isPrimary: true,
       isVerified: true,
     });
 
     const oldIdentityResolved = await findLearnerProfileByIdentity(db, {
-      tenantId: 'tenant_umich',
-      identityType: 'email',
-      identityValue: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      identityType: "email",
+      identityValue: "student@umich.edu",
     });
     const newIdentityResolved = await findLearnerProfileByIdentity(db, {
-      tenantId: 'tenant_umich',
-      identityType: 'email',
-      identityValue: 'student@gmail.com',
+      tenantId: "tenant_umich",
+      identityType: "email",
+      identityValue: "student@gmail.com",
     });
 
     expect(oldIdentityResolved?.id).toBe(profile.id);
     expect(newIdentityResolved?.id).toBe(profile.id);
 
-    const identities = await listLearnerIdentitiesByProfile(db, 'tenant_umich', profile.id);
+    const identities = await listLearnerIdentitiesByProfile(db, "tenant_umich", profile.id);
     expect(identities).toHaveLength(2);
-    expect(identities[0]?.identityValue).toBe('student@gmail.com');
+    expect(identities[0]?.identityValue).toBe("student@gmail.com");
     expect(identities[0]?.isPrimary).toBe(true);
-    expect(identities[1]?.identityValue).toBe('student@umich.edu');
+    expect(identities[1]?.identityValue).toBe("student@umich.edu");
     expect(identities[1]?.isPrimary).toBe(false);
   });
 
-  it('prevents duplicate identity aliases within a tenant', async () => {
+  it("prevents duplicate identity aliases within a tenant", async () => {
     const db = createFakeDb();
     const firstProfile = await createLearnerProfile(db, {
-      tenantId: 'tenant_umich',
-      primaryIdentityType: 'email',
-      primaryIdentityValue: 'first@umich.edu',
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "first@umich.edu",
     });
     const secondProfile = await createLearnerProfile(db, {
-      tenantId: 'tenant_umich',
-      primaryIdentityType: 'email',
-      primaryIdentityValue: 'second@umich.edu',
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "second@umich.edu",
     });
 
     expect(firstProfile.id).not.toBe(secondProfile.id);
 
     await expect(
       addLearnerIdentityAlias(db, {
-        tenantId: 'tenant_umich',
+        tenantId: "tenant_umich",
         learnerProfileId: secondProfile.id,
-        identityType: 'email',
-        identityValue: 'first@umich.edu',
+        identityType: "email",
+        identityValue: "first@umich.edu",
       }),
-    ).rejects.toThrow('UNIQUE constraint failed');
+    ).rejects.toThrow("UNIQUE constraint failed");
   });
 
-  it('resolves to existing learner profile for repeated identity values', async () => {
+  it("resolves to existing learner profile for repeated identity values", async () => {
     const db = createFakeDb();
     const first = await resolveLearnerProfileForIdentity(db, {
-      tenantId: 'tenant_umich',
-      identityType: 'email',
-      identityValue: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      identityType: "email",
+      identityValue: "student@umich.edu",
     });
     const second = await resolveLearnerProfileForIdentity(db, {
-      tenantId: 'tenant_umich',
-      identityType: 'email',
-      identityValue: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      identityType: "email",
+      identityValue: "student@umich.edu",
     });
 
     expect(second.id).toBe(first.id);
-    const identities = await listLearnerIdentitiesByProfile(db, 'tenant_umich', first.id);
+    const identities = await listLearnerIdentitiesByProfile(db, "tenant_umich", first.id);
     expect(identities).toHaveLength(1);
   });
 });
 
-describe('resolveLearnerProfileFromSaml', () => {
-  it('falls back to verified email and links new SAML subject when subject changes', async () => {
+describe("resolveLearnerProfileFromSaml", () => {
+  it("falls back to verified email and links new SAML subject when subject changes", async () => {
     const db = createFakeDb();
     const profile = await createLearnerProfile(db, {
-      tenantId: 'tenant_umich',
-      primaryIdentityType: 'email',
-      primaryIdentityValue: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
       primaryIdentityVerified: true,
     });
 
     const resolvedFromFallback = await resolveLearnerProfileFromSaml(db, {
-      tenantId: 'tenant_umich',
-      samlSubject: 'umich-subject-123',
-      email: 'student@umich.edu',
+      tenantId: "tenant_umich",
+      samlSubject: "umich-subject-123",
+      email: "student@umich.edu",
     });
 
-    expect(resolvedFromFallback.strategy).toBe('verified_email');
+    expect(resolvedFromFallback.strategy).toBe("verified_email");
     expect(resolvedFromFallback.profile.id).toBe(profile.id);
 
     const resolvedBySaml = await resolveLearnerProfileFromSaml(db, {
-      tenantId: 'tenant_umich',
-      samlSubject: 'umich-subject-123',
-      email: 'another-email@umich.edu',
+      tenantId: "tenant_umich",
+      samlSubject: "umich-subject-123",
+      email: "another-email@umich.edu",
     });
 
-    expect(resolvedBySaml.strategy).toBe('saml_subject');
+    expect(resolvedBySaml.strategy).toBe("saml_subject");
     expect(resolvedBySaml.profile.id).toBe(profile.id);
 
-    const identities = await listLearnerIdentitiesByProfile(db, 'tenant_umich', profile.id);
-    expect(identities.map((entry) => entry.identityType)).toEqual(['saml_subject', 'email']);
+    const identities = await listLearnerIdentitiesByProfile(db, "tenant_umich", profile.id);
+    expect(identities.map((entry) => entry.identityType)).toEqual(["saml_subject", "email"]);
     expect(identities[0]?.isPrimary).toBe(true);
     expect(identities[1]?.isPrimary).toBe(false);
   });
 
-  it('creates a new profile when no existing SAML or verified email identity exists', async () => {
+  it("creates a new profile when no existing SAML or verified email identity exists", async () => {
     const db = createFakeDb();
     const resolved = await resolveLearnerProfileFromSaml(db, {
-      tenantId: 'tenant_umich',
-      samlSubject: 'umich-subject-999',
-      email: 'new.student@gmail.com',
-      displayName: 'New Student',
+      tenantId: "tenant_umich",
+      samlSubject: "umich-subject-999",
+      email: "new.student@gmail.com",
+      displayName: "New Student",
     });
 
-    expect(resolved.strategy).toBe('created');
-    expect(resolved.profile.displayName).toBe('New Student');
+    expect(resolved.strategy).toBe("created");
+    expect(resolved.profile.displayName).toBe("New Student");
 
-    const identities = await listLearnerIdentitiesByProfile(db, 'tenant_umich', resolved.profile.id);
+    const identities = await listLearnerIdentitiesByProfile(
+      db,
+      "tenant_umich",
+      resolved.profile.id,
+    );
     expect(identities).toHaveLength(2);
-    expect(identities[0]?.identityType).toBe('saml_subject');
-    expect(identities[1]?.identityType).toBe('email');
+    expect(identities[0]?.identityType).toBe("saml_subject");
+    expect(identities[1]?.identityType).toBe("email");
     expect(identities[1]?.isVerified).toBe(true);
   });
 
-  it('fails when neither SAML subject nor email is provided', async () => {
+  it("fails when neither SAML subject nor email is provided", async () => {
     const db = createFakeDb();
 
     await expect(
       resolveLearnerProfileFromSaml(db, {
-        tenantId: 'tenant_umich',
+        tenantId: "tenant_umich",
       }),
-    ).rejects.toThrow('Cannot resolve learner profile without SAML subject or email');
+    ).rejects.toThrow("Cannot resolve learner profile without SAML subject or email");
   });
 });
 
-describe('auth identity links', () => {
-  it('persists and resolves Better Auth links by auth system and auth user id', async () => {
+describe("auth identity links", () => {
+  it("persists and resolves Better Auth links by auth system and auth user id", async () => {
     const db = createFakeAuthIdentityDb();
-    const user = await upsertUserByEmail(db, ' Student@Example.edu ');
+    const user = await upsertUserByEmail(db, " Student@Example.edu ");
 
     const link = await createAuthIdentityLink(db, {
-      authSystem: 'better_auth',
-      authUserId: 'ba_usr_123',
-      authAccountId: 'ba_account_123',
+      authSystem: "better_auth",
+      authUserId: "ba_usr_123",
+      authAccountId: "ba_account_123",
       credtrailUserId: user.id,
-      emailSnapshot: 'student@example.edu',
+      emailSnapshot: "student@example.edu",
     });
 
     const resolvedByAuthUser = await findAuthIdentityLinkByAuthUserId(
       db,
-      'better_auth',
-      'ba_usr_123',
+      "better_auth",
+      "ba_usr_123",
     );
     const resolvedByCredtrailUser = await findAuthIdentityLinkByCredtrailUserId(
       db,
-      'better_auth',
+      "better_auth",
       user.id,
     );
-    const resolvedUser = await findUserByEmail(db, 'student@example.edu');
+    const resolvedUser = await findUserByEmail(db, "student@example.edu");
 
     expect(resolvedByAuthUser).toEqual(link);
     expect(resolvedByCredtrailUser).toEqual(link);
     expect(resolvedUser).toEqual(user);
-    expect(link.emailSnapshot).toBe('student@example.edu');
+    expect(link.emailSnapshot).toBe("student@example.edu");
   });
 });
 
-describe('tenant auth policy and provider helpers', () => {
-  it('resolves local auth policy defaults when no tenant auth policy exists', async () => {
+describe("tenant auth policy and provider helpers", () => {
+  it("resolves local auth policy defaults when no tenant auth policy exists", async () => {
     const db = createFakeTenantAuthDb();
 
-    const policy = await resolveTenantAuthPolicy(db, 'tenant_123');
+    const policy = await resolveTenantAuthPolicy(db, "tenant_123");
 
     expect(policy).toEqual({
-      tenantId: 'tenant_123',
-      loginMode: 'local',
+      tenantId: "tenant_123",
+      loginMode: "local",
       breakGlassEnabled: false,
       localMfaRequired: false,
       defaultProviderId: null,
-      enforceForRoles: 'all_users',
+      enforceForRoles: "all_users",
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
   });
 
-  it('persists and updates tenant auth policy state', async () => {
+  it("persists and updates tenant auth policy state", async () => {
     const db = createFakeTenantAuthDb();
 
     const created = await upsertTenantAuthPolicy(db, {
-      tenantId: 'tenant_123',
-      loginMode: 'hybrid',
+      tenantId: "tenant_123",
+      loginMode: "hybrid",
       breakGlassEnabled: true,
       localMfaRequired: true,
-      defaultProviderId: 'tap_oidc',
-      enforceForRoles: 'admins_only',
+      defaultProviderId: "tap_oidc",
+      enforceForRoles: "admins_only",
     });
-    const resolved = await findTenantAuthPolicy(db, 'tenant_123');
+    const resolved = await findTenantAuthPolicy(db, "tenant_123");
 
-    expect(created.loginMode).toBe('hybrid');
+    expect(created.loginMode).toBe("hybrid");
     expect(created.breakGlassEnabled).toBe(true);
     expect(created.localMfaRequired).toBe(true);
-    expect(created.defaultProviderId).toBe('tap_oidc');
-    expect(created.enforceForRoles).toBe('all_users');
+    expect(created.defaultProviderId).toBe("tap_oidc");
+    expect(created.enforceForRoles).toBe("all_users");
     expect(resolved).toEqual(created);
   });
 
-  it('keeps exactly one default OIDC auth provider per tenant when providers are created or updated', async () => {
+  it("keeps exactly one default OIDC auth provider per tenant when providers are created or updated", async () => {
     const db = createFakeTenantAuthDb();
 
     await createTenantAuthProvider(db, {
-      id: 'tap_oidc',
-      tenantId: 'tenant_123',
-      protocol: 'oidc',
-      label: 'Campus OIDC',
+      id: "tap_oidc",
+      tenantId: "tenant_123",
+      protocol: "oidc",
+      label: "Campus OIDC",
       enabled: true,
       isDefault: true,
       configJson: '{"issuer":"https://idp.example.edu"}',
     });
     await createTenantAuthProvider(db, {
-      id: 'tap_oidc_backup',
-      tenantId: 'tenant_123',
-      protocol: 'oidc',
-      label: 'Campus OIDC Backup',
+      id: "tap_oidc_backup",
+      tenantId: "tenant_123",
+      protocol: "oidc",
+      label: "Campus OIDC Backup",
       enabled: true,
       isDefault: false,
       configJson: '{"issuer":"https://backup-idp.example.edu"}',
     });
 
     const updated = await updateTenantAuthProvider(db, {
-      tenantId: 'tenant_123',
-      providerId: 'tap_oidc_backup',
-      protocol: 'oidc',
-      label: 'Campus OIDC Backup',
+      tenantId: "tenant_123",
+      providerId: "tap_oidc_backup",
+      protocol: "oidc",
+      label: "Campus OIDC Backup",
       enabled: false,
       isDefault: true,
       configJson: '{"issuer":"https://backup-idp.example.edu"}',
     });
-    const providers = await listTenantAuthProviders(db, 'tenant_123');
+    const providers = await listTenantAuthProviders(db, "tenant_123");
 
     expect(updated?.isDefault).toBe(true);
     expect(updated?.enabled).toBe(false);
     expect(providers).toHaveLength(2);
-    expect(providers.find((provider) => provider.id === 'tap_oidc_backup')?.isDefault).toBe(true);
-    expect(providers.find((provider) => provider.id === 'tap_oidc')?.isDefault).toBe(false);
+    expect(providers.find((provider) => provider.id === "tap_oidc_backup")?.isDefault).toBe(true);
+    expect(providers.find((provider) => provider.id === "tap_oidc")?.isDefault).toBe(false);
 
-    const backupProvider = await findTenantAuthProviderById(db, 'tenant_123', 'tap_oidc_backup');
+    const backupProvider = await findTenantAuthProviderById(db, "tenant_123", "tap_oidc_backup");
     expect(backupProvider?.enabled).toBe(false);
   });
 
-  it('rejects new hosted SAML provider writes while preserving legacy compatibility reads', async () => {
+  it("rejects new hosted SAML provider writes while preserving legacy compatibility reads", async () => {
     const db = createFakeTenantAuthDb();
 
     await expect(
       createTenantAuthProvider(db, {
-        id: 'tap_saml',
-        tenantId: 'tenant_123',
-        protocol: 'saml',
-        label: 'Campus SAML',
+        id: "tap_saml",
+        tenantId: "tenant_123",
+        protocol: "saml",
+        label: "Campus SAML",
         enabled: true,
         isDefault: true,
         configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
       }),
-    ).rejects.toThrow('Hosted enterprise sign-in currently supports OIDC providers only.');
+    ).rejects.toThrow("Hosted enterprise sign-in currently supports OIDC providers only.");
 
     await createTenantAuthProvider(db, {
-      id: 'tap_oidc',
-      tenantId: 'tenant_123',
-      protocol: 'oidc',
-      label: 'Campus OIDC',
+      id: "tap_oidc",
+      tenantId: "tenant_123",
+      protocol: "oidc",
+      label: "Campus OIDC",
       enabled: true,
       isDefault: true,
       configJson: '{"issuer":"https://idp.example.edu"}',
@@ -1891,282 +1928,282 @@ describe('tenant auth policy and provider helpers', () => {
 
     await expect(
       updateTenantAuthProvider(db, {
-        tenantId: 'tenant_123',
-        providerId: 'tap_oidc',
-        protocol: 'saml',
-        label: 'Campus SAML',
+        tenantId: "tenant_123",
+        providerId: "tap_oidc",
+        protocol: "saml",
+        label: "Campus SAML",
         enabled: true,
         isDefault: true,
         configJson: '{"ssoLoginUrl":"https://idp.example.edu/sso"}',
       }),
-    ).rejects.toThrow('Hosted enterprise sign-in currently supports OIDC providers only.');
+    ).rejects.toThrow("Hosted enterprise sign-in currently supports OIDC providers only.");
   });
 
-  it('bridges legacy SAML configuration into the provider and policy model', async () => {
+  it("bridges legacy SAML configuration into the provider and policy model", async () => {
     const db = createFakeTenantAuthDb();
     const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
 
     tenantAuthDb.legacySamlConfigurations.push({
-      tenant_id: 'tenant_legacy',
-      idp_entity_id: 'https://idp.example.edu/entity',
-      sso_login_url: 'https://idp.example.edu/sso/login',
-      idp_certificate_pem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
-      idp_metadata_url: 'https://idp.example.edu/metadata',
-      sp_entity_id: 'https://credtrail.example.edu/saml/sp',
-      assertion_consumer_service_url: 'https://credtrail.example.edu/saml/acs',
-      name_id_format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      tenant_id: "tenant_legacy",
+      idp_entity_id: "https://idp.example.edu/entity",
+      sso_login_url: "https://idp.example.edu/sso/login",
+      idp_certificate_pem: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----",
+      idp_metadata_url: "https://idp.example.edu/metadata",
+      sp_entity_id: "https://credtrail.example.edu/saml/sp",
+      assertion_consumer_service_url: "https://credtrail.example.edu/saml/acs",
+      name_id_format: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
       enforced: 1,
-      created_at: '2026-03-16T10:00:00.000Z',
-      updated_at: '2026-03-16T10:00:00.000Z',
+      created_at: "2026-03-16T10:00:00.000Z",
+      updated_at: "2026-03-16T10:00:00.000Z",
     });
 
-    const policy = await findTenantAuthPolicy(db, 'tenant_legacy');
-    const providers = await listTenantAuthProviders(db, 'tenant_legacy');
+    const policy = await findTenantAuthPolicy(db, "tenant_legacy");
+    const providers = await listTenantAuthProviders(db, "tenant_legacy");
 
-    expect(policy?.loginMode).toBe('sso_required');
-    expect(policy?.defaultProviderId).toBe('tenant_legacy:provider:saml-default');
+    expect(policy?.loginMode).toBe("sso_required");
+    expect(policy?.defaultProviderId).toBe("tenant_legacy:provider:saml-default");
     expect(providers).toEqual([
       expect.objectContaining({
-        id: 'tenant_legacy:provider:saml-default',
-        protocol: 'saml',
+        id: "tenant_legacy:provider:saml-default",
+        protocol: "saml",
         isDefault: true,
         enabled: true,
-        label: 'Legacy SAML (compatibility only)',
+        label: "Legacy SAML (compatibility only)",
       }),
     ]);
 
-    const configJson = providers[0]?.configJson ?? '{}';
-    expect(configJson).toContain('idpEntityId');
-    expect(configJson).toContain('idpCertificatePem');
+    const configJson = providers[0]?.configJson ?? "{}";
+    expect(configJson).toContain("idpEntityId");
+    expect(configJson).toContain("idpCertificatePem");
   });
 
-  it('stores break-glass accounts with enrollment and usage status', async () => {
+  it("stores break-glass accounts with enrollment and usage status", async () => {
     const db = createFakeTenantAuthDb();
     const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
-    const user = await upsertUserByEmail(db, 'Admin@Example.edu');
+    const user = await upsertUserByEmail(db, "Admin@Example.edu");
 
     tenantAuthDb.betterAuthUsers.push({
-      id: 'ba_usr_admin',
-      email: 'admin@example.edu',
+      id: "ba_usr_admin",
+      email: "admin@example.edu",
       two_factor_enabled: 1,
     });
     tenantAuthDb.betterAuthAccounts.push({
-      user_id: 'ba_usr_admin',
-      provider_id: 'credential',
-      password: 'hashed-password',
+      user_id: "ba_usr_admin",
+      provider_id: "credential",
+      password: "hashed-password",
     });
 
     await upsertTenantBreakGlassAccount(db, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       userId: user.id,
-      createdByUserId: 'usr_owner',
+      createdByUserId: "usr_owner",
     });
     await markTenantBreakGlassEnrollmentEmailSent(db, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       userId: user.id,
-      sentAt: '2026-03-16T12:05:00.000Z',
+      sentAt: "2026-03-16T12:05:00.000Z",
     });
     await markTenantBreakGlassAccountUsed(db, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       userId: user.id,
-      usedAt: '2026-03-16T12:10:00.000Z',
+      usedAt: "2026-03-16T12:10:00.000Z",
     });
 
-    const listed = await listTenantBreakGlassAccounts(db, 'tenant_123');
+    const listed = await listTenantBreakGlassAccounts(db, "tenant_123");
     const resolved = await findActiveTenantBreakGlassAccountByEmail(
       db,
-      'tenant_123',
-      'admin@example.edu',
+      "tenant_123",
+      "admin@example.edu",
     );
 
     expect(listed).toHaveLength(1);
     expect(listed[0]).toEqual(
       expect.objectContaining({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         userId: user.id,
-        email: 'admin@example.edu',
-        betterAuthUserId: 'ba_usr_admin',
+        email: "admin@example.edu",
+        betterAuthUserId: "ba_usr_admin",
         localCredentialEnabled: true,
         twoFactorEnabled: true,
       }),
     );
-    expect(resolved?.lastEnrollmentEmailSentAt).toBe('2026-03-16T12:05:00.000Z');
-    expect(resolved?.lastUsedAt).toBe('2026-03-16T12:10:00.000Z');
+    expect(resolved?.lastEnrollmentEmailSentAt).toBe("2026-03-16T12:05:00.000Z");
+    expect(resolved?.lastUsedAt).toBe("2026-03-16T12:10:00.000Z");
 
     const removed = await revokeTenantBreakGlassAccount(db, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       userId: user.id,
-      revokedAt: '2026-03-16T12:20:00.000Z',
+      revokedAt: "2026-03-16T12:20:00.000Z",
     });
     const resolvedAfterRevoke = await findActiveTenantBreakGlassAccountByEmail(
       db,
-      'tenant_123',
-      'admin@example.edu',
+      "tenant_123",
+      "admin@example.edu",
     );
 
     expect(removed).toBe(true);
     expect(resolvedAfterRevoke).toBeNull();
   });
 
-  it('lists accessible tenant contexts for a user from active memberships', async () => {
+  it("lists accessible tenant contexts for a user from active memberships", async () => {
     const db = createFakeTenantAuthDb();
     const tenantAuthDb = db as unknown as FakeTenantAuthSqlDatabase;
 
     tenantAuthDb.tenants.push(
       {
-        id: 'tenant_admin',
-        slug: 'tenant-admin',
-        display_name: 'Admin Tenant',
-        plan_tier: 'enterprise',
+        id: "tenant_admin",
+        slug: "tenant-admin",
+        display_name: "Admin Tenant",
+        plan_tier: "enterprise",
         is_active: 1,
       },
       {
-        id: 'tenant_viewer',
-        slug: 'tenant-viewer',
-        display_name: 'Viewer Tenant',
-        plan_tier: 'team',
+        id: "tenant_viewer",
+        slug: "tenant-viewer",
+        display_name: "Viewer Tenant",
+        plan_tier: "team",
         is_active: 1,
       },
       {
-        id: 'tenant_inactive',
-        slug: 'tenant-inactive',
-        display_name: 'Inactive Tenant',
-        plan_tier: 'institution',
+        id: "tenant_inactive",
+        slug: "tenant-inactive",
+        display_name: "Inactive Tenant",
+        plan_tier: "institution",
         is_active: 0,
       },
     );
     tenantAuthDb.memberships.push(
       {
-        tenant_id: 'tenant_viewer',
-        user_id: 'usr_123',
-        role: 'viewer',
+        tenant_id: "tenant_viewer",
+        user_id: "usr_123",
+        role: "viewer",
       },
       {
-        tenant_id: 'tenant_admin',
-        user_id: 'usr_123',
-        role: 'admin',
+        tenant_id: "tenant_admin",
+        user_id: "usr_123",
+        role: "admin",
       },
       {
-        tenant_id: 'tenant_inactive',
-        user_id: 'usr_123',
-        role: 'owner',
+        tenant_id: "tenant_inactive",
+        user_id: "usr_123",
+        role: "owner",
       },
     );
 
-    const contexts = await listAccessibleTenantContextsForUser(db, 'usr_123');
+    const contexts = await listAccessibleTenantContextsForUser(db, "usr_123");
 
     expect(contexts).toEqual([
       {
-        tenantId: 'tenant_admin',
-        tenantSlug: 'tenant-admin',
-        tenantDisplayName: 'Admin Tenant',
-        tenantPlanTier: 'enterprise',
-        membershipRole: 'admin',
+        tenantId: "tenant_admin",
+        tenantSlug: "tenant-admin",
+        tenantDisplayName: "Admin Tenant",
+        tenantPlanTier: "enterprise",
+        membershipRole: "admin",
       },
       {
-        tenantId: 'tenant_viewer',
-        tenantSlug: 'tenant-viewer',
-        tenantDisplayName: 'Viewer Tenant',
-        tenantPlanTier: 'team',
-        membershipRole: 'viewer',
+        tenantId: "tenant_viewer",
+        tenantSlug: "tenant-viewer",
+        tenantDisplayName: "Viewer Tenant",
+        tenantPlanTier: "team",
+        membershipRole: "viewer",
       },
     ]);
   });
 });
 
-describe('better auth core migration', () => {
-  it('keeps Better Auth tables in an auth schema and preserves CredTrail-owned tables', () => {
+describe("better auth core migration", () => {
+  it("keeps Better Auth tables in an auth schema and preserves CredTrail-owned tables", () => {
     const sql = readFileSync(
-      new URL('../migrations/0025_better_auth_core.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0025_better_auth_core.sql", import.meta.url),
+      "utf8",
     );
 
-    expect(sql).toContain('CREATE SCHEMA IF NOT EXISTS auth');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.user');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.session');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.account');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth.verification');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS auth_identity_links');
-    expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS users');
-    expect(sql).not.toContain('CREATE TABLE IF NOT EXISTS sessions');
+    expect(sql).toContain("CREATE SCHEMA IF NOT EXISTS auth");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth.user");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth.session");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth.account");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth.verification");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS auth_identity_links");
+    expect(sql).not.toContain("CREATE TABLE IF NOT EXISTS users");
+    expect(sql).not.toContain("CREATE TABLE IF NOT EXISTS sessions");
   });
 
-  it('adds tenant auth policy and provider migrations with legacy SAML backfill', () => {
+  it("adds tenant auth policy and provider migrations with legacy SAML backfill", () => {
     const policySql = readFileSync(
-      new URL('../migrations/0026_tenant_auth_policies.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0026_tenant_auth_policies.sql", import.meta.url),
+      "utf8",
     );
     const providerSql = readFileSync(
-      new URL('../migrations/0027_tenant_auth_providers.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0027_tenant_auth_providers.sql", import.meta.url),
+      "utf8",
     );
     const backfillSql = readFileSync(
-      new URL('../migrations/0028_backfill_legacy_saml_auth_providers.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0028_backfill_legacy_saml_auth_providers.sql", import.meta.url),
+      "utf8",
     );
 
-    expect(policySql).toContain('CREATE TABLE IF NOT EXISTS tenant_auth_policies');
+    expect(policySql).toContain("CREATE TABLE IF NOT EXISTS tenant_auth_policies");
     expect(policySql).toContain("CHECK (login_mode IN ('local', 'hybrid', 'sso_required'))");
-    expect(providerSql).toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
+    expect(providerSql).toContain("CREATE TABLE IF NOT EXISTS tenant_auth_providers");
     expect(providerSql).toContain("CHECK (protocol IN ('oidc', 'saml'))");
-    expect(providerSql).toContain('idx_tenant_auth_providers_default_per_tenant');
-    expect(backfillSql).toContain('INSERT INTO tenant_auth_providers');
-    expect(backfillSql).toContain('tenant_sso_saml_configurations');
-    expect(backfillSql).toContain('tenant_auth_policies');
+    expect(providerSql).toContain("idx_tenant_auth_providers_default_per_tenant");
+    expect(backfillSql).toContain("INSERT INTO tenant_auth_providers");
+    expect(backfillSql).toContain("tenant_sso_saml_configurations");
+    expect(backfillSql).toContain("tenant_auth_policies");
   });
 
-  it('adds Better Auth enterprise SSO indexes without changing CredTrail-owned tables', () => {
+  it("adds Better Auth enterprise SSO indexes without changing CredTrail-owned tables", () => {
     const ssoSql = readFileSync(
-      new URL('../migrations/0029_better_auth_enterprise_sso.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0029_better_auth_enterprise_sso.sql", import.meta.url),
+      "utf8",
     );
 
-    expect(ssoSql).toContain('idx_auth_user_email');
-    expect(ssoSql).toContain('idx_auth_account_provider_user');
-    expect(ssoSql).not.toContain('CREATE TABLE IF NOT EXISTS tenant_auth_providers');
+    expect(ssoSql).toContain("idx_auth_user_email");
+    expect(ssoSql).toContain("idx_auth_account_provider_user");
+    expect(ssoSql).not.toContain("CREATE TABLE IF NOT EXISTS tenant_auth_providers");
   });
 
-  it('removes legacy auth table helpers from the public DB package', async () => {
-    const dbModule = await import('./index');
+  it("removes legacy auth table helpers from the public DB package", async () => {
+    const dbModule = await import("./index");
 
-    expect(dbModule).not.toHaveProperty('createMagicLinkToken');
-    expect(dbModule).not.toHaveProperty('findMagicLinkTokenByHash');
-    expect(dbModule).not.toHaveProperty('markMagicLinkTokenUsed');
-    expect(dbModule).not.toHaveProperty('createSession');
-    expect(dbModule).not.toHaveProperty('findActiveSessionByHash');
-    expect(dbModule).not.toHaveProperty('touchSession');
-    expect(dbModule).not.toHaveProperty('revokeSessionByHash');
+    expect(dbModule).not.toHaveProperty("createMagicLinkToken");
+    expect(dbModule).not.toHaveProperty("findMagicLinkTokenByHash");
+    expect(dbModule).not.toHaveProperty("markMagicLinkTokenUsed");
+    expect(dbModule).not.toHaveProperty("createSession");
+    expect(dbModule).not.toHaveProperty("findActiveSessionByHash");
+    expect(dbModule).not.toHaveProperty("touchSession");
+    expect(dbModule).not.toHaveProperty("revokeSessionByHash");
   });
 
-  it('adds a forward migration that drops obsolete legacy auth tables and indexes', () => {
+  it("adds a forward migration that drops obsolete legacy auth tables and indexes", () => {
     const sql = readFileSync(
-      new URL('../migrations/0032_drop_legacy_auth_tables.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0032_drop_legacy_auth_tables.sql", import.meta.url),
+      "utf8",
     );
 
-    expect(sql).toContain('DROP INDEX IF EXISTS idx_magic_link_tokens_tenant_user');
-    expect(sql).toContain('DROP INDEX IF EXISTS idx_magic_link_tokens_expires_at');
-    expect(sql).toContain('DROP INDEX IF EXISTS idx_sessions_tenant_user');
-    expect(sql).toContain('DROP INDEX IF EXISTS idx_sessions_expires_at');
-    expect(sql).toContain('DROP TABLE IF EXISTS magic_link_tokens');
-    expect(sql).toContain('DROP TABLE IF EXISTS sessions');
+    expect(sql).toContain("DROP INDEX IF EXISTS idx_magic_link_tokens_tenant_user");
+    expect(sql).toContain("DROP INDEX IF EXISTS idx_magic_link_tokens_expires_at");
+    expect(sql).toContain("DROP INDEX IF EXISTS idx_sessions_tenant_user");
+    expect(sql).toContain("DROP INDEX IF EXISTS idx_sessions_expires_at");
+    expect(sql).toContain("DROP TABLE IF EXISTS magic_link_tokens");
+    expect(sql).toContain("DROP TABLE IF EXISTS sessions");
   });
 
-  it('adds Better Auth two-factor and tenant break-glass migrations', () => {
+  it("adds Better Auth two-factor and tenant break-glass migrations", () => {
     const twoFactorSql = readFileSync(
-      new URL('../migrations/0030_better_auth_two_factor.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0030_better_auth_two_factor.sql", import.meta.url),
+      "utf8",
     );
     const breakGlassSql = readFileSync(
-      new URL('../migrations/0031_tenant_break_glass_accounts.sql', import.meta.url),
-      'utf8',
+      new URL("../migrations/0031_tenant_break_glass_accounts.sql", import.meta.url),
+      "utf8",
     );
 
-    expect(twoFactorSql).toContain('ALTER TABLE auth.user');
-    expect(twoFactorSql).toContain('two_factor_enabled');
-    expect(twoFactorSql).toContain('CREATE TABLE IF NOT EXISTS auth.two_factor');
-    expect(breakGlassSql).toContain('CREATE TABLE IF NOT EXISTS tenant_break_glass_accounts');
-    expect(breakGlassSql).toContain('last_enrollment_email_sent_at');
-    expect(breakGlassSql).toContain('idx_tenant_break_glass_accounts_tenant_active');
+    expect(twoFactorSql).toContain("ALTER TABLE auth.user");
+    expect(twoFactorSql).toContain("two_factor_enabled");
+    expect(twoFactorSql).toContain("CREATE TABLE IF NOT EXISTS auth.two_factor");
+    expect(breakGlassSql).toContain("CREATE TABLE IF NOT EXISTS tenant_break_glass_accounts");
+    expect(breakGlassSql).toContain("last_enrollment_email_sent_at");
+    expect(breakGlassSql).toContain("idx_tenant_break_glass_accounts_tenant_active");
   });
 });

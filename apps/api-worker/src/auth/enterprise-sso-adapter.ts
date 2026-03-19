@@ -10,12 +10,12 @@ import {
   type TenantAuthPolicyRecord,
   type TenantAuthProviderProtocol,
   type TenantAuthProviderRecord,
-} from '@credtrail/db';
-import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth';
-import { buildBetterAuthRouteResponse } from './better-auth-bridge';
-import type { BetterAuthRuntimeConfig } from './better-auth-config';
-import { buildLocalLoginPath } from './break-glass-policy';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
+} from "@credtrail/db";
+import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
+import { buildBetterAuthRouteResponse } from "./better-auth-bridge";
+import type { BetterAuthRuntimeConfig } from "./better-auth-config";
+import { buildLocalLoginPath } from "./break-glass-policy";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-context";
 
 export interface EnterpriseSsoProviderOption {
   id: string;
@@ -27,7 +27,7 @@ export interface EnterpriseSsoProviderOption {
 
 export interface EnterpriseLoginExperience {
   tenantId: string;
-  loginMode: TenantAuthPolicyRecord['loginMode'];
+  loginMode: TenantAuthPolicyRecord["loginMode"];
   localLoginAllowed: boolean;
   explicitLocalLoginPath: string | null;
   enterpriseProviders: readonly EnterpriseSsoProviderOption[];
@@ -122,13 +122,13 @@ const redirectResponse = (location: string): Response => {
 };
 
 const normalizeNextPath = (_tenantId: string, nextPath: string | undefined): string => {
-  const trimmed = nextPath?.trim() ?? '';
+  const trimmed = nextPath?.trim() ?? "";
 
-  if (trimmed.startsWith('/')) {
+  if (trimmed.startsWith("/")) {
     return trimmed;
   }
 
-  return '/auth/resolve';
+  return "/auth/resolve";
 };
 
 const buildTenantLoginPath = (input: {
@@ -136,12 +136,12 @@ const buildTenantLoginPath = (input: {
   nextPath?: string | undefined;
   reason?: string | undefined;
 }): string => {
-  const url = new URL('https://credtrail.local/login');
-  url.searchParams.set('tenantId', input.tenantId);
-  url.searchParams.set('next', normalizeNextPath(input.tenantId, input.nextPath));
+  const url = new URL("https://credtrail.local/login");
+  url.searchParams.set("tenantId", input.tenantId);
+  url.searchParams.set("next", normalizeNextPath(input.tenantId, input.nextPath));
 
   if (input.reason !== undefined && input.reason.trim().length > 0) {
-    url.searchParams.set('reason', input.reason);
+    url.searchParams.set("reason", input.reason);
   }
 
   return `${url.pathname}${url.search}`;
@@ -150,24 +150,24 @@ const buildTenantLoginPath = (input: {
 const buildStartPath = (tenantId: string, providerId: string, nextPath: string): string => {
   const url = new URL(
     `/v1/auth/sso/${encodeURIComponent(providerId)}/start`,
-    'https://credtrail.local',
+    "https://credtrail.local",
   );
-  url.searchParams.set('tenantId', tenantId);
-  url.searchParams.set('next', normalizeNextPath(tenantId, nextPath));
+  url.searchParams.set("tenantId", tenantId);
+  url.searchParams.set("next", normalizeNextPath(tenantId, nextPath));
   return `${url.pathname}${url.search}`;
 };
 
 const appendWellKnownDiscovery = (issuer: string): string => {
-  const trimmedIssuer = issuer.trim().replace(/\/+$/, '');
+  const trimmedIssuer = issuer.trim().replace(/\/+$/, "");
   return `${trimmedIssuer}/.well-known/openid-configuration`;
 };
 
 const asString = (value: unknown): string | null => {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 };
 
 const asBoolean = (value: unknown): boolean | undefined => {
-  return typeof value === 'boolean' ? value : undefined;
+  return typeof value === "boolean" ? value : undefined;
 };
 
 const asStringArray = (value: unknown): string[] | undefined => {
@@ -176,19 +176,19 @@ const asStringArray = (value: unknown): string[] | undefined => {
   }
 
   const output = value
-    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter((entry) => entry.length > 0);
 
   return output.length > 0 ? output : undefined;
 };
 
 const asStringRecord = (value: unknown): Record<string, string> | undefined => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, entryValue]) => typeof entryValue === 'string')
+    .filter(([, entryValue]) => typeof entryValue === "string")
     .map(([entryKey, entryValue]) => [entryKey, (entryValue as string).trim()] as const)
     .filter(([, entryValue]) => entryValue.length > 0);
 
@@ -199,7 +199,7 @@ const parseProviderConfigRecord = (configJson: string): Record<string, unknown> 
   try {
     const parsed = JSON.parse(configJson) as unknown;
 
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return null;
     }
 
@@ -210,7 +210,7 @@ const parseProviderConfigRecord = (configJson: string): Record<string, unknown> 
 };
 
 const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthConfig | null => {
-  if (provider.protocol !== 'oidc') {
+  if (provider.protocol !== "oidc") {
     return null;
   }
 
@@ -221,7 +221,8 @@ const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthC
   }
 
   const issuer = asString(parsed.issuer);
-  const discoveryUrl = asString(parsed.discoveryUrl) ?? (issuer === null ? null : appendWellKnownDiscovery(issuer));
+  const discoveryUrl =
+    asString(parsed.discoveryUrl) ?? (issuer === null ? null : appendWellKnownDiscovery(issuer));
   const clientId = asString(parsed.clientId);
   const authorizationUrl = asString(parsed.authorizationUrl);
   const tokenUrl = asString(parsed.tokenUrl);
@@ -237,32 +238,42 @@ const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthC
   return {
     providerId: provider.id,
     clientId,
-    ...(asString(parsed.clientSecret) === null ? {} : { clientSecret: asString(parsed.clientSecret) ?? undefined }),
+    ...(asString(parsed.clientSecret) === null
+      ? {}
+      : { clientSecret: asString(parsed.clientSecret) ?? undefined }),
     ...(discoveryUrl === null ? {} : { discoveryUrl }),
     ...(issuer === null ? {} : { issuer }),
     ...(authorizationUrl === null ? {} : { authorizationUrl }),
     ...(tokenUrl === null ? {} : { tokenUrl }),
-    ...(asString(parsed.userInfoUrl) === null ? {} : { userInfoUrl: asString(parsed.userInfoUrl) ?? undefined }),
+    ...(asString(parsed.userInfoUrl) === null
+      ? {}
+      : { userInfoUrl: asString(parsed.userInfoUrl) ?? undefined }),
     ...(asStringArray(parsed.scopes) === undefined ? {} : { scopes: asStringArray(parsed.scopes) }),
-    ...(asString(parsed.redirectURI) === null ? {} : { redirectURI: asString(parsed.redirectURI) ?? undefined }),
-    ...(asString(parsed.responseType) === null ? {} : { responseType: asString(parsed.responseType) ?? undefined }),
+    ...(asString(parsed.redirectURI) === null
+      ? {}
+      : { redirectURI: asString(parsed.redirectURI) ?? undefined }),
+    ...(asString(parsed.responseType) === null
+      ? {}
+      : { responseType: asString(parsed.responseType) ?? undefined }),
     ...(asString(parsed.responseMode) === null
       ? {}
-      : { responseMode: asString(parsed.responseMode) as 'query' | 'form_post' }),
+      : { responseMode: asString(parsed.responseMode) as "query" | "form_post" }),
     ...(asString(parsed.prompt) === null
       ? {}
       : {
           prompt: asString(parsed.prompt) as
-            | 'none'
-            | 'login'
-            | 'create'
-            | 'consent'
-            | 'select_account'
-            | 'select_account consent'
-            | 'login consent',
+            | "none"
+            | "login"
+            | "create"
+            | "consent"
+            | "select_account"
+            | "select_account consent"
+            | "login consent",
         }),
     ...(asBoolean(parsed.pkce) === undefined ? {} : { pkce: asBoolean(parsed.pkce) }),
-    ...(asString(parsed.accessType) === null ? {} : { accessType: asString(parsed.accessType) ?? undefined }),
+    ...(asString(parsed.accessType) === null
+      ? {}
+      : { accessType: asString(parsed.accessType) ?? undefined }),
     ...(asStringRecord(parsed.authorizationUrlParams) === undefined
       ? {}
       : { authorizationUrlParams: asStringRecord(parsed.authorizationUrlParams) }),
@@ -271,7 +282,7 @@ const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthC
       : { tokenUrlParams: asStringRecord(parsed.tokenUrlParams) }),
     ...(asString(parsed.authentication) === null
       ? {}
-      : { authentication: asString(parsed.authentication) as 'basic' | 'post' }),
+      : { authentication: asString(parsed.authentication) as "basic" | "post" }),
     ...(asBoolean(parsed.requireIssuerValidation) === undefined
       ? {}
       : { requireIssuerValidation: asBoolean(parsed.requireIssuerValidation) }),
@@ -293,9 +304,7 @@ const toGenericOAuthConfig = (provider: TenantAuthProviderRecord): GenericOAuthC
   };
 };
 
-const isRuntimeCapableEnterpriseProvider = (
-  provider: TenantAuthProviderRecord,
-): boolean => {
+const isRuntimeCapableEnterpriseProvider = (provider: TenantAuthProviderRecord): boolean => {
   if (!isHostedEnterpriseAuthProviderSupported(provider)) {
     return false;
   }
@@ -314,7 +323,7 @@ const resolveDefaultProvider = (
   const explicitDefault =
     policy.defaultProviderId === null
       ? null
-      : providers.find((provider) => provider.id === policy.defaultProviderId) ?? null;
+      : (providers.find((provider) => provider.id === policy.defaultProviderId) ?? null);
 
   if (explicitDefault !== null) {
     return explicitDefault;
@@ -326,7 +335,7 @@ const resolveDefaultProvider = (
     return providerMarkedDefault;
   }
 
-  return providers.length === 1 ? providers[0] ?? null : null;
+  return providers.length === 1 ? (providers[0] ?? null) : null;
 };
 
 const resolveTenantEnterpriseState = async (
@@ -341,7 +350,7 @@ const resolveTenantEnterpriseState = async (
 }> => {
   const tenant = await findTenantById(db, tenantId);
 
-  if (tenant?.planTier !== 'enterprise') {
+  if (tenant?.planTier !== "enterprise") {
     return {
       tenant,
       policy: null,
@@ -374,13 +383,13 @@ const buildFinalizeUrl = (input: {
   nextPath: string;
   status?: string | undefined;
 }): string => {
-  const url = new URL('/auth/sso/finalize', input.baseURL);
-  url.searchParams.set('tenantId', input.tenantId);
-  url.searchParams.set('providerId', input.providerId);
-  url.searchParams.set('next', normalizeNextPath(input.tenantId, input.nextPath));
+  const url = new URL("/auth/sso/finalize", input.baseURL);
+  url.searchParams.set("tenantId", input.tenantId);
+  url.searchParams.set("providerId", input.providerId);
+  url.searchParams.set("next", normalizeNextPath(input.tenantId, input.nextPath));
 
   if (input.status !== undefined && input.status.trim().length > 0) {
-    url.searchParams.set('status', input.status);
+    url.searchParams.set("status", input.status);
   }
 
   return url.toString();
@@ -405,10 +414,10 @@ export const createEnterpriseSsoAdapter = <
       request.tenantId,
     );
 
-    if (state.tenant?.planTier !== 'enterprise' || state.policy === null) {
+    if (state.tenant?.planTier !== "enterprise" || state.policy === null) {
       return {
         tenantId: request.tenantId,
-        loginMode: 'local',
+        loginMode: "local",
         localLoginAllowed: true,
         explicitLocalLoginPath: null,
         enterpriseProviders: [],
@@ -424,16 +433,16 @@ export const createEnterpriseSsoAdapter = <
       startPath: buildStartPath(request.tenantId, provider.id, normalizedNextPath),
     }));
     const autoStartPath =
-      state.policy.loginMode === 'sso_required' && state.defaultProvider !== null
+      state.policy.loginMode === "sso_required" && state.defaultProvider !== null
         ? buildStartPath(request.tenantId, state.defaultProvider.id, normalizedNextPath)
         : null;
 
     return {
       tenantId: request.tenantId,
       loginMode: state.policy.loginMode,
-      localLoginAllowed: state.policy.loginMode !== 'sso_required',
+      localLoginAllowed: state.policy.loginMode !== "sso_required",
       explicitLocalLoginPath:
-        state.policy.loginMode === 'sso_required' && state.policy.breakGlassEnabled
+        state.policy.loginMode === "sso_required" && state.policy.breakGlassEnabled
           ? buildLocalLoginPath({
               tenantId: request.tenantId,
               nextPath: normalizedNextPath,
@@ -441,10 +450,10 @@ export const createEnterpriseSsoAdapter = <
           : null,
       enterpriseProviders,
       autoStartPath,
-      ...(state.policy.loginMode === 'sso_required' && enterpriseProviders.length === 0
+      ...(state.policy.loginMode === "sso_required" && enterpriseProviders.length === 0
         ? {
             notice:
-              'Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.',
+              "Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.",
           }
         : {}),
     };
@@ -462,21 +471,21 @@ export const createEnterpriseSsoAdapter = <
       request.tenantId,
     );
 
-    if (state.tenant?.planTier !== 'enterprise' || state.policy === null) {
+    if (state.tenant?.planTier !== "enterprise" || state.policy === null) {
       return null;
     }
 
-    if (state.policy.loginMode !== 'sso_required') {
+    if (state.policy.loginMode !== "sso_required") {
       return null;
     }
 
     return context.json(
       {
-        error: 'Enterprise SSO is required for this tenant. Use institution sign-in instead.',
+        error: "Enterprise SSO is required for this tenant. Use institution sign-in instead.",
         loginPath: buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: request.nextPath,
-          reason: 'sso_required',
+          reason: "sso_required",
         }),
       },
       403,
@@ -497,17 +506,17 @@ export const createEnterpriseSsoAdapter = <
     const provider =
       state.enabledProviders.find((entry) => entry.id === request.providerId) ?? null;
 
-    if (state.tenant?.planTier !== 'enterprise' || state.policy === null) {
+    if (state.tenant?.planTier !== "enterprise" || state.policy === null) {
       return redirectResponse(
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_unavailable',
+          reason: "sso_unavailable",
         }),
       );
     }
 
-    if (state.policy.loginMode === 'local') {
+    if (state.policy.loginMode === "local") {
       return redirectResponse(
         buildTenantLoginPath({
           tenantId: request.tenantId,
@@ -519,11 +528,11 @@ export const createEnterpriseSsoAdapter = <
     if (provider === null) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_start_failed',
-        targetType: 'tenant_auth_provider',
+        action: "auth.sso_start_failed",
+        targetType: "tenant_auth_provider",
         targetId: request.providerId,
         metadata: {
-          reason: 'provider_not_found_or_disabled',
+          reason: "provider_not_found_or_disabled",
           requestedProviderId: request.providerId,
         },
       });
@@ -532,7 +541,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_unavailable',
+          reason: "sso_unavailable",
         }),
       );
     }
@@ -540,11 +549,11 @@ export const createEnterpriseSsoAdapter = <
     if (!isHostedEnterpriseAuthProviderSupported(provider)) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_start_failed',
-        targetType: 'tenant_auth_provider',
+        action: "auth.sso_start_failed",
+        targetType: "tenant_auth_provider",
         targetId: provider.id,
         metadata: {
-          reason: 'protocol_not_supported_in_runtime',
+          reason: "protocol_not_supported_in_runtime",
           protocol: provider.protocol,
         },
       });
@@ -553,7 +562,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_unavailable',
+          reason: "sso_unavailable",
         }),
       );
     }
@@ -563,11 +572,11 @@ export const createEnterpriseSsoAdapter = <
     if (oauthConfig === null) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_start_failed',
-        targetType: 'tenant_auth_provider',
+        action: "auth.sso_start_failed",
+        targetType: "tenant_auth_provider",
         targetId: provider.id,
         metadata: {
-          reason: 'invalid_provider_config',
+          reason: "invalid_provider_config",
           protocol: provider.protocol,
         },
       });
@@ -576,7 +585,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_unavailable',
+          reason: "sso_unavailable",
         }),
       );
     }
@@ -597,13 +606,13 @@ export const createEnterpriseSsoAdapter = <
       tenantId: request.tenantId,
       providerId: provider.id,
       nextPath: normalizedNextPath,
-      status: 'error',
+      status: "error",
     });
     const betterAuthResponse = await auth.handler(
-      input.createBetterAuthRequest(context, '/sign-in/oauth2', {
-        method: 'POST',
+      input.createBetterAuthRequest(context, "/sign-in/oauth2", {
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           providerId: provider.id,
@@ -616,11 +625,11 @@ export const createEnterpriseSsoAdapter = <
     if (!betterAuthResponse.ok) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_start_failed',
-        targetType: 'tenant_auth_provider',
+        action: "auth.sso_start_failed",
+        targetType: "tenant_auth_provider",
         targetId: provider.id,
         metadata: {
-          reason: 'oauth_start_failed',
+          reason: "oauth_start_failed",
           status: betterAuthResponse.status,
         },
       });
@@ -629,7 +638,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_failed',
+          reason: "sso_failed",
         }),
       );
     }
@@ -642,11 +651,11 @@ export const createEnterpriseSsoAdapter = <
     if (authorizationUrl === undefined || authorizationUrl.length === 0) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_start_failed',
-        targetType: 'tenant_auth_provider',
+        action: "auth.sso_start_failed",
+        targetType: "tenant_auth_provider",
         targetId: provider.id,
         metadata: {
-          reason: 'authorization_url_missing',
+          reason: "authorization_url_missing",
         },
       });
 
@@ -654,15 +663,15 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_failed',
+          reason: "sso_failed",
         }),
       );
     }
 
     await createAuditLog(db, {
       tenantId: request.tenantId,
-      action: 'auth.sso_start_requested',
-      targetType: 'tenant_auth_provider',
+      action: "auth.sso_start_requested",
+      targetType: "tenant_auth_provider",
       targetId: provider.id,
       metadata: {
         protocol: provider.protocol,
@@ -687,7 +696,7 @@ export const createEnterpriseSsoAdapter = <
     const requestedTenant = await input.resolveRequestedTenantContext(context);
 
     if (requestedTenant === null) {
-      return redirectResponse('/login?reason=sso_failed');
+      return redirectResponse("/login?reason=sso_failed");
     }
 
     const provider = await findTenantAuthProviderById(
@@ -704,7 +713,7 @@ export const createEnterpriseSsoAdapter = <
       return redirectResponse(
         buildTenantLoginPath({
           tenantId: requestedTenant.tenantId,
-          reason: 'sso_unavailable',
+          reason: "sso_unavailable",
         }),
       );
     }
@@ -718,15 +727,15 @@ export const createEnterpriseSsoAdapter = <
         context,
         `/oauth2/callback/${encodeURIComponent(request.providerId)}${requestUrl.search}`,
         {
-          method: 'GET',
+          method: "GET",
         },
       ),
     );
     const headers = new Headers();
-    const location = betterAuthResponse.headers.get('location');
+    const location = betterAuthResponse.headers.get("location");
 
     if (location !== null) {
-      headers.set('location', location);
+      headers.set("location", location);
     }
 
     return buildBetterAuthRouteResponse(betterAuthResponse, {
@@ -749,14 +758,14 @@ export const createEnterpriseSsoAdapter = <
     const db = input.resolveDatabase(context.env);
     const normalizedNextPath = normalizeNextPath(request.tenantId, request.nextPath);
 
-    if (request.status === 'error' || (request.error !== null && request.error.trim().length > 0)) {
+    if (request.status === "error" || (request.error !== null && request.error.trim().length > 0)) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_sign_in_failed',
-        targetType: 'tenant_auth_provider',
-        targetId: request.providerId ?? 'unknown',
+        action: "auth.sso_sign_in_failed",
+        targetType: "tenant_auth_provider",
+        targetId: request.providerId ?? "unknown",
         metadata: {
-          error: request.error ?? 'sso_callback_failed',
+          error: request.error ?? "sso_callback_failed",
           nextPath: normalizedNextPath,
         },
       });
@@ -765,7 +774,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_failed',
+          reason: "sso_failed",
         }),
       );
     }
@@ -777,11 +786,11 @@ export const createEnterpriseSsoAdapter = <
     if (principal === null) {
       await createAuditLog(db, {
         tenantId: request.tenantId,
-        action: 'auth.sso_sign_in_failed',
-        targetType: 'tenant_auth_provider',
-        targetId: request.providerId ?? 'unknown',
+        action: "auth.sso_sign_in_failed",
+        targetType: "tenant_auth_provider",
+        targetId: request.providerId ?? "unknown",
         metadata: {
-          error: 'principal_not_resolved',
+          error: "principal_not_resolved",
           nextPath: normalizedNextPath,
         },
       });
@@ -790,7 +799,7 @@ export const createEnterpriseSsoAdapter = <
         buildTenantLoginPath({
           tenantId: request.tenantId,
           nextPath: normalizedNextPath,
-          reason: 'sso_failed',
+          reason: "sso_failed",
         }),
       );
     }
@@ -801,13 +810,13 @@ export const createEnterpriseSsoAdapter = <
       await createAuditLog(db, {
         tenantId: request.tenantId,
         actorUserId: principal.userId,
-        action: 'membership.role_assigned',
-        targetType: 'membership',
+        action: "membership.role_assigned",
+        targetType: "membership",
         targetId: `${request.tenantId}:${principal.userId}`,
         metadata: {
           userId: principal.userId,
           role: membershipResult.membership.role,
-          source: 'enterprise_sso',
+          source: "enterprise_sso",
         },
       });
     }
@@ -815,9 +824,9 @@ export const createEnterpriseSsoAdapter = <
     await createAuditLog(db, {
       tenantId: request.tenantId,
       actorUserId: principal.userId,
-      action: 'auth.sso_sign_in_succeeded',
-      targetType: 'tenant_auth_provider',
-      targetId: request.providerId ?? 'unknown',
+      action: "auth.sso_sign_in_succeeded",
+      targetType: "tenant_auth_provider",
+      targetId: request.providerId ?? "unknown",
       metadata: {
         authMethod: principal.authMethod,
         nextPath: normalizedNextPath,

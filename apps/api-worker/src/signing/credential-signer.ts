@@ -3,17 +3,17 @@ import {
   signCredentialWithEd25519Signature2020,
   type DataIntegrityCryptosuite,
   type JsonObject,
-} from '@credtrail/core-domain';
-import type { TenantSigningRegistryEntry } from '@credtrail/validation';
+} from "@credtrail/core-domain";
+import type { TenantSigningRegistryEntry } from "@credtrail/validation";
 import {
   isEd25519SigningPrivateJwk,
   isP256SigningPrivateJwk,
   toEd25519PrivateJwk,
   toP256PrivateJwk,
-} from './key-material';
-import type { RemoteSignerRegistryEntry } from './registry';
+} from "./key-material";
+import type { RemoteSignerRegistryEntry } from "./registry";
 
-export type SupportedCredentialProofType = 'Ed25519Signature2020' | 'DataIntegrityProof';
+export type SupportedCredentialProofType = "Ed25519Signature2020" | "DataIntegrityProof";
 
 export interface SignCredentialForDidInput<ContextType> {
   context: ContextType;
@@ -30,13 +30,13 @@ export type SignCredentialErrorStatusCode = 400 | 404 | 422 | 500 | 502;
 
 export type SignCredentialForDidResult =
   | {
-      status: 'ok';
+      status: "ok";
       keyId: string;
       verificationMethod: string;
       credential: JsonObject;
     }
   | {
-      status: 'error';
+      status: "error";
       statusCode: SignCredentialErrorStatusCode;
       error: string;
       did: string;
@@ -70,25 +70,25 @@ const signCredentialWithRemoteSigner = async (input: {
   selectCredentialProofObject: (credential: JsonObject) => JsonObject | null;
 }): Promise<
   | {
-      status: 'ok';
+      status: "ok";
       credential: JsonObject;
     }
   | {
-      status: 'error';
+      status: "error";
       reason: string;
     }
 > => {
   const abortController = new AbortController();
   const timeoutHandle: ReturnType<typeof setTimeout> = setTimeout(() => {
-    abortController.abort('remote-signer-timeout');
+    abortController.abort("remote-signer-timeout");
   }, input.remoteSigner.timeoutMs);
 
   let response: Response;
 
   try {
     const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      accept: 'application/json',
+      "content-type": "application/json",
+      accept: "application/json",
     };
 
     if (input.remoteSigner.authorizationHeader !== null) {
@@ -96,7 +96,7 @@ const signCredentialWithRemoteSigner = async (input: {
     }
 
     response = await fetch(input.remoteSigner.url, {
-      method: 'POST',
+      method: "POST",
       headers,
       body: JSON.stringify({
         did: input.did,
@@ -111,8 +111,8 @@ const signCredentialWithRemoteSigner = async (input: {
     });
   } catch {
     return {
-      status: 'error',
-      reason: 'request to remote signer failed',
+      status: "error",
+      reason: "request to remote signer failed",
     };
   } finally {
     clearTimeout(timeoutHandle);
@@ -120,7 +120,7 @@ const signCredentialWithRemoteSigner = async (input: {
 
   if (!response.ok) {
     return {
-      status: 'error',
+      status: "error",
       reason: `remote signer returned HTTP ${String(response.status)}`,
     };
   }
@@ -131,8 +131,8 @@ const signCredentialWithRemoteSigner = async (input: {
 
   if (signedCredential === null) {
     return {
-      status: 'error',
-      reason: 'remote signer response is missing a JSON credential object',
+      status: "error",
+      reason: "remote signer response is missing a JSON credential object",
     };
   }
 
@@ -140,8 +140,8 @@ const signCredentialWithRemoteSigner = async (input: {
 
   if (signedProof === null) {
     return {
-      status: 'error',
-      reason: 'remote signer credential is missing a proof object',
+      status: "error",
+      reason: "remote signer credential is missing a proof object",
     };
   }
 
@@ -153,24 +153,24 @@ const signCredentialWithRemoteSigner = async (input: {
     signedVerificationMethod !== input.verificationMethod
   ) {
     return {
-      status: 'error',
-      reason: 'remote signer proof metadata does not match requested proof parameters',
+      status: "error",
+      reason: "remote signer proof metadata does not match requested proof parameters",
     };
   }
 
-  if (input.proofType === 'DataIntegrityProof' && input.cryptosuite !== undefined) {
+  if (input.proofType === "DataIntegrityProof" && input.cryptosuite !== undefined) {
     const signedCryptosuite = input.asNonEmptyString(signedProof.cryptosuite);
 
     if (signedCryptosuite !== input.cryptosuite) {
       return {
-        status: 'error',
-        reason: 'remote signer proof cryptosuite does not match requested cryptosuite',
+        status: "error",
+        reason: "remote signer proof cryptosuite does not match requested cryptosuite",
       };
     }
   }
 
   return {
-    status: 'ok',
+    status: "ok",
     credential: signedCredential,
   };
 };
@@ -185,20 +185,20 @@ export const createSignCredentialForDid = <ContextType>(
 
     if (signingEntry === null) {
       return {
-        status: 'error',
+        status: "error",
         statusCode: 404,
-        error: 'No signing configuration for requested DID',
+        error: "No signing configuration for requested DID",
         did: request.did,
       };
     }
 
     const verificationMethod = `${request.did}#${signingEntry.keyId}`;
 
-    if (request.proofType === 'DataIntegrityProof' && request.cryptosuite === undefined) {
+    if (request.proofType === "DataIntegrityProof" && request.cryptosuite === undefined) {
       return {
-        status: 'error',
+        status: "error",
         statusCode: 400,
-        error: 'DataIntegrityProof signing requires a cryptosuite value',
+        error: "DataIntegrityProof signing requires a cryptosuite value",
         did: request.did,
       };
     }
@@ -206,24 +206,24 @@ export const createSignCredentialForDid = <ContextType>(
     if (signingEntry.privateJwk !== undefined) {
       let signedCredential: JsonObject;
 
-      if (request.proofType === 'DataIntegrityProof') {
+      if (request.proofType === "DataIntegrityProof") {
         const cryptosuite = request.cryptosuite;
 
         if (cryptosuite === undefined) {
           return {
-            status: 'error',
+            status: "error",
             statusCode: 400,
-            error: 'DataIntegrityProof signing requires a cryptosuite value',
+            error: "DataIntegrityProof signing requires a cryptosuite value",
             did: request.did,
           };
         }
 
-        if (cryptosuite === 'eddsa-rdfc-2022') {
+        if (cryptosuite === "eddsa-rdfc-2022") {
           if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
             return {
-              status: 'error',
+              status: "error",
               statusCode: 422,
-              error: 'DataIntegrity eddsa-rdfc-2022 signing requires an Ed25519 private key',
+              error: "DataIntegrity eddsa-rdfc-2022 signing requires an Ed25519 private key",
               did: request.did,
             };
           }
@@ -238,9 +238,9 @@ export const createSignCredentialForDid = <ContextType>(
         } else {
           if (!isP256SigningPrivateJwk(signingEntry.privateJwk)) {
             return {
-              status: 'error',
+              status: "error",
               statusCode: 422,
-              error: 'DataIntegrity ecdsa-sd-2023 signing requires a P-256 private key',
+              error: "DataIntegrity ecdsa-sd-2023 signing requires a P-256 private key",
               did: request.did,
             };
           }
@@ -256,11 +256,11 @@ export const createSignCredentialForDid = <ContextType>(
       } else {
         if (!isEd25519SigningPrivateJwk(signingEntry.privateJwk)) {
           return {
-            status: 'error',
+            status: "error",
             statusCode: 422,
             error:
               request.ed25519KeyRequirementError ??
-              'Credential signing endpoint requires an Ed25519 private key',
+              "Credential signing endpoint requires an Ed25519 private key",
             did: request.did,
           };
         }
@@ -274,7 +274,7 @@ export const createSignCredentialForDid = <ContextType>(
       }
 
       return {
-        status: 'ok',
+        status: "ok",
         keyId: signingEntry.keyId,
         verificationMethod,
         credential: signedCredential,
@@ -285,11 +285,11 @@ export const createSignCredentialForDid = <ContextType>(
 
     if (remoteSigner === null) {
       return {
-        status: 'error',
+        status: "error",
         statusCode: 500,
         error:
           request.missingPrivateKeyError ??
-          'DID is missing private signing key material and no remote signer is configured',
+          "DID is missing private signing key material and no remote signer is configured",
         did: request.did,
       };
     }
@@ -308,9 +308,9 @@ export const createSignCredentialForDid = <ContextType>(
       selectCredentialProofObject: input.selectCredentialProofObject,
     });
 
-    if (remoteSignerResult.status !== 'ok') {
+    if (remoteSignerResult.status !== "ok") {
       return {
-        status: 'error',
+        status: "error",
         statusCode: 502,
         error: `Remote signer request failed: ${remoteSignerResult.reason}`,
         did: request.did,
@@ -318,7 +318,7 @@ export const createSignCredentialForDid = <ContextType>(
     }
 
     return {
-      status: 'ok',
+      status: "ok",
       keyId: signingEntry.keyId,
       verificationMethod,
       credential: remoteSignerResult.credential,

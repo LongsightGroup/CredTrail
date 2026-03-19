@@ -3,16 +3,13 @@ import {
   createOAuthRefreshToken,
   findOAuthClientById,
   type SqlDatabase,
-} from '@credtrail/db';
-import {
-  OAUTH_ACCESS_TOKEN_TTL_SECONDS,
-  OAUTH_REFRESH_TOKEN_TTL_SECONDS,
-} from './constants';
+} from "@credtrail/db";
+import { OAUTH_ACCESS_TOKEN_TTL_SECONDS, OAUTH_REFRESH_TOKEN_TTL_SECONDS } from "./constants";
 import {
   parseBasicAuthorizationHeader,
   parseOAuthClientMetadata,
   type OAuthClientMetadata,
-} from './oauth-utils';
+} from "./oauth-utils";
 
 interface BasicHeaderContext {
   req: {
@@ -68,14 +65,14 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
         clientMetadata: OAuthClientMetadata;
       }
   > => {
-    const basicAuth = parseBasicAuthorizationHeader(context.req.header('authorization'));
+    const basicAuth = parseBasicAuthorizationHeader(context.req.header("authorization"));
 
     if (basicAuth === null) {
       return input.oauthTokenErrorJson(
         context,
         401,
-        'invalid_client',
-        'Client authentication with client_secret_basic is required',
+        "invalid_client",
+        "Client authentication with client_secret_basic is required",
         true,
       );
     }
@@ -83,7 +80,7 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
     const registeredClient = await findOAuthClientById(db, basicAuth.clientId);
 
     if (registeredClient === null) {
-      return input.oauthTokenErrorJson(context, 401, 'invalid_client', 'Unknown client_id', true);
+      return input.oauthTokenErrorJson(context, 401, "invalid_client", "Unknown client_id", true);
     }
 
     const providedSecretHash = await input.sha256Hex(basicAuth.clientSecret);
@@ -92,8 +89,8 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
       return input.oauthTokenErrorJson(
         context,
         401,
-        'invalid_client',
-        'Client authentication failed',
+        "invalid_client",
+        "Client authentication failed",
         true,
       );
     }
@@ -104,8 +101,8 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
       return input.oauthTokenErrorJson(
         context,
         401,
-        'invalid_client',
-        'Invalid client registration',
+        "invalid_client",
+        "Invalid client registration",
         true,
       );
     }
@@ -136,7 +133,7 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
       userId: request.userId,
       tenantId: request.tenantId,
       accessTokenHash,
-      scope: request.scopeTokens.join(' '),
+      scope: request.scopeTokens.join(" "),
       expiresAt: input.addSecondsToIso(request.nowIso, OAUTH_ACCESS_TOKEN_TTL_SECONDS),
     });
 
@@ -145,7 +142,7 @@ export const createOAuthTokenHelpers = <ContextType extends BasicHeaderContext>(
       userId: request.userId,
       tenantId: request.tenantId,
       refreshTokenHash,
-      scope: request.scopeTokens.join(' '),
+      scope: request.scopeTokens.join(" "),
       expiresAt: input.addSecondsToIso(request.nowIso, OAUTH_REFRESH_TOKEN_TTL_SECONDS),
     });
 

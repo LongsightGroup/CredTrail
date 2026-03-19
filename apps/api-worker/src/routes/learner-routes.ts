@@ -13,17 +13,17 @@ import {
   resolveLearnerProfileForIdentity,
   type SqlDatabase,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   parseLearnerDidSettingsRequest,
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
   parseTenantPathParams,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
-import { buildOrganizationsPath } from '../auth/tenant-context-selection';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "../auth/auth-context";
+import { buildOrganizationsPath } from "../auth/tenant-context-selection";
 
 interface RegisterLearnerRoutesInput<DidNotice> {
   app: Hono<AppEnv>;
@@ -72,7 +72,7 @@ export const registerLearnerRoutes = <DidNotice>(
     learnerDashboardPage,
   } = input;
 
-  app.get('/tenants/:tenantId/learner/dashboard', async (c) => {
+  app.get("/tenants/:tenantId/learner/dashboard", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
@@ -86,7 +86,7 @@ export const registerLearnerRoutes = <DidNotice>(
     if (user === null) {
       return c.json(
         {
-          error: 'Authenticated user not found',
+          error: "Authenticated user not found",
         },
         404,
       );
@@ -94,7 +94,7 @@ export const registerLearnerRoutes = <DidNotice>(
 
     const learnerProfile = await resolveLearnerProfileForIdentity(db, {
       tenantId: pathParams.tenantId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: user.email,
     });
     const learnerIdentities = await listLearnerIdentitiesByProfile(
@@ -103,12 +103,12 @@ export const registerLearnerRoutes = <DidNotice>(
       learnerProfile.id,
     );
     const learnerDid =
-      learnerIdentities.find((identity) => identity.identityType === 'did')?.identityValue ?? null;
+      learnerIdentities.find((identity) => identity.identityType === "did")?.identityValue ?? null;
     const badges = await listLearnerBadgeSummaries(db, {
       tenantId: pathParams.tenantId,
       userId: roleCheck.principal.userId,
     });
-    const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query('didStatus'));
+    const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query("didStatus"));
     const accessibleTenantContexts = await listAccessibleTenantContextsForUser(
       db,
       roleCheck.principal.userId,
@@ -119,7 +119,7 @@ export const registerLearnerRoutes = <DidNotice>(
         ? buildOrganizationsPath(`${requestUrl.pathname}${requestUrl.search}`)
         : null;
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
     return c.html(
       learnerDashboardPage(
         c.req.url,
@@ -132,7 +132,7 @@ export const registerLearnerRoutes = <DidNotice>(
     );
   });
 
-  app.post('/tenants/:tenantId/learner/settings/did', async (c): Promise<Response> => {
+  app.post("/tenants/:tenantId/learner/settings/did", async (c): Promise<Response> => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
@@ -144,10 +144,10 @@ export const registerLearnerRoutes = <DidNotice>(
       `/tenants/${encodeURIComponent(pathParams.tenantId)}/learner/dashboard`,
       c.req.url,
     );
-    const contentType = c.req.header('content-type') ?? '';
+    const contentType = c.req.header("content-type") ?? "";
 
-    if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
-      dashboardUrl.searchParams.set('didStatus', 'invalid');
+    if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
+      dashboardUrl.searchParams.set("didStatus", "invalid");
       return c.redirect(dashboardUrl.toString(), 303);
     }
 
@@ -158,10 +158,10 @@ export const registerLearnerRoutes = <DidNotice>(
 
     try {
       request = parseLearnerDidSettingsRequest({
-        did: formData.get('did') ?? undefined,
+        did: formData.get("did") ?? undefined,
       });
     } catch {
-      dashboardUrl.searchParams.set('didStatus', 'invalid');
+      dashboardUrl.searchParams.set("didStatus", "invalid");
       return c.redirect(dashboardUrl.toString(), 303);
     }
 
@@ -171,7 +171,7 @@ export const registerLearnerRoutes = <DidNotice>(
     if (user === null) {
       return c.json(
         {
-          error: 'Authenticated user not found',
+          error: "Authenticated user not found",
         },
         404,
       );
@@ -179,51 +179,51 @@ export const registerLearnerRoutes = <DidNotice>(
 
     const learnerProfile = await resolveLearnerProfileForIdentity(db, {
       tenantId: pathParams.tenantId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: user.email,
     });
-    const submittedDid = request.did ?? '';
+    const submittedDid = request.did ?? "";
 
     if (submittedDid.length === 0) {
       await removeLearnerIdentityAliasesByType(db, {
         tenantId: pathParams.tenantId,
         learnerProfileId: learnerProfile.id,
-        identityType: 'did',
+        identityType: "did",
       });
-      dashboardUrl.searchParams.set('didStatus', 'cleared');
+      dashboardUrl.searchParams.set("didStatus", "cleared");
       return c.redirect(dashboardUrl.toString(), 303);
     }
 
     const existingDidProfile = await findLearnerProfileByIdentity(db, {
       tenantId: pathParams.tenantId,
-      identityType: 'did',
+      identityType: "did",
       identityValue: submittedDid,
     });
 
     if (existingDidProfile !== null && existingDidProfile.id !== learnerProfile.id) {
-      dashboardUrl.searchParams.set('didStatus', 'conflict');
+      dashboardUrl.searchParams.set("didStatus", "conflict");
       return c.redirect(dashboardUrl.toString(), 303);
     }
 
     await removeLearnerIdentityAliasesByType(db, {
       tenantId: pathParams.tenantId,
       learnerProfileId: learnerProfile.id,
-      identityType: 'did',
+      identityType: "did",
     });
     await addLearnerIdentityAlias(db, {
       tenantId: pathParams.tenantId,
       learnerProfileId: learnerProfile.id,
-      identityType: 'did',
+      identityType: "did",
       identityValue: submittedDid,
       isPrimary: false,
       isVerified: true,
     });
 
-    dashboardUrl.searchParams.set('didStatus', 'updated');
+    dashboardUrl.searchParams.set("didStatus", "updated");
     return c.redirect(dashboardUrl.toString(), 303);
   });
 
-  app.post('/v1/tenants/:tenantId/learner/identity-links/email/request', async (c) => {
+  app.post("/v1/tenants/:tenantId/learner/identity-links/email/request", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseLearnerIdentityLinkRequest(payload);
@@ -239,7 +239,7 @@ export const registerLearnerRoutes = <DidNotice>(
     if (user === null) {
       return c.json(
         {
-          error: 'Authenticated user not found',
+          error: "Authenticated user not found",
         },
         404,
       );
@@ -247,20 +247,20 @@ export const registerLearnerRoutes = <DidNotice>(
 
     const learnerProfile = await resolveLearnerProfileForIdentity(db, {
       tenantId: pathParams.tenantId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: user.email,
     });
     const normalizedEmail = request.email.trim().toLowerCase();
     const existingProfile = await findLearnerProfileByIdentity(db, {
       tenantId: pathParams.tenantId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: normalizedEmail,
     });
 
     if (existingProfile !== null && existingProfile.id !== learnerProfile.id) {
       return c.json(
         {
-          error: 'Email is already linked to a different learner profile',
+          error: "Email is already linked to a different learner profile",
         },
         409,
       );
@@ -268,10 +268,10 @@ export const registerLearnerRoutes = <DidNotice>(
 
     if (existingProfile !== null) {
       return c.json({
-        status: 'already_linked',
+        status: "already_linked",
         tenantId: pathParams.tenantId,
         learnerProfileId: learnerProfile.id,
-        identityType: 'email',
+        identityType: "email",
         identityValue: normalizedEmail,
       });
     }
@@ -285,18 +285,18 @@ export const registerLearnerRoutes = <DidNotice>(
       tenantId: pathParams.tenantId,
       learnerProfileId: learnerProfile.id,
       requestedByUserId: roleCheck.principal.userId,
-      identityType: 'email',
+      identityType: "email",
       identityValue: normalizedEmail,
       tokenHash,
       expiresAt,
     });
 
-    if (c.env.APP_ENV === 'development') {
+    if (c.env.APP_ENV === "development") {
       return c.json(
         {
-          status: 'sent',
+          status: "sent",
           tenantId: pathParams.tenantId,
-          identityType: 'email',
+          identityType: "email",
           identityValue: normalizedEmail,
           expiresAt,
           token: proofToken,
@@ -307,9 +307,9 @@ export const registerLearnerRoutes = <DidNotice>(
 
     return c.json(
       {
-        status: 'sent',
+        status: "sent",
         tenantId: pathParams.tenantId,
-        identityType: 'email',
+        identityType: "email",
         identityValue: normalizedEmail,
         expiresAt,
       },
@@ -317,7 +317,7 @@ export const registerLearnerRoutes = <DidNotice>(
     );
   });
 
-  app.post('/v1/tenants/:tenantId/learner/identity-links/email/verify', async (c) => {
+  app.post("/v1/tenants/:tenantId/learner/identity-links/email/verify", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseLearnerIdentityLinkVerifyRequest(payload);
@@ -334,7 +334,7 @@ export const registerLearnerRoutes = <DidNotice>(
     if (proof === null || !isLearnerIdentityLinkProofValid(proof, nowIso)) {
       return c.json(
         {
-          error: 'Invalid or expired identity link token',
+          error: "Invalid or expired identity link token",
         },
         400,
       );
@@ -346,7 +346,7 @@ export const registerLearnerRoutes = <DidNotice>(
     ) {
       return c.json(
         {
-          error: 'Forbidden identity link token',
+          error: "Forbidden identity link token",
         },
         403,
       );
@@ -361,7 +361,7 @@ export const registerLearnerRoutes = <DidNotice>(
     if (existingProfile !== null && existingProfile.id !== proof.learnerProfileId) {
       return c.json(
         {
-          error: 'Email is already linked to a different learner profile',
+          error: "Email is already linked to a different learner profile",
         },
         409,
       );
@@ -381,7 +381,7 @@ export const registerLearnerRoutes = <DidNotice>(
     await markLearnerIdentityLinkProofUsed(db, proof.id, nowIso);
 
     return c.json({
-      status: existingProfile === null ? 'linked' : 'already_linked',
+      status: existingProfile === null ? "linked" : "already_linked",
       tenantId: pathParams.tenantId,
       learnerProfileId: proof.learnerProfileId,
       identityType: proof.identityType,

@@ -3,21 +3,21 @@ import {
   type ImmutableCredentialStore,
   type JsonObject,
   type ObservabilityContext,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   findTenantSigningRegistrationByDid,
   listLtiIssuerRegistrations,
   upsertTenantMembershipRole,
   type SqlDatabase,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
-import { Hono, type Context } from 'hono';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
+import { Hono, type Context } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import {
   credentialDownloadFilename,
   credentialPdfDownloadFilename,
   renderBadgePdfDocument,
-} from './badges/pdf';
+} from "./badges/pdf";
 import {
   achievementDetailsFromCredential,
   badgeHeroImageMarkup,
@@ -27,7 +27,7 @@ import {
   evidenceDetailsFromCredential,
   recipientAvatarUrlFromAssertion,
   recipientDisplayNameFromAssertion,
-} from './badges/public-badge-helpers';
+} from "./badges/public-badge-helpers";
 import {
   badgeNameFromCredential,
   isWebUrl,
@@ -35,16 +35,16 @@ import {
   issuerNameFromCredential,
   issuerUrlFromCredential,
   recipientFromCredential,
-} from './badges/credential-display';
+} from "./badges/credential-display";
 import {
   buildRevocationStatusListCredential,
   credentialStatusForAssertion,
   decodedRevocationStatusBit,
   parseStatusListIndex,
   revocationStatusListUrlForTenant,
-} from './badges/revocation-status';
-import { createPublicBadgePageRenderers } from './badges/public-badge-pages';
-import { createIssueBadgeForTenant } from './badges/direct-issue';
+} from "./badges/revocation-status";
+import { createPublicBadgePageRenderers } from "./badges/public-badge-pages";
+import { createIssueBadgeForTenant } from "./badges/direct-issue";
 import {
   assertionBelongsToTenant,
   loadCredentialForAssertion,
@@ -53,27 +53,23 @@ import {
   parseTenantScopedCredentialId,
   publicBadgePathForAssertion,
   type VerificationViewModel,
-} from './badges/public-badge-model';
+} from "./badges/public-badge-model";
 import {
   VC_DATA_MODEL_CONTEXT_URL,
   createCredentialVerificationChecks,
-} from './credentials/verification-checks';
-import { createCredentialProofVerificationHelpers } from './credentials/proof-verification';
-import { registerCommonMiddleware } from './http/common-middleware';
-import { createLoadJsonObjectFromUrl } from './http/json-object-loader';
-import { registerPageAssetRoutes } from './ui/page-assets';
-import {
-  createSignCredentialForDid,
-} from './signing/credential-signer';
+} from "./credentials/verification-checks";
+import { createCredentialProofVerificationHelpers } from "./credentials/proof-verification";
+import { registerCommonMiddleware } from "./http/common-middleware";
+import { createLoadJsonObjectFromUrl } from "./http/json-object-loader";
+import { registerPageAssetRoutes } from "./ui/page-assets";
+import { createSignCredentialForDid } from "./signing/credential-signer";
 import {
   didDocumentForSigningEntry,
   didForTenantPathRequest,
   didForWellKnownRequest,
   jwksDocumentForSigningEntry,
-} from './signing/did-documents';
-import {
-  createSigningRegistryResolvers,
-} from './signing/registry';
+} from "./signing/did-documents";
+import { createSigningRegistryResolvers } from "./signing/registry";
 import {
   ADMIN_ROLES,
   ISSUER_ROLES,
@@ -81,19 +77,19 @@ import {
   createTenantAccessHelpers,
   defaultInstitutionOrgUnitId,
   isUniqueConstraintError,
-} from './auth/tenant-access';
+} from "./auth/tenant-access";
 import type {
   AuthContextVariables,
   AuthenticatedPrincipal,
   RequestedTenantContext,
-} from './auth/auth-context';
-import { createBetterAuthProvider } from './auth/better-auth-adapter';
-import { applyBetterAuthResponseHeaders } from './auth/better-auth-bridge';
-import { createBetterAuthRuntimeConfig } from './auth/better-auth-config';
+} from "./auth/auth-context";
+import { createBetterAuthProvider } from "./auth/better-auth-adapter";
+import { applyBetterAuthResponseHeaders } from "./auth/better-auth-bridge";
+import { createBetterAuthRuntimeConfig } from "./auth/better-auth-config";
 import {
   BREAK_GLASS_PENDING_MFA_COOKIE_NAME,
   createBreakGlassPolicyAdapter,
-} from './auth/break-glass-policy';
+} from "./auth/break-glass-policy";
 import {
   BETTER_AUTH_BASE_PATH,
   REQUESTED_TENANT_COOKIE_NAME,
@@ -103,72 +99,69 @@ import {
   createCredtrailBetterAuth,
   findBetterAuthSessionByToken,
   parseHostedMagicLinkToken,
-} from './auth/better-auth-runtime';
-import { createEnterpriseSsoAdapter } from './auth/enterprise-sso-adapter';
-import { createOAuthTokenHelpers } from './ob3/oauth-token-helpers';
-import { createOb3ErrorResponses } from './ob3/error-responses';
-import { createOb3AccessTokenAuthenticator } from './ob3/access-token-auth';
-import { ob3ServiceDescriptionDocument as ob3ServiceDescriptionDocumentFromRequest } from './ob3/service-description';
+} from "./auth/better-auth-runtime";
+import { createEnterpriseSsoAdapter } from "./auth/enterprise-sso-adapter";
+import { createOAuthTokenHelpers } from "./ob3/oauth-token-helpers";
+import { createOb3ErrorResponses } from "./ob3/error-responses";
+import { createOb3AccessTokenAuthenticator } from "./ob3/access-token-auth";
+import { ob3ServiceDescriptionDocument as ob3ServiceDescriptionDocumentFromRequest } from "./ob3/service-description";
 import {
   ltiIssuerRegistryFromStoredRows,
   parseLtiIssuerRegistryFromEnv,
   signLtiStatePayload as signLtiStatePayloadHelper,
   validateLtiStateToken as validateLtiStateTokenHelper,
   type LtiIssuerRegistry,
-} from './lti/lti-helpers';
-import {
-  createLearnerDashboardPage,
-  learnerDidSettingsNoticeFromQuery,
-} from './learner/pages';
+} from "./lti/lti-helpers";
+import { createLearnerDashboardPage, learnerDidSettingsNoticeFromQuery } from "./learner/pages";
 import {
   sendIssuanceEmailNotification,
   type SendIssuanceEmailNotificationInput,
-} from './notifications/send-issuance-email';
-import { sendMagicLinkEmailNotification } from './notifications/send-magic-link-email';
-import { sendPasswordResetEmailNotification } from './notifications/send-password-reset-email';
-import { registerAdminRoutes } from './routes/admin-routes';
-import { registerAssertionRoutes } from './routes/assertion-routes';
-import { registerAuthRoutes } from './routes/auth-routes';
-import { registerBadgeTemplateRoutes } from './routes/badge-template-routes';
-import { registerBadgeRuleRoutes } from './routes/badge-rule-routes';
-import { registerCredentialRoutes } from './routes/credential-routes';
-import { registerDidRoutes } from './routes/did-routes';
-import { registerLearnerRoutes } from './routes/learner-routes';
-import { registerLtiRoutes } from './routes/lti-routes';
-import { registerMigrationRoutes } from './routes/migration-routes';
-import { registerOb3Routes } from './routes/ob3-routes';
-import { registerPresentationRoutes } from './routes/presentation-routes';
-import { registerPublicBadgeRoutes } from './routes/public-badge-routes';
-import { registerQueueRoutes } from './routes/queue-routes';
-import { registerSigningRoutes } from './routes/signing-routes';
-import { registerTenantGovernanceRoutes } from './routes/tenant-governance-routes';
-import { registerOid4vciRoutes } from './routes/oid4vci-routes';
+} from "./notifications/send-issuance-email";
+import { sendMagicLinkEmailNotification } from "./notifications/send-magic-link-email";
+import { sendPasswordResetEmailNotification } from "./notifications/send-password-reset-email";
+import { registerAdminRoutes } from "./routes/admin-routes";
+import { registerAssertionRoutes } from "./routes/assertion-routes";
+import { registerAuthRoutes } from "./routes/auth-routes";
+import { registerBadgeTemplateRoutes } from "./routes/badge-template-routes";
+import { registerBadgeRuleRoutes } from "./routes/badge-rule-routes";
+import { registerCredentialRoutes } from "./routes/credential-routes";
+import { registerDidRoutes } from "./routes/did-routes";
+import { registerLearnerRoutes } from "./routes/learner-routes";
+import { registerLtiRoutes } from "./routes/lti-routes";
+import { registerMigrationRoutes } from "./routes/migration-routes";
+import { registerOb3Routes } from "./routes/ob3-routes";
+import { registerPresentationRoutes } from "./routes/presentation-routes";
+import { registerPublicBadgeRoutes } from "./routes/public-badge-routes";
+import { registerQueueRoutes } from "./routes/queue-routes";
+import { registerSigningRoutes } from "./routes/signing-routes";
+import { registerTenantGovernanceRoutes } from "./routes/tenant-governance-routes";
+import { registerOid4vciRoutes } from "./routes/oid4vci-routes";
 import {
   addSecondsToIso,
   generateOpaqueToken,
   sessionCookieSecure,
   sha256Base64Url,
   sha256Hex,
-} from './utils/crypto';
-import { escapeHtml, formatIsoTimestamp, linkedInAddToProfileUrl } from './utils/display-format';
-import { asJsonObject, asNonEmptyString, asString } from './utils/value-parsers';
-import { createApiWorker } from './worker/create-worker';
+} from "./utils/crypto";
+import { escapeHtml, formatIsoTimestamp, linkedInAddToProfileUrl } from "./utils/display-format";
+import { asJsonObject, asNonEmptyString, asString } from "./utils/value-parsers";
+import { createApiWorker } from "./worker/create-worker";
 import {
   issueBadgeQueueJobFromRequest,
   revokeBadgeQueueJobFromRequest,
-} from './queue/job-builders';
+} from "./queue/job-builders";
 import {
   createProcessQueuedJobs,
   processQueueInputWithDefaults,
   readJsonBodyOrEmptyObject,
-} from './queue/processing';
-import { queueProcessorRequestFromSchedule } from './queue/scheduled-trigger';
+} from "./queue/processing";
+import { queueProcessorRequestFromSchedule } from "./queue/scheduled-trigger";
 import {
   createPresentationVerificationHelpers,
   didKeyVerificationMethod,
   ed25519PublicJwkFromDidKey,
   verifiableCredentialObjectsFromPresentation as verifiableCredentialObjectsFromPresentationHelper,
-} from './presentation/verification-helpers';
+} from "./presentation/verification-helpers";
 
 export interface AppBindings {
   APP_ENV: string;
@@ -213,25 +206,25 @@ export type AppContext = Context<AppEnv>;
 export const app = new Hono<AppEnv>();
 export { sendIssuanceEmailNotification };
 export type { SendIssuanceEmailNotificationInput };
-const API_SERVICE_NAME = 'api-worker';
+const API_SERVICE_NAME = "api-worker";
 const MAGIC_LINK_TTL_SECONDS = 10 * 60;
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 const LEARNER_IDENTITY_LINK_TTL_SECONDS = 10 * 60;
 const OID4VCI_PRE_AUTH_CODE_TTL_SECONDS = 10 * 60;
 const OID4VCI_ACCESS_TOKEN_TTL_SECONDS = 10 * 60;
-const SAKAI_SHOWCASE_TENANT_ID = 'sakai';
-const SAKAI_SHOWCASE_TEMPLATE_ID = 'badge_template_sakai_1000';
+const SAKAI_SHOWCASE_TENANT_ID = "sakai";
+const SAKAI_SHOWCASE_TEMPLATE_ID = "badge_template_sakai_1000";
 const databasesByUrl = new Map<string, SqlDatabase>();
-const STORAGE_READINESS_PROBE_KEY = '__credtrail__/healthz/dependency-probe.jsonld';
+const STORAGE_READINESS_PROBE_KEY = "__credtrail__/healthz/dependency-probe.jsonld";
 
 const resolveDatabase = (bindings: AppBindings): SqlDatabase => {
   if (bindings.DATABASE_URL === undefined) {
-    throw new Error('DATABASE_URL is required');
+    throw new Error("DATABASE_URL is required");
   }
   const databaseUrl = bindings.DATABASE_URL.trim();
 
   if (databaseUrl.length === 0) {
-    throw new Error('DATABASE_URL is required');
+    throw new Error("DATABASE_URL is required");
   }
 
   const existingDatabase = databasesByUrl.get(databaseUrl);
@@ -263,7 +256,7 @@ const requestedTenantFromCookie = (context: AppContext): RequestedTenantContext 
 
   return {
     tenantId,
-    source: 'route',
+    source: "route",
     authoritative: true,
   };
 };
@@ -271,26 +264,26 @@ const requestedTenantFromCookie = (context: AppContext): RequestedTenantContext 
 const rememberRequestedTenant = (context: AppContext, tenantId: string): RequestedTenantContext => {
   const requestedTenant: RequestedTenantContext = {
     tenantId,
-    source: 'route',
+    source: "route",
     authoritative: true,
   };
 
   setCookie(context, REQUESTED_TENANT_COOKIE_NAME, tenantId, {
     httpOnly: true,
     secure: sessionCookieSecure(context.env.APP_ENV),
-    sameSite: 'Lax',
-    path: '/',
+    sameSite: "Lax",
+    path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
-  context.set('requestedTenantContext', requestedTenant);
+  context.set("requestedTenantContext", requestedTenant);
   return requestedTenant;
 };
 
 const clearRequestedTenant = (context: AppContext): void => {
   deleteCookie(context, REQUESTED_TENANT_COOKIE_NAME, {
-    path: '/',
+    path: "/",
   });
-  context.set('requestedTenantContext', null);
+  context.set("requestedTenantContext", null);
 };
 
 const pendingBreakGlassTenantFromCookie = (context: AppContext): string | null => {
@@ -329,20 +322,14 @@ const createBetterAuthRuntime = (
   context: AppContext,
   options?: {
     generateMagicLinkToken?: (() => string) | undefined;
-    oauthProviders?: readonly import('better-auth/plugins/generic-oauth').GenericOAuthConfig[] | undefined;
+    oauthProviders?:
+      | readonly import("better-auth/plugins/generic-oauth").GenericOAuthConfig[]
+      | undefined;
     sendMagicLink?:
-      | ((data: {
-          email: string;
-          token: string;
-          url: string;
-        }) => Promise<void>)
+      | ((data: { email: string; token: string; url: string }) => Promise<void>)
       | undefined;
     sendResetPassword?:
-      | ((data: {
-          email: string;
-          url: string;
-          token: string;
-        }) => Promise<void>)
+      | ((data: { email: string; url: string; token: string }) => Promise<void>)
       | undefined;
   },
 ): {
@@ -375,11 +362,11 @@ const createBetterAuthRuntime = (
 
 const resolveCurrentBetterAuthSession = async (
   context: AppContext,
-): Promise<import('./auth/better-auth-adapter').BetterAuthResolvedSession | null> => {
+): Promise<import("./auth/better-auth-adapter").BetterAuthResolvedSession | null> => {
   const { auth } = createBetterAuthRuntime(context);
   const response = await auth.handler(
-    createBetterAuthRequest(context, '/get-session', {
-      method: 'GET',
+    createBetterAuthRequest(context, "/get-session", {
+      method: "GET",
     }),
   );
 
@@ -420,10 +407,10 @@ const resolveCurrentBetterAuthSession = async (
 const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   resolveDatabase,
   requestMagicLink: async (context, input) => {
-    const defaultNextPath = '/auth/resolve';
-    const nextPath = input.nextPath?.startsWith('/') === true ? input.nextPath : defaultNextPath;
+    const defaultNextPath = "/auth/resolve";
+    const nextPath = input.nextPath?.startsWith("/") === true ? input.nextPath : defaultNextPath;
     const expiresAt = addSecondsToIso(new Date().toISOString(), MAGIC_LINK_TTL_SECONDS);
-    let deliveryStatus: 'sent' | 'skipped' | 'failed' = 'skipped';
+    let deliveryStatus: "sent" | "skipped" | "failed" = "skipped";
     let debugMagicLinkToken: string | undefined;
     let debugMagicLinkUrl: string | undefined;
     const { auth, runtimeConfig } = createBetterAuthRuntime(context, {
@@ -448,9 +435,9 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
             magicLinkUrl: debugMagicLinkUrl,
             expiresAtIso: expiresAt,
           });
-          deliveryStatus = 'sent';
+          deliveryStatus = "sent";
         } catch {
-          deliveryStatus = 'failed';
+          deliveryStatus = "failed";
         }
       },
       sendResetPassword: async ({ email, url }) => {
@@ -467,10 +454,10 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
       },
     });
     const response = await auth.handler(
-      createBetterAuthRequest(context, '/sign-in/magic-link', {
-        method: 'POST',
+      createBetterAuthRequest(context, "/sign-in/magic-link", {
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           email: input.email,
@@ -480,7 +467,7 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
     );
 
     if (!response.ok) {
-      throw new Error('Better Auth magic-link request failed');
+      throw new Error("Better Auth magic-link request failed");
     }
 
     return {
@@ -502,7 +489,7 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
     const { auth } = createBetterAuthRuntime(context);
     const response = await auth.handler(
       createBetterAuthRequest(context, `/magic-link/verify?token=${encodeURIComponent(token)}`, {
-        method: 'GET',
+        method: "GET",
       }),
     );
 
@@ -514,11 +501,13 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
 
     const payload = await response.json<{
       token?: string | undefined;
-      user?: {
-        id: string;
-        email: string | null;
-        emailVerified: boolean;
-      } | undefined;
+      user?:
+        | {
+            id: string;
+            email: string | null;
+            emailVerified: boolean;
+          }
+        | undefined;
     }>();
     const sessionToken = payload.token?.trim();
 
@@ -549,14 +538,14 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
       db: resolveDatabase(context.env),
       runtimeConfig,
       credtrailUserId: input.userId,
-      userAgent: context.req.header('user-agent') ?? null,
+      userAgent: context.req.header("user-agent") ?? null,
     });
 
     setCookie(context, runtimeConfig.session.cookieName, sessionToken, {
       httpOnly: true,
-      sameSite: 'Lax',
-      secure: runtimeConfig.baseURL.startsWith('https://'),
-      path: '/',
+      sameSite: "Lax",
+      secure: runtimeConfig.baseURL.startsWith("https://"),
+      path: "/",
       maxAge: runtimeConfig.session.expiresInSeconds,
     });
     rememberRequestedTenant(context, input.tenantId);
@@ -576,59 +565,61 @@ const betterAuthProvider = createBetterAuthProvider<AppContext, AppBindings>({
   revokeSession: async (context) => {
     const { auth } = createBetterAuthRuntime(context);
     const response = await auth.handler(
-      createBetterAuthRequest(context, '/sign-out', {
-        method: 'POST',
+      createBetterAuthRequest(context, "/sign-out", {
+        method: "POST",
       }),
     );
 
     applyBetterAuthResponseHeaders(context, response);
     clearRequestedTenant(context);
     deleteCookie(context, BREAK_GLASS_PENDING_MFA_COOKIE_NAME, {
-      path: '/',
+      path: "/",
     });
   },
   resolveRequestedTenantContext: (context) => {
-    return Promise.resolve(context.get('requestedTenantContext') ?? requestedTenantFromCookie(context));
+    return Promise.resolve(
+      context.get("requestedTenantContext") ?? requestedTenantFromCookie(context),
+    );
   },
   cacheAuthenticatedPrincipal: (
     context: AppContext,
-    principal: AppEnv['Variables']['authenticatedPrincipal'],
+    principal: AppEnv["Variables"]["authenticatedPrincipal"],
   ): void => {
-    context.set('authenticatedPrincipal', principal);
+    context.set("authenticatedPrincipal", principal);
   },
   cacheRequestedTenantContext: (
     context: AppContext,
-    requestedTenant: AppEnv['Variables']['requestedTenantContext'],
+    requestedTenant: AppEnv["Variables"]["requestedTenantContext"],
   ): void => {
-    context.set('requestedTenantContext', requestedTenant);
+    context.set("requestedTenantContext", requestedTenant);
   },
 });
 
 const resolveAuthenticatedPrincipal = async (
   c: AppContext,
 ): Promise<AuthenticatedPrincipal | null> => {
-  const cachedPrincipal = c.get('authenticatedPrincipal');
+  const cachedPrincipal = c.get("authenticatedPrincipal");
 
   if (cachedPrincipal !== undefined) {
     return cachedPrincipal ?? null;
   }
 
   const principal = await betterAuthProvider.resolveAuthenticatedPrincipal(c);
-  c.set('authenticatedPrincipal', principal);
+  c.set("authenticatedPrincipal", principal);
   return principal;
 };
 
 const resolveRequestedTenantContext = async (
   c: AppContext,
 ): Promise<RequestedTenantContext | null> => {
-  const cachedRequestedTenant = c.get('requestedTenantContext');
+  const cachedRequestedTenant = c.get("requestedTenantContext");
 
   if (cachedRequestedTenant !== undefined) {
     return cachedRequestedTenant ?? null;
   }
 
   const requestedTenant = await betterAuthProvider.resolveRequestedTenantContext(c);
-  c.set('requestedTenantContext', requestedTenant);
+  c.set("requestedTenantContext", requestedTenant);
   return requestedTenant;
 };
 
@@ -707,11 +698,11 @@ const authenticateOb3AccessToken = createOb3AccessTokenAuthenticator<AppContext,
 
 const { authenticateOAuthClient, issueOAuthAccessAndRefreshTokens } =
   createOAuthTokenHelpers<AppContext>({
-  oauthTokenErrorJson,
-  sha256Hex,
-  generateOpaqueToken,
-  addSecondsToIso,
-});
+    oauthTokenErrorJson,
+    sha256Hex,
+    generateOpaqueToken,
+    addSecondsToIso,
+  });
 
 const loadJsonObjectFromUrl = createLoadJsonObjectFromUrl<AppBindings>({
   appRequest: async (pathWithQuery, init, bindings) => {
@@ -785,28 +776,32 @@ class HttpErrorResponse extends Error {
   }
 }
 
-const { publicBadgeNotFoundPage, publicBadgePage, tenantBadgeWallPage, tenantBadgeCriteriaRegistryPage } =
-  createPublicBadgePageRenderers({
-    asString,
-    achievementDetailsFromCredential,
-    badgeHeroImageMarkup,
-    badgeNameFromCredential,
-    evidenceDetailsFromCredential,
-    escapeHtml,
-    formatIsoTimestamp,
-    githubAvatarUrlForUsername,
-    githubUsernameFromUrl,
-    imsOb3ValidatorUrl,
-    isWebUrl,
-    issuerIdentifierFromCredential,
-    issuerNameFromCredential,
-    issuerUrlFromCredential,
-    linkedInAddToProfileUrl,
-    publicBadgePathForAssertion,
-    recipientAvatarUrlFromAssertion,
-    recipientDisplayNameFromAssertion,
-    recipientFromCredential,
-  });
+const {
+  publicBadgeNotFoundPage,
+  publicBadgePage,
+  tenantBadgeWallPage,
+  tenantBadgeCriteriaRegistryPage,
+} = createPublicBadgePageRenderers({
+  asString,
+  achievementDetailsFromCredential,
+  badgeHeroImageMarkup,
+  badgeNameFromCredential,
+  evidenceDetailsFromCredential,
+  escapeHtml,
+  formatIsoTimestamp,
+  githubAvatarUrlForUsername,
+  githubUsernameFromUrl,
+  imsOb3ValidatorUrl,
+  isWebUrl,
+  issuerIdentifierFromCredential,
+  issuerNameFromCredential,
+  issuerUrlFromCredential,
+  linkedInAddToProfileUrl,
+  publicBadgePathForAssertion,
+  recipientAvatarUrlFromAssertion,
+  recipientDisplayNameFromAssertion,
+  recipientFromCredential,
+});
 
 const learnerDashboardPage = createLearnerDashboardPage({
   escapeHtml,
@@ -831,23 +826,23 @@ const walletCredentialOfferPayload = (
   const credentialDownloadPath = `${publicBadgePath}/download`;
   const preAuthorizedCode =
     options?.preAuthorizedCode ?? `public-badge:${assertion.publicId ?? assertion.id}`;
-  const tokenEndpointPath = options?.tokenEndpointPath ?? '/credentials/v1/token';
-  const credentialEndpointPath = options?.credentialEndpointPath ?? '/credentials/v1/credentials';
+  const tokenEndpointPath = options?.tokenEndpointPath ?? "/credentials/v1/token";
+  const credentialEndpointPath = options?.credentialEndpointPath ?? "/credentials/v1/credentials";
 
   return {
     credential_issuer: requestBaseUrl.origin,
     credential_endpoint: new URL(credentialEndpointPath, requestBaseUrl).toString(),
-    credential_configuration_ids: ['OpenBadgeCredential'],
+    credential_configuration_ids: ["OpenBadgeCredential"],
     grants: {
-      'urn:ietf:params:oauth:grant-type:pre-authorized_code': {
-        'pre-authorized_code': preAuthorizedCode,
+      "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+        "pre-authorized_code": preAuthorizedCode,
         tx_code_required: false,
       },
     },
     credentials: [
       {
-        format: 'ldp_vc',
-        types: ['VerifiableCredential', 'OpenBadgeCredential'],
+        format: "ldp_vc",
+        types: ["VerifiableCredential", "OpenBadgeCredential"],
       },
     ],
     x_credtrail: {
@@ -892,10 +887,7 @@ const publicBadgeSummaryPayload = (
   const criteriaRegistryPath = `/showcase/${encodeURIComponent(
     assertion.tenantId,
   )}/criteria?badgeTemplateId=${encodeURIComponent(assertion.badgeTemplateId)}`;
-  const verificationLabel =
-    model.lifecycle.state === 'active'
-      ? 'verified'
-      : model.lifecycle.state;
+  const verificationLabel = model.lifecycle.state === "active" ? "verified" : model.lifecycle.state;
 
   return {
     badge: {
@@ -933,7 +925,7 @@ const publicBadgeSummaryPayload = (
     },
     verification: {
       label: verificationLabel,
-      isValid: model.lifecycle.state === 'active',
+      isValid: model.lifecycle.state === "active",
     },
     links: {
       badgePagePath: publicBadgePath,
@@ -958,7 +950,6 @@ const publicBadgeSummaryPayload = (
   };
 };
 
-
 registerCommonMiddleware({
   app,
   observabilityContext,
@@ -968,21 +959,21 @@ registerPageAssetRoutes({
   app,
 });
 
-app.get('/healthz/dependencies', async (c) => {
+app.get("/healthz/dependencies", async (c) => {
   try {
-    await resolveDatabase(c.env).prepare('SELECT 1 AS ready').first<{ ready: number }>();
+    await resolveDatabase(c.env).prepare("SELECT 1 AS ready").first<{ ready: number }>();
     await c.env.BADGE_OBJECTS.head(STORAGE_READINESS_PROBE_KEY);
   } catch (error: unknown) {
-    const detail = error instanceof Error ? error.message : 'Unknown dependency check failure';
+    const detail = error instanceof Error ? error.message : "Unknown dependency check failure";
 
-    logWarn(observabilityContext(c.env), 'dependency_healthcheck_failed', {
+    logWarn(observabilityContext(c.env), "dependency_healthcheck_failed", {
       detail,
     });
 
     return c.json(
       {
         service: API_SERVICE_NAME,
-        status: 'degraded',
+        status: "degraded",
         detail,
       },
       503,
@@ -991,7 +982,7 @@ app.get('/healthz/dependencies', async (c) => {
 
   return c.json({
     service: API_SERVICE_NAME,
-    status: 'ok',
+    status: "ok",
   });
 });
 

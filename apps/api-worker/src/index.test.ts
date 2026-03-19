@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -11,7 +11,7 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
@@ -25,10 +25,10 @@ import {
   createAuditLog,
   upsertBadgeTemplateById,
   upsertTenant,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface ErrorResponse {
   error: string;
@@ -64,58 +64,58 @@ const createEnv = (): {
   LTI_STATE_SIGNING_SECRET?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for completing TS basics.',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for completing TS basics.",
     criteriaUri: null,
     imageUri: null,
-    createdByUserId: 'usr_issuer',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_issuer",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: '{"stability":"institution_registry"}',
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleTenant = (overrides?: Partial<TenantRecord>): TenantRecord => {
   return {
-    id: 'sakai',
-    slug: 'sakai',
-    displayName: 'Sakai Project',
-    planTier: 'team',
-    issuerDomain: 'sakai.credtrail.test',
-    didWeb: 'did:web:credtrail.test:sakai',
+    id: "sakai",
+    slug: "sakai",
+    displayName: "Sakai Project",
+    planTier: "team",
+    issuerDomain: "sakai.credtrail.test",
+    didWeb: "did:web:credtrail.test:sakai",
     isActive: true,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
-    id: 'aud_123',
-    tenantId: 'sakai',
+    id: "aud_123",
+    tenantId: "sakai",
     actorUserId: null,
-    action: 'tenant.updated',
-    targetType: 'tenant',
-    targetId: 'sakai',
+    action: "tenant.updated",
+    targetType: "tenant",
+    targetId: "sakai",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -128,19 +128,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock("./auth/better-auth-adapter");
 });
 
 const loadAppWithMockedAuthFactories = async (input?: {
   betterAuthPrincipal?: {
     userId: string;
     authSessionId: string;
-    authMethod: 'better_auth';
+    authMethod: "better_auth";
     expiresAt: string;
   } | null;
   betterAuthRequestedTenant?: {
     tenantId: string;
-    source: 'route' | 'legacy_session';
+    source: "route" | "legacy_session";
     authoritative: boolean;
   } | null;
 }) => {
@@ -158,11 +158,10 @@ const loadAppWithMockedAuthFactories = async (input?: {
   };
   const createBetterAuthProvider = vi.fn(() => betterAuthProvider);
 
-  vi.doMock('./auth/better-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-        './auth/better-auth-adapter',
-      );
+  vi.doMock("./auth/better-auth-adapter", async () => {
+    const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+      "./auth/better-auth-adapter",
+    );
 
     return {
       ...actual,
@@ -170,7 +169,7 @@ const loadAppWithMockedAuthFactories = async (input?: {
     };
   });
 
-  const { app: isolatedApp } = await import('./index');
+  const { app: isolatedApp } = await import("./index");
 
   return {
     app: isolatedApp,
@@ -183,12 +182,12 @@ const loadAppWithMockedAuthProviders = async (input: {
   betterAuthPrincipal?: {
     userId: string;
     authSessionId: string;
-    authMethod: 'better_auth';
+    authMethod: "better_auth";
     expiresAt: string;
   } | null;
   betterAuthRequestedTenant?: {
     tenantId: string;
-    source: 'route' | 'legacy_session';
+    source: "route" | "legacy_session";
     authoritative: boolean;
   } | null;
 }): Promise<{
@@ -202,15 +201,16 @@ const loadAppWithMockedAuthProviders = async (input: {
     createMagicLinkSession: vi.fn(),
     createLtiSession: vi.fn(),
     resolveAuthenticatedPrincipal: vi.fn(() => Promise.resolve(input.betterAuthPrincipal ?? null)),
-    resolveRequestedTenantContext: vi.fn(() => Promise.resolve(input.betterAuthRequestedTenant ?? null)),
+    resolveRequestedTenantContext: vi.fn(() =>
+      Promise.resolve(input.betterAuthRequestedTenant ?? null),
+    ),
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
-  vi.doMock('./auth/better-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-        './auth/better-auth-adapter',
-      );
+  vi.doMock("./auth/better-auth-adapter", async () => {
+    const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+      "./auth/better-auth-adapter",
+    );
 
     return {
       ...actual,
@@ -218,7 +218,7 @@ const loadAppWithMockedAuthProviders = async (input: {
     };
   });
 
-  const { app: isolatedApp } = await import('./index');
+  const { app: isolatedApp } = await import("./index");
 
   return {
     app: isolatedApp,
@@ -226,36 +226,36 @@ const loadAppWithMockedAuthProviders = async (input: {
   };
 };
 
-describe('GET /', () => {
-  it('redirects to /login', async () => {
-    const response = await app.request('/', undefined, createEnv());
+describe("GET /", () => {
+  it("redirects to /login", async () => {
+    const response = await app.request("/", undefined, createEnv());
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/login');
+    expect(response.headers.get("location")).toBe("/login");
   });
 
-  it('instantiates the Better Auth provider in the composition root', async () => {
+  it("instantiates the Better Auth provider in the composition root", async () => {
     const { createBetterAuthProvider } = await loadAppWithMockedAuthFactories();
 
     expect(createBetterAuthProvider).toHaveBeenCalledTimes(1);
   });
 
-  it('resolves hosted auth sessions through Better Auth in the composition root', async () => {
+  it("resolves hosted auth sessions through Better Auth in the composition root", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders({
-        betterAuthPrincipal: {
-          userId: 'usr_better',
-          authSessionId: 'ba_ses_123',
-          authMethod: 'better_auth',
-          expiresAt: '2026-03-17T22:00:00.000Z',
-        },
-        betterAuthRequestedTenant: {
-          tenantId: 'tenant_better',
-          source: 'route',
-          authoritative: true,
-        },
-      });
+      betterAuthPrincipal: {
+        userId: "usr_better",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth",
+        expiresAt: "2026-03-17T22:00:00.000Z",
+      },
+      betterAuthRequestedTenant: {
+        tenantId: "tenant_better",
+        source: "route",
+        authoritative: true,
+      },
+    });
 
-    const response = await isolatedApp.request('/v1/auth/session', undefined, createEnv());
+    const response = await isolatedApp.request("/v1/auth/session", undefined, createEnv());
     const body = await response.json<{
       status: string;
       tenantId: string;
@@ -265,49 +265,49 @@ describe('GET /', () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_better',
-      userId: 'usr_better',
-      expiresAt: '2026-03-17T22:00:00.000Z',
+      status: "authenticated",
+      tenantId: "tenant_better",
+      userId: "usr_better",
+      expiresAt: "2026-03-17T22:00:00.000Z",
     });
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
   });
 
-  it('keeps hosted auth routes Better Auth-only when no Better Auth session is present', async () => {
+  it("keeps hosted auth routes Better Auth-only when no Better Auth session is present", async () => {
     const { app: isolatedApp } = await loadAppWithMockedAuthProviders({
       betterAuthPrincipal: null,
       betterAuthRequestedTenant: null,
     });
 
-    const response = await isolatedApp.request('/v1/auth/session', undefined, createEnv());
+    const response = await isolatedApp.request("/v1/auth/session", undefined, createEnv());
     const body = await response.json<{
       error: string;
     }>();
 
     expect(response.status).toBe(401);
     expect(body).toEqual({
-      error: 'Not authenticated',
+      error: "Not authenticated",
     });
   });
 });
 
-describe('PUT /v1/admin/tenants/:tenantId', () => {
+describe("PUT /v1/admin/tenants/:tenantId", () => {
   beforeEach(() => {
     mockedUpsertTenant.mockReset();
   });
 
-  it('returns 503 when bootstrap admin token is not configured', async () => {
+  it("returns 503 when bootstrap admin token is not configured", async () => {
     const response = await app.request(
-      '/v1/admin/tenants/sakai',
+      "/v1/admin/tenants/sakai",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer any-token',
+          "content-type": "application/json",
+          authorization: "Bearer any-token",
         },
         body: JSON.stringify({
-          slug: 'sakai',
-          displayName: 'Sakai Project',
+          slug: "sakai",
+          displayName: "Sakai Project",
         }),
       },
       createEnv(),
@@ -315,26 +315,26 @@ describe('PUT /v1/admin/tenants/:tenantId', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(503);
-    expect(body.error).toBe('Bootstrap admin API is not configured');
+    expect(body.error).toBe("Bootstrap admin API is not configured");
     expect(mockedUpsertTenant).not.toHaveBeenCalled();
   });
 
-  it('returns 401 when bootstrap bearer token does not match', async () => {
+  it("returns 401 when bootstrap bearer token does not match", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     const response = await app.request(
-      '/v1/admin/tenants/sakai',
+      "/v1/admin/tenants/sakai",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer wrong-secret',
+          "content-type": "application/json",
+          authorization: "Bearer wrong-secret",
         },
         body: JSON.stringify({
-          slug: 'sakai',
-          displayName: 'Sakai Project',
+          slug: "sakai",
+          displayName: "Sakai Project",
         }),
       },
       env,
@@ -342,28 +342,28 @@ describe('PUT /v1/admin/tenants/:tenantId', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(401);
-    expect(body.error).toBe('Unauthorized');
+    expect(body.error).toBe("Unauthorized");
     expect(mockedUpsertTenant).not.toHaveBeenCalled();
   });
 
-  it('upserts tenant metadata through the admin API', async () => {
+  it("upserts tenant metadata through the admin API", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     mockedUpsertTenant.mockResolvedValue(sampleTenant());
 
     const response = await app.request(
-      '/v1/admin/tenants/sakai',
+      "/v1/admin/tenants/sakai",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer bootstrap-secret',
+          "content-type": "application/json",
+          authorization: "Bearer bootstrap-secret",
         },
         body: JSON.stringify({
-          slug: 'sakai',
-          displayName: 'Sakai Project',
+          slug: "sakai",
+          displayName: "Sakai Project",
         }),
       },
       env,
@@ -371,39 +371,39 @@ describe('PUT /v1/admin/tenants/:tenantId', () => {
     const body = await response.json<{ tenant: TenantRecord }>();
 
     expect(response.status).toBe(201);
-    expect(body.tenant.id).toBe('sakai');
-    expect(body.tenant.didWeb).toBe('did:web:credtrail.test:sakai');
+    expect(body.tenant.id).toBe("sakai");
+    expect(body.tenant.didWeb).toBe("did:web:credtrail.test:sakai");
     expect(mockedUpsertTenant).toHaveBeenCalledWith(fakeDb, {
-      id: 'sakai',
-      slug: 'sakai',
-      displayName: 'Sakai Project',
-      planTier: 'team',
-      issuerDomain: 'sakai.credtrail.test',
-      didWeb: 'did:web:credtrail.test:sakai',
+      id: "sakai",
+      slug: "sakai",
+      displayName: "Sakai Project",
+      planTier: "team",
+      issuerDomain: "sakai.credtrail.test",
+      didWeb: "did:web:credtrail.test:sakai",
       isActive: undefined,
     });
   });
 
-  it('returns 409 when tenant slug/domain uniqueness is violated', async () => {
+  it("returns 409 when tenant slug/domain uniqueness is violated", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     mockedUpsertTenant.mockRejectedValue(
       new Error('duplicate key value violates unique constraint "tenants_slug_key"'),
     );
 
     const response = await app.request(
-      '/v1/admin/tenants/sakai',
+      "/v1/admin/tenants/sakai",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer bootstrap-secret',
+          "content-type": "application/json",
+          authorization: "Bearer bootstrap-secret",
         },
         body: JSON.stringify({
-          slug: 'sakai',
-          displayName: 'Sakai Project',
+          slug: "sakai",
+          displayName: "Sakai Project",
         }),
       },
       env,
@@ -411,42 +411,42 @@ describe('PUT /v1/admin/tenants/:tenantId', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(409);
-    expect(body.error).toBe('Tenant slug or issuer domain is already in use');
+    expect(body.error).toBe("Tenant slug or issuer domain is already in use");
   });
 });
 
-describe('PUT /v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', () => {
+describe("PUT /v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId", () => {
   beforeEach(() => {
     mockedUpsertBadgeTemplateById.mockReset();
   });
 
-  it('upserts a template through the admin API', async () => {
+  it("upserts a template through the admin API", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     mockedUpsertBadgeTemplateById.mockResolvedValue(
       sampleBadgeTemplate({
-        id: 'badge_template_sakai_1000',
-        tenantId: 'sakai',
-        slug: 'sakai-1000-commits-contributor',
+        id: "badge_template_sakai_1000",
+        tenantId: "sakai",
+        slug: "sakai-1000-commits-contributor",
       }),
     );
 
     const response = await app.request(
-      '/v1/admin/tenants/sakai/badge-templates/badge_template_sakai_1000',
+      "/v1/admin/tenants/sakai/badge-templates/badge_template_sakai_1000",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer bootstrap-secret',
+          "content-type": "application/json",
+          authorization: "Bearer bootstrap-secret",
         },
         body: JSON.stringify({
-          slug: 'sakai-1000-commits-contributor',
-          title: 'Sakai 1000+ Commits Contributor',
-          description: 'Awarded for contributing 1000+ commits to Sakai.',
-          criteriaUri: 'https://github.com/sakaiproject/sakai',
-          imageUri: 'https://avatars.githubusercontent.com/u/429529?s=200&v=4',
+          slug: "sakai-1000-commits-contributor",
+          title: "Sakai 1000+ Commits Contributor",
+          description: "Awarded for contributing 1000+ commits to Sakai.",
+          criteriaUri: "https://github.com/sakaiproject/sakai",
+          imageUri: "https://avatars.githubusercontent.com/u/429529?s=200&v=4",
         }),
       },
       env,
@@ -454,18 +454,18 @@ describe('PUT /v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', () 
     const body = await response.json<{ tenantId: string; template: BadgeTemplateRecord }>();
 
     expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('sakai');
-    expect(body.template.id).toBe('badge_template_sakai_1000');
+    expect(body.tenantId).toBe("sakai");
+    expect(body.template.id).toBe("badge_template_sakai_1000");
     expect(mockedUpsertBadgeTemplateById).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        id: 'badge_template_sakai_1000',
-        tenantId: 'sakai',
-        slug: 'sakai-1000-commits-contributor',
-        title: 'Sakai 1000+ Commits Contributor',
-        description: 'Awarded for contributing 1000+ commits to Sakai.',
-        criteriaUri: 'https://github.com/sakaiproject/sakai',
-        imageUri: 'https://avatars.githubusercontent.com/u/429529?s=200&v=4',
+        id: "badge_template_sakai_1000",
+        tenantId: "sakai",
+        slug: "sakai-1000-commits-contributor",
+        title: "Sakai 1000+ Commits Contributor",
+        description: "Awarded for contributing 1000+ commits to Sakai.",
+        criteriaUri: "https://github.com/sakaiproject/sakai",
+        imageUri: "https://avatars.githubusercontent.com/u/429529?s=200&v=4",
       }),
     );
   });

@@ -1,4 +1,4 @@
-import { captureSentryException } from '@credtrail/core-domain';
+import { captureSentryException } from "@credtrail/core-domain";
 import {
   addLearnerIdentityAlias,
   ensureTenantMembership,
@@ -8,7 +8,7 @@ import {
   upsertUserByEmail,
   type SqlDatabase,
   type TenantMembershipRole,
-} from '@credtrail/db';
+} from "@credtrail/db";
 import {
   LTI_CLAIM_CONTEXT,
   LTI_CLAIM_VERSION,
@@ -26,11 +26,11 @@ import {
   parseLtiOidcLoginInitiationRequest,
   resolveLtiRoleKind,
   type LtiLaunchClaims,
-} from '@credtrail/lti';
-import type { Hono } from 'hono';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import type { AuthenticatedPrincipal } from '../auth/auth-context';
-import type { LtiSessionInput } from '../auth/auth-provider';
+} from "@credtrail/lti";
+import type { Hono } from "hono";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import type { AuthenticatedPrincipal } from "../auth/auth-context";
+import type { LtiSessionInput } from "../auth/auth-provider";
 import {
   LTI_LAUNCH_PATH,
   LTI_OIDC_LOGIN_PATH,
@@ -39,7 +39,7 @@ import {
   LTI_OIDC_RESPONSE_TYPE,
   LTI_OIDC_SCOPE,
   LTI_STATE_TTL_SECONDS,
-} from '../lti/constants';
+} from "../lti/constants";
 import {
   ltiAudienceIncludesClientId,
   ltiDisplayNameFromClaims,
@@ -57,15 +57,15 @@ import {
   type LtiIssuerRegistry,
   type LtiStatePayload,
   type LtiStateValidationResult,
-} from '../lti/lti-helpers';
-import { fetchNrpsRoster, parseLtiNrpsNamesRoleServiceClaim } from '../lti/nrps';
+} from "../lti/lti-helpers";
+import { fetchNrpsRoster, parseLtiNrpsNamesRoleServiceClaim } from "../lti/nrps";
 import {
   ltiDeepLinkSelectionPage,
   ltiLaunchResultPage,
   type LtiBulkIssuanceView,
-} from '../lti/pages';
-import { parseCompactJwsHeaderObject, parseCompactJwsPayloadObject } from '../ob3/oauth-utils';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+} from "../lti/pages";
+import { parseCompactJwsHeaderObject, parseCompactJwsPayloadObject } from "../ob3/oauth-utils";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
 interface RegisterLtiRoutesInput {
   app: Hono<AppEnv>;
@@ -106,13 +106,13 @@ interface LtiDeepLinkingSettings {
 }
 
 const base64UrlEncodeBytes = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const base64UrlEncodeJson = (value: Record<string, unknown>): string => {
@@ -121,8 +121,8 @@ const base64UrlEncodeJson = (value: Record<string, unknown>): string => {
 
 const unsignedCompactJwt = (payload: Record<string, unknown>): string => {
   const header = base64UrlEncodeJson({
-    alg: 'none',
-    typ: 'JWT',
+    alg: "none",
+    typ: "JWT",
   });
   const encodedPayload = base64UrlEncodeJson(payload);
 
@@ -151,8 +151,8 @@ const parseDeepLinkingSettings = (claimValue: unknown): LtiDeepLinkingSettings |
   }
 
   if (
-    parsedDeepLinkReturnUrl.protocol !== 'https:' &&
-    parsedDeepLinkReturnUrl.protocol !== 'http:'
+    parsedDeepLinkReturnUrl.protocol !== "https:" &&
+    parsedDeepLinkReturnUrl.protocol !== "http:"
   ) {
     return null;
   }
@@ -197,7 +197,7 @@ const parseDeepLinkingSettings = (claimValue: unknown): LtiDeepLinkingSettings |
 const badgeTemplateIdFromTargetLinkUri = (targetLinkUri: string): string | null => {
   try {
     const parsed = new URL(targetLinkUri);
-    const badgeTemplateId = parsed.searchParams.get('badgeTemplateId')?.trim() ?? '';
+    const badgeTemplateId = parsed.searchParams.get("badgeTemplateId")?.trim() ?? "";
     return badgeTemplateId.length === 0 ? null : badgeTemplateId;
   } catch {
     return null;
@@ -229,7 +229,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         context: observabilityContext(c.env),
         dsn: c.env.SENTRY_DSN,
         error,
-        message: 'LTI issuer registry configuration is invalid',
+        message: "LTI issuer registry configuration is invalid",
         tags: {
           path: LTI_OIDC_LOGIN_PATH,
           method: c.req.method,
@@ -237,7 +237,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       });
       return c.json(
         {
-          error: 'LTI issuer registry configuration is invalid',
+          error: "LTI issuer registry configuration is invalid",
         },
         500,
       );
@@ -250,7 +250,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     } catch {
       return c.json(
         {
-          error: 'Invalid LTI OIDC login initiation request',
+          error: "Invalid LTI OIDC login initiation request",
         },
         400,
       );
@@ -261,7 +261,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (issuerEntry === undefined) {
       return c.json(
         {
-          error: 'Unknown LTI issuer',
+          error: "Unknown LTI issuer",
         },
         400,
       );
@@ -272,7 +272,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (loginRequest.client_id !== undefined && loginRequest.client_id !== issuerEntry.clientId) {
       return c.json(
         {
-          error: 'client_id does not match configured issuer registration',
+          error: "client_id does not match configured issuer registration",
         },
         400,
       );
@@ -301,25 +301,25 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     };
     const stateToken = await signLtiStatePayload(statePayload, ltiStateSigningSecret(c.env));
     const authorizationRequestUrl = new URL(issuerEntry.authorizationEndpoint);
-    authorizationRequestUrl.searchParams.set('scope', LTI_OIDC_SCOPE);
-    authorizationRequestUrl.searchParams.set('response_type', LTI_OIDC_RESPONSE_TYPE);
-    authorizationRequestUrl.searchParams.set('response_mode', LTI_OIDC_RESPONSE_MODE);
-    authorizationRequestUrl.searchParams.set('prompt', LTI_OIDC_PROMPT);
-    authorizationRequestUrl.searchParams.set('client_id', clientId);
+    authorizationRequestUrl.searchParams.set("scope", LTI_OIDC_SCOPE);
+    authorizationRequestUrl.searchParams.set("response_type", LTI_OIDC_RESPONSE_TYPE);
+    authorizationRequestUrl.searchParams.set("response_mode", LTI_OIDC_RESPONSE_MODE);
+    authorizationRequestUrl.searchParams.set("prompt", LTI_OIDC_PROMPT);
+    authorizationRequestUrl.searchParams.set("client_id", clientId);
     authorizationRequestUrl.searchParams.set(
-      'redirect_uri',
+      "redirect_uri",
       new URL(LTI_LAUNCH_PATH, c.req.url).toString(),
     );
-    authorizationRequestUrl.searchParams.set('login_hint', loginRequest.login_hint);
-    authorizationRequestUrl.searchParams.set('state', stateToken);
-    authorizationRequestUrl.searchParams.set('nonce', nonce);
+    authorizationRequestUrl.searchParams.set("login_hint", loginRequest.login_hint);
+    authorizationRequestUrl.searchParams.set("state", stateToken);
+    authorizationRequestUrl.searchParams.set("nonce", nonce);
 
     if (loginRequest.lti_message_hint !== undefined) {
-      authorizationRequestUrl.searchParams.set('lti_message_hint', loginRequest.lti_message_hint);
+      authorizationRequestUrl.searchParams.set("lti_message_hint", loginRequest.lti_message_hint);
     }
 
     if (loginRequest.lti_deployment_id !== undefined) {
-      authorizationRequestUrl.searchParams.set('lti_deployment_id', loginRequest.lti_deployment_id);
+      authorizationRequestUrl.searchParams.set("lti_deployment_id", loginRequest.lti_deployment_id);
     }
 
     return c.redirect(authorizationRequestUrl.toString(), 302);
@@ -334,7 +334,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (formInput.idToken === null || formInput.idToken.trim().length === 0) {
       return c.json(
         {
-          error: 'id_token is required',
+          error: "id_token is required",
         },
         400,
       );
@@ -343,7 +343,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (formInput.state === null || formInput.state.trim().length === 0) {
       return c.json(
         {
-          error: 'state is required',
+          error: "state is required",
         },
         400,
       );
@@ -358,7 +358,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         context: observabilityContext(c.env),
         dsn: c.env.SENTRY_DSN,
         error,
-        message: 'LTI issuer registry configuration is invalid',
+        message: "LTI issuer registry configuration is invalid",
         tags: {
           path: LTI_LAUNCH_PATH,
           method: c.req.method,
@@ -366,7 +366,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       });
       return c.json(
         {
-          error: 'LTI issuer registry configuration is invalid',
+          error: "LTI issuer registry configuration is invalid",
         },
         500,
       );
@@ -379,7 +379,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       nowIso,
     );
 
-    if (validatedState.status !== 'ok') {
+    if (validatedState.status !== "ok") {
       return c.json(
         {
           error: `Invalid launch state: ${validatedState.reason}`,
@@ -393,7 +393,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (issuerEntry === undefined) {
       return c.json(
         {
-          error: 'No issuer registration configured for state.iss',
+          error: "No issuer registration configured for state.iss",
         },
         400,
       );
@@ -405,7 +405,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (idTokenHeader === null || idTokenPayload === null) {
       return c.json(
         {
-          error: 'id_token must be a compact JWT with valid JSON header and payload',
+          error: "id_token must be a compact JWT with valid JSON header and payload",
         },
         400,
       );
@@ -413,7 +413,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
 
     const algorithm = asNonEmptyString(idTokenHeader.alg);
 
-    if (algorithm === null || algorithm.toLowerCase() === 'none') {
+    if (algorithm === null || algorithm.toLowerCase() === "none") {
       return c.json(
         {
           error: 'id_token must specify a JOSE alg and must not use "none"',
@@ -426,7 +426,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       return c.json(
         {
           error:
-            'LTI issuer requires signature verification configuration; set allowUnsignedIdToken only for test launches',
+            "LTI issuer requires signature verification configuration; set allowUnsignedIdToken only for test launches",
         },
         501,
       );
@@ -439,7 +439,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     } catch {
       return c.json(
         {
-          error: 'id_token launch claims are invalid for LTI 1.3',
+          error: "id_token launch claims are invalid for LTI 1.3",
         },
         400,
       );
@@ -448,7 +448,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (normalizeLtiIssuer(launchClaims.iss) !== normalizeLtiIssuer(validatedState.payload.iss)) {
       return c.json(
         {
-          error: 'id_token issuer does not match state issuer',
+          error: "id_token issuer does not match state issuer",
         },
         400,
       );
@@ -457,7 +457,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (!ltiAudienceIncludesClientId(launchClaims.aud, validatedState.payload.clientId)) {
       return c.json(
         {
-          error: 'id_token aud does not include configured client_id',
+          error: "id_token aud does not include configured client_id",
         },
         400,
       );
@@ -466,7 +466,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (launchClaims.nonce !== validatedState.payload.nonce) {
       return c.json(
         {
-          error: 'id_token nonce does not match launch state nonce',
+          error: "id_token nonce does not match launch state nonce",
         },
         400,
       );
@@ -477,7 +477,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (launchClaims.exp <= nowEpochSeconds) {
       return c.json(
         {
-          error: 'id_token is expired',
+          error: "id_token is expired",
         },
         400,
       );
@@ -486,7 +486,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     if (launchClaims.iat > nowEpochSeconds + 60) {
       return c.json(
         {
-          error: 'id_token iat is in the future',
+          error: "id_token iat is in the future",
         },
         400,
       );
@@ -498,7 +498,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     ) {
       return c.json(
         {
-          error: 'id_token deployment_id does not match launch initiation',
+          error: "id_token deployment_id does not match launch initiation",
         },
         400,
       );
@@ -510,7 +510,9 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       validatedState.payload.targetLinkUri,
     );
     const normalizedClaimTargetLinkUri =
-      targetLinkUriClaim === undefined ? null : normalizeAbsoluteUrlForComparison(targetLinkUriClaim);
+      targetLinkUriClaim === undefined
+        ? null
+        : normalizeAbsoluteUrlForComparison(targetLinkUriClaim);
 
     if (
       targetLinkUriClaim !== undefined &&
@@ -519,7 +521,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     ) {
       return c.json(
         {
-          error: 'id_token target_link_uri does not match launch initiation',
+          error: "id_token target_link_uri does not match launch initiation",
         },
         400,
       );
@@ -535,16 +537,16 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       if (resourceLinkClaim === undefined || asNonEmptyString(resourceLinkClaim.id) === null) {
         return c.json(
           {
-            error: 'id_token for LtiResourceLinkRequest must include resource_link.id',
+            error: "id_token for LtiResourceLinkRequest must include resource_link.id",
           },
           400,
         );
       }
     } else if (messageType === LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST) {
-      if (roleKind !== 'instructor') {
+      if (roleKind !== "instructor") {
         return c.json(
           {
-            error: 'LtiDeepLinkingRequest requires instructor role',
+            error: "LtiDeepLinkingRequest requires instructor role",
           },
           403,
         );
@@ -555,7 +557,8 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       if (deepLinkingSettings === null) {
         return c.json(
           {
-            error: 'id_token for LtiDeepLinkingRequest must include deep_linking_settings.deep_link_return_url',
+            error:
+              "id_token for LtiDeepLinkingRequest must include deep_linking_settings.deep_link_return_url",
           },
           400,
         );
@@ -563,11 +566,11 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
 
       if (
         deepLinkingSettings.acceptTypes !== undefined &&
-        !deepLinkingSettings.acceptTypes.includes('ltiResourceLink')
+        !deepLinkingSettings.acceptTypes.includes("ltiResourceLink")
       ) {
         return c.json(
           {
-            error: 'deep_linking_settings.accept_types must include ltiResourceLink',
+            error: "deep_linking_settings.accept_types must include ltiResourceLink",
           },
           400,
         );
@@ -592,7 +595,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     try {
       const learnerProfile = await resolveLearnerProfileForIdentity(db, {
         tenantId,
-        identityType: 'saml_subject',
+        identityType: "saml_subject",
         identityValue: federatedSubject,
         ...(displayName === undefined ? {} : { displayName }),
       });
@@ -603,19 +606,19 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       if (claimedEmail !== null) {
         const existingEmailProfile = await findLearnerProfileByIdentity(db, {
           tenantId,
-          identityType: 'email',
+          identityType: "email",
           identityValue: claimedEmail,
         });
 
         if (existingEmailProfile !== null && existingEmailProfile.id !== learnerProfile.id) {
-          throw new Error('LTI email claim is already linked to a different learner profile');
+          throw new Error("LTI email claim is already linked to a different learner profile");
         }
 
         if (existingEmailProfile === null) {
           await addLearnerIdentityAlias(db, {
             tenantId,
             learnerProfileId: learnerProfile.id,
-            identityType: 'email',
+            identityType: "email",
             identityValue: claimedEmail,
             isPrimary: false,
             isVerified: true,
@@ -628,19 +631,22 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       if (sourcedId !== null) {
         const existingSourcedIdProfile = await findLearnerProfileByIdentity(db, {
           tenantId,
-          identityType: 'sourced_id',
+          identityType: "sourced_id",
           identityValue: sourcedId,
         });
 
-        if (existingSourcedIdProfile !== null && existingSourcedIdProfile.id !== learnerProfile.id) {
-          throw new Error('LTI sourcedId claim is already linked to a different learner profile');
+        if (
+          existingSourcedIdProfile !== null &&
+          existingSourcedIdProfile.id !== learnerProfile.id
+        ) {
+          throw new Error("LTI sourcedId claim is already linked to a different learner profile");
         }
 
         if (existingSourcedIdProfile === null) {
           await addLearnerIdentityAlias(db, {
             tenantId,
             learnerProfileId: learnerProfile.id,
-            identityType: 'sourced_id',
+            identityType: "sourced_id",
             identityValue: sourcedId,
             isPrimary: false,
             isVerified: true,
@@ -659,7 +665,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
 
       const desiredRole = ltiMembershipRoleFromRoleKind(roleKind);
 
-      if (desiredRole === 'issuer' && linkedMembershipRole === 'viewer') {
+      if (desiredRole === "issuer" && linkedMembershipRole === "viewer") {
         const promotedMembership = await upsertTenantMembershipRoleWithInput(db, {
           tenantId,
           userId: user.id,
@@ -672,7 +678,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         context: observabilityContext(c.env),
         dsn: c.env.SENTRY_DSN,
         error,
-        message: 'LTI launch could not be linked to a local user/session',
+        message: "LTI launch could not be linked to a local user/session",
         tags: {
           path: LTI_LAUNCH_PATH,
           method: c.req.method,
@@ -685,7 +691,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       });
       return c.json(
         {
-          error: 'Unable to link LTI launch to local account',
+          error: "Unable to link LTI launch to local account",
         },
         500,
       );
@@ -697,23 +703,21 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
     });
 
     const dashboardPath = ltiLearnerDashboardPath(tenantId);
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
     let bulkIssuanceView: LtiBulkIssuanceView | null = null;
 
-    if (messageType === LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST && roleKind === 'instructor') {
+    if (messageType === LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST && roleKind === "instructor") {
       const nrpsClaim = parseLtiNrpsNamesRoleServiceClaim(launchClaims);
       const contextClaim = asJsonObject(launchClaims[LTI_CLAIM_CONTEXT]);
       const courseContextTitle =
-        asNonEmptyString(contextClaim?.title) ??
-        asNonEmptyString(contextClaim?.label) ??
-        null;
+        asNonEmptyString(contextClaim?.title) ?? asNonEmptyString(contextClaim?.label) ?? null;
       const courseContextId = asNonEmptyString(contextClaim?.id);
       const badgeTemplateId = badgeTemplateIdFromTargetLinkUri(resolvedTargetLinkUri);
 
       if (nrpsClaim === null) {
         bulkIssuanceView = {
-          status: 'unavailable',
-          message: 'LMS launch did not include NRPS names/roles service claim details.',
+          status: "unavailable",
+          message: "LMS launch did not include NRPS names/roles service claim details.",
           badgeTemplateId,
           courseContextTitle,
           courseContextId,
@@ -727,9 +731,9 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
         issuerEntry.clientSecret === undefined
       ) {
         bulkIssuanceView = {
-          status: 'unavailable',
+          status: "unavailable",
           message:
-            'NRPS roster unavailable: issuer registration is missing token endpoint and client secret.',
+            "NRPS roster unavailable: issuer registration is missing token endpoint and client secret.",
           badgeTemplateId,
           courseContextTitle,
           courseContextId,
@@ -757,7 +761,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
             };
           });
           bulkIssuanceView = {
-            status: 'ready',
+            status: "ready",
             message: `Loaded ${String(learnerMembers.length)} learner members from LMS NRPS roster.`,
             badgeTemplateId,
             courseContextTitle,
@@ -772,7 +776,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
             context: observabilityContext(c.env),
             dsn: c.env.SENTRY_DSN,
             error,
-            message: 'NRPS roster pull failed for LTI launch',
+            message: "NRPS roster pull failed for LTI launch",
             tags: {
               path: LTI_LAUNCH_PATH,
               method: c.req.method,
@@ -785,8 +789,8 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
             },
           });
           bulkIssuanceView = {
-            status: 'error',
-            message: 'NRPS roster request failed for this launch. Check issuer token settings.',
+            status: "error",
+            message: "NRPS roster request failed for this launch. Check issuer token settings.",
             badgeTemplateId,
             courseContextTitle,
             courseContextId,
@@ -807,7 +811,7 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
       const responseTokenIssuedAtEpoch = Math.floor(Date.parse(nowIso) / 1000);
       const deepLinkOptions = badgeTemplates.map((badgeTemplate) => {
         const launchUrl = new URL(resolvedTargetLinkUri);
-        launchUrl.searchParams.set('badgeTemplateId', badgeTemplate.id);
+        launchUrl.searchParams.set("badgeTemplateId", badgeTemplate.id);
         const responsePayload: Record<string, unknown> = {
           iss: new URL(c.req.url).origin,
           aud: validatedState.payload.clientId,
@@ -815,11 +819,11 @@ export const registerLtiRoutes = (input: RegisterLtiRoutesInput): void => {
           exp: responseTokenIssuedAtEpoch + 300,
           nonce: validatedState.payload.nonce,
           [LTI_CLAIM_DEPLOYMENT_ID]: launchClaims[LTI_CLAIM_DEPLOYMENT_ID],
-          [LTI_CLAIM_MESSAGE_TYPE]: 'LtiDeepLinkingResponse',
+          [LTI_CLAIM_MESSAGE_TYPE]: "LtiDeepLinkingResponse",
           [LTI_CLAIM_VERSION]: LTI_VERSION_1P3P0,
           [LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS]: [
             {
-              type: 'ltiResourceLink',
+              type: "ltiResourceLink",
               title: badgeTemplate.title,
               text:
                 badgeTemplate.description ??

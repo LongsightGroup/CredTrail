@@ -1,12 +1,12 @@
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
-import { createCanvasGradebookProvider } from './canvas-gradebook-provider';
-import { createSakaiGradebookProvider } from './sakai-gradebook-provider';
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
+import { createCanvasGradebookProvider } from "./canvas-gradebook-provider";
+import { createSakaiGradebookProvider } from "./sakai-gradebook-provider";
 import {
   GRADEBOOK_PROVIDER_KINDS,
   type GradebookProvider,
   type GradebookProviderConfig,
   type GradebookProviderKind,
-} from './gradebook-types';
+} from "./gradebook-types";
 
 const isGradebookProviderKind = (value: string): value is GradebookProviderKind => {
   return (GRADEBOOK_PROVIDER_KINDS as readonly string[]).includes(value);
@@ -26,31 +26,33 @@ export const parseGradebookProviderConfig = (input: unknown): GradebookProviderC
   const parsedConfig = asJsonObject(input);
 
   if (parsedConfig === null) {
-    throw new Error('Gradebook provider config must be a JSON object');
+    throw new Error("Gradebook provider config must be a JSON object");
   }
 
   const kindRaw = asNonEmptyString(parsedConfig.kind);
 
   if (kindRaw === null || !isGradebookProviderKind(kindRaw)) {
     throw new Error(
-      `Gradebook provider kind must be one of: ${GRADEBOOK_PROVIDER_KINDS.join(', ')}`,
+      `Gradebook provider kind must be one of: ${GRADEBOOK_PROVIDER_KINDS.join(", ")}`,
     );
   }
 
   return {
     kind: kindRaw,
-    apiBaseUrl: parseRequiredField(parsedConfig.apiBaseUrl, 'apiBaseUrl'),
-    accessToken: parseRequiredField(parsedConfig.accessToken, 'accessToken'),
+    apiBaseUrl: parseRequiredField(parsedConfig.apiBaseUrl, "apiBaseUrl"),
+    accessToken: parseRequiredField(parsedConfig.accessToken, "accessToken"),
   };
 };
 
-export const parseGradebookProviderConfigJson = (rawConfigJson: string): GradebookProviderConfig => {
+export const parseGradebookProviderConfigJson = (
+  rawConfigJson: string,
+): GradebookProviderConfig => {
   let parsed: unknown;
 
   try {
     parsed = JSON.parse(rawConfigJson);
   } catch {
-    throw new Error('Gradebook provider config JSON is invalid');
+    throw new Error("Gradebook provider config JSON is invalid");
   }
 
   return parseGradebookProviderConfig(parsed);
@@ -63,12 +65,12 @@ export interface CreateGradebookProviderInput {
 
 export const createGradebookProvider = (input: CreateGradebookProviderInput): GradebookProvider => {
   switch (input.config.kind) {
-    case 'canvas':
+    case "canvas":
       return createCanvasGradebookProvider({
         config: input.config,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),
       });
-    case 'sakai':
+    case "sakai":
       return createSakaiGradebookProvider({
         config: input.config,
         ...(input.fetchImpl === undefined ? {} : { fetchImpl: input.fetchImpl }),

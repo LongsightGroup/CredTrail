@@ -1,17 +1,21 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 
 interface CreateJsonObjectLoaderInput<BindingsType> {
-  appRequest: (pathWithQuery: string, init: RequestInit, bindings: BindingsType) => Promise<Response>;
+  appRequest: (
+    pathWithQuery: string,
+    init: RequestInit,
+    bindings: BindingsType,
+  ) => Promise<Response>;
   asJsonObject: (value: unknown) => JsonObject | null;
 }
 
 type JsonObjectLoadResult =
   | {
-      status: 'ok';
+      status: "ok";
       value: JsonObject;
     }
   | {
-      status: 'error';
+      status: "error";
       reason: string;
     };
 
@@ -29,8 +33,8 @@ export const createLoadJsonObjectFromUrl = <BindingsType>(
       parsedResourceUrl = new URL(resourceUrl);
     } catch {
       return {
-        status: 'error',
-        reason: 'URL is invalid',
+        status: "error",
+        reason: "URL is invalid",
       };
     }
 
@@ -44,7 +48,7 @@ export const createLoadJsonObjectFromUrl = <BindingsType>(
         response = await input.appRequest(
           pathWithQuery,
           {
-            method: 'GET',
+            method: "GET",
             headers: {
               accept: acceptHeader,
             },
@@ -60,14 +64,14 @@ export const createLoadJsonObjectFromUrl = <BindingsType>(
       }
     } catch {
       return {
-        status: 'error',
-        reason: 'request failed',
+        status: "error",
+        reason: "request failed",
       };
     }
 
     if (!response.ok) {
       return {
-        status: 'error',
+        status: "error",
         reason: `HTTP ${String(response.status)}`,
       };
     }
@@ -77,13 +81,13 @@ export const createLoadJsonObjectFromUrl = <BindingsType>(
 
     if (responseObject === null) {
       return {
-        status: 'error',
-        reason: 'response is not a JSON object',
+        status: "error",
+        reason: "response is not a JSON object",
       };
     }
 
     return {
-      status: 'ok',
+      status: "ok",
       value: responseObject,
     };
   };

@@ -1,7 +1,7 @@
-import type { LtiIssuerRegistrationRecord, TenantMembershipRole } from '@credtrail/db';
-import { LTI_CLAIM_LIS, type LtiLaunchClaims, type LtiRoleKind } from '@credtrail/lti';
-import type { AppBindings, AppContext } from '../app';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import type { LtiIssuerRegistrationRecord, TenantMembershipRole } from "@credtrail/db";
+import { LTI_CLAIM_LIS, type LtiLaunchClaims, type LtiRoleKind } from "@credtrail/lti";
+import type { AppBindings, AppContext } from "../app";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
 export interface LtiIssuerRegistryEntry {
   authorizationEndpoint: string;
@@ -28,11 +28,11 @@ export interface LtiStatePayload {
 
 export type LtiStateValidationResult =
   | {
-      status: 'ok';
+      status: "ok";
       payload: LtiStatePayload;
     }
   | {
-      status: 'invalid';
+      status: "invalid";
       reason: string;
     };
 
@@ -111,13 +111,13 @@ const parseLtiStatePayload = (input: unknown): LtiStatePayload | null => {
 };
 
 const bytesToBase64Url = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const textToBase64Url = (value: string): string => {
@@ -125,8 +125,8 @@ const textToBase64Url = (value: string): string => {
 };
 
 const base64UrlToText = (value: string): string | null => {
-  const normalizedBase64 = value.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedBase64 = `${normalizedBase64}${'='.repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
+  const normalizedBase64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = `${normalizedBase64}${"=".repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
 
   try {
     return atob(paddedBase64);
@@ -140,13 +140,13 @@ const isLikelyEmailAddress = (value: string): boolean => {
 };
 
 export const normalizeLtiIssuer = (issuer: string): string => {
-  return issuer.trim().replace(/\/+$/g, '');
+  return issuer.trim().replace(/\/+$/g, "");
 };
 
 export const isAbsoluteHttpUrl = (value: string): boolean => {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -156,18 +156,20 @@ export const normalizeAbsoluteUrlForComparison = (value: string): string | null 
   try {
     const parsed = new URL(value);
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
 
-    parsed.hash = '';
+    parsed.hash = "";
     return parsed.toString();
   } catch {
     return null;
   }
 };
 
-export const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): LtiIssuerRegistry => {
+export const parseLtiIssuerRegistryFromEnv = (
+  rawRegistry: string | undefined,
+): LtiIssuerRegistry => {
   if (rawRegistry === undefined || rawRegistry.trim().length === 0) {
     return {};
   }
@@ -177,13 +179,13 @@ export const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): 
   try {
     parsedRegistry = JSON.parse(rawRegistry);
   } catch {
-    throw new Error('LTI_ISSUER_REGISTRY_JSON is not valid JSON');
+    throw new Error("LTI_ISSUER_REGISTRY_JSON is not valid JSON");
   }
 
   const registryObject = asJsonObject(parsedRegistry);
 
   if (registryObject === null) {
-    throw new Error('LTI_ISSUER_REGISTRY_JSON must be a JSON object keyed by issuer URL');
+    throw new Error("LTI_ISSUER_REGISTRY_JSON must be a JSON object keyed by issuer URL");
   }
 
   const registry: LtiIssuerRegistry = {};
@@ -218,7 +220,7 @@ export const parseLtiIssuerRegistryFromEnv = (rawRegistry: string | undefined): 
       throw new Error(`LTI_ISSUER_REGISTRY_JSON["${issuer}"].tenantId must be a non-empty string`);
     }
 
-    if (allowUnsignedIdToken !== undefined && typeof allowUnsignedIdToken !== 'boolean') {
+    if (allowUnsignedIdToken !== undefined && typeof allowUnsignedIdToken !== "boolean") {
       throw new Error(
         `LTI_ISSUER_REGISTRY_JSON["${issuer}"].allowUnsignedIdToken must be a boolean when provided`,
       );
@@ -332,7 +334,7 @@ export const validateLtiStateToken = async (
   nowIso: string,
   sha256Base64Url: (value: string) => Promise<string>,
 ): Promise<LtiStateValidationResult> => {
-  const [encodedPayload, providedSignature] = stateToken.split('.', 2);
+  const [encodedPayload, providedSignature] = stateToken.split(".", 2);
 
   if (
     encodedPayload === undefined ||
@@ -341,8 +343,8 @@ export const validateLtiStateToken = async (
     providedSignature.length === 0
   ) {
     return {
-      status: 'invalid',
-      reason: 'state token is malformed',
+      status: "invalid",
+      reason: "state token is malformed",
     };
   }
 
@@ -350,8 +352,8 @@ export const validateLtiStateToken = async (
 
   if (providedSignature !== expectedSignature) {
     return {
-      status: 'invalid',
-      reason: 'state token signature is invalid',
+      status: "invalid",
+      reason: "state token signature is invalid",
     };
   }
 
@@ -359,8 +361,8 @@ export const validateLtiStateToken = async (
 
   if (payloadJson === null) {
     return {
-      status: 'invalid',
-      reason: 'state token payload is not valid base64url data',
+      status: "invalid",
+      reason: "state token payload is not valid base64url data",
     };
   }
 
@@ -370,8 +372,8 @@ export const validateLtiStateToken = async (
     parsedPayload = JSON.parse(payloadJson);
   } catch {
     return {
-      status: 'invalid',
-      reason: 'state token payload is not valid JSON',
+      status: "invalid",
+      reason: "state token payload is not valid JSON",
     };
   }
 
@@ -379,8 +381,8 @@ export const validateLtiStateToken = async (
 
   if (payload === null) {
     return {
-      status: 'invalid',
-      reason: 'state token payload failed validation',
+      status: "invalid",
+      reason: "state token payload failed validation",
     };
   }
 
@@ -389,22 +391,22 @@ export const validateLtiStateToken = async (
 
   if (!Number.isFinite(nowMs) || !Number.isFinite(expiresAtMs) || nowMs >= expiresAtMs) {
     return {
-      status: 'invalid',
-      reason: 'state token is expired',
+      status: "invalid",
+      reason: "state token is expired",
     };
   }
 
   return {
-    status: 'ok',
+    status: "ok",
     payload,
   };
 };
 
 export const ltiAudienceIncludesClientId = (
-  audienceClaim: LtiLaunchClaims['aud'],
+  audienceClaim: LtiLaunchClaims["aud"],
   clientId: string,
 ): boolean => {
-  if (typeof audienceClaim === 'string') {
+  if (typeof audienceClaim === "string") {
     return audienceClaim === clientId;
   }
 
@@ -412,7 +414,7 @@ export const ltiAudienceIncludesClientId = (
 };
 
 export const ltiMembershipRoleFromRoleKind = (roleKind: LtiRoleKind): TenantMembershipRole => {
-  return roleKind === 'instructor' ? 'issuer' : 'viewer';
+  return roleKind === "instructor" ? "issuer" : "viewer";
 };
 
 export const ltiFederatedSubjectIdentity = (issuer: string, subjectId: string): string => {
@@ -465,30 +467,30 @@ export const ltiLearnerDashboardPath = (tenantId: string): string => {
 };
 
 export const ltiLoginInputFromRequest = async (c: AppContext): Promise<Record<string, string>> => {
-  if (c.req.method === 'GET') {
+  if (c.req.method === "GET") {
     return {
-      iss: c.req.query('iss') ?? '',
-      login_hint: c.req.query('login_hint') ?? '',
-      target_link_uri: c.req.query('target_link_uri') ?? '',
-      ...(c.req.query('client_id') === undefined
+      iss: c.req.query("iss") ?? "",
+      login_hint: c.req.query("login_hint") ?? "",
+      target_link_uri: c.req.query("target_link_uri") ?? "",
+      ...(c.req.query("client_id") === undefined
         ? {}
-        : { client_id: c.req.query('client_id') ?? '' }),
-      ...(c.req.query('lti_message_hint') === undefined
+        : { client_id: c.req.query("client_id") ?? "" }),
+      ...(c.req.query("lti_message_hint") === undefined
         ? {}
         : {
-            lti_message_hint: c.req.query('lti_message_hint') ?? '',
+            lti_message_hint: c.req.query("lti_message_hint") ?? "",
           }),
-      ...(c.req.query('lti_deployment_id') === undefined
+      ...(c.req.query("lti_deployment_id") === undefined
         ? {}
         : {
-            lti_deployment_id: c.req.query('lti_deployment_id') ?? '',
+            lti_deployment_id: c.req.query("lti_deployment_id") ?? "",
           }),
     };
   }
 
-  const contentType = c.req.header('content-type') ?? '';
+  const contentType = c.req.header("content-type") ?? "";
 
-  if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+  if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
     return {};
   }
 
@@ -496,19 +498,19 @@ export const ltiLoginInputFromRequest = async (c: AppContext): Promise<Record<st
   const formData = new URLSearchParams(rawBody);
 
   return {
-    iss: formData.get('iss') ?? '',
-    login_hint: formData.get('login_hint') ?? '',
-    target_link_uri: formData.get('target_link_uri') ?? '',
-    ...(formData.get('client_id') === null ? {} : { client_id: formData.get('client_id') ?? '' }),
-    ...(formData.get('lti_message_hint') === null
+    iss: formData.get("iss") ?? "",
+    login_hint: formData.get("login_hint") ?? "",
+    target_link_uri: formData.get("target_link_uri") ?? "",
+    ...(formData.get("client_id") === null ? {} : { client_id: formData.get("client_id") ?? "" }),
+    ...(formData.get("lti_message_hint") === null
       ? {}
       : {
-          lti_message_hint: formData.get('lti_message_hint') ?? '',
+          lti_message_hint: formData.get("lti_message_hint") ?? "",
         }),
-    ...(formData.get('lti_deployment_id') === null
+    ...(formData.get("lti_deployment_id") === null
       ? {}
       : {
-          lti_deployment_id: formData.get('lti_deployment_id') ?? '',
+          lti_deployment_id: formData.get("lti_deployment_id") ?? "",
         }),
   };
 };
@@ -516,9 +518,9 @@ export const ltiLoginInputFromRequest = async (c: AppContext): Promise<Record<st
 export const ltiLaunchFormInputFromRequest = async (
   c: AppContext,
 ): Promise<{ idToken: string | null; state: string | null }> => {
-  const contentType = c.req.header('content-type') ?? '';
+  const contentType = c.req.header("content-type") ?? "";
 
-  if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+  if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
     return {
       idToken: null,
       state: null,
@@ -529,7 +531,7 @@ export const ltiLaunchFormInputFromRequest = async (
   const formData = new URLSearchParams(rawBody);
 
   return {
-    idToken: formData.get('id_token'),
-    state: formData.get('state'),
+    idToken: formData.get("id_token"),
+    state: formData.get("state"),
   };
 };

@@ -3,7 +3,7 @@ import {
   splitTenantScopedId,
   type ImmutableCredentialStore,
   type JsonObject,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   findBadgeTemplateById,
   findAssertionById,
@@ -13,7 +13,7 @@ import {
   type AssertionRecord,
   type ResolveAssertionLifecycleStateResult,
   type SqlDatabase,
-} from '@credtrail/db';
+} from "@credtrail/db";
 
 export interface VerificationViewModel {
   assertion: AssertionRecord;
@@ -25,24 +25,24 @@ export interface VerificationViewModel {
 
 export type VerificationLookupResult =
   | {
-      status: 'ok';
+      status: "ok";
       value: VerificationViewModel;
     }
   | {
-      status: 'invalid_id' | 'not_found';
+      status: "invalid_id" | "not_found";
     };
 
 export type PublicBadgeLookupResult =
   | {
-      status: 'ok';
+      status: "ok";
       value: VerificationViewModel;
     }
   | {
-      status: 'redirect';
+      status: "redirect";
       canonicalPath: string;
     }
   | {
-      status: 'not_found';
+      status: "not_found";
     };
 
 export const parseTenantScopedCredentialId = (
@@ -127,7 +127,7 @@ export const loadVerificationViewModel = async (
 
   if (tenantScopedCredentialId === null) {
     return {
-      status: 'invalid_id',
+      status: "invalid_id",
     };
   }
 
@@ -135,25 +135,27 @@ export const loadVerificationViewModel = async (
 
   if (assertion === null) {
     return {
-      status: 'not_found',
+      status: "not_found",
     };
   }
 
   const credential = await loadCredentialForAssertion(store, assertion);
   const badgeTemplateImageUri = await loadBadgeTemplateImageUriForAssertion(db, assertion);
-  const lifecycle =
-    (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
-    {
-      state: assertion.revokedAt === null ? 'active' : 'revoked',
-      source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
-      reasonCode: null,
-      reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
-      transitionedAt: assertion.revokedAt,
-      revokedAt: assertion.revokedAt,
-    };
+  const lifecycle = (await resolveAssertionLifecycleState(
+    db,
+    assertion.tenantId,
+    assertion.id,
+  )) ?? {
+    state: assertion.revokedAt === null ? "active" : "revoked",
+    source: assertion.revokedAt === null ? "default_active" : "assertion_revocation",
+    reasonCode: null,
+    reason: assertion.revokedAt === null ? null : "credential has been revoked by issuer",
+    transitionedAt: assertion.revokedAt,
+    revokedAt: assertion.revokedAt,
+  };
 
   return {
-    status: 'ok',
+    status: "ok",
     value: {
       assertion,
       credential,
@@ -173,7 +175,7 @@ export const loadPublicBadgeViewModel = async (
 
   if (trimmedIdentifier.length === 0) {
     return {
-      status: 'not_found',
+      status: "not_found",
     };
   }
 
@@ -189,20 +191,22 @@ export const loadPublicBadgeViewModel = async (
       db,
       assertionByPublicId,
     );
-    const lifecycle =
-      (await resolveAssertionLifecycleState(db, assertionByPublicId.tenantId, assertionByPublicId.id)) ??
-      {
-        state: assertionByPublicId.revokedAt === null ? 'active' : 'revoked',
-        source: assertionByPublicId.revokedAt === null ? 'default_active' : 'assertion_revocation',
-        reasonCode: null,
-        reason:
-          assertionByPublicId.revokedAt === null ? null : 'credential has been revoked by issuer',
-        transitionedAt: assertionByPublicId.revokedAt,
-        revokedAt: assertionByPublicId.revokedAt,
-      };
+    const lifecycle = (await resolveAssertionLifecycleState(
+      db,
+      assertionByPublicId.tenantId,
+      assertionByPublicId.id,
+    )) ?? {
+      state: assertionByPublicId.revokedAt === null ? "active" : "revoked",
+      source: assertionByPublicId.revokedAt === null ? "default_active" : "assertion_revocation",
+      reasonCode: null,
+      reason:
+        assertionByPublicId.revokedAt === null ? null : "credential has been revoked by issuer",
+      transitionedAt: assertionByPublicId.revokedAt,
+      revokedAt: assertionByPublicId.revokedAt,
+    };
 
     return {
-      status: 'ok',
+      status: "ok",
       value: {
         assertion: assertionByPublicId,
         credential,
@@ -217,7 +221,7 @@ export const loadPublicBadgeViewModel = async (
 
   if (tenantScopedCredentialId === null) {
     return {
-      status: 'not_found',
+      status: "not_found",
     };
   }
 
@@ -229,7 +233,7 @@ export const loadPublicBadgeViewModel = async (
 
   if (assertion === null) {
     return {
-      status: 'not_found',
+      status: "not_found",
     };
   }
 
@@ -237,19 +241,21 @@ export const loadPublicBadgeViewModel = async (
     const credential = await loadCredentialForAssertion(store, assertion);
     const recipientDisplayName = await loadRecipientDisplayNameForAssertion(db, assertion);
     const badgeTemplateImageUri = await loadBadgeTemplateImageUriForAssertion(db, assertion);
-    const lifecycle =
-      (await resolveAssertionLifecycleState(db, assertion.tenantId, assertion.id)) ??
-      {
-        state: assertion.revokedAt === null ? 'active' : 'revoked',
-        source: assertion.revokedAt === null ? 'default_active' : 'assertion_revocation',
-        reasonCode: null,
-        reason: assertion.revokedAt === null ? null : 'credential has been revoked by issuer',
-        transitionedAt: assertion.revokedAt,
-        revokedAt: assertion.revokedAt,
-      };
+    const lifecycle = (await resolveAssertionLifecycleState(
+      db,
+      assertion.tenantId,
+      assertion.id,
+    )) ?? {
+      state: assertion.revokedAt === null ? "active" : "revoked",
+      source: assertion.revokedAt === null ? "default_active" : "assertion_revocation",
+      reasonCode: null,
+      reason: assertion.revokedAt === null ? null : "credential has been revoked by issuer",
+      transitionedAt: assertion.revokedAt,
+      revokedAt: assertion.revokedAt,
+    };
 
     return {
-      status: 'ok',
+      status: "ok",
       value: {
         assertion,
         credential,
@@ -261,7 +267,7 @@ export const loadPublicBadgeViewModel = async (
   }
 
   return {
-    status: 'redirect',
+    status: "redirect",
     canonicalPath: publicBadgePathForAssertion(assertion),
   };
 };

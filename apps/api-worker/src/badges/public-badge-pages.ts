@@ -1,8 +1,8 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 import {
   parseBadgeIssuanceRuleDefinition,
   type BadgeIssuanceRuleCondition,
-} from '@credtrail/validation';
+} from "@credtrail/validation";
 import type {
   AssertionRecord,
   BadgeIssuanceRuleApprovalEventRecord,
@@ -14,9 +14,9 @@ import type {
   PublicBadgeWallEntryRecord,
   ResolveAssertionLifecycleStateResult,
   TenantOrgUnitRecord,
-} from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
-import type { VerificationViewModel } from './public-badge-model';
+} from "@credtrail/db";
+import { renderPageShell } from "@credtrail/ui-components";
+import type { VerificationViewModel } from "./public-badge-model";
 
 interface AchievementDetails {
   badgeClassUri: string | null;
@@ -128,7 +128,7 @@ export const createPublicBadgePageRenderers = (
     recipientDisplayNameFromAssertion,
     recipientFromCredential,
   } = input;
-  const VC_DATA_MODEL_V2_CONTEXT_URL = 'https://www.w3.org/ns/credentials/v2';
+  const VC_DATA_MODEL_V2_CONTEXT_URL = "https://www.w3.org/ns/credentials/v2";
   const nonEmptyText = (value: string | null): string | null => {
     if (value === null) {
       return null;
@@ -153,7 +153,7 @@ export const createPublicBadgePageRenderers = (
     }
   };
   const hasContextUrl = (contextValue: unknown, expectedContextUrl: string): boolean => {
-    if (typeof contextValue === 'string') {
+    if (typeof contextValue === "string") {
       return contextValue === expectedContextUrl;
     }
 
@@ -161,14 +161,14 @@ export const createPublicBadgePageRenderers = (
       return false;
     }
 
-    return contextValue.some((entry) => typeof entry === 'string' && entry === expectedContextUrl);
+    return contextValue.some((entry) => typeof entry === "string" && entry === expectedContextUrl);
   };
 
   const buildSeoHeadContent = (options: {
     title: string;
     description: string;
     canonicalUrl: string;
-    ogType: 'article' | 'website';
+    ogType: "article" | "website";
     imageUrl?: string | null;
     robots?: string;
     extraHeadContent?: string;
@@ -178,7 +178,7 @@ export const createPublicBadgePageRenderers = (
 
     return [
       `<meta name="description" content="${escapeHtml(options.description)}" />`,
-      `<meta name="robots" content="${escapeHtml(options.robots ?? 'index, follow')}" />`,
+      `<meta name="robots" content="${escapeHtml(options.robots ?? "index, follow")}" />`,
       `<link rel="canonical" href="${escapeHtml(options.canonicalUrl)}" />`,
       `<meta property="og:site_name" content="CredTrail" />`,
       `<meta property="og:type" content="${escapeHtml(options.ogType)}" />`,
@@ -188,19 +188,23 @@ export const createPublicBadgePageRenderers = (
       ...(imageUrl === null
         ? []
         : [`<meta property="og:image" content="${escapeHtml(imageUrl)}" />`]),
-      `<meta name="twitter:card" content="${imageUrl === null ? 'summary' : 'summary_large_image'}" />`,
+      `<meta name="twitter:card" content="${imageUrl === null ? "summary" : "summary_large_image"}" />`,
       `<meta name="twitter:title" content="${escapeHtml(options.title)}" />`,
       `<meta name="twitter:description" content="${escapeHtml(options.description)}" />`,
-      ...(imageUrl === null ? [] : [`<meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`]),
-      ...(extraHeadContent === undefined || extraHeadContent.length === 0 ? [] : [extraHeadContent]),
-    ].join('\n      ');
+      ...(imageUrl === null
+        ? []
+        : [`<meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`]),
+      ...(extraHeadContent === undefined || extraHeadContent.length === 0
+        ? []
+        : [extraHeadContent]),
+    ].join("\n      ");
   };
 
   const publicBadgeNotFoundPage = (requestUrl: string): string => {
     const canonicalUrl = new URL(requestUrl).toString();
 
     return renderPageShell(
-      'Badge not found',
+      "Badge not found",
       `<style>
         .public-badge-not-found {
           display: grid;
@@ -248,37 +252,37 @@ export const createPublicBadgePageRenderers = (
         </article>
       </section>`,
       buildSeoHeadContent({
-        title: 'Badge not found | CredTrail',
-        description: 'The shared badge URL is invalid or the credential does not exist.',
+        title: "Badge not found | CredTrail",
+        description: "The shared badge URL is invalid or the credential does not exist.",
         canonicalUrl,
-        ogType: 'website',
-        robots: 'noindex, nofollow',
+        ogType: "website",
+        robots: "noindex, nofollow",
       }),
     );
   };
 
   const ruleConditionMarkup = (condition: BadgeIssuanceRuleCondition): string => {
-    if ('all' in condition) {
+    if ("all" in condition) {
       return `<li><strong>All of these must be true:</strong><ul>${condition.all
         .map((entry) => ruleConditionMarkup(entry))
-        .join('')}</ul></li>`;
+        .join("")}</ul></li>`;
     }
 
-    if ('any' in condition) {
+    if ("any" in condition) {
       return `<li><strong>At least one of these must be true:</strong><ul>${condition.any
         .map((entry) => ruleConditionMarkup(entry))
-        .join('')}</ul></li>`;
+        .join("")}</ul></li>`;
     }
 
-    if ('not' in condition) {
+    if ("not" in condition) {
       return `<li><strong>None of these can be true:</strong><ul>${ruleConditionMarkup(
         condition.not,
       )}</ul></li>`;
     }
 
     switch (condition.type) {
-      case 'grade_threshold': {
-        const scoreField = condition.scoreField ?? 'final_score';
+      case "grade_threshold": {
+        const scoreField = condition.scoreField ?? "final_score";
         const range =
           condition.minScore !== undefined && condition.maxScore !== undefined
             ? `between ${String(condition.minScore)} and ${String(condition.maxScore)}`
@@ -286,67 +290,80 @@ export const createPublicBadgePageRenderers = (
               ? `at least ${String(condition.minScore)}`
               : `at most ${String(condition.maxScore)}`;
         const courseLabel =
-          condition.courseId ?? (condition.courseListId === undefined ? 'the selected course' : `course list ${condition.courseListId}`);
+          condition.courseId ??
+          (condition.courseListId === undefined
+            ? "the selected course"
+            : `course list ${condition.courseListId}`);
         return `<li>For course ${escapeHtml(
           courseLabel,
         )}, ${escapeHtml(scoreField)} must be ${escapeHtml(range)}.</li>`;
       }
-      case 'course_completion': {
+      case "course_completion": {
         const completionTarget =
           condition.minCompletionPercent === undefined
-            ? ''
+            ? ""
             : ` and reach at least ${String(condition.minCompletionPercent)}% completion`;
         const completionRequirement =
-          condition.requireCompleted === false ? 'Completion does not need to be marked complete' : 'The course must be marked complete';
+          condition.requireCompleted === false
+            ? "Completion does not need to be marked complete"
+            : "The course must be marked complete";
         const courseLabel =
-          condition.courseId ?? (condition.courseListId === undefined ? 'the selected course' : `course list ${condition.courseListId}`);
+          condition.courseId ??
+          (condition.courseListId === undefined
+            ? "the selected course"
+            : `course list ${condition.courseListId}`);
         return `<li>For course ${escapeHtml(courseLabel)}, ${escapeHtml(
           completionRequirement,
         )}${escapeHtml(completionTarget)}.</li>`;
       }
-      case 'program_completion': {
+      case "program_completion": {
         const programLabel =
           condition.courseIds === undefined
-            ? `complete the courses in list ${condition.courseListId ?? 'selected'}`
+            ? `complete the courses in list ${condition.courseListId ?? "selected"}`
             : condition.minimumCompleted === undefined
               ? `complete all ${String(condition.courseIds.length)} listed courses`
               : `complete ${String(condition.minimumCompleted)} of ${String(condition.courseIds.length)} listed courses`;
-        const courseList = condition.courseIds === undefined ? condition.courseListId ?? 'configured list' : condition.courseIds.join(', ');
-        const minimumCompleted =
-          programLabel;
+        const courseList =
+          condition.courseIds === undefined
+            ? (condition.courseListId ?? "configured list")
+            : condition.courseIds.join(", ");
+        const minimumCompleted = programLabel;
         return `<li>Program requirement: ${escapeHtml(minimumCompleted)} (${escapeHtml(
           courseList,
         )}).</li>`;
       }
-      case 'assignment_submission': {
+      case "assignment_submission": {
         const scoreClause =
-          condition.minScore === undefined ? '' : ` and earn at least ${String(condition.minScore)}`;
+          condition.minScore === undefined
+            ? ""
+            : ` and earn at least ${String(condition.minScore)}`;
         const submissionClause =
-          condition.requireSubmitted === false ? 'submission is optional' : 'submission is required';
+          condition.requireSubmitted === false
+            ? "submission is optional"
+            : "submission is required";
         const workflowClause =
           condition.workflowStates === undefined
-            ? ''
-            : `, with workflow state in ${escapeHtml(condition.workflowStates.join(', '))}`;
+            ? ""
+            : `, with workflow state in ${escapeHtml(condition.workflowStates.join(", "))}`;
         return `<li>For assignment ${escapeHtml(condition.assignmentId)} in ${escapeHtml(
           condition.courseId,
-        )}, ${escapeHtml(
-          submissionClause,
-        )}${escapeHtml(scoreClause)}${workflowClause}.</li>`;
+        )}, ${escapeHtml(submissionClause)}${escapeHtml(scoreClause)}${workflowClause}.</li>`;
       }
-      case 'time_window': {
+      case "time_window": {
         const notBefore =
           condition.notBefore === undefined
-            ? ''
+            ? ""
             : ` on or after ${escapeHtml(formatIsoTimestamp(condition.notBefore))} UTC`;
         const notAfter =
           condition.notAfter === undefined
-            ? ''
+            ? ""
             : ` on or before ${escapeHtml(formatIsoTimestamp(condition.notAfter))} UTC`;
         return `<li>Qualifying activity must happen${notBefore}${notAfter}.</li>`;
       }
-      case 'prerequisite_badge':
+      case "prerequisite_badge":
         return `<li>Requires earning this badge first: ${escapeHtml(
-          condition.badgeTemplateId ?? `badge template list ${condition.badgeTemplateListId ?? 'selected'}`,
+          condition.badgeTemplateId ??
+            `badge template list ${condition.badgeTemplateListId ?? "selected"}`,
         )}.</li>`;
     }
   };
@@ -363,7 +380,7 @@ export const createPublicBadgePageRenderers = (
       return '<p class="criteria-registry__muted">Rule definition could not be parsed.</p>';
     }
   };
-  
+
   const publicBadgePage = (requestUrl: string, model: VerificationViewModel): string => {
     const badgeName = badgeNameFromCredential(model.credential);
     const issuerName = issuerNameFromCredential(model.credential);
@@ -373,7 +390,7 @@ export const createPublicBadgePageRenderers = (
     const recipientName =
       model.recipientDisplayName ??
       recipientDisplayNameFromAssertion(model.assertion) ??
-      'Badge recipient';
+      "Badge recipient";
     const recipientAvatarUrl = recipientAvatarUrlFromAssertion(model.assertion);
     const achievementDetails = achievementDetailsFromCredential(model.credential);
     const evidenceDetails = evidenceDetailsFromCredential(model.credential);
@@ -388,10 +405,10 @@ export const createPublicBadgePageRenderers = (
     const credentialUri = asString(model.credential.id) ?? model.assertion.id;
     const lifecycleState = model.lifecycle.state;
     const verificationLabel =
-      lifecycleState === 'active'
-        ? 'Verified'
+      lifecycleState === "active"
+        ? "Verified"
         : lifecycleState.slice(0, 1).toUpperCase() + lifecycleState.slice(1);
-    const verificationStatusClass = lifecycleState === 'active' ? 'verified' : lifecycleState;
+    const verificationStatusClass = lifecycleState === "active" ? "verified" : lifecycleState;
     const publicBadgePath = publicBadgePathForAssertion(model.assertion);
     const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
     const summaryPath = `${publicBadgePath}/summary`;
@@ -407,8 +424,8 @@ export const createPublicBadgePageRenderers = (
     const walletOfferBadgeIdentifier = model.assertion.publicId ?? model.assertion.id;
     const walletOfferPath = `/credentials/v1/offers/${encodeURIComponent(walletOfferBadgeIdentifier)}`;
     const walletOfferUrl = new URL(walletOfferPath, requestUrl).toString();
-    const walletDeepLinkUrl = new URL('openid-credential-offer://');
-    walletDeepLinkUrl.searchParams.set('credential_offer_uri', walletOfferUrl);
+    const walletDeepLinkUrl = new URL("openid-credential-offer://");
+    walletDeepLinkUrl.searchParams.set("credential_offer_uri", walletOfferUrl);
     const dccExchangePath = `/credentials/v1/dcc/exchanges/${encodeURIComponent(walletOfferBadgeIdentifier)}`;
     const dccExchangeUrl = new URL(dccExchangePath, requestUrl).toString();
     const dccInvitationRequest = {
@@ -417,9 +434,12 @@ export const createPublicBadgePageRenderers = (
         vcapi: dccExchangeUrl,
       },
     };
-    const dccWalletDeepLinkUrl = new URL('https://lcw.app/request');
-    dccWalletDeepLinkUrl.searchParams.set('request', JSON.stringify(dccInvitationRequest));
-    const isVcV2Credential = hasContextUrl(model.credential['@context'], VC_DATA_MODEL_V2_CONTEXT_URL);
+    const dccWalletDeepLinkUrl = new URL("https://lcw.app/request");
+    dccWalletDeepLinkUrl.searchParams.set("request", JSON.stringify(dccInvitationRequest));
+    const isVcV2Credential = hasContextUrl(
+      model.credential["@context"],
+      VC_DATA_MODEL_V2_CONTEXT_URL,
+    );
     const assertionValidationTargetUrl = ob3JsonUrl;
     const badgeClassValidationTargetUrl =
       achievementDetails.badgeClassUri !== null && isWebUrl(achievementDetails.badgeClassUri)
@@ -441,7 +461,7 @@ export const createPublicBadgePageRenderers = (
         : imsOb3ValidatorUrl(issuerValidationTargetUrl);
     const validatorLinks =
       assertionValidatorUrl === null
-        ? ''
+        ? ""
         : [
             `<a
         class="public-badge__button"
@@ -475,10 +495,10 @@ export const createPublicBadgePageRenderers = (
               Validate Issuer (IMS)
             </a>`,
                 ]),
-          ].join('');
+          ].join("");
     const validatorToolsMarkup =
       assertionValidatorUrl === null
-        ? ''
+        ? ""
         : `<div class="public-badge__validator-block">
               <p class="public-badge__validator-note">
                 Use IMS tools to validate the published JSON and issuer records.
@@ -490,26 +510,26 @@ export const createPublicBadgePageRenderers = (
             </div>`;
     const badgeClassValidationTechnicalDetail =
       badgeClassValidatorUrl === null
-        ? '<span>Not available (badge class URI is not a web URL).</span>'
+        ? "<span>Not available (badge class URI is not a web URL).</span>"
         : `<a href="${escapeHtml(badgeClassValidatorUrl)}">${escapeHtml(badgeClassValidatorUrl)}</a>`;
     const issuerValidationTechnicalDetail =
       issuerValidatorUrl === null
-        ? '<span>Not available (issuer URL is not published).</span>'
+        ? "<span>Not available (issuer URL is not published).</span>"
         : `<a href="${escapeHtml(issuerValidatorUrl)}">${escapeHtml(issuerValidatorUrl)}</a>`;
     const imsTechnicalDetailRows =
       assertionValidatorUrl === null
-        ? ''
+        ? ""
         : `<dt>IMS assertion validation</dt>
             <dd><a href="${escapeHtml(assertionValidatorUrl)}">${escapeHtml(assertionValidatorUrl)}</a></dd>
             <dt>IMS badge class validation</dt>
             <dd>${badgeClassValidationTechnicalDetail}</dd>
             <dt>IMS issuer validation</dt>
             <dd>${issuerValidationTechnicalDetail}</dd>`;
-    const qrCodeImageUrl = new URL('https://api.qrserver.com/v1/create-qr-code/');
-    qrCodeImageUrl.searchParams.set('size', '220x220');
-    qrCodeImageUrl.searchParams.set('format', 'svg');
-    qrCodeImageUrl.searchParams.set('margin', '0');
-    qrCodeImageUrl.searchParams.set('data', walletOfferUrl);
+    const qrCodeImageUrl = new URL("https://api.qrserver.com/v1/create-qr-code/");
+    qrCodeImageUrl.searchParams.set("size", "220x220");
+    qrCodeImageUrl.searchParams.set("format", "svg");
+    qrCodeImageUrl.searchParams.set("margin", "0");
+    qrCodeImageUrl.searchParams.set("data", walletOfferUrl);
     const linkedInAddProfileUrl = linkedInAddToProfileUrl({
       badgeName,
       issuerName,
@@ -517,8 +537,8 @@ export const createPublicBadgePageRenderers = (
       credentialUrl: publicBadgeUrl,
       credentialId: credentialUri,
     });
-    const linkedInShareUrl = new URL('https://www.linkedin.com/sharing/share-offsite/');
-    linkedInShareUrl.searchParams.set('url', publicBadgeUrl);
+    const linkedInShareUrl = new URL("https://www.linkedin.com/sharing/share-offsite/");
+    linkedInShareUrl.searchParams.set("url", publicBadgeUrl);
     const advancedActionButtons = [
       `<a
           class="public-badge__button"
@@ -555,7 +575,7 @@ export const createPublicBadgePageRenderers = (
         >
           Add to Browser Wallet
         </button>`,
-    ].join('');
+    ].join("");
     const advancedActionsSection = `<details class="public-badge__actions-details">
       <summary>Wallet, downloads, and advanced tools</summary>
       <div class="public-badge__actions public-badge__actions--secondary">
@@ -572,12 +592,13 @@ export const createPublicBadgePageRenderers = (
           )}</a>`;
     const pageTitle = `${badgeName} | CredTrail`;
     const pageDescription =
-      nonEmptyText(achievementDetails.description) ?? `${badgeName} credential issued by ${issuerName}.`;
+      nonEmptyText(achievementDetails.description) ??
+      `${badgeName} credential issued by ${issuerName}.`;
     const socialImageUrl = toAbsoluteWebUrl(requestUrl, displayBadgeImageUri);
-    const recipientIdentifierLine = '';
+    const recipientIdentifierLine = "";
     const recipientAvatarSection =
       recipientAvatarUrl === null
-        ? ''
+        ? ""
         : `<img
             class="public-badge__recipient-avatar"
             src="${escapeHtml(recipientAvatarUrl)}"
@@ -586,7 +607,7 @@ export const createPublicBadgePageRenderers = (
           />`;
     const criteriaSection =
       achievementDetails.criteriaUri === null
-        ? ''
+        ? ""
         : `<p class="public-badge__achievement-copy">
             Criteria:
             <a href="${escapeHtml(achievementDetails.criteriaUri)}" target="_blank" rel="noopener noreferrer">
@@ -601,11 +622,11 @@ export const createPublicBadgePageRenderers = (
       <a href="${escapeHtml(criteriaRegistryPath)}">View public criteria registry entry</a>
     </p>`;
     const lifecycleDetails = (() => {
-      if (lifecycleState === 'active') {
-        return '';
+      if (lifecycleState === "active") {
+        return "";
       }
 
-      if (lifecycleState === 'revoked' && model.lifecycle.revokedAt !== null) {
+      if (lifecycleState === "revoked" && model.lifecycle.revokedAt !== null) {
         return `<p class="public-badge__status-note public-badge__status-note--revoked">Revoked at ${escapeHtml(
           formatIsoTimestamp(model.lifecycle.revokedAt),
         )} UTC</p>`;
@@ -613,11 +634,11 @@ export const createPublicBadgePageRenderers = (
 
       const transitionedAt =
         model.lifecycle.transitionedAt === null
-          ? ''
+          ? ""
           : ` since ${escapeHtml(formatIsoTimestamp(model.lifecycle.transitionedAt))} UTC`;
       const reasonLine =
         model.lifecycle.reason === null
-          ? ''
+          ? ""
           : `<p class="public-badge__status-note public-badge__status-note--${escapeHtml(
               lifecycleState,
             )}">${escapeHtml(model.lifecycle.reason)}</p>`;
@@ -633,7 +654,7 @@ export const createPublicBadgePageRenderers = (
         : `<p class="public-badge__achievement-copy">${escapeHtml(achievementDetails.description)}</p>`;
     const evidenceSection =
       evidenceDetails.length === 0
-        ? ''
+        ? ""
         : `<section class="public-badge__card public-badge__stack-sm">
             <h2 class="public-badge__section-title">Evidence</h2>
             <ul class="public-badge__evidence-list">
@@ -642,11 +663,11 @@ export const createPublicBadgePageRenderers = (
                   const label = entry.name ?? entry.uri;
                   const description =
                     entry.description === null
-                      ? ''
+                      ? ""
                       : `<p class="public-badge__evidence-description">${escapeHtml(
                           entry.description,
                         )}</p>`;
-  
+
                   return `<li class="public-badge__evidence-item">
                     <a href="${escapeHtml(entry.uri)}" target="_blank" rel="noopener noreferrer">
                       ${escapeHtml(label)}
@@ -654,10 +675,10 @@ export const createPublicBadgePageRenderers = (
                     ${description}
                   </li>`;
                 })
-                .join('')}
+                .join("")}
             </ul>
           </section>`;
-  
+
     return renderPageShell(
       pageTitle,
       `<style>
@@ -1238,7 +1259,7 @@ export const createPublicBadgePageRenderers = (
           <summary>Technical details</summary>
           <dl class="public-badge__technical-grid">
             <dt>Issuer ID</dt>
-            <dd>${escapeHtml(issuerIdentifier ?? 'Not available')}</dd>
+            <dd>${escapeHtml(issuerIdentifier ?? "Not available")}</dd>
             <dt>Recipient identity</dt>
             <dd>${escapeHtml(model.assertion.recipientIdentity)}</dd>
             <dt>Recipient identity type</dt>
@@ -1342,14 +1363,14 @@ export const createPublicBadgePageRenderers = (
         title: pageTitle,
         description: pageDescription,
         canonicalUrl: publicBadgeUrl,
-        ogType: 'article',
+        ogType: "article",
         imageUrl: socialImageUrl,
         extraHeadContent: `<link rel="alternate" type="application/ld+json" href="${escapeHtml(
           ob3JsonUrl,
         )}" />
       <link rel="alternate" type="application/json" href="${escapeHtml(summaryUrl)}" />`,
       }),
-      'open',
+      "open",
     );
   };
 
@@ -1380,7 +1401,7 @@ export const createPublicBadgePageRenderers = (
           )}`;
     const cards =
       entries.length === 0
-        ? ''
+        ? ""
         : entries
             .map((entry) => {
               const username = githubUsernameFromUrl(entry.recipientIdentity);
@@ -1391,35 +1412,35 @@ export const createPublicBadgePageRenderers = (
               const issuedAt = `${formatIsoTimestamp(entry.issuedAt)} UTC`;
               const lifecycleState = entry.lifecycle.state;
               const statusLabel =
-                lifecycleState === 'active'
-                  ? 'Verified'
+                lifecycleState === "active"
+                  ? "Verified"
                   : lifecycleState.slice(0, 1).toUpperCase() + lifecycleState.slice(1);
-              const statusClass = lifecycleState === 'active' ? 'verified' : lifecycleState;
+              const statusClass = lifecycleState === "active" ? "verified" : lifecycleState;
               const transitionedAt =
-                lifecycleState === 'revoked'
-                  ? entry.lifecycle.revokedAt ?? entry.lifecycle.transitionedAt
+                lifecycleState === "revoked"
+                  ? (entry.lifecycle.revokedAt ?? entry.lifecycle.transitionedAt)
                   : entry.lifecycle.transitionedAt;
               const transitionLine =
-                transitionedAt === null || lifecycleState === 'active'
-                  ? ''
+                transitionedAt === null || lifecycleState === "active"
+                  ? ""
                   : `<p class="badge-wall__meta badge-wall__meta--${escapeHtml(statusClass)}">${escapeHtml(
                       statusLabel,
                     )} ${escapeHtml(formatIsoTimestamp(transitionedAt))} UTC</p>`;
               const reasonText = entry.lifecycle.reason ?? entry.lifecycle.reasonCode;
               const reasonLine =
-                reasonText === null || lifecycleState === 'active'
-                  ? ''
+                reasonText === null || lifecycleState === "active"
+                  ? ""
                   : `<p class="badge-wall__meta badge-wall__meta--reason">${escapeHtml(reasonText)}</p>`;
               const avatarMarkup =
                 avatarUrl === null
-                  ? ''
+                  ? ""
                   : `<img
                       class="badge-wall__avatar"
                       src="${escapeHtml(avatarUrl)}"
                       alt="${escapeHtml(`${recipientLabel} GitHub avatar`)}"
                       loading="lazy"
                     />`;
-              const badgeInitial = entry.badgeTitle.trim().slice(0, 1).toUpperCase() || 'B';
+              const badgeInitial = entry.badgeTitle.trim().slice(0, 1).toUpperCase() || "B";
               const badgeImageMarkup =
                 entry.badgeImageUri === null
                   ? `<span class="badge-wall__badge-image badge-wall__badge-image--placeholder" aria-hidden="true">${escapeHtml(
@@ -1431,7 +1452,7 @@ export const createPublicBadgePageRenderers = (
                       alt="${escapeHtml(`${entry.badgeTitle} image`)}"
                       loading="lazy"
                     />`;
-  
+
               return `<li class="badge-wall__item">
                 <div class="badge-wall__summary">
                   <div class="badge-wall__identity">
@@ -1463,7 +1484,7 @@ export const createPublicBadgePageRenderers = (
                 </div>
               </li>`;
             })
-            .join('');
+            .join("");
     const listMarkup =
       entries.length === 0
         ? '<p class="badge-wall__empty">No public badges found for this showcase.</p>'
@@ -1473,7 +1494,7 @@ export const createPublicBadgePageRenderers = (
       entries
         .map((entry) => toAbsoluteWebUrl(requestUrl, entry.badgeImageUri))
         .find((value): value is string => value !== null) ?? null;
-  
+
     return renderPageShell(
       pageTitle,
       `<style>
@@ -1897,10 +1918,10 @@ export const createPublicBadgePageRenderers = (
         title: pageTitle,
         description: subtitle,
         canonicalUrl,
-        ogType: 'website',
+        ogType: "website",
         imageUrl: socialImageUrl,
       }),
-      'open',
+      "open",
     );
   };
 
@@ -1924,8 +1945,8 @@ export const createPublicBadgePageRenderers = (
         : `Public criteria and governance metadata for tenant "${tenantId}" badge template "${filterBadgeTemplateId}".`;
     const heroLead =
       filterBadgeTemplateId === null
-        ? 'Use this page to understand what each public badge recognizes, who publishes it, and how qualification rules are reviewed.'
-        : 'Use this page to understand what this public badge recognizes, who publishes it, and how qualification rules are reviewed.';
+        ? "Use this page to understand what each public badge recognizes, who publishes it, and how qualification rules are reviewed."
+        : "Use this page to understand what this public badge recognizes, who publishes it, and how qualification rules are reviewed.";
     const badgeWallPath =
       filterBadgeTemplateId === null
         ? `/showcase/${encodeURIComponent(tenantId)}`
@@ -1984,17 +2005,20 @@ export const createPublicBadgePageRenderers = (
                               : (orgUnitById.get(event.fromOrgUnitId) ?? null);
                           const toOrgUnit = orgUnitById.get(event.toOrgUnitId) ?? null;
                           const fromLabel =
-                            fromOrgUnit === null ? 'No previous owner recorded' : fromOrgUnit.displayName;
-                          const toLabel = toOrgUnit === null ? event.toOrgUnitId : toOrgUnit.displayName;
-                          const actor = event.transferredByUserId ?? 'system';
+                            fromOrgUnit === null
+                              ? "No previous owner recorded"
+                              : fromOrgUnit.displayName;
+                          const toLabel =
+                            toOrgUnit === null ? event.toOrgUnitId : toOrgUnit.displayName;
+                          const actor = event.transferredByUserId ?? "system";
                           const reason =
                             event.reason === null
                               ? event.reasonCode
                               : `${event.reasonCode}: ${event.reason}`;
                           return `<li>
                             <p><strong>${escapeHtml(fromLabel)}</strong> → <strong>${escapeHtml(
-                            toLabel,
-                          )}</strong></p>
+                              toLabel,
+                            )}</strong></p>
                             <p class="criteria-registry__muted">Why it changed: ${escapeHtml(
                               reason,
                             )} · Recorded by ${escapeHtml(actor)} · ${escapeHtml(
@@ -2002,7 +2026,7 @@ export const createPublicBadgePageRenderers = (
                             )} UTC</p>
                           </li>`;
                         })
-                        .join('')}
+                        .join("")}
                     </ol>
                     </details>`;
               const rulesSection =
@@ -2015,11 +2039,11 @@ export const createPublicBadgePageRenderers = (
                         const effectiveVersion = activeVersion ?? latestVersion;
                         const latestVersionLabel =
                           latestVersion === null
-                            ? 'No recorded version'
+                            ? "No recorded version"
                             : `v${String(latestVersion.versionNumber)} (${latestVersion.status})`;
                         const activeVersionLabel =
                           activeVersion === null
-                            ? 'No published version'
+                            ? "No published version"
                             : `v${String(activeVersion.versionNumber)}`;
                         const changeSummary =
                           effectiveVersion?.changeSummary === null ||
@@ -2032,10 +2056,10 @@ export const createPublicBadgePageRenderers = (
                             : `<ol class="criteria-registry__approval-steps">
                                 ${ruleEntry.approvalSteps
                                   .map((step) => {
-                                    const actor = step.decidedByUserId ?? 'pending';
+                                    const actor = step.decidedByUserId ?? "pending";
                                     const decidedAt =
                                       step.decidedAt === null
-                                        ? 'Awaiting decision'
+                                        ? "Awaiting decision"
                                         : `${formatIsoTimestamp(step.decidedAt)} UTC`;
                                     const reviewLabel =
                                       step.label === null || step.label.trim().length === 0
@@ -2052,7 +2076,7 @@ export const createPublicBadgePageRenderers = (
                                       )} · ${escapeHtml(decidedAt)}</p>
                                     </li>`;
                                   })
-                                  .join('')}
+                                  .join("")}
                               </ol>`;
                         const approvalEventsMarkup =
                           ruleEntry.approvalEvents.length === 0
@@ -2060,11 +2084,11 @@ export const createPublicBadgePageRenderers = (
                             : `<ol class="criteria-registry__approval-events">
                                 ${ruleEntry.approvalEvents
                                   .map((event) => {
-                                    const actor = event.actorUserId ?? 'system';
-                                    const role = event.actorRole ?? 'unknown_role';
+                                    const actor = event.actorUserId ?? "system";
+                                    const role = event.actorRole ?? "unknown_role";
                                     const comment =
                                       event.comment === null
-                                        ? ''
+                                        ? ""
                                         : ` · ${escapeHtml(event.comment)}`;
                                     return `<li>${escapeHtml(event.action)} by ${escapeHtml(
                                       actor,
@@ -2072,7 +2096,7 @@ export const createPublicBadgePageRenderers = (
                                       formatIsoTimestamp(event.occurredAt),
                                     )} UTC${comment}</li>`;
                                   })
-                                  .join('')}
+                                  .join("")}
                               </ol>`;
                         const ruleGovernanceDetails = `<details class="criteria-registry__details">
                           <summary>Rule history and governance details</summary>
@@ -2107,7 +2131,7 @@ export const createPublicBadgePageRenderers = (
                           </div>
                         </article>`;
                       })
-                      .join('');
+                      .join("");
 
               return `<article class="criteria-registry__template-card">
                 <header class="criteria-registry__template-header">
@@ -2123,7 +2147,7 @@ export const createPublicBadgePageRenderers = (
                   </div>
                 </header>
                 <p class="criteria-registry__description">${escapeHtml(
-                  template.description ?? 'No public description is published for this badge yet.',
+                  template.description ?? "No public description is published for this badge yet.",
                 )}</p>
                 <dl class="criteria-registry__facts">
                   <div class="criteria-registry__fact">
@@ -2155,7 +2179,7 @@ export const createPublicBadgePageRenderers = (
                 </section>
               </article>`;
             })
-            .join('');
+            .join("");
     const pageTitle = `${title} | CredTrail`;
     const socialImageUrl =
       model.templates
@@ -2452,10 +2476,10 @@ export const createPublicBadgePageRenderers = (
         title: pageTitle,
         description: subtitle,
         canonicalUrl,
-        ogType: 'website',
+        ogType: "website",
         imageUrl: socialImageUrl,
       }),
-      'open',
+      "open",
     );
   };
 

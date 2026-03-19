@@ -1,4 +1,4 @@
-import { asJsonObject, asNonEmptyString, asString } from '../utils/value-parsers';
+import { asJsonObject, asNonEmptyString, asString } from "../utils/value-parsers";
 import type {
   CanvasGradebookProviderConfig,
   GradebookAssignmentRecord,
@@ -8,7 +8,7 @@ import type {
   GradebookGradeRecord,
   GradebookProvider,
   GradebookSubmissionRecord,
-} from './gradebook-types';
+} from "./gradebook-types";
 
 interface CreateCanvasGradebookProviderInput {
   config: CanvasGradebookProviderConfig;
@@ -20,12 +20,12 @@ const asJsonArray = (value: unknown): readonly unknown[] | null => {
 };
 
 const asIdentifier = (value: unknown): string | null => {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length === 0 ? null : trimmed;
   }
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value.toString();
   }
 
@@ -33,11 +33,11 @@ const asIdentifier = (value: unknown): string | null => {
 };
 
 const asNumber = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -46,7 +46,7 @@ const asNumber = (value: unknown): number | null => {
 };
 
 const asBoolean = (value: unknown): boolean | null => {
-  return typeof value === 'boolean' ? value : null;
+  return typeof value === "boolean" ? value : null;
 };
 
 const asIsoTimestamp = (value: unknown): string | null => {
@@ -65,14 +65,14 @@ const ensureHttpBaseUrl = (candidate: string): URL => {
   try {
     parsed = new URL(candidate);
   } catch {
-    throw new Error('Gradebook provider apiBaseUrl must be a valid absolute URL');
+    throw new Error("Gradebook provider apiBaseUrl must be a valid absolute URL");
   }
 
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('Gradebook provider apiBaseUrl must use http or https');
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Gradebook provider apiBaseUrl must use http or https");
   }
 
-  if (!parsed.pathname.endsWith('/')) {
+  if (!parsed.pathname.endsWith("/")) {
     parsed.pathname = `${parsed.pathname}/`;
   }
 
@@ -231,19 +231,21 @@ const parseCompletionRecord = (
 
   const normalizedState = enrollmentState?.toLowerCase() ?? null;
   const completed =
-    normalizedState === 'completed' || normalizedState === 'concluded' || normalizedState === 'inactive';
+    normalizedState === "completed" ||
+    normalizedState === "concluded" ||
+    normalizedState === "inactive";
 
   return {
     courseId,
     learnerId,
     completed,
     completedAt: completed
-      ? asIsoTimestamp(enrollment.completed_at) ??
+      ? (asIsoTimestamp(enrollment.completed_at) ??
         asIsoTimestamp(enrollment.updated_at) ??
-        asIsoTimestamp(enrollment.last_activity_at)
+        asIsoTimestamp(enrollment.last_activity_at))
       : null,
     completionPercent:
-      grades === null ? null : asNumber(grades.final_score) ?? asNumber(grades.current_score),
+      grades === null ? null : (asNumber(grades.final_score) ?? asNumber(grades.current_score)),
     sourceState: enrollmentState,
   };
 };
@@ -266,10 +268,10 @@ export const createCanvasGradebookProvider = (
     }
 
     const response = await fetchImpl(requestUrl.toString(), {
-      method: 'GET',
+      method: "GET",
       headers: {
         authorization: `Bearer ${config.accessToken}`,
-        accept: 'application/json',
+        accept: "application/json",
       },
     });
 
@@ -283,7 +285,9 @@ export const createCanvasGradebookProvider = (
     const payload = asJsonArray(body);
 
     if (payload === null) {
-      throw new Error(`Canvas gradebook API response must be a JSON array for ${requestUrl.pathname}`);
+      throw new Error(
+        `Canvas gradebook API response must be a JSON array for ${requestUrl.pathname}`,
+      );
     }
 
     return payload;
@@ -294,23 +298,23 @@ export const createCanvasGradebookProvider = (
     learnerId?: string;
   }): Promise<readonly unknown[]> => {
     const query = new URLSearchParams();
-    query.set('per_page', '100');
-    query.append('type[]', 'StudentEnrollment');
+    query.set("per_page", "100");
+    query.append("type[]", "StudentEnrollment");
 
     if (input.learnerId !== undefined) {
-      query.append('student_ids[]', input.learnerId);
+      query.append("student_ids[]", input.learnerId);
     }
 
     return requestArray(`/api/v1/courses/${encodeURIComponent(input.courseId)}/enrollments`, query);
   };
 
   return {
-    kind: 'canvas',
+    kind: "canvas",
     listCourses: async (): Promise<readonly GradebookCourseRecord[]> => {
       const query = new URLSearchParams();
-      query.set('per_page', '100');
-      query.set('enrollment_state', 'active');
-      const courses = await requestArray('/api/v1/courses', query);
+      query.set("per_page", "100");
+      query.set("enrollment_state", "active");
+      const courses = await requestArray("/api/v1/courses", query);
       const normalizedCourses = courses
         .map((course) => parseCourseRecord(course))
         .filter((course): course is GradebookCourseRecord => course !== null);
@@ -318,7 +322,7 @@ export const createCanvasGradebookProvider = (
     },
     listAssignments: async (input): Promise<readonly GradebookAssignmentRecord[]> => {
       const query = new URLSearchParams();
-      query.set('per_page', '100');
+      query.set("per_page", "100");
       const assignments = await requestArray(
         `/api/v1/courses/${encodeURIComponent(input.courseId)}/assignments`,
         query,
@@ -337,14 +341,14 @@ export const createCanvasGradebookProvider = (
     },
     listSubmissions: async (input): Promise<readonly GradebookSubmissionRecord[]> => {
       const query = new URLSearchParams();
-      query.set('per_page', '100');
+      query.set("per_page", "100");
 
       if (input.assignmentId !== undefined) {
-        query.append('assignment_ids[]', input.assignmentId);
+        query.append("assignment_ids[]", input.assignmentId);
       }
 
       if (input.learnerId !== undefined) {
-        query.append('student_ids[]', input.learnerId);
+        query.append("student_ids[]", input.learnerId);
       }
 
       const submissions = await requestArray(

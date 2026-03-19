@@ -12,8 +12,8 @@ import {
   type SqlDatabase,
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   parseBadgeTemplateListQuery,
   parseBadgeTemplatePathParams,
@@ -21,16 +21,16 @@ import {
   parseTenantPathParams,
   parseTransferBadgeTemplateOwnershipRequest,
   parseUpdateBadgeTemplateRequest,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import type { AuthenticatedPrincipal } from '../auth/auth-context';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import type { AuthenticatedPrincipal } from "../auth/auth-context";
 import {
   BADGE_TEMPLATE_IMAGE_MAX_BYTES,
   badgeTemplateImageMimeTypeFromBytes,
   badgeTemplateImageMimeTypeFromValue,
   loadBadgeTemplateImage,
   storeBadgeTemplateImage,
-} from '../badges/template-image-storage';
+} from "../badges/template-image-storage";
 
 interface RegisterBadgeTemplateRoutesInput {
   app: Hono<AppEnv>;
@@ -76,10 +76,10 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     TENANT_MEMBER_ROLES,
   } = input;
 
-  app.get('/badges/assets/:tenantId/:badgeTemplateId/:assetId', async (c) => {
-    const tenantId = c.req.param('tenantId').trim();
-    const badgeTemplateId = c.req.param('badgeTemplateId').trim();
-    const assetId = c.req.param('assetId').trim();
+  app.get("/badges/assets/:tenantId/:badgeTemplateId/:assetId", async (c) => {
+    const tenantId = c.req.param("tenantId").trim();
+    const badgeTemplateId = c.req.param("badgeTemplateId").trim();
+    const assetId = c.req.param("assetId").trim();
 
     if (tenantId.length === 0 || badgeTemplateId.length === 0 || assetId.length === 0) {
       return c.notFound();
@@ -95,9 +95,9 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return c.notFound();
     }
 
-    c.header('Cache-Control', 'public, max-age=31536000, immutable');
-    c.header('Content-Type', image.mimeType);
-    c.header('X-Content-Type-Options', 'nosniff');
+    c.header("Cache-Control", "public, max-age=31536000, immutable");
+    c.header("Content-Type", image.mimeType);
+    c.header("X-Content-Type-Options", "nosniff");
 
     const imageBuffer = new ArrayBuffer(image.bytes.byteLength);
     new Uint8Array(imageBuffer).set(image.bytes);
@@ -105,10 +105,10 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     return c.body(imageBuffer);
   });
 
-  app.get('/v1/tenants/:tenantId/badge-templates', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-templates", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const query = parseBadgeTemplateListQuery({
-      includeArchived: c.req.query('includeArchived'),
+      includeArchived: c.req.query("includeArchived"),
     });
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
@@ -123,7 +123,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       includeArchived: query.includeArchived,
     });
 
-    if (membershipRole === 'issuer') {
+    if (membershipRole === "issuer") {
       const hasScopedAssignments = await hasTenantMembershipOrgUnitScopeAssignments(
         db,
         pathParams.tenantId,
@@ -138,7 +138,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
             tenantId: pathParams.tenantId,
             userId: principal.userId,
             orgUnitId: template.ownerOrgUnitId,
-            requiredRole: 'viewer',
+            requiredRole: "viewer",
           });
 
           if (canViewTemplate) {
@@ -156,7 +156,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-templates', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-templates", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseCreateBadgeTemplateRequest(payload);
@@ -177,7 +177,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       userId: principal.userId,
       membershipRole,
       orgUnitId: targetOwnerOrgUnitId,
-      requiredRole: 'issuer',
+      requiredRole: "issuer",
       allowWhenNoScopes: true,
     });
 
@@ -200,8 +200,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       await createAuditLog(db, {
         tenantId: pathParams.tenantId,
         actorUserId: principal.userId,
-        action: 'badge_template.created',
-        targetType: 'badge_template',
+        action: "badge_template.created",
+        targetType: "badge_template",
         targetId: template.id,
         metadata: {
           role: membershipRole,
@@ -219,10 +219,10 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
         201,
       );
     } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return c.json(
           {
-            error: 'Badge template slug already exists for tenant',
+            error: "Badge template slug already exists for tenant",
           },
           409,
         );
@@ -230,8 +230,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
       if (
         error instanceof Error &&
-        error.message.includes('Org unit') &&
-        error.message.includes('not found for tenant')
+        error.message.includes("Org unit") &&
+        error.message.includes("not found for tenant")
       ) {
         return c.json(
           {
@@ -245,7 +245,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     }
   });
 
-  app.get('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
 
@@ -255,18 +255,22 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
-    const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
+    const template = await findBadgeTemplateById(
+      db,
+      pathParams.tenantId,
+      pathParams.badgeTemplateId,
+    );
 
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
     }
 
-    if (membershipRole === 'issuer') {
+    if (membershipRole === "issuer") {
       const hasScopedAssignments = await hasTenantMembershipOrgUnitScopeAssignments(
         db,
         pathParams.tenantId,
@@ -278,13 +282,13 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
           tenantId: pathParams.tenantId,
           userId: principal.userId,
           orgUnitId: template.ownerOrgUnitId,
-          requiredRole: 'viewer',
+          requiredRole: "viewer",
         });
 
         if (!canViewTemplate) {
           return c.json(
             {
-              error: 'Insufficient org-unit scope for requested action',
+              error: "Insufficient org-unit scope for requested action",
             },
             403,
           );
@@ -298,7 +302,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     });
   });
 
-  app.get('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/ownership-history', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/ownership-history", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -308,12 +312,16 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
-    const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
+    const template = await findBadgeTemplateById(
+      db,
+      pathParams.tenantId,
+      pathParams.badgeTemplateId,
+    );
 
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -325,7 +333,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       userId: principal.userId,
       membershipRole,
       orgUnitId: template.ownerOrgUnitId,
-      requiredRole: 'viewer',
+      requiredRole: "viewer",
       allowWhenNoScopes: true,
     });
 
@@ -345,98 +353,104 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/ownership-transfer', async (c) => {
-    const pathParams = parseBadgeTemplatePathParams(c.req.param());
-    let request: ReturnType<typeof parseTransferBadgeTemplateOwnershipRequest>;
+  app.post(
+    "/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/ownership-transfer",
+    async (c) => {
+      const pathParams = parseBadgeTemplatePathParams(c.req.param());
+      let request: ReturnType<typeof parseTransferBadgeTemplateOwnershipRequest>;
 
-    try {
-      request = parseTransferBadgeTemplateOwnershipRequest(await c.req.json<unknown>());
-    } catch {
-      return c.json(
-        {
-          error: 'Invalid ownership transfer request payload',
-        },
-        400,
-      );
-    }
-
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
-
-    if (roleCheck instanceof Response) {
-      return roleCheck;
-    }
-
-    const { principal, membershipRole } = roleCheck;
-
-    try {
-      const transition = await transferBadgeTemplateOwnership(resolveDatabase(c.env), {
-        tenantId: pathParams.tenantId,
-        badgeTemplateId: pathParams.badgeTemplateId,
-        toOrgUnitId: request.toOrgUnitId,
-        reasonCode: request.reasonCode,
-        reason: request.reason,
-        governanceMetadataJson:
-          request.governanceMetadata === undefined
-            ? undefined
-            : JSON.stringify(request.governanceMetadata),
-        transferredByUserId: principal.userId,
-        transferredAt: request.transferredAt ?? new Date().toISOString(),
-      });
-
-      await createAuditLog(resolveDatabase(c.env), {
-        tenantId: pathParams.tenantId,
-        actorUserId: principal.userId,
-        action: 'badge_template.ownership_transferred',
-        targetType: 'badge_template',
-        targetId: pathParams.badgeTemplateId,
-        metadata: {
-          role: membershipRole,
-          status: transition.status,
-          fromOrgUnitId: transition.event?.fromOrgUnitId ?? transition.template.ownerOrgUnitId,
-          toOrgUnitId: transition.template.ownerOrgUnitId,
-          reasonCode: request.reasonCode,
-          reason: request.reason,
-          eventId: transition.event?.id ?? null,
-        },
-      });
-
-      return c.json({
-        tenantId: pathParams.tenantId,
-        status: transition.status,
-        template: transition.template,
-        event: transition.event,
-      });
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        if (error.message.includes('not found for tenant') && error.message.includes('Badge template')) {
-          return c.json(
-            {
-              error: 'Badge template not found',
-            },
-            404,
-          );
-        }
-
-        if (
-          error.message.includes('transferredAt must be a valid ISO timestamp') ||
-          error.message.includes('Unsupported badge template ownership reason code') ||
-          error.message.includes('initial_assignment is reserved') ||
-          (error.message.includes('Org unit') && error.message.includes('not found for tenant'))
-        ) {
-          return c.json(
-            {
-              error: error.message,
-            },
-            422,
-          );
-        }
+      try {
+        request = parseTransferBadgeTemplateOwnershipRequest(await c.req.json<unknown>());
+      } catch {
+        return c.json(
+          {
+            error: "Invalid ownership transfer request payload",
+          },
+          400,
+        );
       }
 
-      throw error;
-    }
-  });
+      const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
-  app.patch('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
+      if (roleCheck instanceof Response) {
+        return roleCheck;
+      }
+
+      const { principal, membershipRole } = roleCheck;
+
+      try {
+        const transition = await transferBadgeTemplateOwnership(resolveDatabase(c.env), {
+          tenantId: pathParams.tenantId,
+          badgeTemplateId: pathParams.badgeTemplateId,
+          toOrgUnitId: request.toOrgUnitId,
+          reasonCode: request.reasonCode,
+          reason: request.reason,
+          governanceMetadataJson:
+            request.governanceMetadata === undefined
+              ? undefined
+              : JSON.stringify(request.governanceMetadata),
+          transferredByUserId: principal.userId,
+          transferredAt: request.transferredAt ?? new Date().toISOString(),
+        });
+
+        await createAuditLog(resolveDatabase(c.env), {
+          tenantId: pathParams.tenantId,
+          actorUserId: principal.userId,
+          action: "badge_template.ownership_transferred",
+          targetType: "badge_template",
+          targetId: pathParams.badgeTemplateId,
+          metadata: {
+            role: membershipRole,
+            status: transition.status,
+            fromOrgUnitId: transition.event?.fromOrgUnitId ?? transition.template.ownerOrgUnitId,
+            toOrgUnitId: transition.template.ownerOrgUnitId,
+            reasonCode: request.reasonCode,
+            reason: request.reason,
+            eventId: transition.event?.id ?? null,
+          },
+        });
+
+        return c.json({
+          tenantId: pathParams.tenantId,
+          status: transition.status,
+          template: transition.template,
+          event: transition.event,
+        });
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          if (
+            error.message.includes("not found for tenant") &&
+            error.message.includes("Badge template")
+          ) {
+            return c.json(
+              {
+                error: "Badge template not found",
+              },
+              404,
+            );
+          }
+
+          if (
+            error.message.includes("transferredAt must be a valid ISO timestamp") ||
+            error.message.includes("Unsupported badge template ownership reason code") ||
+            error.message.includes("initial_assignment is reserved") ||
+            (error.message.includes("Org unit") && error.message.includes("not found for tenant"))
+          ) {
+            return c.json(
+              {
+                error: error.message,
+              },
+              422,
+            );
+          }
+        }
+
+        throw error;
+      }
+    },
+  );
+
+  app.patch("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseUpdateBadgeTemplateRequest(payload);
@@ -457,7 +471,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (existingTemplate === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -469,7 +483,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       userId: principal.userId,
       membershipRole,
       orgUnitId: existingTemplate.ownerOrgUnitId,
-      requiredRole: 'issuer',
+      requiredRole: "issuer",
       allowWhenNoScopes: true,
     });
 
@@ -491,7 +505,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       if (template === null) {
         return c.json(
           {
-            error: 'Badge template not found',
+            error: "Badge template not found",
           },
           404,
         );
@@ -500,8 +514,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       await createAuditLog(db, {
         tenantId: pathParams.tenantId,
         actorUserId: principal.userId,
-        action: 'badge_template.updated',
-        targetType: 'badge_template',
+        action: "badge_template.updated",
+        targetType: "badge_template",
         targetId: template.id,
         metadata: {
           role: membershipRole,
@@ -515,10 +529,10 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
         template,
       });
     } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
         return c.json(
           {
-            error: 'Badge template slug already exists for tenant',
+            error: "Badge template slug already exists for tenant",
           },
           409,
         );
@@ -528,7 +542,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     }
   });
 
-  app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/image-upload', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/image-upload", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
@@ -538,12 +552,16 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
 
     const { principal, membershipRole } = roleCheck;
     const db = resolveDatabase(c.env);
-    const template = await findBadgeTemplateById(db, pathParams.tenantId, pathParams.badgeTemplateId);
+    const template = await findBadgeTemplateById(
+      db,
+      pathParams.tenantId,
+      pathParams.badgeTemplateId,
+    );
 
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -555,7 +573,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       userId: principal.userId,
       membershipRole,
       orgUnitId: template.ownerOrgUnitId,
-      requiredRole: 'issuer',
+      requiredRole: "issuer",
       allowWhenNoScopes: true,
     });
 
@@ -563,19 +581,20 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
       return scopeCheck;
     }
 
-    const contentType = c.req.header('content-type') ?? '';
+    const contentType = c.req.header("content-type") ?? "";
 
-    if (!contentType.includes('multipart/form-data')) {
+    if (!contentType.includes("multipart/form-data")) {
       return c.json(
         {
-          error: 'Badge template image upload requires multipart/form-data with a file field named "file"',
+          error:
+            'Badge template image upload requires multipart/form-data with a file field named "file"',
         },
         400,
       );
     }
 
     const formData = await c.req.formData();
-    const upload = formData.get('file');
+    const upload = formData.get("file");
 
     if (!(upload instanceof File)) {
       return c.json(
@@ -589,7 +608,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (upload.size < 1) {
       return c.json(
         {
-          error: 'Badge template image file must not be empty',
+          error: "Badge template image file must not be empty",
         },
         422,
       );
@@ -609,7 +628,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (declaredMimeType === null) {
       return c.json(
         {
-          error: 'Unsupported image type. Allowed types: image/png, image/jpeg, image/webp',
+          error: "Unsupported image type. Allowed types: image/png, image/jpeg, image/webp",
         },
         422,
       );
@@ -621,7 +640,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (detectedMimeType === null || detectedMimeType !== declaredMimeType) {
       return c.json(
         {
-          error: 'Uploaded file content does not match declared image type',
+          error: "Uploaded file content does not match declared image type",
         },
         422,
       );
@@ -651,7 +670,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (updatedTemplate === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -660,8 +679,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     await createAuditLog(db, {
       tenantId: pathParams.tenantId,
       actorUserId: principal.userId,
-      action: 'badge_template.image_uploaded',
-      targetType: 'badge_template',
+      action: "badge_template.image_uploaded",
+      targetType: "badge_template",
       targetId: updatedTemplate.id,
       metadata: {
         role: membershipRole,
@@ -688,7 +707,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     );
   });
 
-  app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/archive", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
@@ -707,7 +726,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -716,8 +735,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: principal.userId,
-      action: 'badge_template.archived_state_changed',
-      targetType: 'badge_template',
+      action: "badge_template.archived_state_changed",
+      targetType: "badge_template",
       targetId: template.id,
       metadata: {
         role: membershipRole,
@@ -731,7 +750,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/unarchive', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-templates/:badgeTemplateId/unarchive", async (c) => {
     const pathParams = parseBadgeTemplatePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
@@ -750,7 +769,7 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -759,8 +778,8 @@ export const registerBadgeTemplateRoutes = (input: RegisterBadgeTemplateRoutesIn
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: principal.userId,
-      action: 'badge_template.archived_state_changed',
-      targetType: 'badge_template',
+      action: "badge_template.archived_state_changed",
+      targetType: "badge_template",
       targetId: template.id,
       metadata: {
         role: membershipRole,

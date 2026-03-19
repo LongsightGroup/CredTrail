@@ -1,15 +1,15 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 
 export interface CredentialStatusListReference extends JsonObject {
   id: string;
   type: string;
-  statusPurpose: 'revocation';
+  statusPurpose: "revocation";
   statusListIndex: string;
   statusListCredential: string;
 }
 
 export interface CredentialVerificationCheckSummary {
-  status: 'valid' | 'invalid' | 'unchecked';
+  status: "valid" | "invalid" | "unchecked";
   reason: string | null;
 }
 
@@ -35,89 +35,89 @@ export interface CredentialVerificationChecksSummary {
 }
 
 export interface CredentialLifecycleVerificationSummary {
-  state: 'active' | 'expired' | 'revoked';
+  state: "active" | "expired" | "revoked";
   reason: string | null;
   checkedAt: string;
   expiresAt: string | null;
   revokedAt: string | null;
 }
 
-export const VC_DATA_MODEL_CONTEXT_URL = 'https://www.w3.org/ns/credentials/v2';
-export const VC_DATA_MODEL_V1_CONTEXT_URL = 'https://www.w3.org/2018/credentials/v1';
+export const VC_DATA_MODEL_CONTEXT_URL = "https://www.w3.org/ns/credentials/v2";
+export const VC_DATA_MODEL_V1_CONTEXT_URL = "https://www.w3.org/2018/credentials/v1";
 
 const JSON_LD_KEYWORDS = new Set([
-  '@base',
-  '@container',
-  '@context',
-  '@direction',
-  '@graph',
-  '@id',
-  '@import',
-  '@included',
-  '@index',
-  '@json',
-  '@language',
-  '@list',
-  '@nest',
-  '@none',
-  '@prefix',
-  '@propagate',
-  '@protected',
-  '@reverse',
-  '@set',
-  '@type',
-  '@value',
-  '@version',
-  '@vocab',
+  "@base",
+  "@container",
+  "@context",
+  "@direction",
+  "@graph",
+  "@id",
+  "@import",
+  "@included",
+  "@index",
+  "@json",
+  "@language",
+  "@list",
+  "@nest",
+  "@none",
+  "@prefix",
+  "@propagate",
+  "@protected",
+  "@reverse",
+  "@set",
+  "@type",
+  "@value",
+  "@version",
+  "@vocab",
 ]);
 
 const OB3_SAFE_MODE_KNOWN_TERMS = new Set([
-  'id',
-  'type',
-  'name',
-  'description',
-  'issuer',
-  'image',
-  'narrative',
-  'criteria',
-  'alignment',
-  'achievement',
-  'achievementType',
-  'awardedDate',
-  'validFrom',
-  'validUntil',
-  'issuanceDate',
-  'expirationDate',
-  'credentialSubject',
-  'credentialStatus',
-  'credentialSchema',
-  'proof',
-  'proofPurpose',
-  'proofValue',
-  'verificationMethod',
-  'cryptosuite',
-  'created',
-  'nonce',
-  'challenge',
-  'domain',
-  'statusPurpose',
-  'statusListIndex',
-  'statusListCredential',
-  'encodedList',
-  'identifier',
-  'identifierType',
-  'hashed',
-  'identityHash',
-  'identityType',
-  'salt',
-  'result',
-  'resultDescription',
-  'resultType',
-  'evidence',
-  'url',
-  'endorsement',
-  'endorsementJwt',
-  'subject',
+  "id",
+  "type",
+  "name",
+  "description",
+  "issuer",
+  "image",
+  "narrative",
+  "criteria",
+  "alignment",
+  "achievement",
+  "achievementType",
+  "awardedDate",
+  "validFrom",
+  "validUntil",
+  "issuanceDate",
+  "expirationDate",
+  "credentialSubject",
+  "credentialStatus",
+  "credentialSchema",
+  "proof",
+  "proofPurpose",
+  "proofValue",
+  "verificationMethod",
+  "cryptosuite",
+  "created",
+  "nonce",
+  "challenge",
+  "domain",
+  "statusPurpose",
+  "statusListIndex",
+  "statusListCredential",
+  "encodedList",
+  "identifier",
+  "identifierType",
+  "hashed",
+  "identityHash",
+  "identityType",
+  "salt",
+  "result",
+  "resultDescription",
+  "resultType",
+  "evidence",
+  "url",
+  "endorsement",
+  "endorsementJwt",
+  "subject",
 ]);
 
 interface CreateCredentialVerificationChecksInput<ContextType> {
@@ -127,7 +127,7 @@ interface CreateCredentialVerificationChecksInput<ContextType> {
     context: ContextType,
     resourceUrl: string,
     acceptHeader: string,
-  ) => Promise<{ status: 'ok'; value: JsonObject } | { status: 'error'; reason: string }>;
+  ) => Promise<{ status: "ok"; value: JsonObject } | { status: "error"; reason: string }>;
   parseStatusListIndex: (value: string) => number | null;
   decodedRevocationStatusBit: (
     encodedList: string,
@@ -161,7 +161,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 ): CredentialVerificationChecksHelpers<ContextType> => {
   const expirationTimestampFromCredential = (credential: JsonObject): string | null => {
     return (
-      input.asNonEmptyString(credential.validUntil) ?? input.asNonEmptyString(credential.expirationDate)
+      input.asNonEmptyString(credential.validUntil) ??
+      input.asNonEmptyString(credential.expirationDate)
     );
   };
 
@@ -175,8 +176,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (revokedAt !== null) {
       return {
-        state: 'revoked',
-        reason: 'credential has been revoked by issuer',
+        state: "revoked",
+        reason: "credential has been revoked by issuer",
         checkedAt,
         expiresAt,
         revokedAt,
@@ -188,8 +189,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
       if (expiresAtMilliseconds !== null && expiresAtMilliseconds <= checkedAtMilliseconds) {
         return {
-          state: 'expired',
-          reason: 'credential validUntil/expirationDate has passed',
+          state: "expired",
+          reason: "credential validUntil/expirationDate has passed",
           checkedAt,
           expiresAt,
           revokedAt: null,
@@ -198,7 +199,7 @@ export const createCredentialVerificationChecks = <ContextType>(
     }
 
     return {
-      state: 'active',
+      state: "active",
       reason: null,
       checkedAt,
       expiresAt,
@@ -238,7 +239,7 @@ export const createCredentialVerificationChecks = <ContextType>(
     }
 
     for (const key of Object.keys(contextObject)) {
-      if (key.startsWith('@')) {
+      if (key.startsWith("@")) {
         continue;
       }
 
@@ -270,11 +271,11 @@ export const createCredentialVerificationChecks = <ContextType>(
     }
 
     for (const [key, entryValue] of Object.entries(valueObject)) {
-      if (key.startsWith('@')) {
+      if (key.startsWith("@")) {
         if (!JSON_LD_KEYWORDS.has(key)) {
           unknownTermPaths.push(`${path}.${key}`);
         }
-      } else if (!key.includes(':') && !knownTerms.has(key)) {
+      } else if (!key.includes(":") && !knownTerms.has(key)) {
         unknownTermPaths.push(`${path}.${key}`);
       }
 
@@ -285,12 +286,12 @@ export const createCredentialVerificationChecks = <ContextType>(
   const verifyCredentialJsonLdSafeModeSummary = (
     credential: JsonObject,
   ): CredentialVerificationCheckSummary => {
-    const context = credential['@context'];
+    const context = credential["@context"];
 
     if (context === undefined) {
       return {
-        status: 'invalid',
-        reason: 'credential is missing @context',
+        status: "invalid",
+        reason: "credential is missing @context",
       };
     }
 
@@ -302,9 +303,9 @@ export const createCredentialVerificationChecks = <ContextType>(
       !contextUrls.includes(VC_DATA_MODEL_V1_CONTEXT_URL)
     ) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason:
-          'credential @context must include https://www.w3.org/ns/credentials/v2 or https://www.w3.org/2018/credentials/v1',
+          "credential @context must include https://www.w3.org/ns/credentials/v2 or https://www.w3.org/2018/credentials/v1",
       };
     }
 
@@ -312,19 +313,19 @@ export const createCredentialVerificationChecks = <ContextType>(
     collectInlineContextTerms(context, knownTerms);
 
     const unknownTermPaths: string[] = [];
-    collectUnknownJsonLdTerms(credential, '$', knownTerms, unknownTermPaths);
+    collectUnknownJsonLdTerms(credential, "$", knownTerms, unknownTermPaths);
 
     if (unknownTermPaths.length > 0) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason: `credential contains terms not defined by known JSON-LD context entries (${unknownTermPaths
           .slice(0, 3)
-          .join(', ')})`,
+          .join(", ")})`,
       };
     }
 
     return {
-      status: 'valid',
+      status: "valid",
       reason: null,
     };
   };
@@ -365,7 +366,7 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (credentialSchemaValue === undefined) {
       return {
-        status: 'unchecked',
+        status: "unchecked",
         reason: null,
       };
     }
@@ -376,8 +377,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (entries.length === 0) {
       return {
-        status: 'invalid',
-        reason: 'credentialSchema must include at least one schema entry when present',
+        status: "invalid",
+        reason: "credentialSchema must include at least one schema entry when present",
       };
     }
 
@@ -388,7 +389,7 @@ export const createCredentialVerificationChecks = <ContextType>(
 
       if (schemaEntry === null) {
         return {
-          status: 'invalid',
+          status: "invalid",
           reason: `credentialSchema[${String(index)}] must be a JSON object`,
         };
       }
@@ -398,30 +399,30 @@ export const createCredentialVerificationChecks = <ContextType>(
 
       if (schemaId === null) {
         return {
-          status: 'invalid',
+          status: "invalid",
           reason: `credentialSchema[${String(index)}] is missing a non-empty id`,
         };
       }
 
       if (schemaTypes.length === 0) {
         return {
-          status: 'invalid',
+          status: "invalid",
           reason: `credentialSchema[${String(index)}] is missing a non-empty type`,
         };
       }
 
-      if (schemaTypes.includes('1EdTechJsonSchemaValidator2019')) {
+      if (schemaTypes.includes("1EdTechJsonSchemaValidator2019")) {
         has1EdTechJsonSchemaValidator = true;
 
         const loadedSchema = await input.loadJsonObjectFromUrl(
           context,
           schemaId,
-          'application/schema+json, application/json',
+          "application/schema+json, application/json",
         );
 
-        if (loadedSchema.status !== 'ok') {
+        if (loadedSchema.status !== "ok") {
           return {
-            status: 'invalid',
+            status: "invalid",
             reason: `credentialSchema[${String(index)}] schema could not be loaded (${loadedSchema.reason})`,
           };
         }
@@ -433,10 +434,10 @@ export const createCredentialVerificationChecks = <ContextType>(
 
         if (missingRequiredProperties.length > 0) {
           return {
-            status: 'invalid',
+            status: "invalid",
             reason: `credential does not satisfy credentialSchema[${String(index)}] required properties (${missingRequiredProperties
               .slice(0, 3)
-              .join(', ')})`,
+              .join(", ")})`,
           };
         }
       }
@@ -444,13 +445,13 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (!has1EdTechJsonSchemaValidator) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason: "credentialSchema must include a schema with type '1EdTechJsonSchemaValidator2019'",
       };
     }
 
     return {
-      status: 'valid',
+      status: "valid",
       reason: null,
     };
   };
@@ -497,8 +498,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (credentialSubject === null) {
       return {
-        status: 'invalid',
-        reason: 'credentialSubject must be an object',
+        status: "invalid",
+        reason: "credentialSubject must be an object",
       };
     }
 
@@ -507,42 +508,45 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (subjectId === null && !hasIdentifier) {
       return {
-        status: 'invalid',
-        reason: 'credentialSubject must include id or at least one identifier',
+        status: "invalid",
+        reason: "credentialSubject must include id or at least one identifier",
       };
     }
 
     const credentialTypes = normalizedStringValues(credential.type);
 
-    if (credentialTypes.includes('OpenBadgeCredential')) {
+    if (credentialTypes.includes("OpenBadgeCredential")) {
       const achievement = input.asJsonObject(credentialSubject.achievement);
 
       if (achievement === null) {
         return {
-          status: 'invalid',
-          reason: 'credentialSubject.achievement must be an object for OpenBadgeCredential',
+          status: "invalid",
+          reason: "credentialSubject.achievement must be an object for OpenBadgeCredential",
         };
       }
 
       const achievementTypes = normalizedStringValues(achievement.type);
 
-      if (!achievementTypes.includes('Achievement')) {
+      if (!achievementTypes.includes("Achievement")) {
         return {
-          status: 'invalid',
+          status: "invalid",
           reason:
-            'credentialSubject.achievement.type must include Achievement for OpenBadgeCredential',
+            "credentialSubject.achievement.type must include Achievement for OpenBadgeCredential",
         };
       }
     }
 
     return {
-      status: 'valid',
+      status: "valid",
       reason: null,
     };
   };
 
   const validFromTimestampFromCredential = (credential: JsonObject): string | null => {
-    return input.asNonEmptyString(credential.validFrom) ?? input.asNonEmptyString(credential.issuanceDate);
+    return (
+      input.asNonEmptyString(credential.validFrom) ??
+      input.asNonEmptyString(credential.issuanceDate)
+    );
   };
 
   const verifyCredentialDatesSummary = (
@@ -554,8 +558,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (validFrom === null) {
       return {
-        status: 'invalid',
-        reason: 'credential must include validFrom or issuanceDate',
+        status: "invalid",
+        reason: "credential must include validFrom or issuanceDate",
         validFrom,
         validUntil,
       };
@@ -565,8 +569,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (validFromMilliseconds === null) {
       return {
-        status: 'invalid',
-        reason: 'credential validFrom/issuanceDate must be a valid ISO timestamp',
+        status: "invalid",
+        reason: "credential validFrom/issuanceDate must be a valid ISO timestamp",
         validFrom,
         validUntil,
       };
@@ -577,8 +581,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (validUntil !== null && validUntilMilliseconds === null) {
       return {
-        status: 'invalid',
-        reason: 'credential validUntil/expirationDate must be a valid ISO timestamp',
+        status: "invalid",
+        reason: "credential validUntil/expirationDate must be a valid ISO timestamp",
         validFrom,
         validUntil,
       };
@@ -586,9 +590,9 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (validUntilMilliseconds !== null && validUntilMilliseconds < validFromMilliseconds) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason:
-          'credential validUntil/expirationDate must not be earlier than validFrom/issuanceDate',
+          "credential validUntil/expirationDate must not be earlier than validFrom/issuanceDate",
         validFrom,
         validUntil,
       };
@@ -598,15 +602,15 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (validFromMilliseconds > checkedAtMilliseconds) {
       return {
-        status: 'invalid',
-        reason: 'credential validFrom/issuanceDate is in the future',
+        status: "invalid",
+        reason: "credential validFrom/issuanceDate is in the future",
         validFrom,
         validUntil,
       };
     }
 
     return {
-      status: 'valid',
+      status: "valid",
       reason: null,
       validFrom,
       validUntil,
@@ -616,22 +620,22 @@ export const createCredentialVerificationChecks = <ContextType>(
   const loadStatusListCredentialForVerification = async (
     context: ContextType,
     statusListCredentialUrl: string,
-  ): Promise<{ status: 'ok'; credential: JsonObject } | { status: 'error'; reason: string }> => {
+  ): Promise<{ status: "ok"; credential: JsonObject } | { status: "error"; reason: string }> => {
     const loadedCredential = await input.loadJsonObjectFromUrl(
       context,
       statusListCredentialUrl,
-      'application/ld+json, application/json',
+      "application/ld+json, application/json",
     );
 
-    if (loadedCredential.status !== 'ok') {
+    if (loadedCredential.status !== "ok") {
       return {
-        status: 'error',
+        status: "error",
         reason: `credential status list could not be retrieved (${loadedCredential.reason})`,
       };
     }
 
     return {
-      status: 'ok',
+      status: "ok",
       credential: loadedCredential.value,
     };
   };
@@ -645,11 +649,11 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (credentialStatus === undefined) {
       return {
-        status: expectedStatusList === null ? 'unchecked' : 'invalid',
+        status: expectedStatusList === null ? "unchecked" : "invalid",
         reason:
           expectedStatusList === null
             ? null
-            : 'credentialStatus is required when revocation metadata is configured',
+            : "credentialStatus is required when revocation metadata is configured",
         type: null,
         statusPurpose: null,
         statusListIndex: null,
@@ -662,8 +666,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (credentialStatusObject === null) {
       return {
-        status: 'invalid',
-        reason: 'credentialStatus must be a JSON object',
+        status: "invalid",
+        reason: "credentialStatus must be a JSON object",
         type: null,
         statusPurpose: null,
         statusListIndex: null,
@@ -675,12 +679,14 @@ export const createCredentialVerificationChecks = <ContextType>(
     const statusType = input.asNonEmptyString(credentialStatusObject.type);
     const statusPurpose = input.asNonEmptyString(credentialStatusObject.statusPurpose);
     const statusListIndex = input.asNonEmptyString(credentialStatusObject.statusListIndex);
-    const statusListCredential = input.asNonEmptyString(credentialStatusObject.statusListCredential);
+    const statusListCredential = input.asNonEmptyString(
+      credentialStatusObject.statusListCredential,
+    );
 
     if (expectedStatusList === null) {
       return {
-        status: 'invalid',
-        reason: 'credentialStatus is present but no revocation metadata exists for this credential',
+        status: "invalid",
+        reason: "credentialStatus is present but no revocation metadata exists for this credential",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -693,11 +699,11 @@ export const createCredentialVerificationChecks = <ContextType>(
       statusType === null ||
       statusListIndex === null ||
       statusListCredential === null ||
-      (statusPurpose !== null && statusPurpose !== 'revocation')
+      (statusPurpose !== null && statusPurpose !== "revocation")
     ) {
       return {
-        status: 'invalid',
-        reason: 'credentialStatus is missing required Bitstring status list fields',
+        status: "invalid",
+        reason: "credentialStatus is missing required Bitstring status list fields",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -706,10 +712,10 @@ export const createCredentialVerificationChecks = <ContextType>(
       };
     }
 
-    if (statusType !== 'BitstringStatusListEntry' && statusType !== '1EdTechRevocationList') {
+    if (statusType !== "BitstringStatusListEntry" && statusType !== "1EdTechRevocationList") {
       return {
-        status: 'invalid',
-        reason: 'credentialStatus type must be BitstringStatusListEntry or 1EdTechRevocationList',
+        status: "invalid",
+        reason: "credentialStatus type must be BitstringStatusListEntry or 1EdTechRevocationList",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -720,9 +726,9 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (statusListIndex !== expectedStatusList.statusListIndex) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason:
-          'credentialStatus statusListIndex does not match the expected credential revocation index',
+          "credentialStatus statusListIndex does not match the expected credential revocation index",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -733,9 +739,9 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (statusListCredential !== expectedStatusList.statusListCredential) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason:
-          'credentialStatus statusListCredential does not match the expected revocation list URL',
+          "credentialStatus statusListCredential does not match the expected revocation list URL",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -748,8 +754,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (normalizedStatusListIndex === null) {
       return {
-        status: 'invalid',
-        reason: 'credentialStatus statusListIndex must be a non-negative integer string',
+        status: "invalid",
+        reason: "credentialStatus statusListIndex must be a non-negative integer string",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -763,9 +769,9 @@ export const createCredentialVerificationChecks = <ContextType>(
       statusListCredential,
     );
 
-    if (statusListCredentialResult.status !== 'ok') {
+    if (statusListCredentialResult.status !== "ok") {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason: statusListCredentialResult.reason,
         type: statusType,
         statusPurpose,
@@ -782,8 +788,8 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (encodedList === null) {
       return {
-        status: 'invalid',
-        reason: 'credential status list is missing credentialSubject.encodedList',
+        status: "invalid",
+        reason: "credential status list is missing credentialSubject.encodedList",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -796,9 +802,9 @@ export const createCredentialVerificationChecks = <ContextType>(
 
     if (revoked === null) {
       return {
-        status: 'invalid',
+        status: "invalid",
         reason:
-          'credential status list encodedList could not be decoded for the specified statusListIndex',
+          "credential status list encodedList could not be decoded for the specified statusListIndex",
         type: statusType,
         statusPurpose,
         statusListIndex,
@@ -808,10 +814,10 @@ export const createCredentialVerificationChecks = <ContextType>(
     }
 
     return {
-      status: 'valid',
+      status: "valid",
       reason: null,
       type: statusType,
-      statusPurpose: statusPurpose ?? 'revocation',
+      statusPurpose: statusPurpose ?? "revocation",
       statusListIndex,
       statusListCredential,
       revoked,

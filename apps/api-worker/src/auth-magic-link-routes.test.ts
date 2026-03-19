@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteCookie, setCookie } from 'hono/cookie';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { deleteCookie, setCookie } from "hono/cookie";
 
 const {
   mockedResolveEnterpriseLoginExperience,
@@ -29,8 +29,8 @@ const {
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -41,13 +41,13 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/enterprise-sso-adapter', () => {
+vi.mock("./auth/enterprise-sso-adapter", () => {
   return {
     createEnterpriseSsoAdapter: vi.fn(() => ({
       resolveLoginExperience: mockedResolveEnterpriseLoginExperience,
@@ -59,11 +59,10 @@ vi.mock('./auth/enterprise-sso-adapter', () => {
   };
 });
 
-vi.mock('./auth/break-glass-policy', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/break-glass-policy')>(
-      './auth/break-glass-policy',
-    );
+vi.mock("./auth/break-glass-policy", async () => {
+  const actual = await vi.importActual<typeof import("./auth/break-glass-policy")>(
+    "./auth/break-glass-policy",
+  );
 
   return {
     ...actual,
@@ -83,10 +82,10 @@ import {
   listAccessibleTenantContextsForUser,
   upsertUserByEmail,
   type SqlDatabase,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
@@ -108,9 +107,9 @@ const createEnv = (
 } => {
   return {
     APP_ENV: appEnv,
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -127,7 +126,7 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
   requestMagicLinkResult?: {
     tenantId: string;
     email: string;
-    deliveryStatus: 'sent' | 'skipped' | 'failed';
+    deliveryStatus: "sent" | "skipped" | "failed";
     expiresAt?: string | undefined;
     debugMagicLinkToken?: string | undefined;
     debugMagicLinkUrl?: string | undefined;
@@ -136,16 +135,14 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
   betterAuthPrincipal?: {
     userId: string;
     authSessionId: string;
-    authMethod: 'better_auth';
+    authMethod: "better_auth";
     expiresAt: string;
   };
-  betterAuthRequestedTenant?:
-    | {
-        tenantId: string;
-        source: 'route' | 'legacy_session';
-        authoritative: boolean;
-      }
-    | null;
+  betterAuthRequestedTenant?: {
+    tenantId: string;
+    source: "route" | "legacy_session";
+    authoritative: boolean;
+  } | null;
 }): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
@@ -153,16 +150,16 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
   vi.resetModules();
 
   const betterAuthPrincipal = options?.betterAuthPrincipal ?? {
-    userId: 'usr_better',
-    authSessionId: 'ba_ses_123',
-    authMethod: 'better_auth' as const,
-    expiresAt: '2026-02-18T22:00:00.000Z',
+    userId: "usr_better",
+    authSessionId: "ba_ses_123",
+    authMethod: "better_auth" as const,
+    expiresAt: "2026-02-18T22:00:00.000Z",
   };
   const betterAuthRequestedTenant =
     options?.betterAuthRequestedTenant === undefined
       ? {
-          tenantId: 'tenant_123',
-          source: 'route' as const,
+          tenantId: "tenant_123",
+          source: "route" as const,
           authoritative: true,
         }
       : options.betterAuthRequestedTenant;
@@ -172,22 +169,22 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     requestMagicLink: vi.fn(() =>
       Promise.resolve(
         options?.requestMagicLinkResult ?? {
-          tenantId: 'tenant_123',
-          email: 'learner@example.edu',
-          deliveryStatus: 'sent' as const,
-          expiresAt: '2026-02-18T12:10:00.000Z',
-          debugMagicLinkToken: 'better-token-1234567890',
+          tenantId: "tenant_123",
+          email: "learner@example.edu",
+          deliveryStatus: "sent" as const,
+          expiresAt: "2026-02-18T12:10:00.000Z",
+          debugMagicLinkToken: "better-token-1234567890",
           debugMagicLinkUrl:
-            'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
+            "https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve",
         },
       ),
     ),
     createMagicLinkSession: vi.fn((context: Parameters<typeof setCookie>[0]) => {
       betterAuthAuthenticated = true;
-      setCookie(context, 'better-auth.session_token', 'better-session', {
+      setCookie(context, "better-auth.session_token", "better-session", {
         httpOnly: true,
-        sameSite: 'Lax',
-        path: '/',
+        sameSite: "Lax",
+        path: "/",
       });
       return Promise.resolve(betterAuthPrincipal);
     }),
@@ -200,18 +197,17 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     ),
     revokeCurrentSession: vi.fn((context: Parameters<typeof deleteCookie>[0]) => {
       betterAuthAuthenticated = false;
-      deleteCookie(context, 'better-auth.session_token', {
-        path: '/',
+      deleteCookie(context, "better-auth.session_token", {
+        path: "/",
       });
       return Promise.resolve();
     }),
   };
 
-  vi.doMock('./auth/better-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-        './auth/better-auth-adapter',
-      );
+  vi.doMock("./auth/better-auth-adapter", async () => {
+    const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+      "./auth/better-auth-adapter",
+    );
 
     return {
       ...actual,
@@ -219,7 +215,7 @@ const loadAppWithMockedHostedAuthProviders = async (options?: {
     };
   });
 
-  const { app: isolatedApp } = await import('./index');
+  const { app: isolatedApp } = await import("./index");
 
   return {
     app: isolatedApp,
@@ -232,65 +228,65 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedCreateAuditLog.mockReset();
   mockedCreateAuditLog.mockResolvedValue({
-    id: 'audit_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'membership.role_assigned',
-    targetType: 'membership',
-    targetId: 'tenant_123:usr_123',
+    id: "audit_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "membership.role_assigned",
+    targetType: "membership",
+    targetId: "tenant_123:usr_123",
     metadataJson: null,
-    occurredAt: '2026-02-18T12:00:00.000Z',
-    createdAt: '2026-02-18T12:00:00.000Z',
+    occurredAt: "2026-02-18T12:00:00.000Z",
+    createdAt: "2026-02-18T12:00:00.000Z",
   });
   mockedEnsureTenantMembership.mockReset();
   mockedEnsureTenantMembership.mockResolvedValue({
     membership: {
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
-      role: 'viewer',
-      createdAt: '2026-02-18T12:00:00.000Z',
-      updatedAt: '2026-02-18T12:00:00.000Z',
+      tenantId: "tenant_123",
+      userId: "usr_123",
+      role: "viewer",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
     },
     created: false,
   });
   mockedListAccessibleTenantContextsForUser.mockReset();
   mockedListAccessibleTenantContextsForUser.mockResolvedValue([
     {
-      tenantId: 'tenant_123',
-      tenantSlug: 'tenant-123',
-      tenantDisplayName: 'Tenant 123',
-      tenantPlanTier: 'team',
-      membershipRole: 'viewer',
+      tenantId: "tenant_123",
+      tenantSlug: "tenant-123",
+      tenantDisplayName: "Tenant 123",
+      tenantPlanTier: "team",
+      membershipRole: "viewer",
     },
   ]);
   mockedUpsertUserByEmail.mockReset();
   mockedUpsertUserByEmail.mockResolvedValue({
-    id: 'usr_123',
-    email: 'learner@example.edu',
+    id: "usr_123",
+    email: "learner@example.edu",
   });
   mockedBreakGlassRequestPasswordReset.mockReset();
-  mockedBreakGlassRequestPasswordReset.mockResolvedValue('sent');
+  mockedBreakGlassRequestPasswordReset.mockResolvedValue("sent");
   mockedBreakGlassSignIn.mockReset();
   mockedBreakGlassSignIn.mockResolvedValue({
-    status: 'rejected',
-    reason: 'break_glass_invalid_credentials',
+    status: "rejected",
+    reason: "break_glass_invalid_credentials",
   });
   mockedBreakGlassEnrollTwoFactor.mockReset();
   mockedBreakGlassEnrollTwoFactor.mockResolvedValue({
-    status: 'rejected',
-    reason: 'break_glass_enrollment_failed',
+    status: "rejected",
+    reason: "break_glass_enrollment_failed",
   });
   mockedBreakGlassVerifyTwoFactor.mockReset();
   mockedBreakGlassVerifyTwoFactor.mockResolvedValue({
-    status: 'rejected',
-    reason: 'break_glass_invalid_code',
+    status: "rejected",
+    reason: "break_glass_invalid_code",
   });
   mockedBreakGlassResetPassword.mockReset();
-  mockedBreakGlassResetPassword.mockResolvedValue('rejected');
+  mockedBreakGlassResetPassword.mockResolvedValue("rejected");
   mockedResolveEnterpriseLoginExperience.mockReset();
   mockedResolveEnterpriseLoginExperience.mockResolvedValue({
-    tenantId: 'tenant_123',
-    loginMode: 'local',
+    tenantId: "tenant_123",
+    loginMode: "local",
     localLoginAllowed: true,
     enterpriseProviders: [],
     autoStartPath: null,
@@ -302,7 +298,7 @@ beforeEach(() => {
     new Response(null, {
       status: 302,
       headers: {
-        location: '/login?reason=sso_unavailable',
+        location: "/login?reason=sso_unavailable",
       },
     }),
   );
@@ -311,7 +307,7 @@ beforeEach(() => {
     new Response(null, {
       status: 302,
       headers: {
-        location: '/login?reason=sso_failed',
+        location: "/login?reason=sso_failed",
       },
     }),
   );
@@ -320,281 +316,282 @@ beforeEach(() => {
     new Response(null, {
       status: 302,
       headers: {
-        location: '/login?reason=sso_failed',
+        location: "/login?reason=sso_failed",
       },
     }),
   );
 });
 
 afterEach(() => {
-  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock("./auth/better-auth-adapter");
 });
 
-describe('magic-link auth routes', () => {
-  it('renders login page with magic-link form and linked page assets', async () => {
-    const env = createEnv('production');
+describe("magic-link auth routes", () => {
+  it("renders login page with magic-link form and linked page assets", async () => {
+    const env = createEnv("production");
     const response = await app.request(
-      '/login?tenantId=sakai&next=%2Ftenants%2Fsakai%2Fadmin',
+      "/login?tenantId=sakai&next=%2Ftenants%2Fsakai%2Fadmin",
       undefined,
       env,
     );
     const body = await response.text();
-    const stylesheetMatch = /<link rel="stylesheet" href="([^"]*\/assets\/ui\/auth-login\.[^"]+\.css)"/.exec(
-      body,
-    );
-    const scriptMatch = /<script defer src="([^"]*\/assets\/ui\/auth-login\.[^"]+\.js)"><\/script>/.exec(
-      body,
-    );
-    const stylesheetPath =
-      stylesheetMatch?.[1] ?? null;
+    const stylesheetMatch =
+      /<link rel="stylesheet" href="([^"]*\/assets\/ui\/auth-login\.[^"]+\.css)"/.exec(body);
+    const scriptMatch =
+      /<script defer src="([^"]*\/assets\/ui\/auth-login\.[^"]+\.js)"><\/script>/.exec(body);
+    const stylesheetPath = stylesheetMatch?.[1] ?? null;
     const scriptPath = scriptMatch?.[1] ?? null;
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/html');
-    expect(body).toContain('Access your CredTrail tenant');
-    expect(body).toContain('Email me a sign-in link');
-    expect(body).toContain('The link expires in 10 minutes and returns you to this tenant flow.');
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(body).toContain("Access your CredTrail tenant");
+    expect(body).toContain("Email me a sign-in link");
+    expect(body).toContain("The link expires in 10 minutes and returns you to this tenant flow.");
     expect(body).toContain('id="magic-link-login-form"');
     expect(body).toContain('name="tenantId"');
     expect(body).toContain('value="sakai"');
-    expect(body).toContain('ct-login__step-copy');
-    expect(body).toContain('/assets/ui/foundation.');
-    expect(body).not.toContain('.ct-login__hero {');
+    expect(body).toContain("ct-login__step-copy");
+    expect(body).toContain("/assets/ui/foundation.");
+    expect(body).not.toContain(".ct-login__hero {");
     expect(stylesheetPath).not.toBeNull();
     expect(scriptPath).not.toBeNull();
 
-    const stylesheetResponse = await app.request(stylesheetPath ?? '', undefined, env);
-    const scriptResponse = await app.request(scriptPath ?? '', undefined, env);
+    const stylesheetResponse = await app.request(stylesheetPath ?? "", undefined, env);
+    const scriptResponse = await app.request(scriptPath ?? "", undefined, env);
 
     expect(stylesheetResponse.status).toBe(200);
-    expect(stylesheetResponse.headers.get('content-type')).toContain('text/css');
-    expect(stylesheetResponse.headers.get('cache-control')).toContain('immutable');
+    expect(stylesheetResponse.headers.get("content-type")).toContain("text/css");
+    expect(stylesheetResponse.headers.get("cache-control")).toContain("immutable");
     expect(scriptResponse.status).toBe(200);
-    expect(scriptResponse.headers.get('content-type')).toContain('text/javascript');
-    expect(scriptResponse.headers.get('cache-control')).toContain('immutable');
+    expect(scriptResponse.headers.get("content-type")).toContain("text/javascript");
+    expect(scriptResponse.headers.get("cache-control")).toContain("immutable");
   });
 
-  it('redirects sso_required tenant login pages into the default enterprise provider flow', async () => {
+  it("redirects sso_required tenant login pages into the default enterprise provider flow", async () => {
     mockedResolveEnterpriseLoginExperience.mockResolvedValue({
-      tenantId: 'tenant_123',
-      loginMode: 'sso_required',
+      tenantId: "tenant_123",
+      loginMode: "sso_required",
       localLoginAllowed: false,
       enterpriseProviders: [
         {
-          id: 'tap_oidc',
-          label: 'Campus OIDC',
-          protocol: 'oidc',
+          id: "tap_oidc",
+          label: "Campus OIDC",
+          protocol: "oidc",
           isDefault: true,
           startPath:
-            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+            "/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
         },
       ],
       autoStartPath:
-        '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        "/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
     });
 
     const response = await app.request(
-      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      "/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe(
-      '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    expect(response.headers.get("location")).toBe(
+      "/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
     );
   });
 
-  it('renders a truthful notice instead of auto-starting when no supported hosted enterprise provider is available', async () => {
+  it("renders a truthful notice instead of auto-starting when no supported hosted enterprise provider is available", async () => {
     mockedResolveEnterpriseLoginExperience.mockResolvedValue({
-      tenantId: 'tenant_123',
-      loginMode: 'sso_required',
+      tenantId: "tenant_123",
+      loginMode: "sso_required",
       localLoginAllowed: false,
       enterpriseProviders: [],
       autoStartPath: null,
       notice:
-        'Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.',
+        "Institution sign-in is required for this tenant, but no supported hosted OIDC provider is currently available.",
     });
 
     const response = await app.request(
-      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      "/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('no supported hosted OIDC provider is currently available');
-    expect(body).not.toContain('Continue with Campus OIDC');
+    expect(body).toContain("no supported hosted OIDC provider is currently available");
+    expect(body).not.toContain("Continue with Campus OIDC");
   });
 
-  it('renders a truthful hosted enterprise unavailability notice after an unsupported SSO start redirect', async () => {
+  it("renders a truthful hosted enterprise unavailability notice after an unsupported SSO start redirect", async () => {
     const response = await app.request(
-      '/login?tenantId=tenant_123&reason=sso_unavailable',
+      "/login?tenantId=tenant_123&reason=sso_unavailable",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Hosted institution sign-in is not available for this tenant right now.');
+    expect(body).toContain(
+      "Hosted institution sign-in is not available for this tenant right now.",
+    );
   });
 
-  it('renders hybrid tenant login pages with both local and enterprise options', async () => {
+  it("renders hybrid tenant login pages with both local and enterprise options", async () => {
     mockedResolveEnterpriseLoginExperience.mockResolvedValue({
-      tenantId: 'tenant_123',
-      loginMode: 'hybrid',
+      tenantId: "tenant_123",
+      loginMode: "hybrid",
       localLoginAllowed: true,
       explicitLocalLoginPath: null,
       enterpriseProviders: [
         {
-          id: 'tap_oidc',
-          label: 'Campus OIDC',
-          protocol: 'oidc',
+          id: "tap_oidc",
+          label: "Campus OIDC",
+          protocol: "oidc",
           isDefault: true,
           startPath:
-            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+            "/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
         },
       ],
       autoStartPath: null,
     });
 
     const response = await app.request(
-      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      "/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Institution sign-in');
-    expect(body).toContain('Continue with Campus OIDC');
-    expect(body).not.toContain('OIDC or SAML');
+    expect(body).toContain("Institution sign-in");
+    expect(body).toContain("Continue with Campus OIDC");
+    expect(body).not.toContain("OIDC or SAML");
     expect(body).toContain('id="magic-link-login-form"');
   });
 
-  it('renders explicit break-glass local sign-in link when SSO-required tenant enables fallback accounts', async () => {
+  it("renders explicit break-glass local sign-in link when SSO-required tenant enables fallback accounts", async () => {
     mockedResolveEnterpriseLoginExperience.mockResolvedValue({
-      tenantId: 'tenant_123',
-      loginMode: 'sso_required',
+      tenantId: "tenant_123",
+      loginMode: "sso_required",
       localLoginAllowed: false,
       explicitLocalLoginPath:
-        '/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+        "/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       enterpriseProviders: [
         {
-          id: 'tap_oidc',
-          label: 'Campus OIDC',
-          protocol: 'oidc',
+          id: "tap_oidc",
+          label: "Campus OIDC",
+          protocol: "oidc",
           isDefault: false,
           startPath:
-            '/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+            "/v1/auth/sso/tap_oidc/start?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
         },
       ],
       autoStartPath: null,
     });
 
     const response = await app.request(
-      '/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      "/login?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('break-glass local sign-in');
-    expect(body).toContain('/login/local?tenantId=tenant_123&amp;next=%2Ftenants%2Ftenant_123%2Fadmin');
+    expect(body).toContain("break-glass local sign-in");
+    expect(body).toContain(
+      "/login/local?tenantId=tenant_123&amp;next=%2Ftenants%2Ftenant_123%2Fadmin",
+    );
   });
 
-  it('renders explicit break-glass local login page', async () => {
+  it("renders explicit break-glass local login page", async () => {
     const response = await app.request(
-      '/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+      "/login/local?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Break-glass local sign-in');
+    expect(body).toContain("Break-glass local sign-in");
     expect(body).toContain('action="/auth/local/sign-in"');
     expect(body).toContain('action="/auth/local/reset-password/request"');
   });
 
-  it('redirects local break-glass sign-in into MFA setup when Better Auth account exists without TOTP', async () => {
+  it("redirects local break-glass sign-in into MFA setup when Better Auth account exists without TOTP", async () => {
     mockedBreakGlassSignIn.mockResolvedValue({
-      status: 'setup_required',
+      status: "setup_required",
     });
 
     const response = await app.request(
-      '/auth/local/sign-in',
+      "/auth/local/sign-in",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          tenantId: 'tenant_123',
-          next: '/tenants/tenant_123/admin',
-          email: 'admin@example.edu',
-          password: 'test-password',
+          tenantId: "tenant_123",
+          next: "/tenants/tenant_123/admin",
+          email: "admin@example.edu",
+          password: "test-password",
         }).toString(),
       },
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe(
-      '/auth/local/two-factor/setup?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin',
+    expect(response.headers.get("location")).toBe(
+      "/auth/local/two-factor/setup?tenantId=tenant_123&next=%2Ftenants%2Ftenant_123%2Fadmin",
     );
-    expect(response.headers.get('set-cookie')).toContain('credtrail_break_glass_pending_mfa=');
+    expect(response.headers.get("set-cookie")).toContain("credtrail_break_glass_pending_mfa=");
   });
 
-  it('redirects local break-glass verification into the requested tenant path on success', async () => {
+  it("redirects local break-glass verification into the requested tenant path on success", async () => {
     mockedBreakGlassVerifyTwoFactor.mockResolvedValue({
-      status: 'authenticated',
+      status: "authenticated",
       principal: {
-        userId: 'usr_break_glass',
-        authSessionId: 'ba_session_123',
-        authMethod: 'better_auth',
-        expiresAt: '2026-03-17T01:00:00.000Z',
+        userId: "usr_break_glass",
+        authSessionId: "ba_session_123",
+        authMethod: "better_auth",
+        expiresAt: "2026-03-17T01:00:00.000Z",
       },
     });
 
     const response = await app.request(
-      '/auth/local/two-factor/verify',
+      "/auth/local/two-factor/verify",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          tenantId: 'tenant_123',
-          next: '/tenants/tenant_123/admin',
-          code: '123456',
+          tenantId: "tenant_123",
+          next: "/tenants/tenant_123/admin",
+          code: "123456",
         }).toString(),
       },
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_123/admin');
+    expect(response.headers.get("location")).toBe("/tenants/tenant_123/admin");
   });
 
-  it('returns token + url in development mode for magic-link request', async () => {
+  it("returns token + url in development mode for magic-link request", async () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/v1/auth/magic-link/request',
+      "/v1/auth/magic-link/request",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          tenantId: 'tenant_123',
-          email: 'learner@example.edu',
+          tenantId: "tenant_123",
+          email: "learner@example.edu",
         }),
       },
-      createEnv('development'),
+      createEnv("development"),
     );
     const body = await response.json<{
       status: string;
@@ -604,18 +601,18 @@ describe('magic-link auth routes', () => {
     }>();
 
     expect(response.status).toBe(202);
-    expect(body.status).toBe('sent');
-    expect(typeof body.magicLinkToken).toBe('string');
+    expect(body.status).toBe("sent");
+    expect(typeof body.magicLinkToken).toBe("string");
     expect(body.magicLinkToken.length).toBeGreaterThan(0);
-    expect(body.magicLinkUrl).toContain('/auth/magic-link/verify?token=');
-    expect(body.magicLinkUrl).toContain('next=');
+    expect(body.magicLinkUrl).toContain("/auth/magic-link/verify?token=");
+    expect(body.magicLinkUrl).toContain("next=");
   });
 
-  it('rejects local hosted magic-link requests when enterprise SSO is required', async () => {
+  it("rejects local hosted magic-link requests when enterprise SSO is required", async () => {
     mockedEnforceLocalMagicLinkRequest.mockResolvedValue(
       Response.json(
         {
-          error: 'Enterprise SSO is required for this tenant. Use institution sign-in instead.',
+          error: "Enterprise SSO is required for this tenant. Use institution sign-in instead.",
         },
         {
           status: 403,
@@ -625,37 +622,37 @@ describe('magic-link auth routes', () => {
 
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
     const response = await isolatedApp.request(
-      '/v1/auth/magic-link/request',
+      "/v1/auth/magic-link/request",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          tenantId: 'tenant_123',
-          email: 'learner@example.edu',
+          tenantId: "tenant_123",
+          email: "learner@example.edu",
         }),
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.json<{
       error: string;
     }>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toContain('Enterprise SSO is required');
+    expect(body.error).toContain("Enterprise SSO is required");
     expect(mockedUpsertUserByEmail).not.toHaveBeenCalled();
     expect(betterAuthProvider.requestMagicLink).not.toHaveBeenCalled();
   });
 
-  it('delegates hosted magic-link requests to Better Auth while preserving user and membership upserts', async () => {
+  it("delegates hosted magic-link requests to Better Auth while preserving user and membership upserts", async () => {
     mockedEnsureTenantMembership.mockResolvedValue({
       membership: {
-        tenantId: 'tenant_123',
-        userId: 'usr_123',
-        role: 'viewer',
-        createdAt: '2026-02-18T12:00:00.000Z',
-        updatedAt: '2026-02-18T12:00:00.000Z',
+        tenantId: "tenant_123",
+        userId: "usr_123",
+        role: "viewer",
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
       },
       created: true,
     });
@@ -663,18 +660,18 @@ describe('magic-link auth routes', () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/v1/auth/magic-link/request',
+      "/v1/auth/magic-link/request",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          tenantId: 'tenant_123',
-          email: 'learner@example.edu',
+          tenantId: "tenant_123",
+          email: "learner@example.edu",
         }),
       },
-      createEnv('development'),
+      createEnv("development"),
     );
     const body = await response.json<{
       status: string;
@@ -688,42 +685,42 @@ describe('magic-link auth routes', () => {
 
     expect(response.status).toBe(202);
     expect(body).toEqual({
-      status: 'sent',
-      deliveryStatus: 'sent',
-      tenantId: 'tenant_123',
-      email: 'learner@example.edu',
-      expiresAt: '2026-02-18T12:10:00.000Z',
-      magicLinkToken: 'better-token-1234567890',
+      status: "sent",
+      deliveryStatus: "sent",
+      tenantId: "tenant_123",
+      email: "learner@example.edu",
+      expiresAt: "2026-02-18T12:10:00.000Z",
+      magicLinkToken: "better-token-1234567890",
       magicLinkUrl:
-        'https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
+        "https://credtrail.test/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve",
     });
-    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, 'learner@example.edu');
-    expect(mockedEnsureTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_123');
+    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, "learner@example.edu");
+    expect(mockedEnsureTenantMembership).toHaveBeenCalledWith(fakeDb, "tenant_123", "usr_123");
     expect(mockedCreateAuditLog).toHaveBeenCalledTimes(1);
     expect(betterAuthProvider.requestMagicLink).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        email: 'learner@example.edu',
+        tenantId: "tenant_123",
+        email: "learner@example.edu",
       }),
     );
   });
 
-  it('delegates JSON verify to Better Auth-backed session creation instead of legacy token tables', async () => {
+  it("delegates JSON verify to Better Auth-backed session creation instead of legacy token tables", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/v1/auth/magic-link/verify',
+      "/v1/auth/magic-link/verify",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          token: 'better-token-1234567890',
+          token: "better-token-1234567890",
         }),
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.json<{
       status: string;
@@ -734,57 +731,63 @@ describe('magic-link auth routes', () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_123',
-      userId: 'usr_better',
-      expiresAt: '2026-02-18T22:00:00.000Z',
+      status: "authenticated",
+      tenantId: "tenant_123",
+      userId: "usr_better",
+      expiresAt: "2026-02-18T22:00:00.000Z",
     });
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(response.headers.get("set-cookie")).toContain(
+      "better-auth.session_token=better-session",
+    );
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
   });
 
-  it('delegates browser GET verify to Better Auth-backed session creation instead of legacy token tables', async () => {
+  it("delegates browser GET verify to Better Auth-backed session creation instead of legacy token tables", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
+      "/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/auth/resolve');
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(response.headers.get("location")).toBe("/auth/resolve");
+    expect(response.headers.get("set-cookie")).toContain(
+      "better-auth.session_token=better-session",
+    );
     expect(betterAuthProvider.createMagicLinkSession).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to the neutral resolver after browser verify when no explicit next path is present', async () => {
+  it("falls back to the neutral resolver after browser verify when no explicit next path is present", async () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=better-token-1234567890',
+      "/auth/magic-link/verify?token=better-token-1234567890",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/auth/resolve');
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(response.headers.get("location")).toBe("/auth/resolve");
+    expect(response.headers.get("set-cookie")).toContain(
+      "better-auth.session_token=better-session",
+    );
   });
 
-  it('uses Better Auth-backed session inspection and logout without falling back to legacy session tables', async () => {
+  it("uses Better Auth-backed session inspection and logout without falling back to legacy session tables", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedHostedAuthProviders({
-        betterAuthInitiallyAuthenticated: true,
-      });
+      betterAuthInitiallyAuthenticated: true,
+    });
 
     const sessionResponse = await isolatedApp.request(
-      '/v1/auth/session',
+      "/v1/auth/session",
       {
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const sessionBody = await sessionResponse.json<{
       status: string;
@@ -795,22 +798,22 @@ describe('magic-link auth routes', () => {
 
     expect(sessionResponse.status).toBe(200);
     expect(sessionBody).toEqual({
-      status: 'authenticated',
-      tenantId: 'tenant_123',
-      userId: 'usr_better',
-      expiresAt: '2026-02-18T22:00:00.000Z',
+      status: "authenticated",
+      tenantId: "tenant_123",
+      userId: "usr_better",
+      expiresAt: "2026-02-18T22:00:00.000Z",
     });
     expect(betterAuthProvider.resolveAuthenticatedPrincipal).toHaveBeenCalled();
 
     const logoutResponse = await isolatedApp.request(
-      '/v1/auth/logout',
+      "/v1/auth/logout",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const logoutBody = await logoutResponse.json<{
       status: string;
@@ -818,19 +821,19 @@ describe('magic-link auth routes', () => {
 
     expect(logoutResponse.status).toBe(200);
     expect(logoutBody).toEqual({
-      status: 'signed_out',
+      status: "signed_out",
     });
-    expect(logoutResponse.headers.get('set-cookie')).toContain('better-auth.session_token=');
+    expect(logoutResponse.headers.get("set-cookie")).toContain("better-auth.session_token=");
     expect(betterAuthProvider.revokeCurrentSession).toHaveBeenCalledTimes(1);
 
     const afterLogoutResponse = await isolatedApp.request(
-      '/v1/auth/session',
+      "/v1/auth/session",
       {
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const afterLogoutBody = await afterLogoutResponse.json<{
       error: string;
@@ -838,60 +841,62 @@ describe('magic-link auth routes', () => {
 
     expect(afterLogoutResponse.status).toBe(401);
     expect(afterLogoutBody).toEqual({
-      error: 'Not authenticated',
+      error: "Not authenticated",
     });
   });
 
-  it('supports browser GET verify and sets session cookie before redirect', async () => {
+  it("supports browser GET verify and sets session cookie before redirect", async () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders();
 
     const response = await isolatedApp.request(
-      '/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve',
+      "/auth/magic-link/verify?token=better-token-1234567890&next=%2Fauth%2Fresolve",
       undefined,
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/auth/resolve');
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=better-session');
+    expect(response.headers.get("location")).toBe("/auth/resolve");
+    expect(response.headers.get("set-cookie")).toContain(
+      "better-auth.session_token=better-session",
+    );
   });
 
-  it('redirects single-tenant authenticated users from /auth/resolve into their preferred tenant path', async () => {
+  it("redirects single-tenant authenticated users from /auth/resolve into their preferred tenant path", async () => {
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
       betterAuthInitiallyAuthenticated: true,
     });
 
     const response = await isolatedApp.request(
-      '/auth/resolve',
+      "/auth/resolve",
       {
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_123/learner/dashboard');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_requested_tenant=tenant_123');
-    expect(mockedListAccessibleTenantContextsForUser).toHaveBeenCalledWith(fakeDb, 'usr_better');
+    expect(response.headers.get("location")).toBe("/tenants/tenant_123/learner/dashboard");
+    expect(response.headers.get("set-cookie")).toContain("credtrail_requested_tenant=tenant_123");
+    expect(mockedListAccessibleTenantContextsForUser).toHaveBeenCalledWith(fakeDb, "usr_better");
   });
 
-  it('redirects multi-tenant authenticated users from /auth/resolve into the chooser flow', async () => {
+  it("redirects multi-tenant authenticated users from /auth/resolve into the chooser flow", async () => {
     mockedListAccessibleTenantContextsForUser.mockResolvedValue([
       {
-        tenantId: 'tenant_123',
-        tenantSlug: 'tenant-123',
-        tenantDisplayName: 'Tenant 123',
-        tenantPlanTier: 'team',
-        membershipRole: 'viewer',
+        tenantId: "tenant_123",
+        tenantSlug: "tenant-123",
+        tenantDisplayName: "Tenant 123",
+        tenantPlanTier: "team",
+        membershipRole: "viewer",
       },
       {
-        tenantId: 'tenant_456',
-        tenantSlug: 'tenant-456',
-        tenantDisplayName: 'Tenant 456',
-        tenantPlanTier: 'enterprise',
-        membershipRole: 'admin',
+        tenantId: "tenant_456",
+        tenantSlug: "tenant-456",
+        tenantDisplayName: "Tenant 456",
+        tenantPlanTier: "enterprise",
+        membershipRole: "admin",
       },
     ]);
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
@@ -900,79 +905,79 @@ describe('magic-link auth routes', () => {
     });
 
     const response = await isolatedApp.request(
-      '/auth/resolve',
+      "/auth/resolve",
       {
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/account/organizations');
+    expect(response.headers.get("location")).toBe("/account/organizations");
   });
 
-  it('renders the organization chooser for multi-tenant authenticated users', async () => {
+  it("renders the organization chooser for multi-tenant authenticated users", async () => {
     mockedListAccessibleTenantContextsForUser.mockResolvedValue([
       {
-        tenantId: 'tenant_123',
-        tenantSlug: 'tenant-123',
-        tenantDisplayName: 'Tenant 123',
-        tenantPlanTier: 'team',
-        membershipRole: 'viewer',
+        tenantId: "tenant_123",
+        tenantSlug: "tenant-123",
+        tenantDisplayName: "Tenant 123",
+        tenantPlanTier: "team",
+        membershipRole: "viewer",
       },
       {
-        tenantId: 'tenant_456',
-        tenantSlug: 'tenant-456',
-        tenantDisplayName: 'Tenant 456',
-        tenantPlanTier: 'enterprise',
-        membershipRole: 'admin',
+        tenantId: "tenant_456",
+        tenantSlug: "tenant-456",
+        tenantDisplayName: "Tenant 456",
+        tenantPlanTier: "enterprise",
+        membershipRole: "admin",
       },
     ]);
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
       betterAuthInitiallyAuthenticated: true,
       betterAuthRequestedTenant: {
-        tenantId: 'tenant_456',
-        source: 'route',
+        tenantId: "tenant_456",
+        source: "route",
         authoritative: true,
       },
     });
 
     const response = await isolatedApp.request(
-      '/account/organizations',
+      "/account/organizations",
       {
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
+          Cookie: "better-auth.session_token=better-session",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Choose a CredTrail organization');
-    expect(body).toContain('Tenant 123');
-    expect(body).toContain('Tenant 456');
-    expect(body).toContain('Current');
+    expect(body).toContain("Choose a CredTrail organization");
+    expect(body).toContain("Tenant 123");
+    expect(body).toContain("Tenant 456");
+    expect(body).toContain("Current");
     expect(body).toContain('action="/account/organizations/select"');
   });
 
-  it('remembers the explicit organization selection and redirects into the chosen tenant path', async () => {
+  it("remembers the explicit organization selection and redirects into the chosen tenant path", async () => {
     mockedListAccessibleTenantContextsForUser.mockResolvedValue([
       {
-        tenantId: 'tenant_123',
-        tenantSlug: 'tenant-123',
-        tenantDisplayName: 'Tenant 123',
-        tenantPlanTier: 'team',
-        membershipRole: 'viewer',
+        tenantId: "tenant_123",
+        tenantSlug: "tenant-123",
+        tenantDisplayName: "Tenant 123",
+        tenantPlanTier: "team",
+        membershipRole: "viewer",
       },
       {
-        tenantId: 'tenant_456',
-        tenantSlug: 'tenant-456',
-        tenantDisplayName: 'Tenant 456',
-        tenantPlanTier: 'enterprise',
-        membershipRole: 'admin',
+        tenantId: "tenant_456",
+        tenantSlug: "tenant-456",
+        tenantDisplayName: "Tenant 456",
+        tenantPlanTier: "enterprise",
+        membershipRole: "admin",
       },
     ]);
     const { app: isolatedApp } = await loadAppWithMockedHostedAuthProviders({
@@ -981,35 +986,35 @@ describe('magic-link auth routes', () => {
     });
 
     const response = await isolatedApp.request(
-      '/account/organizations/select',
+      "/account/organizations/select",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=better-session',
-          'content-type': 'application/x-www-form-urlencoded',
+          Cookie: "better-auth.session_token=better-session",
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          tenantId: 'tenant_456',
-          next: '',
+          tenantId: "tenant_456",
+          next: "",
         }).toString(),
       },
-      createEnv('production'),
+      createEnv("production"),
     );
 
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toBe('/tenants/tenant_456/admin');
-    expect(response.headers.get('set-cookie')).toContain('credtrail_requested_tenant=tenant_456');
+    expect(response.headers.get("location")).toBe("/tenants/tenant_456/admin");
+    expect(response.headers.get("set-cookie")).toContain("credtrail_requested_tenant=tenant_456");
   });
 
-  it('does not rely on credtrail_session for hosted auth session inspection', async () => {
+  it("does not rely on credtrail_session for hosted auth session inspection", async () => {
     const response = await app.request(
-      '/v1/auth/session',
+      "/v1/auth/session",
       {
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: "credtrail_session=session-token",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.json<{
       error: string;
@@ -1017,20 +1022,20 @@ describe('magic-link auth routes', () => {
 
     expect(response.status).toBe(401);
     expect(body).toEqual({
-      error: 'Not authenticated',
+      error: "Not authenticated",
     });
   });
 
-  it('does not emit credtrail_session clears on hosted logout after Better Auth cleanup', async () => {
+  it("does not emit credtrail_session clears on hosted logout after Better Auth cleanup", async () => {
     const response = await app.request(
-      '/v1/auth/logout',
+      "/v1/auth/logout",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'credtrail_session=session-token',
+          Cookie: "credtrail_session=session-token",
         },
       },
-      createEnv('production'),
+      createEnv("production"),
     );
     const body = await response.json<{
       status: string;
@@ -1038,8 +1043,8 @@ describe('magic-link auth routes', () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({
-      status: 'signed_out',
+      status: "signed_out",
     });
-    expect(response.headers.get('set-cookie') ?? '').not.toContain('credtrail_session=');
+    expect(response.headers.get("set-cookie") ?? "").not.toContain("credtrail_session=");
   });
 });

@@ -1,4 +1,4 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 import {
   OB3_BASE_PATH,
   OB3_OAUTH_SCOPE_CREDENTIAL_READONLY,
@@ -6,7 +6,7 @@ import {
   OB3_OAUTH_SCOPE_DESCRIPTIONS,
   OB3_OAUTH_SCOPE_PROFILE_READONLY,
   OB3_OAUTH_SCOPE_PROFILE_UPDATE,
-} from './constants';
+} from "./constants";
 
 interface Ob3ServiceDescriptionInput {
   requestUrl: string;
@@ -24,7 +24,7 @@ const resolveAbsoluteUrl = (requestUrl: string, configuredValue: string): string
   const trimmedValue = configuredValue.trim();
 
   if (trimmedValue.length === 0) {
-    throw new Error('Expected non-empty URL value');
+    throw new Error("Expected non-empty URL value");
   }
 
   return new URL(trimmedValue, requestUrl).toString();
@@ -35,17 +35,14 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
   const configuredTitle = input.discoveryTitle?.trim();
   const title =
     configuredTitle === undefined || configuredTitle.length === 0
-      ? 'CredTrail Open Badges API'
+      ? "CredTrail Open Badges API"
       : configuredTitle;
-  const termsOfService = resolveAbsoluteUrl(
-    input.requestUrl,
-    input.termsOfServiceUrl ?? '/terms',
-  );
+  const termsOfService = resolveAbsoluteUrl(input.requestUrl, input.termsOfServiceUrl ?? "/terms");
   const privacyPolicyUrl = resolveAbsoluteUrl(
     input.requestUrl,
-    input.privacyPolicyUrl ?? '/privacy',
+    input.privacyPolicyUrl ?? "/privacy",
   );
-  const imageUrl = resolveAbsoluteUrl(input.requestUrl, input.imageUrl ?? '/credtrail-logo.png');
+  const imageUrl = resolveAbsoluteUrl(input.requestUrl, input.imageUrl ?? "/credtrail-logo.png");
   const registrationUrl = resolveAbsoluteUrl(
     input.requestUrl,
     input.oauthRegistrationUrl ?? `${OB3_BASE_PATH}/oauth/register`,
@@ -64,43 +61,43 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
   );
 
   return {
-    openapi: '3.0.1',
+    openapi: "3.0.1",
     info: {
       title,
-      description: 'Open Badges v3.0 Service Description Document',
-      version: '3.0',
+      description: "Open Badges v3.0 Service Description Document",
+      version: "3.0",
       termsOfService,
-      'x-imssf-privacyPolicyUrl': privacyPolicyUrl,
-      'x-imssf-image': imageUrl,
+      "x-imssf-privacyPolicyUrl": privacyPolicyUrl,
+      "x-imssf-image": imageUrl,
     },
     servers: [
       {
         url: serverUrl,
-        description: 'Open Badges v3.0 service endpoint',
+        description: "Open Badges v3.0 service endpoint",
       },
     ],
     tags: [
       {
-        name: 'OpenBadgeCredentials',
-        description: 'Exchange OpenBadgeCredentials and Profile resources.',
+        name: "OpenBadgeCredentials",
+        description: "Exchange OpenBadgeCredentials and Profile resources.",
       },
       {
-        name: 'Discovery',
-        description: 'Service Description Document metadata endpoint.',
+        name: "Discovery",
+        description: "Service Description Document metadata endpoint.",
       },
     ],
     paths: {
-      '/credentials': {
+      "/credentials": {
         get: {
-          tags: ['OpenBadgeCredentials'],
-          summary: 'Get credentials for the authenticated entity.',
-          operationId: 'getCredentials',
+          tags: ["OpenBadgeCredentials"],
+          summary: "Get credentials for the authenticated entity.",
+          operationId: "getCredentials",
           responses: {
             200: {
-              description: 'Credentials returned.',
+              description: "Credentials returned.",
             },
             default: {
-              description: 'Request was invalid or cannot be served.',
+              description: "Request was invalid or cannot be served.",
             },
           },
           security: [
@@ -110,18 +107,18 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
           ],
         },
         post: {
-          tags: ['OpenBadgeCredentials'],
-          summary: 'Create or update a credential for the authenticated entity.',
-          operationId: 'upsertCredential',
+          tags: ["OpenBadgeCredentials"],
+          summary: "Create or update a credential for the authenticated entity.",
+          operationId: "upsertCredential",
           responses: {
             200: {
-              description: 'Credential replaced.',
+              description: "Credential replaced.",
             },
             201: {
-              description: 'Credential created.',
+              description: "Credential created.",
             },
             default: {
-              description: 'Request was invalid or cannot be served.',
+              description: "Request was invalid or cannot be served.",
             },
           },
           security: [
@@ -131,17 +128,17 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
           ],
         },
       },
-      '/profile': {
+      "/profile": {
         get: {
-          tags: ['OpenBadgeCredentials'],
-          summary: 'Get profile for the authenticated entity.',
-          operationId: 'getProfile',
+          tags: ["OpenBadgeCredentials"],
+          summary: "Get profile for the authenticated entity.",
+          operationId: "getProfile",
           responses: {
             200: {
-              description: 'Profile returned.',
+              description: "Profile returned.",
             },
             default: {
-              description: 'Request was invalid or cannot be served.',
+              description: "Request was invalid or cannot be served.",
             },
           },
           security: [
@@ -151,15 +148,15 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
           ],
         },
         put: {
-          tags: ['OpenBadgeCredentials'],
-          summary: 'Update profile for the authenticated entity.',
-          operationId: 'putProfile',
+          tags: ["OpenBadgeCredentials"],
+          summary: "Update profile for the authenticated entity.",
+          operationId: "putProfile",
           responses: {
             200: {
-              description: 'Profile updated.',
+              description: "Profile updated.",
             },
             default: {
-              description: 'Request was invalid or cannot be served.',
+              description: "Request was invalid or cannot be served.",
             },
           },
           security: [
@@ -169,17 +166,17 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
           ],
         },
       },
-      '/discovery': {
+      "/discovery": {
         get: {
-          tags: ['Discovery'],
-          summary: 'Get the service description document.',
-          operationId: 'getServiceDescription',
+          tags: ["Discovery"],
+          summary: "Get the service description document.",
+          operationId: "getServiceDescription",
           responses: {
             200: {
-              description: 'Service description document returned.',
+              description: "Service description document returned.",
             },
             default: {
-              description: 'Request was invalid or cannot be served.',
+              description: "Request was invalid or cannot be served.",
             },
           },
         },
@@ -188,8 +185,8 @@ export const ob3ServiceDescriptionDocument = (input: Ob3ServiceDescriptionInput)
     components: {
       securitySchemes: {
         OAuth2ACG: {
-          type: 'oauth2',
-          'x-imssf-registrationUrl': registrationUrl,
+          type: "oauth2",
+          "x-imssf-registrationUrl": registrationUrl,
           flows: {
             authorizationCode: {
               authorizationUrl,

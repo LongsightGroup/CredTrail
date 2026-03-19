@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { runImmutableCredentialStoreContract } from './immutable-credential-store-contract';
-import { createR2ImmutableCredentialStore } from './r2-immutable-credential-store';
+import { beforeEach, describe, expect, it } from "vitest";
+import { runImmutableCredentialStoreContract } from "./immutable-credential-store-contract";
+import { createR2ImmutableCredentialStore } from "./r2-immutable-credential-store";
 
 interface StoredR2Object {
   key: string;
@@ -21,11 +21,11 @@ const normalizeHttpMetadata = (
   }
 
   if (input instanceof Headers) {
-    const contentType = input.get('content-type');
-    const cacheControl = input.get('cache-control');
-    const contentDisposition = input.get('content-disposition');
-    const contentEncoding = input.get('content-encoding');
-    const contentLanguage = input.get('content-language');
+    const contentType = input.get("content-type");
+    const cacheControl = input.get("cache-control");
+    const contentDisposition = input.get("content-disposition");
+    const contentEncoding = input.get("content-encoding");
+    const contentLanguage = input.get("content-language");
     const normalized: R2HTTPMetadata = {
       ...(contentType === null ? {} : { contentType }),
       ...(cacheControl === null ? {} : { cacheControl }),
@@ -65,7 +65,7 @@ const createInMemoryR2Bucket = (): R2Bucket & {
         version: found.version,
         size: found.size,
         uploaded: found.uploaded,
-        storageClass: 'Standard',
+        storageClass: "Standard",
         checksums: {},
         httpEtag: found.etag,
         customMetadata: found.customMetadata,
@@ -87,7 +87,7 @@ const createInMemoryR2Bucket = (): R2Bucket & {
         version: found.version,
         size: found.size,
         uploaded: found.uploaded,
-        storageClass: 'Standard',
+        storageClass: "Standard",
         checksums: {},
         httpEtag: found.etag,
         customMetadata: found.customMetadata,
@@ -108,8 +108,8 @@ const createInMemoryR2Bucket = (): R2Bucket & {
       value: string | ReadableStream | ArrayBuffer | ArrayBufferView | Blob | null,
       options?: R2PutOptions,
     ): Promise<R2Object | null> => {
-      if (value === null || typeof value !== 'string') {
-        throw new Error('In-memory R2 test bucket expects string puts');
+      if (value === null || typeof value !== "string") {
+        throw new Error("In-memory R2 test bucket expects string puts");
       }
 
       if (options?.onlyIf !== undefined && objects.has(key)) {
@@ -125,7 +125,7 @@ const createInMemoryR2Bucket = (): R2Bucket & {
         etag: `etag-${nextSequence}`,
         version: `version-${nextSequence}`,
         size: value.length,
-        uploaded: new Date('2026-02-16T00:00:00.000Z'),
+        uploaded: new Date("2026-02-16T00:00:00.000Z"),
         ...(normalizedHttpMetadata === undefined
           ? {}
           : {
@@ -145,7 +145,7 @@ const createInMemoryR2Bucket = (): R2Bucket & {
         version: stored.version,
         size: stored.size,
         uploaded: stored.uploaded,
-        storageClass: 'Standard',
+        storageClass: "Standard",
         checksums: {},
         httpEtag: stored.etag,
         customMetadata: stored.customMetadata,
@@ -175,17 +175,17 @@ const createInMemoryR2Bucket = (): R2Bucket & {
       _key: string,
       _options?: R2MultipartOptions,
     ): Promise<R2MultipartUpload> => {
-      throw new Error('createMultipartUpload is not implemented in test bucket');
+      throw new Error("createMultipartUpload is not implemented in test bucket");
     },
     resumeMultipartUpload: (_key: string, _uploadId: string): R2MultipartUpload => {
-      throw new Error('resumeMultipartUpload is not implemented in test bucket');
+      throw new Error("resumeMultipartUpload is not implemented in test bucket");
     },
   } as R2Bucket & {
     objects: Map<string, StoredR2Object>;
   };
 };
 
-describe('createR2ImmutableCredentialStore', () => {
+describe("createR2ImmutableCredentialStore", () => {
   let bucket: R2Bucket & {
     objects: Map<string, StoredR2Object>;
   };
@@ -194,31 +194,31 @@ describe('createR2ImmutableCredentialStore', () => {
     bucket = createInMemoryR2Bucket();
   });
 
-  describe('contract', () => {
+  describe("contract", () => {
     runImmutableCredentialStoreContract({
       createStore: () => createR2ImmutableCredentialStore(bucket),
     });
   });
 
-  it('forwards metadata fields during put', async () => {
+  it("forwards metadata fields during put", async () => {
     const store = createR2ImmutableCredentialStore(bucket);
-    await store.put('tenants/a/assertions/1.jsonld', '{"hello":"world"}', {
+    await store.put("tenants/a/assertions/1.jsonld", '{"hello":"world"}', {
       httpMetadata: {
-        contentType: 'application/ld+json',
-        cacheControl: 'public, max-age=31536000, immutable',
+        contentType: "application/ld+json",
+        cacheControl: "public, max-age=31536000, immutable",
       },
       customMetadata: {
-        tenantId: 'tenant-a',
+        tenantId: "tenant-a",
       },
     });
 
-    expect(bucket.objects.get('tenants/a/assertions/1.jsonld')).toMatchObject({
+    expect(bucket.objects.get("tenants/a/assertions/1.jsonld")).toMatchObject({
       httpMetadata: {
-        contentType: 'application/ld+json',
-        cacheControl: 'public, max-age=31536000, immutable',
+        contentType: "application/ld+json",
+        cacheControl: "public, max-age=31536000, immutable",
       },
       customMetadata: {
-        tenantId: 'tenant-a',
+        tenantId: "tenant-a",
       },
     });
   });

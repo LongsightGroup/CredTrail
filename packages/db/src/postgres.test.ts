@@ -1,19 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-import { createPostgresDatabase } from './postgres';
+import { createPostgresDatabase } from "./postgres";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = testDatabaseUrl === undefined ? describe.skip : describe;
 const getTestDatabaseUrl = (): string => {
   if (testDatabaseUrl === undefined) {
-    throw new Error('TEST_DATABASE_URL is required');
+    throw new Error("TEST_DATABASE_URL is required");
   }
 
   return testDatabaseUrl;
 };
 
-describeWithDatabase('postgres adapter integration', () => {
-  it('supports question-mark placeholders and ON CONFLICT DO NOTHING semantics', async () => {
+describeWithDatabase("postgres adapter integration", () => {
+  it("supports question-mark placeholders and ON CONFLICT DO NOTHING semantics", async () => {
     const db = createPostgresDatabase({
       databaseUrl: getTestDatabaseUrl(),
     });
@@ -37,7 +37,7 @@ describeWithDatabase('postgres adapter integration', () => {
           ON CONFLICT DO NOTHING
         `,
       )
-      .bind('usr_first', 'student@example.edu')
+      .bind("usr_first", "student@example.edu")
       .run();
 
     await db
@@ -48,7 +48,7 @@ describeWithDatabase('postgres adapter integration', () => {
           ON CONFLICT DO NOTHING
         `,
       )
-      .bind('usr_duplicate', 'student@example.edu')
+      .bind("usr_duplicate", "student@example.edu")
       .run();
 
     const rows = await db
@@ -60,11 +60,11 @@ describeWithDatabase('postgres adapter integration', () => {
           ORDER BY id ASC
         `,
       )
-      .bind('student@example.edu')
+      .bind("student@example.edu")
       .all<{ id: string; email: string }>();
 
     expect(rows.results).toHaveLength(1);
-    expect(rows.results[0]?.id).toBe('usr_first');
+    expect(rows.results[0]?.id).toBe("usr_first");
 
     const singleRow = await db
       .prepare(
@@ -75,11 +75,11 @@ describeWithDatabase('postgres adapter integration', () => {
           LIMIT 1
         `,
       )
-      .bind('usr_first')
+      .bind("usr_first")
       .first<{ id: string; email: string }>();
 
     expect(singleRow).not.toBeNull();
-    expect(singleRow?.email).toBe('student@example.edu');
+    expect(singleRow?.email).toBe("student@example.edu");
 
     const aliasedRow = await db
       .prepare(
@@ -90,10 +90,10 @@ describeWithDatabase('postgres adapter integration', () => {
           LIMIT 1
         `,
       )
-      .bind('usr_first')
+      .bind("usr_first")
       .first<{ recipientEmail: string }>();
 
     expect(aliasedRow).not.toBeNull();
-    expect(aliasedRow?.recipientEmail).toBe('student@example.edu');
+    expect(aliasedRow?.recipientEmail).toBe("student@example.edu");
   });
 });

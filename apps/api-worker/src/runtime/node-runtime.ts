@@ -1,33 +1,33 @@
-import type { AppBindings } from '../app';
-import { createS3ImmutableCredentialStore } from '../storage/s3-immutable-credential-store';
+import type { AppBindings } from "../app";
+import { createS3ImmutableCredentialStore } from "../storage/s3-immutable-credential-store";
 
 type EnvSource = Record<string, string | undefined>;
 
 const OPTIONAL_BINDING_KEYS = [
-  'DATABASE_URL',
-  'SENTRY_DSN',
-  'TENANT_SIGNING_REGISTRY_JSON',
-  'TENANT_SIGNING_KEY_HISTORY_JSON',
-  'TENANT_REMOTE_SIGNER_REGISTRY_JSON',
-  'MAILTRAP_API_TOKEN',
-  'MAILTRAP_INBOX_ID',
-  'MAILTRAP_API_BASE_URL',
-  'MAILTRAP_FROM_EMAIL',
-  'MAILTRAP_FROM_NAME',
-  'GITHUB_TOKEN',
-  'JOB_PROCESSOR_TOKEN',
-  'BOOTSTRAP_ADMIN_TOKEN',
-  'LTI_ISSUER_REGISTRY_JSON',
-  'LTI_STATE_SIGNING_SECRET',
-  'CANVAS_OAUTH_STATE_SIGNING_SECRET',
-  'OB3_DISCOVERY_TITLE',
-  'OB3_TERMS_OF_SERVICE_URL',
-  'OB3_PRIVACY_POLICY_URL',
-  'OB3_IMAGE_URL',
-  'OB3_OAUTH_REGISTRATION_URL',
-  'OB3_OAUTH_AUTHORIZATION_URL',
-  'OB3_OAUTH_TOKEN_URL',
-  'OB3_OAUTH_REFRESH_URL',
+  "DATABASE_URL",
+  "SENTRY_DSN",
+  "TENANT_SIGNING_REGISTRY_JSON",
+  "TENANT_SIGNING_KEY_HISTORY_JSON",
+  "TENANT_REMOTE_SIGNER_REGISTRY_JSON",
+  "MAILTRAP_API_TOKEN",
+  "MAILTRAP_INBOX_ID",
+  "MAILTRAP_API_BASE_URL",
+  "MAILTRAP_FROM_EMAIL",
+  "MAILTRAP_FROM_NAME",
+  "GITHUB_TOKEN",
+  "JOB_PROCESSOR_TOKEN",
+  "BOOTSTRAP_ADMIN_TOKEN",
+  "LTI_ISSUER_REGISTRY_JSON",
+  "LTI_STATE_SIGNING_SECRET",
+  "CANVAS_OAUTH_STATE_SIGNING_SECRET",
+  "OB3_DISCOVERY_TITLE",
+  "OB3_TERMS_OF_SERVICE_URL",
+  "OB3_PRIVACY_POLICY_URL",
+  "OB3_IMAGE_URL",
+  "OB3_OAUTH_REGISTRATION_URL",
+  "OB3_OAUTH_AUTHORIZATION_URL",
+  "OB3_OAUTH_TOKEN_URL",
+  "OB3_OAUTH_REFRESH_URL",
 ] as const;
 
 type OptionalBindingKey = (typeof OPTIONAL_BINDING_KEYS)[number];
@@ -59,11 +59,11 @@ const parseBooleanEnv = (envSource: EnvSource, name: string): boolean | undefine
     return undefined;
   }
 
-  if (value === 'true' || value === '1') {
+  if (value === "true" || value === "1") {
     return true;
   }
 
-  if (value === 'false' || value === '0') {
+  if (value === "false" || value === "0") {
     return false;
   }
 
@@ -87,7 +87,7 @@ const optionalBindingsFromEnv = (envSource: EnvSource): Partial<AppBindings> => 
 };
 
 export const parseNodeRuntimePort = (envSource: EnvSource = process.env): number => {
-  const rawPort = optionalEnv(envSource, 'PORT') ?? '8787';
+  const rawPort = optionalEnv(envSource, "PORT") ?? "8787";
   const parsedPort = Number.parseInt(rawPort, 10);
 
   if (!Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
@@ -117,34 +117,32 @@ export const parsePositiveIntegerEnv = (
   return parsed;
 };
 
-export const createNodeRuntimeBindings = (
-  envSource: EnvSource = process.env,
-): AppBindings => {
-  const storageBackend = (optionalEnv(envSource, 'STORAGE_BACKEND') ?? 's3').toLowerCase();
+export const createNodeRuntimeBindings = (envSource: EnvSource = process.env): AppBindings => {
+  const storageBackend = (optionalEnv(envSource, "STORAGE_BACKEND") ?? "s3").toLowerCase();
 
-  if (storageBackend !== 's3') {
+  if (storageBackend !== "s3") {
     throw new Error(
       `Unsupported STORAGE_BACKEND "${storageBackend}". Node runtime currently supports "s3".`,
     );
   }
 
-  const s3Endpoint = optionalEnv(envSource, 'S3_ENDPOINT');
-  const s3ForcePathStyle = parseBooleanEnv(envSource, 'S3_FORCE_PATH_STYLE');
-  const awsSessionToken = optionalEnv(envSource, 'AWS_SESSION_TOKEN');
+  const s3Endpoint = optionalEnv(envSource, "S3_ENDPOINT");
+  const s3ForcePathStyle = parseBooleanEnv(envSource, "S3_FORCE_PATH_STYLE");
+  const awsSessionToken = optionalEnv(envSource, "AWS_SESSION_TOKEN");
 
   const badgeObjectsBinding = createS3ImmutableCredentialStore({
-    bucket: requireEnv(envSource, 'S3_BUCKET'),
-    region: requireEnv(envSource, 'S3_REGION'),
-    accessKeyId: requireEnv(envSource, 'AWS_ACCESS_KEY_ID'),
-    secretAccessKey: requireEnv(envSource, 'AWS_SECRET_ACCESS_KEY'),
+    bucket: requireEnv(envSource, "S3_BUCKET"),
+    region: requireEnv(envSource, "S3_REGION"),
+    accessKeyId: requireEnv(envSource, "AWS_ACCESS_KEY_ID"),
+    secretAccessKey: requireEnv(envSource, "AWS_SECRET_ACCESS_KEY"),
     ...(s3Endpoint === undefined ? {} : { endpoint: s3Endpoint }),
     ...(s3ForcePathStyle === undefined ? {} : { forcePathStyle: s3ForcePathStyle }),
     ...(awsSessionToken === undefined ? {} : { sessionToken: awsSessionToken }),
   });
 
   return {
-    APP_ENV: optionalEnv(envSource, 'APP_ENV') ?? 'development',
-    PLATFORM_DOMAIN: optionalEnv(envSource, 'PLATFORM_DOMAIN') ?? 'localhost',
+    APP_ENV: optionalEnv(envSource, "APP_ENV") ?? "development",
+    PLATFORM_DOMAIN: optionalEnv(envSource, "PLATFORM_DOMAIN") ?? "localhost",
     BADGE_OBJECTS: badgeObjectsBinding,
     ...optionalBindingsFromEnv(envSource),
   };

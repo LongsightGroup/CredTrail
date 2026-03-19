@@ -1,13 +1,13 @@
-import type { ImmutableCredentialStore } from '@credtrail/core-domain';
+import type { ImmutableCredentialStore } from "@credtrail/core-domain";
 
 export const BADGE_TEMPLATE_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
-const BADGE_TEMPLATE_IMAGE_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const BADGE_TEMPLATE_IMAGE_ARTIFACT_TYPE = 'badge-template-image-v1';
+const BADGE_TEMPLATE_IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const BADGE_TEMPLATE_IMAGE_ARTIFACT_TYPE = "badge-template-image-v1";
 
 export const BADGE_TEMPLATE_IMAGE_ALLOWED_MIME_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/webp',
+  "image/png",
+  "image/jpeg",
+  "image/webp",
 ] as const;
 
 export type BadgeTemplateImageMimeType = (typeof BADGE_TEMPLATE_IMAGE_ALLOWED_MIME_TYPES)[number];
@@ -49,7 +49,7 @@ const encodePathSegment = (value: string): string => {
   const trimmed = value.trim();
 
   if (trimmed.length === 0) {
-    throw new Error('Object storage path segments must not be empty');
+    throw new Error("Object storage path segments must not be empty");
   }
 
   return encodeURIComponent(trimmed);
@@ -63,10 +63,10 @@ export const badgeTemplateImageObjectKey = (ids: BadgeTemplateImageObjectIds): s
 
 const asciiSlice = (bytes: Uint8Array, start: number, length: number): string => {
   if (start < 0 || length < 0 || start + length > bytes.length) {
-    return '';
+    return "";
   }
 
-  let output = '';
+  let output = "";
 
   for (let index = start; index < start + length; index += 1) {
     output += String.fromCharCode(bytes[index] ?? 0);
@@ -76,7 +76,7 @@ const asciiSlice = (bytes: Uint8Array, start: number, length: number): string =>
 };
 
 const bytesToBase64 = (bytes: Uint8Array): string => {
-  let binary = '';
+  let binary = "";
 
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
@@ -115,22 +115,24 @@ const isJpeg = (bytes: Uint8Array): boolean => {
 };
 
 const isWebp = (bytes: Uint8Array): boolean => {
-  return bytes.length >= 12 && asciiSlice(bytes, 0, 4) === 'RIFF' && asciiSlice(bytes, 8, 4) === 'WEBP';
+  return (
+    bytes.length >= 12 && asciiSlice(bytes, 0, 4) === "RIFF" && asciiSlice(bytes, 8, 4) === "WEBP"
+  );
 };
 
 export const badgeTemplateImageMimeTypeFromBytes = (
   bytes: Uint8Array,
 ): BadgeTemplateImageMimeType | null => {
   if (isPng(bytes)) {
-    return 'image/png';
+    return "image/png";
   }
 
   if (isJpeg(bytes)) {
-    return 'image/jpeg';
+    return "image/jpeg";
   }
 
   if (isWebp(bytes)) {
-    return 'image/webp';
+    return "image/webp";
   }
 
   return null;
@@ -142,19 +144,21 @@ export const badgeTemplateImageMimeTypeFromValue = (
   const normalized = value.trim().toLowerCase();
 
   switch (normalized) {
-    case 'image/png':
-      return 'image/png';
-    case 'image/jpeg':
-      return 'image/jpeg';
-    case 'image/webp':
-      return 'image/webp';
+    case "image/png":
+      return "image/png";
+    case "image/jpeg":
+      return "image/jpeg";
+    case "image/webp":
+      return "image/webp";
     default:
       return null;
   }
 };
 
-const asStoredBadgeTemplateImageObject = (value: unknown): StoredBadgeTemplateImageObject | null => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+const asStoredBadgeTemplateImageObject = (
+  value: unknown,
+): StoredBadgeTemplateImageObject | null => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
@@ -165,24 +169,24 @@ const asStoredBadgeTemplateImageObject = (value: unknown): StoredBadgeTemplateIm
   }
 
   if (
-    candidate.mimeType !== 'image/png' &&
-    candidate.mimeType !== 'image/jpeg' &&
-    candidate.mimeType !== 'image/webp'
+    candidate.mimeType !== "image/png" &&
+    candidate.mimeType !== "image/jpeg" &&
+    candidate.mimeType !== "image/webp"
   ) {
     return null;
   }
 
   if (
-    typeof candidate.base64Data !== 'string' ||
-    typeof candidate.byteSize !== 'number' ||
+    typeof candidate.base64Data !== "string" ||
+    typeof candidate.byteSize !== "number" ||
     !Number.isInteger(candidate.byteSize) ||
     candidate.byteSize < 1 ||
-    typeof candidate.uploadedAt !== 'string'
+    typeof candidate.uploadedAt !== "string"
   ) {
     return null;
   }
 
-  if (candidate.originalFilename !== null && typeof candidate.originalFilename !== 'string') {
+  if (candidate.originalFilename !== null && typeof candidate.originalFilename !== "string") {
     return null;
   }
 
@@ -211,7 +215,7 @@ export const storeBadgeTemplateImage = async (
   };
   const putResult = await store.put(key, JSON.stringify(payload), {
     httpMetadata: {
-      contentType: 'application/json; charset=utf-8',
+      contentType: "application/json; charset=utf-8",
       cacheControl: BADGE_TEMPLATE_IMAGE_CACHE_CONTROL,
     },
     customMetadata: {

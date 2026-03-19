@@ -1,26 +1,21 @@
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
-import type {
-  SqlDatabase,
-  SqlPreparedStatement,
-  SqlQueryResult,
-  SqlRunResult,
-} from './index';
+import type { SqlDatabase, SqlPreparedStatement, SqlQueryResult, SqlRunResult } from "./index";
 
-type PostgresDriver = 'auto' | 'neon' | 'pg';
+type PostgresDriver = "auto" | "neon" | "pg";
 
 interface QueryExecutor {
   query(sql: string, params: readonly unknown[]): Promise<readonly unknown[]>;
 }
 
-type PgPoolLike = import('pg').Pool;
+type PgPoolLike = import("pg").Pool;
 
 const pgPoolsByConnectionString = new Map<string, Promise<PgPoolLike>>();
 
 const UNQUOTED_ALIAS_PATTERN = /\bAS\s+([A-Za-z_][A-Za-z0-9_]*)/gi;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 };
 
 const collectAliasMap = (sql: string): Map<string, string> => {
@@ -74,7 +69,7 @@ const normalizeSqlForPostgres = (sql: string): string => {
 const isNeonDatabaseUrl = (databaseUrl: string): boolean => {
   try {
     const parsed = new URL(databaseUrl);
-    return parsed.hostname.endsWith('.neon.tech');
+    return parsed.hostname.endsWith(".neon.tech");
   } catch {
     return false;
   }
@@ -83,12 +78,12 @@ const isNeonDatabaseUrl = (databaseUrl: string): boolean => {
 const resolvePostgresDriver = (
   databaseUrl: string,
   configuredDriver: PostgresDriver,
-): Exclude<PostgresDriver, 'auto'> => {
-  if (configuredDriver === 'neon' || configuredDriver === 'pg') {
+): Exclude<PostgresDriver, "auto"> => {
+  if (configuredDriver === "neon" || configuredDriver === "pg") {
     return configuredDriver;
   }
 
-  return isNeonDatabaseUrl(databaseUrl) ? 'neon' : 'pg';
+  return isNeonDatabaseUrl(databaseUrl) ? "neon" : "pg";
 };
 
 const createNeonQueryExecutor = (databaseUrl: string): QueryExecutor => {
@@ -108,7 +103,7 @@ const loadPgPool = async (databaseUrl: string): Promise<PgPoolLike> => {
     return existingPool;
   }
 
-  const poolPromise: Promise<PgPoolLike> = import('pg').then((pgModule: typeof import('pg')) => {
+  const poolPromise: Promise<PgPoolLike> = import("pg").then((pgModule: typeof import("pg")) => {
     return new pgModule.Pool({
       connectionString: databaseUrl,
     });
@@ -215,12 +210,12 @@ export const createPostgresDatabase = (options: CreatePostgresDatabaseOptions): 
   const trimmedUrl = options.databaseUrl.trim();
 
   if (trimmedUrl.length === 0) {
-    throw new Error('databaseUrl is required');
+    throw new Error("databaseUrl is required");
   }
 
-  const driver = resolvePostgresDriver(trimmedUrl, options.driver ?? 'auto');
+  const driver = resolvePostgresDriver(trimmedUrl, options.driver ?? "auto");
   const queryExecutor =
-    driver === 'neon' ? createNeonQueryExecutor(trimmedUrl) : createPgQueryExecutor(trimmedUrl);
+    driver === "neon" ? createNeonQueryExecutor(trimmedUrl) : createPgQueryExecutor(trimmedUrl);
 
   return new PostgresDatabase(queryExecutor);
 };
@@ -235,7 +230,7 @@ export const splitSqlStatements = (sql: string): string[] => {
 };
 
 export const executePostgresSql = async (
-  queryFn: Pick<NeonQueryFunction<false, false>, 'query'>,
+  queryFn: Pick<NeonQueryFunction<false, false>, "query">,
   sql: string,
 ): Promise<void> => {
   const statements = splitSqlStatements(sql);

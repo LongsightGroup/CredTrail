@@ -1,16 +1,16 @@
-import type { LearnerBadgeSummaryRecord } from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
+import type { LearnerBadgeSummaryRecord } from "@credtrail/db";
+import { renderPageShell } from "@credtrail/ui-components";
 
-export type LearnerDidSettingsNotice = 'updated' | 'cleared' | 'conflict' | 'invalid';
+export type LearnerDidSettingsNotice = "updated" | "cleared" | "conflict" | "invalid";
 
 export const learnerDidSettingsNoticeFromQuery = (
   value: string | undefined,
 ): LearnerDidSettingsNotice | null => {
   switch (value) {
-    case 'updated':
-    case 'cleared':
-    case 'conflict':
-    case 'invalid':
+    case "updated":
+    case "cleared":
+    case "conflict":
+    case "invalid":
       return value;
     default:
       return null;
@@ -40,57 +40,59 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
     const activeBadgesLabel = String(activeBadges);
     const revokedBadgesLabel = String(revokedBadges);
     const badgeCountLabel =
-      totalBadges === 1 ? '1 recorded badge' : `${totalBadgesLabel} recorded badges`;
+      totalBadges === 1 ? "1 recorded badge" : `${totalBadgesLabel} recorded badges`;
     const latestIssuedAt = badges.reduce<string | null>(
       (latest, badge) => (latest === null || badge.issuedAt > latest ? badge.issuedAt : latest),
       null,
     );
     const heroLead =
       totalBadges === 0
-        ? 'Your credential collection is ready for its first published badge.'
+        ? "Your credential collection is ready for its first published badge."
         : activeBadges === totalBadges
           ? activeBadges === 1
-            ? '1 verified badge is ready to share and verify.'
+            ? "1 verified badge is ready to share and verify."
             : `${activeBadgesLabel} verified badges are ready to share and verify.`
           : activeBadges > 0
-            ? `${activeBadgesLabel} verified badge${activeBadges === 1 ? '' : 's'} remain ready to share, with ${revokedBadgesLabel} historical record${revokedBadges === 1 ? '' : 's'} preserved below.`
-            : `${revokedBadgesLabel} revoked record${revokedBadges === 1 ? '' : 's'} remain visible in your collection history.`;
+            ? `${activeBadgesLabel} verified badge${activeBadges === 1 ? "" : "s"} remain ready to share, with ${revokedBadgesLabel} historical record${revokedBadges === 1 ? "" : "s"} preserved below.`
+            : `${revokedBadgesLabel} revoked record${revokedBadges === 1 ? "" : "s"} remain visible in your collection history.`;
     const heroNote =
       totalBadges === 0
-        ? 'When a credential is issued to this learner account, it will appear here with its official public verification page.'
-        : 'Each credential includes an official public page you can share with employers and reviewers for verification.';
+        ? "When a credential is issued to this learner account, it will appear here with its official public verification page."
+        : "Each credential includes an official public page you can share with employers and reviewers for verification.";
     const latestIssuedMarkup =
       latestIssuedAt === null
         ? '<p class="learner-dashboard__hero-card-note">Ready for the next published badge.</p>'
         : `<p class="learner-dashboard__hero-card-note">Latest issue: <strong>${escapeHtml(formatIsoTimestamp(latestIssuedAt))} UTC</strong></p>`;
     const didNoticeMarkup =
       didNotice === null
-        ? ''
-        : didNotice === 'updated'
+        ? ""
+        : didNotice === "updated"
           ? '<p class="learner-dashboard__notice learner-dashboard__notice--success">Learner DID updated. Newly issued badges will use this DID as credentialSubject.id.</p>'
-          : didNotice === 'cleared'
+          : didNotice === "cleared"
             ? '<p class="learner-dashboard__notice learner-dashboard__notice--info">Learner DID cleared. Badge issuance will fall back to the default learner subject identifier.</p>'
-            : didNotice === 'conflict'
+            : didNotice === "conflict"
               ? '<p class="learner-dashboard__notice learner-dashboard__notice--danger">That DID is already linked to another learner profile in this tenant.</p>'
               : '<p class="learner-dashboard__notice learner-dashboard__notice--danger">DID must use one of the supported methods: did:key, did:web, or did:ion.</p>';
-    const didValue = learnerDid ?? '';
-    const didDetailsOpenAttribute = didNotice === null ? '' : ' open';
+    const didValue = learnerDid ?? "";
+    const didDetailsOpenAttribute = didNotice === null ? "" : " open";
     const didSummaryText =
       learnerDid === null
-        ? 'No learner DID is currently configured.'
-        : 'A learner DID is configured for future badge issuance.';
+        ? "No learner DID is currently configured."
+        : "A learner DID is configured for future badge issuance.";
     const didSummaryPillClass =
       learnerDid === null
-        ? 'learner-dashboard__summary-pill'
-        : 'learner-dashboard__summary-pill learner-dashboard__summary-pill--configured';
-    const didSummaryPillLabel = learnerDid === null ? 'Optional' : 'Configured';
+        ? "learner-dashboard__summary-pill"
+        : "learner-dashboard__summary-pill learner-dashboard__summary-pill--configured";
+    const didSummaryPillLabel = learnerDid === null ? "Optional" : "Configured";
     const didSummaryMarkup =
       learnerDid === null
         ? '<p class="learner-dashboard__subtle">No learner DID is currently configured.</p>'
         : `<p class="learner-dashboard__subtle learner-dashboard__subtle--break">Current DID: <code>${escapeHtml(learnerDid)}</code></p>`;
     const switchOrganizationMarkup =
-      switchOrganizationPath === undefined || switchOrganizationPath === null || switchOrganizationPath.trim().length === 0
-        ? ''
+      switchOrganizationPath === undefined ||
+      switchOrganizationPath === null ||
+      switchOrganizationPath.trim().length === 0
+        ? ""
         : `<p class="learner-dashboard__hero-note learner-dashboard__hero-note--switch">
             <a class="learner-dashboard__switch-link" href="${escapeHtml(switchOrganizationPath)}">Switch organization</a>
           </p>`;
@@ -176,27 +178,27 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
             </div>
             <div class="learner-dashboard__badge-grid">${badges
               .map((badge) => {
-                const statusLabel = badge.revokedAt === null ? 'Verified' : 'Revoked';
+                const statusLabel = badge.revokedAt === null ? "Verified" : "Revoked";
                 const statusClass =
                   badge.revokedAt === null
-                    ? 'learner-dashboard__badge-status learner-dashboard__badge-status--verified'
-                    : 'learner-dashboard__badge-status learner-dashboard__badge-status--revoked';
+                    ? "learner-dashboard__badge-status learner-dashboard__badge-status--verified"
+                    : "learner-dashboard__badge-status learner-dashboard__badge-status--revoked";
                 const badgeCardClass =
                   badge.revokedAt === null
-                    ? 'learner-dashboard__badge-card learner-dashboard__badge-card--verified'
-                    : 'learner-dashboard__badge-card learner-dashboard__badge-card--revoked';
+                    ? "learner-dashboard__badge-card learner-dashboard__badge-card--verified"
+                    : "learner-dashboard__badge-card learner-dashboard__badge-card--revoked";
                 const badgeEyebrow =
-                  badge.revokedAt === null ? 'Earned credential' : 'Credential history';
+                  badge.revokedAt === null ? "Earned credential" : "Credential history";
                 const publicBadgeId = badge.assertionPublicId ?? badge.assertionId;
                 const publicBadgePath = `/badges/${encodeURIComponent(publicBadgeId)}`;
                 const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
                 const descriptionMarkup =
                   badge.badgeDescription === null
-                    ? ''
+                    ? ""
                     : `<p class="learner-dashboard__badge-description">${escapeHtml(badge.badgeDescription)}</p>`;
                 const revokedAtMarkup =
                   badge.revokedAt === null
-                    ? ''
+                    ? ""
                     : `<p class="learner-dashboard__danger">Revoked at ${escapeHtml(formatIsoTimestamp(badge.revokedAt))} UTC</p>`;
 
                 return `<article class="${badgeCardClass}">
@@ -220,11 +222,11 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
                   <p class="learner-dashboard__badge-url">${escapeHtml(publicBadgeUrl)}</p>
                 </article>`;
               })
-              .join('')}</div>
+              .join("")}</div>
           </section>`;
 
     return renderPageShell(
-      'Learner dashboard | CredTrail',
+      "Learner dashboard | CredTrail",
       `<style>
         .learner-dashboard {
           --learner-ink: #12314f;
@@ -704,7 +706,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
             <ul class="learner-dashboard__hero-chips">
               <li class="learner-dashboard__hero-chip">${badgeCountLabel}</li>
               <li class="learner-dashboard__hero-chip">Public verification ready</li>
-              <li class="learner-dashboard__hero-chip">${learnerDid === null ? 'Optional DID available' : 'Learner DID configured'}</li>
+              <li class="learner-dashboard__hero-chip">${learnerDid === null ? "Optional DID available" : "Learner DID configured"}</li>
             </ul>
             ${switchOrganizationMarkup}
           </div>
@@ -717,8 +719,8 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
         ${badgesMarkup}
         ${didSettingsSection}
       </section>`,
-      '',
-      'open',
+      "",
+      "open",
     );
   };
 };

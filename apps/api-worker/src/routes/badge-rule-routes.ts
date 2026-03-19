@@ -28,8 +28,8 @@ import {
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   parseBadgeIssuanceRuleAuditLogQuery,
   parseBadgeIssuanceRuleDefinition,
@@ -49,10 +49,10 @@ import {
   parseResolveBadgeIssuanceRuleReviewRequest,
   parseTenantPathParams,
   type BadgeIssuanceRuleDefinition,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import { refreshCanvasAccessToken } from '../lms/canvas-oauth';
-import { createGradebookProvider } from '../lms/gradebook-provider';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import { refreshCanvasAccessToken } from "../lms/canvas-oauth";
+import { createGradebookProvider } from "../lms/gradebook-provider";
 import {
   evaluateBadgeIssuanceRuleDefinition,
   extractBadgeIssuanceRuleRequirements,
@@ -61,17 +61,17 @@ import {
   type BadgeIssuanceRuleEvaluationFacts,
   type BadgeIssuanceRuleGradeFact,
   type BadgeIssuanceRuleSubmissionFact,
-} from '../rules/engine';
+} from "../rules/engine";
 
 interface DirectIssueBadgeRequest {
   badgeTemplateId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   idempotencyKey: string;
 }
 
 interface DirectIssueBadgeResult {
-  status: 'issued' | 'already_issued';
+  status: "issued" | "already_issued";
   assertionId: string;
 }
 
@@ -86,7 +86,7 @@ interface IssueBadgeHttpErrorShape {
 }
 
 const isIssueBadgeHttpError = (error: unknown): error is IssueBadgeHttpErrorShape => {
-  if (error === null || typeof error !== 'object') {
+  if (error === null || typeof error !== "object") {
     return false;
   }
 
@@ -109,7 +109,7 @@ const isIssueBadgeHttpError = (error: unknown): error is IssueBadgeHttpErrorShap
     return false;
   }
 
-  if (typeof candidate.payload.error !== 'string') {
+  if (typeof candidate.payload.error !== "string") {
     return false;
   }
 
@@ -172,13 +172,13 @@ const roleSatisfiesMinimumRole = (
 
 interface RuleDefinitionDiffChange {
   path: string;
-  changeType: 'added' | 'removed' | 'changed';
+  changeType: "added" | "removed" | "changed";
   before: unknown;
   after: unknown;
 }
 
 const isJsonRecord = (value: unknown): value is Record<string, unknown> => {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 };
 
 const areJsonValuesEqual = (left: unknown, right: unknown): boolean => {
@@ -204,7 +204,7 @@ const collectRuleDefinitionDiff = (
       if (!(index in baseValue)) {
         changes.push({
           path: childPath,
-          changeType: 'added',
+          changeType: "added",
           before: null,
           after: compareValue[index],
         });
@@ -214,7 +214,7 @@ const collectRuleDefinitionDiff = (
       if (!(index in compareValue)) {
         changes.push({
           path: childPath,
-          changeType: 'removed',
+          changeType: "removed",
           before: baseValue[index],
           after: null,
         });
@@ -238,7 +238,7 @@ const collectRuleDefinitionDiff = (
       if (!baseHasKey) {
         changes.push({
           path: childPath,
-          changeType: 'added',
+          changeType: "added",
           before: null,
           after: compareValue[key],
         });
@@ -248,7 +248,7 @@ const collectRuleDefinitionDiff = (
       if (!compareHasKey) {
         changes.push({
           path: childPath,
-          changeType: 'removed',
+          changeType: "removed",
           before: baseValue[key],
           after: null,
         });
@@ -262,8 +262,8 @@ const collectRuleDefinitionDiff = (
   }
 
   changes.push({
-    path: path.length === 0 ? '$' : path,
-    changeType: 'changed',
+    path: path.length === 0 ? "$" : path,
+    changeType: "changed",
     before: baseValue,
     after: compareValue,
   });
@@ -277,19 +277,19 @@ const resolveRuleDefinition = (
   try {
     parsed = JSON.parse(rawRuleJson) as unknown;
   } catch {
-    throw new Error('Stored rule JSON is invalid');
+    throw new Error("Stored rule JSON is invalid");
   }
 
   return parseBadgeIssuanceRuleDefinition(parsed);
 };
 
-type BadgeRuleEvaluationOutcome = 'matched' | 'no_match' | 'review_required';
+type BadgeRuleEvaluationOutcome = "matched" | "no_match" | "review_required";
 
 function collectRuleValueListReferences(
-  condition: BadgeIssuanceRuleDefinition['conditions'],
+  condition: BadgeIssuanceRuleDefinition["conditions"],
   output: Set<string>,
 ): void {
-  if ('all' in condition) {
+  if ("all" in condition) {
     for (const child of condition.all) {
       collectRuleValueListReferences(child, output);
     }
@@ -297,7 +297,7 @@ function collectRuleValueListReferences(
     return;
   }
 
-  if ('any' in condition) {
+  if ("any" in condition) {
     for (const child of condition.any) {
       collectRuleValueListReferences(child, output);
     }
@@ -305,16 +305,16 @@ function collectRuleValueListReferences(
     return;
   }
 
-  if ('not' in condition) {
+  if ("not" in condition) {
     collectRuleValueListReferences(condition.not, output);
     return;
   }
 
-  if ('courseListId' in condition && typeof condition.courseListId === 'string') {
+  if ("courseListId" in condition && typeof condition.courseListId === "string") {
     output.add(condition.courseListId);
   }
 
-  if ('badgeTemplateListId' in condition && typeof condition.badgeTemplateListId === 'string') {
+  if ("badgeTemplateListId" in condition && typeof condition.badgeTemplateListId === "string") {
     output.add(condition.badgeTemplateListId);
   }
 }
@@ -327,11 +327,11 @@ function valueListById(
 
 function resolveCourseListCondition(
   condition:
-    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'grade_threshold' }>
-    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'course_completion' }>
-    | Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'program_completion' }>,
+    | Extract<BadgeIssuanceRuleDefinition["conditions"], { type: "grade_threshold" }>
+    | Extract<BadgeIssuanceRuleDefinition["conditions"], { type: "course_completion" }>
+    | Extract<BadgeIssuanceRuleDefinition["conditions"], { type: "program_completion" }>,
   valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
-): BadgeIssuanceRuleDefinition['conditions'] {
+): BadgeIssuanceRuleDefinition["conditions"] {
   if (condition.courseListId === undefined) {
     return condition;
   }
@@ -342,13 +342,13 @@ function resolveCourseListCondition(
     throw new Error(`Rule value list ${condition.courseListId} was not found`);
   }
 
-  if (valueList.kind !== 'course_ids') {
+  if (valueList.kind !== "course_ids") {
     throw new Error(`Rule value list ${condition.courseListId} is not a course list`);
   }
 
-  if (condition.type === 'program_completion') {
+  if (condition.type === "program_completion") {
     return {
-      type: 'program_completion',
+      type: "program_completion",
       courseIds: valueList.values,
       ...(condition.minimumCompleted === undefined
         ? {}
@@ -357,9 +357,9 @@ function resolveCourseListCondition(
   }
 
   const expandedConditions = valueList.values.map((courseId) => {
-    if (condition.type === 'grade_threshold') {
+    if (condition.type === "grade_threshold") {
       return {
-        type: 'grade_threshold' as const,
+        type: "grade_threshold" as const,
         courseId,
         ...(condition.scoreField === undefined ? {} : { scoreField: condition.scoreField }),
         ...(condition.minScore === undefined ? {} : { minScore: condition.minScore }),
@@ -368,7 +368,7 @@ function resolveCourseListCondition(
     }
 
     return {
-      type: 'course_completion' as const,
+      type: "course_completion" as const,
       courseId,
       ...(condition.requireCompleted === undefined
         ? {}
@@ -385,9 +385,9 @@ function resolveCourseListCondition(
 }
 
 function resolveBadgeTemplateListCondition(
-  condition: Extract<BadgeIssuanceRuleDefinition['conditions'], { type: 'prerequisite_badge' }>,
+  condition: Extract<BadgeIssuanceRuleDefinition["conditions"], { type: "prerequisite_badge" }>,
   valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
-): BadgeIssuanceRuleDefinition['conditions'] {
+): BadgeIssuanceRuleDefinition["conditions"] {
   if (condition.badgeTemplateListId === undefined) {
     return condition;
   }
@@ -398,49 +398,51 @@ function resolveBadgeTemplateListCondition(
     throw new Error(`Rule value list ${condition.badgeTemplateListId} was not found`);
   }
 
-  if (valueList.kind !== 'badge_template_ids') {
-    throw new Error(`Rule value list ${condition.badgeTemplateListId} is not a badge-template list`);
+  if (valueList.kind !== "badge_template_ids") {
+    throw new Error(
+      `Rule value list ${condition.badgeTemplateListId} is not a badge-template list`,
+    );
   }
 
   return {
     any: valueList.values.map((badgeTemplateId) => ({
-      type: 'prerequisite_badge' as const,
+      type: "prerequisite_badge" as const,
       badgeTemplateId,
     })),
   };
 }
 
 function resolveRuleConditionValueLists(
-  condition: BadgeIssuanceRuleDefinition['conditions'],
+  condition: BadgeIssuanceRuleDefinition["conditions"],
   valueLists: Map<string, BadgeIssuanceRuleValueListRecord>,
-): BadgeIssuanceRuleDefinition['conditions'] {
-  if ('all' in condition) {
+): BadgeIssuanceRuleDefinition["conditions"] {
+  if ("all" in condition) {
     return {
       all: condition.all.map((child) => resolveRuleConditionValueLists(child, valueLists)),
     };
   }
 
-  if ('any' in condition) {
+  if ("any" in condition) {
     return {
       any: condition.any.map((child) => resolveRuleConditionValueLists(child, valueLists)),
     };
   }
 
-  if ('not' in condition) {
+  if ("not" in condition) {
     return {
       not: resolveRuleConditionValueLists(condition.not, valueLists),
     };
   }
 
   switch (condition.type) {
-    case 'grade_threshold':
-    case 'course_completion':
-    case 'program_completion':
+    case "grade_threshold":
+    case "course_completion":
+    case "program_completion":
       return resolveCourseListCondition(condition, valueLists);
-    case 'prerequisite_badge':
+    case "prerequisite_badge":
       return resolveBadgeTemplateListCondition(condition, valueLists);
-    case 'assignment_submission':
-    case 'time_window':
+    case "assignment_submission":
+    case "time_window":
       return condition;
   }
 }
@@ -461,10 +463,15 @@ async function resolveBadgeIssuanceRuleDefinitionValueLists(
     tenantId,
     includeArchived: false,
   });
-  const selectedValueLists = valueLists.filter((valueList) => referencedValueListIds.has(valueList.id));
+  const selectedValueLists = valueLists.filter((valueList) =>
+    referencedValueListIds.has(valueList.id),
+  );
   const resolvedDefinition = {
     ...definition,
-    conditions: resolveRuleConditionValueLists(definition.conditions, valueListById(selectedValueLists)),
+    conditions: resolveRuleConditionValueLists(
+      definition.conditions,
+      valueListById(selectedValueLists),
+    ),
   };
 
   return parseBadgeIssuanceRuleDefinition(resolvedDefinition);
@@ -475,16 +482,16 @@ function badgeRuleEvaluationOutcome(
   evaluation: ReturnType<typeof evaluateBadgeIssuanceRuleDefinition>,
 ): BadgeRuleEvaluationOutcome {
   if (evaluation.matched) {
-    return 'matched';
+    return "matched";
   }
 
   const summary = summarizeBadgeIssuanceRuleEvaluation(evaluation);
 
   if (definition.options?.reviewOnMissingFacts === true && summary.missingDataCount > 0) {
-    return 'review_required';
+    return "review_required";
   }
 
-  return 'no_match';
+  return "no_match";
 }
 
 function parseFactsFromEvaluationRecord(
@@ -493,13 +500,13 @@ function parseFactsFromEvaluationRecord(
   try {
     const parsed = JSON.parse(evaluationRecord.evaluationJson) as unknown;
 
-    if (parsed === null || typeof parsed !== 'object' || !('facts' in parsed)) {
+    if (parsed === null || typeof parsed !== "object" || !("facts" in parsed)) {
       return null;
     }
 
     const facts = parsed.facts as Partial<BadgeIssuanceRuleEvaluationFacts>;
 
-    if (typeof facts.learnerId !== 'string' || typeof facts.nowIso !== 'string') {
+    if (typeof facts.learnerId !== "string" || typeof facts.nowIso !== "string") {
       return null;
     }
 
@@ -524,9 +531,9 @@ const loadRuleFacts = async (input: {
   lmsProviderKind: BadgeIssuanceRuleLmsProviderKind;
   learnerId: string;
   recipientIdentity: string;
-  recipientIdentityType: 'email' | 'email_sha256' | 'did' | 'url';
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
   definition: ReturnType<typeof parseBadgeIssuanceRuleDefinition>;
-  requestedFacts?: ReturnType<typeof parseEvaluateBadgeIssuanceRuleRequest>['facts'];
+  requestedFacts?: ReturnType<typeof parseEvaluateBadgeIssuanceRuleRequest>["facts"];
   nowIso: string;
 }): Promise<BadgeIssuanceRuleEvaluationFacts> => {
   const requestedFacts = input.requestedFacts;
@@ -568,9 +575,9 @@ const loadRuleFacts = async (input: {
   }
 
   const requirements = extractBadgeIssuanceRuleRequirements(input.definition);
-  const providerLabel = input.lmsProviderKind === 'sakai' ? 'Sakai' : 'Canvas';
+  const providerLabel = input.lmsProviderKind === "sakai" ? "Sakai" : "Canvas";
 
-  if (input.lmsProviderKind !== 'canvas' && input.lmsProviderKind !== 'sakai') {
+  if (input.lmsProviderKind !== "canvas" && input.lmsProviderKind !== "sakai") {
     throw new Error(
       `Automated rule evaluation is not implemented for LMS provider "${input.lmsProviderKind}"`,
     );
@@ -579,13 +586,17 @@ const loadRuleFacts = async (input: {
   const integration = await findTenantCanvasGradebookIntegration(input.db, input.tenantId);
 
   if (integration === null) {
-    throw new Error(`${providerLabel} gradebook integration is required for automated rule evaluation`);
+    throw new Error(
+      `${providerLabel} gradebook integration is required for automated rule evaluation`,
+    );
   }
 
   let accessToken = integration.accessToken;
 
   if (accessToken === null) {
-    throw new Error(`${providerLabel} gradebook integration has no access token. Connect LMS first.`);
+    throw new Error(
+      `${providerLabel} gradebook integration has no access token. Connect LMS first.`,
+    );
   }
 
   if (
@@ -609,7 +620,9 @@ const loadRuleFacts = async (input: {
       refreshTokenExpiresAt:
         refresh.refreshTokenExpiresInSeconds === undefined
           ? undefined
-          : new Date(Date.parse(input.nowIso) + refresh.refreshTokenExpiresInSeconds * 1000).toISOString(),
+          : new Date(
+              Date.parse(input.nowIso) + refresh.refreshTokenExpiresInSeconds * 1000,
+            ).toISOString(),
     });
 
     if (refreshed !== null && refreshed.accessToken !== null) {
@@ -705,7 +718,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     TENANT_MEMBER_ROLES,
   } = input;
 
-  app.get('/v1/tenants/:tenantId/badge-rule-value-lists', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rule-value-lists", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     let query;
 
@@ -714,7 +727,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule value-list query',
+          error: "Invalid badge rule value-list query",
         },
         400,
       );
@@ -738,7 +751,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rule-value-lists', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rule-value-lists", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     let request;
 
@@ -747,7 +760,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule value-list payload',
+          error: "Invalid badge rule value-list payload",
         },
         400,
       );
@@ -771,8 +784,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.value_list_created',
-      targetType: 'badge_rule_value_list',
+      action: "badge_rule.value_list_created",
+      targetType: "badge_rule_value_list",
       targetId: valueList.id,
       metadata: {
         role: membershipRole,
@@ -790,7 +803,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     );
   });
 
-  app.get('/v1/tenants/:tenantId/badge-rules', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rules", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -808,7 +821,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules", async (c) => {
     const tenantParams = parseTenantPathParams(c.req.param());
     let request;
 
@@ -817,7 +830,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge issuance rule payload',
+          error: "Invalid badge issuance rule payload",
         },
         400,
       );
@@ -846,8 +859,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: tenantParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.created',
-      targetType: 'badge_rule',
+      action: "badge_rule.created",
+      targetType: "badge_rule",
       targetId: created.rule.id,
       metadata: {
         role: membershipRole,
@@ -870,7 +883,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     );
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules/preview-evaluate', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/preview-evaluate", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     let request;
 
@@ -879,7 +892,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule preview payload',
+          error: "Invalid badge rule preview payload",
         },
         400,
       );
@@ -904,7 +917,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+          error: error instanceof Error ? error.message : "Failed to resolve rule value lists",
         },
         422,
       );
@@ -927,7 +940,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Failed to load rule facts',
+          error: error instanceof Error ? error.message : "Failed to load rule facts",
         },
         502,
       );
@@ -948,7 +961,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules/preview-simulate', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/preview-simulate", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     let request;
 
@@ -957,7 +970,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule simulation payload',
+          error: "Invalid badge rule simulation payload",
         },
         400,
       );
@@ -981,7 +994,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+          error: error instanceof Error ? error.message : "Failed to resolve rule value lists",
         },
         422,
       );
@@ -1017,14 +1030,18 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
           changed:
             projectedEvaluation.matched !== evaluationRecord.matched ||
             projectedOutcome !==
-              (evaluationRecord.issuanceStatus === 'review_required' ? 'review_required' : evaluationRecord.matched ? 'matched' : 'no_match'),
+              (evaluationRecord.issuanceStatus === "review_required"
+                ? "review_required"
+                : evaluationRecord.matched
+                  ? "matched"
+                  : "no_match"),
         };
       })
       .filter((sample): sample is NonNullable<typeof sample> => sample !== null);
 
-    const matchedCount = samples.filter((sample) => sample.projectedOutcome === 'matched').length;
+    const matchedCount = samples.filter((sample) => sample.projectedOutcome === "matched").length;
     const reviewRequiredCount = samples.filter(
-      (sample) => sample.projectedOutcome === 'review_required',
+      (sample) => sample.projectedOutcome === "review_required",
     ).length;
     const changedCount = samples.filter((sample) => sample.changed).length;
 
@@ -1038,14 +1055,14 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         changedCount,
         historicalMatchedCount: samples.filter((sample) => sample.historicalMatched).length,
         historicalReviewRequiredCount: samples.filter(
-          (sample) => sample.historicalIssuanceStatus === 'review_required',
+          (sample) => sample.historicalIssuanceStatus === "review_required",
         ).length,
       },
       samples,
     });
   });
 
-  app.get('/v1/tenants/:tenantId/badge-rules/review-queue', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rules/review-queue", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     let query;
 
@@ -1054,7 +1071,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid review queue query',
+          error: "Invalid review queue query",
         },
         400,
       );
@@ -1066,11 +1083,11 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       return roleCheck;
     }
 
-    const reviewStatus = query.status ?? 'pending';
+    const reviewStatus = query.status ?? "pending";
     const db = resolveDatabase(c.env);
     const evaluations = await listBadgeIssuanceRuleEvaluations(db, {
       tenantId: pathParams.tenantId,
-      issuanceStatus: 'review_required',
+      issuanceStatus: "review_required",
       reviewStatus,
       limit: query.limit ?? 50,
     });
@@ -1094,19 +1111,19 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         })();
         const evaluation =
           parsedPayload !== null &&
-          typeof parsedPayload === 'object' &&
-          'evaluation' in parsedPayload &&
+          typeof parsedPayload === "object" &&
+          "evaluation" in parsedPayload &&
           parsedPayload.evaluation !== null &&
-          typeof parsedPayload.evaluation === 'object'
+          typeof parsedPayload.evaluation === "object"
             ? parsedPayload.evaluation
             : null;
         const summary =
           evaluation !== null &&
-          'matched' in evaluation &&
-          'tree' in evaluation &&
-          typeof evaluation.matched === 'boolean' &&
+          "matched" in evaluation &&
+          "tree" in evaluation &&
+          typeof evaluation.matched === "boolean" &&
           evaluation.tree !== null &&
-          typeof evaluation.tree === 'object'
+          typeof evaluation.tree === "object"
             ? summarizeBadgeIssuanceRuleEvaluation(
                 evaluation as ReturnType<typeof evaluateBadgeIssuanceRuleDefinition>,
               )
@@ -1130,7 +1147,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules/review-queue/:evaluationId/resolve', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/review-queue/:evaluationId/resolve", async (c) => {
     const pathParams = parseBadgeIssuanceRuleEvaluationPathParams(c.req.param());
     let request;
 
@@ -1139,7 +1156,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid review queue resolution payload',
+          error: "Invalid review queue resolution payload",
         },
         400,
       );
@@ -1161,16 +1178,16 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (evaluationRecord === null) {
       return c.json(
         {
-          error: 'Review queue entry not found',
+          error: "Review queue entry not found",
         },
         404,
       );
     }
 
-    if (evaluationRecord.reviewStatus !== 'pending') {
+    if (evaluationRecord.reviewStatus !== "pending") {
       return c.json(
         {
-          error: 'Review queue entry is no longer pending',
+          error: "Review queue entry is no longer pending",
         },
         409,
       );
@@ -1181,7 +1198,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (rule === null) {
       return c.json(
         {
-          error: 'Badge rule not found for review queue entry',
+          error: "Badge rule not found for review queue entry",
         },
         404,
       );
@@ -1189,7 +1206,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
 
     let issuance: DirectIssueBadgeResult | null = null;
 
-    if (request.decision === 'issue') {
+    if (request.decision === "issue") {
       try {
         issuance = await issueBadgeForTenant(
           c,
@@ -1210,9 +1227,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         return c.json(
           {
             error:
-              error instanceof Error
-                ? error.message
-                : 'Failed to issue badge from review queue',
+              error instanceof Error ? error.message : "Failed to issue badge from review queue",
           },
           502,
         );
@@ -1226,16 +1241,14 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       reviewComment: request.comment,
       reviewedByUserId: session.userId,
       issuanceStatus:
-        request.decision === 'issue'
-          ? issuance?.status ?? 'issued'
-          : 'review_dismissed',
-      assertionId: request.decision === 'issue' ? issuance?.assertionId : undefined,
+        request.decision === "issue" ? (issuance?.status ?? "issued") : "review_dismissed",
+      assertionId: request.decision === "issue" ? issuance?.assertionId : undefined,
     });
 
     if (resolved === null) {
       return c.json(
         {
-          error: 'Review queue entry is no longer pending',
+          error: "Review queue entry is no longer pending",
         },
         409,
       );
@@ -1244,8 +1257,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(db, {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.review_resolved',
-      targetType: 'badge_rule_evaluation',
+      action: "badge_rule.review_resolved",
+      targetType: "badge_rule_evaluation",
       targetId: evaluationRecord.id,
       metadata: {
         role: membershipRole,
@@ -1263,7 +1276,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.get('/v1/tenants/:tenantId/badge-rules/:ruleId', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rules/:ruleId", async (c) => {
     const pathParams = parseBadgeIssuanceRulePathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
@@ -1277,7 +1290,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (rule === null) {
       return c.json(
         {
-          error: 'Badge rule not found',
+          error: "Badge rule not found",
         },
         404,
       );
@@ -1295,7 +1308,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.get('/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/diff', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/diff", async (c) => {
     const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
     let query;
 
@@ -1304,7 +1317,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule version diff query',
+          error: "Invalid badge rule version diff query",
         },
         400,
       );
@@ -1326,7 +1339,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (selectedVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version not found',
+          error: "Badge rule version not found",
         },
         404,
       );
@@ -1348,8 +1361,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         {
           error:
             query.baseVersionId === undefined
-              ? 'No base version found. Specify baseVersionId to compare against.'
-              : 'Base badge rule version not found',
+              ? "No base version found. Specify baseVersionId to compare against."
+              : "Base badge rule version not found",
         },
         404,
       );
@@ -1359,7 +1372,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     const selectedDefinition = resolveRuleDefinition(selectedVersion.ruleJson);
     const changes: RuleDefinitionDiffChange[] = [];
 
-    collectRuleDefinitionDiff(baseDefinition, selectedDefinition, 'definition', changes);
+    collectRuleDefinitionDiff(baseDefinition, selectedDefinition, "definition", changes);
 
     return c.json({
       tenantId: pathParams.tenantId,
@@ -1382,7 +1395,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.get('/v1/tenants/:tenantId/badge-rules/:ruleId/audit-log', async (c) => {
+  app.get("/v1/tenants/:tenantId/badge-rules/:ruleId/audit-log", async (c) => {
     const pathParams = parseBadgeIssuanceRulePathParams(c.req.param());
     let query;
 
@@ -1391,7 +1404,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule audit log query',
+          error: "Invalid badge rule audit log query",
         },
         400,
       );
@@ -1409,7 +1422,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (rule === null) {
       return c.json(
         {
-          error: 'Badge rule not found',
+          error: "Badge rule not found",
         },
         404,
       );
@@ -1427,11 +1440,11 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
     const filteredLogs = logs
       .filter((log) => {
-        if (log.targetType === 'badge_rule') {
+        if (log.targetType === "badge_rule") {
           return log.targetId === pathParams.ruleId;
         }
 
-        if (log.targetType === 'badge_rule_version') {
+        if (log.targetType === "badge_rule_version") {
           return versionIds.has(log.targetId);
         }
 
@@ -1446,7 +1459,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules/:ruleId/versions', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/:ruleId/versions", async (c) => {
     const pathParams = parseBadgeIssuanceRulePathParams(c.req.param());
     let request;
 
@@ -1455,7 +1468,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule version payload',
+          error: "Invalid badge rule version payload",
         },
         400,
       );
@@ -1477,7 +1490,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (existingRule === null) {
       return c.json(
         {
-          error: 'Badge rule not found',
+          error: "Badge rule not found",
         },
         404,
       );
@@ -1495,8 +1508,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.version_created',
-      targetType: 'badge_rule_version',
+      action: "badge_rule.version_created",
+      targetType: "badge_rule_version",
       targetId: createdVersion.id,
       metadata: {
         role: membershipRole,
@@ -1517,7 +1530,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
   });
 
   app.post(
-    '/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/submit-approval',
+    "/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/submit-approval",
     async (c) => {
       const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
       const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
@@ -1536,13 +1549,13 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       if (currentVersion === null) {
         return c.json(
           {
-            error: 'Badge rule version not found',
+            error: "Badge rule version not found",
           },
           404,
         );
       }
 
-      if (currentVersion.status !== 'draft' && currentVersion.status !== 'rejected') {
+      if (currentVersion.status !== "draft" && currentVersion.status !== "rejected") {
         return c.json(
           {
             error: `Only draft/rejected versions can be submitted for approval (current: ${currentVersion.status})`,
@@ -1551,18 +1564,21 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         );
       }
 
-      const updatedVersion = await submitBadgeIssuanceRuleVersionForApproval(resolveDatabase(c.env), {
-        tenantId: pathParams.tenantId,
-        ruleId: pathParams.ruleId,
-        versionId: pathParams.versionId,
-        actorUserId: session.userId,
-        actorRole: membershipRole,
-      });
+      const updatedVersion = await submitBadgeIssuanceRuleVersionForApproval(
+        resolveDatabase(c.env),
+        {
+          tenantId: pathParams.tenantId,
+          ruleId: pathParams.ruleId,
+          versionId: pathParams.versionId,
+          actorUserId: session.userId,
+          actorRole: membershipRole,
+        },
+      );
 
       if (updatedVersion === null) {
         return c.json(
           {
-            error: 'Badge rule version not found',
+            error: "Badge rule version not found",
           },
           404,
         );
@@ -1571,8 +1587,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
         actorUserId: session.userId,
-        action: 'badge_rule.version_submitted_for_approval',
-        targetType: 'badge_rule_version',
+        action: "badge_rule.version_submitted_for_approval",
+        targetType: "badge_rule_version",
         targetId: updatedVersion.id,
         metadata: {
           role: membershipRole,
@@ -1590,7 +1606,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     },
   );
 
-  app.post('/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/decision', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/decision", async (c) => {
     const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
     let request;
 
@@ -1599,7 +1615,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule approval decision payload',
+          error: "Invalid badge rule approval decision payload",
         },
         400,
       );
@@ -1621,13 +1637,13 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (currentVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version not found',
+          error: "Badge rule version not found",
         },
         404,
       );
     }
 
-    if (currentVersion.status !== 'pending_approval') {
+    if (currentVersion.status !== "pending_approval") {
       return c.json(
         {
           error: `Only pending_approval versions can be decided (current: ${currentVersion.status})`,
@@ -1641,12 +1657,12 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       ruleId: pathParams.ruleId,
       versionId: pathParams.versionId,
     });
-    const currentApprovalStep = approvalSteps.find((step) => step.status === 'pending');
+    const currentApprovalStep = approvalSteps.find((step) => step.status === "pending");
 
     if (currentApprovalStep === undefined) {
       return c.json(
         {
-          error: 'No pending approval step exists for this rule version',
+          error: "No pending approval step exists for this rule version",
         },
         409,
       );
@@ -1674,7 +1690,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (decidedVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version is no longer pending approval',
+          error: "Badge rule version is no longer pending approval",
         },
         409,
       );
@@ -1683,8 +1699,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.version_approval_decided',
-      targetType: 'badge_rule_version',
+      action: "badge_rule.version_approval_decided",
+      targetType: "badge_rule_version",
       targetId: decidedVersion.id,
       metadata: {
         role: membershipRole,
@@ -1706,7 +1722,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
   });
 
   app.get(
-    '/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/approval-history',
+    "/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/approval-history",
     async (c) => {
       const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
       const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
@@ -1724,7 +1740,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       if (version === null) {
         return c.json(
           {
-            error: 'Badge rule version not found',
+            error: "Badge rule version not found",
           },
           404,
         );
@@ -1742,7 +1758,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
           versionId: pathParams.versionId,
         }),
       ]);
-      const currentStep = steps.find((step) => step.status === 'pending') ?? null;
+      const currentStep = steps.find((step) => step.status === "pending") ?? null;
 
       return c.json({
         tenantId: pathParams.tenantId,
@@ -1757,7 +1773,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     },
   );
 
-  app.post('/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/activate', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/:ruleId/versions/:versionId/activate", async (c) => {
     const pathParams = parseBadgeIssuanceRuleVersionPathParams(c.req.param());
     const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
 
@@ -1775,13 +1791,13 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (currentVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version not found',
+          error: "Badge rule version not found",
         },
         404,
       );
     }
 
-    if (currentVersion.status !== 'approved' && currentVersion.status !== 'active') {
+    if (currentVersion.status !== "approved" && currentVersion.status !== "active") {
       return c.json(
         {
           error: `Only approved versions can be activated (current: ${currentVersion.status})`,
@@ -1800,7 +1816,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (activatedVersion === null) {
       return c.json(
         {
-          error: 'Badge rule version not found',
+          error: "Badge rule version not found",
         },
         404,
       );
@@ -1809,8 +1825,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.version_activated',
-      targetType: 'badge_rule_version',
+      action: "badge_rule.version_activated",
+      targetType: "badge_rule_version",
       targetId: activatedVersion.id,
       metadata: {
         role: membershipRole,
@@ -1827,7 +1843,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     });
   });
 
-  app.post('/v1/tenants/:tenantId/badge-rules/:ruleId/evaluate', async (c) => {
+  app.post("/v1/tenants/:tenantId/badge-rules/:ruleId/evaluate", async (c) => {
     const pathParams = parseBadgeIssuanceRulePathParams(c.req.param());
     let request;
 
@@ -1836,7 +1852,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch {
       return c.json(
         {
-          error: 'Invalid badge rule evaluation payload',
+          error: "Invalid badge rule evaluation payload",
         },
         400,
       );
@@ -1855,7 +1871,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     if (rule === null) {
       return c.json(
         {
-          error: 'Badge rule not found',
+          error: "Badge rule not found",
         },
         404,
       );
@@ -1878,8 +1894,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         {
           error:
             request.versionId === undefined
-              ? 'No active rule version found. Activate an approved version first.'
-              : 'Badge rule version not found',
+              ? "No active rule version found. Activate an approved version first."
+              : "Badge rule version not found",
         },
         404,
       );
@@ -1896,7 +1912,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Failed to resolve rule value lists',
+          error: error instanceof Error ? error.message : "Failed to resolve rule value lists",
         },
         422,
       );
@@ -1920,7 +1936,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Failed to load rule facts',
+          error: error instanceof Error ? error.message : "Failed to load rule facts",
         },
         502,
       );
@@ -1952,7 +1968,8 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
 
         return c.json(
           {
-            error: error instanceof Error ? error.message : 'Failed to issue badge for matched rule',
+            error:
+              error instanceof Error ? error.message : "Failed to issue badge for matched rule",
           },
           502,
         );
@@ -1968,7 +1985,7 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
       recipientIdentityType: request.recipientIdentityType,
       matched: evaluation.matched,
       issuanceStatus:
-        outcome === 'review_required' && !dryRun ? 'review_required' : issuance?.status,
+        outcome === "review_required" && !dryRun ? "review_required" : issuance?.status,
       assertionId: issuance?.assertionId,
       evaluationJson: JSON.stringify({
         dryRun,
@@ -1977,15 +1994,15 @@ export const registerBadgeRuleRoutes = (input: RegisterBadgeRuleRoutesInput): vo
         evaluationSummary,
         facts,
       }),
-      ...(outcome === 'review_required' && !dryRun ? { reviewStatus: 'pending' as const } : {}),
+      ...(outcome === "review_required" && !dryRun ? { reviewStatus: "pending" as const } : {}),
       evaluatedAt: facts.nowIso,
     });
 
     await createAuditLog(db, {
       tenantId: pathParams.tenantId,
       actorUserId: session.userId,
-      action: 'badge_rule.evaluated',
-      targetType: 'badge_rule',
+      action: "badge_rule.evaluated",
+      targetType: "badge_rule",
       targetId: rule.id,
       metadata: {
         role: membershipRole,

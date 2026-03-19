@@ -2,7 +2,7 @@ export type ObservabilityValue = string | number | boolean | null;
 
 export type ObservabilityFields = Record<string, ObservabilityValue | undefined>;
 
-export type ObservabilityLevel = 'info' | 'warn' | 'error';
+export type ObservabilityLevel = "info" | "warn" | "error";
 
 export interface ObservabilityContext {
   service: string;
@@ -29,11 +29,11 @@ interface SerializedError {
 }
 
 const createEventId = (): string => {
-  return crypto.randomUUID().replace(/-/g, '');
+  return crypto.randomUUID().replace(/-/g, "");
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 };
 
 const toSerializedError = (error: unknown): SerializedError => {
@@ -45,9 +45,9 @@ const toSerializedError = (error: unknown): SerializedError => {
     };
   }
 
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     return {
-      name: 'Error',
+      name: "Error",
       message: error,
       stack: null,
     };
@@ -55,12 +55,12 @@ const toSerializedError = (error: unknown): SerializedError => {
 
   if (isRecord(error)) {
     const name =
-      typeof error.name === 'string' && error.name.length > 0 ? error.name : 'UnknownError';
+      typeof error.name === "string" && error.name.length > 0 ? error.name : "UnknownError";
     const message =
-      typeof error.message === 'string' && error.message.length > 0
+      typeof error.message === "string" && error.message.length > 0
         ? error.message
-        : 'Unknown error';
-    const stack = typeof error.stack === 'string' ? error.stack : null;
+        : "Unknown error";
+    const stack = typeof error.stack === "string" ? error.stack : null;
 
     return {
       name,
@@ -70,8 +70,8 @@ const toSerializedError = (error: unknown): SerializedError => {
   }
 
   return {
-    name: 'UnknownError',
-    message: 'Unknown error',
+    name: "UnknownError",
+    message: "Unknown error",
     stack: null,
   };
 };
@@ -79,10 +79,10 @@ const toSerializedError = (error: unknown): SerializedError => {
 const parseSentryDsn = (dsn: string): ParsedSentryDsn => {
   const parsed = new URL(dsn);
   const publicKey = parsed.username;
-  const projectId = parsed.pathname.replace(/^\/+/, '');
+  const projectId = parsed.pathname.replace(/^\/+/, "");
 
   if (publicKey.length === 0 || projectId.length === 0) {
-    throw new Error('Invalid Sentry DSN');
+    throw new Error("Invalid Sentry DSN");
   }
 
   const endpoint = `${parsed.protocol}//${parsed.host}/api/${projectId}/store/?sentry_version=7&sentry_key=${encodeURIComponent(publicKey)}`;
@@ -109,7 +109,7 @@ const logRecord = (
 
   const serialized = JSON.stringify(payload);
 
-  if (level === 'error') {
+  if (level === "error") {
     console.error(serialized);
     return;
   }
@@ -122,7 +122,7 @@ export const logInfo = (
   message: string,
   fields: ObservabilityFields = {},
 ): void => {
-  logRecord('info', context, message, fields);
+  logRecord("info", context, message, fields);
 };
 
 export const logWarn = (
@@ -130,7 +130,7 @@ export const logWarn = (
   message: string,
   fields: ObservabilityFields = {},
 ): void => {
-  logRecord('warn', context, message, fields);
+  logRecord("warn", context, message, fields);
 };
 
 export const logError = (
@@ -138,12 +138,10 @@ export const logError = (
   message: string,
   fields: ObservabilityFields = {},
 ): void => {
-  logRecord('error', context, message, fields);
+  logRecord("error", context, message, fields);
 };
 
-export const captureSentryException = async (
-  input: CaptureSentryExceptionInput,
-): Promise<void> => {
+export const captureSentryException = async (input: CaptureSentryExceptionInput): Promise<void> => {
   if (input.dsn === undefined || input.dsn.trim().length === 0) {
     return;
   }
@@ -155,7 +153,7 @@ export const captureSentryException = async (
   try {
     endpoint = parseSentryDsn(input.dsn).endpoint;
   } catch (error: unknown) {
-    logWarn(input.context, 'sentry_dsn_invalid', {
+    logWarn(input.context, "sentry_dsn_invalid", {
       detail: toSerializedError(error).message,
     });
     return;
@@ -164,8 +162,8 @@ export const captureSentryException = async (
   const event = {
     event_id: createEventId(),
     timestamp: Date.now() / 1000,
-    platform: 'javascript',
-    level: 'error',
+    platform: "javascript",
+    level: "error",
     environment: input.context.environment,
     server_name: input.context.service,
     message: input.message,
@@ -182,7 +180,7 @@ export const captureSentryException = async (
               : {
                   frames: [
                     {
-                      function: 'error',
+                      function: "error",
                       filename: input.context.service,
                       lineno: 0,
                       colno: 0,
@@ -196,20 +194,20 @@ export const captureSentryException = async (
 
   try {
     const response = await fetch(endpoint, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'content-type': 'application/json',
+        "content-type": "application/json",
       },
       body: JSON.stringify(event),
     });
 
     if (!response.ok) {
-      logWarn(input.context, 'sentry_capture_failed', {
+      logWarn(input.context, "sentry_capture_failed", {
         status: response.status,
       });
     }
   } catch (error: unknown) {
-    logWarn(input.context, 'sentry_capture_error', {
+    logWarn(input.context, "sentry_capture_error", {
       detail: toSerializedError(error).message,
     });
   }

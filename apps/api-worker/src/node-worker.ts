@@ -1,14 +1,14 @@
-import { app } from './app';
-import { queueProcessorRequestFromSchedule } from './queue/scheduled-trigger';
+import { app } from "./app";
+import { queueProcessorRequestFromSchedule } from "./queue/scheduled-trigger";
 import {
   createNodeExecutionContext,
   createNodeRuntimeBindings,
   parsePositiveIntegerEnv,
-} from './runtime/node-runtime';
+} from "./runtime/node-runtime";
 
 const bindings = createNodeRuntimeBindings(process.env);
 const executionContext = createNodeExecutionContext();
-const intervalMs = parsePositiveIntegerEnv(process.env, 'JOB_POLL_INTERVAL_MS', 1000);
+const intervalMs = parsePositiveIntegerEnv(process.env, "JOB_POLL_INTERVAL_MS", 1000);
 
 const sleep = (durationMs: number): Promise<void> => {
   return new Promise((resolve) => {
@@ -26,7 +26,7 @@ const processQueue = async (): Promise<void> => {
 
   console.info(
     JSON.stringify({
-      message: 'node_queue_worker_tick',
+      message: "node_queue_worker_tick",
       platformDomain: bindings.PLATFORM_DOMAIN,
       status: response.status,
       body: bodyText,
@@ -41,7 +41,7 @@ const processQueue = async (): Promise<void> => {
 const startWorker = async (): Promise<void> => {
   console.info(
     JSON.stringify({
-      message: 'node_queue_worker_started',
+      message: "node_queue_worker_started",
       platformDomain: bindings.PLATFORM_DOMAIN,
       intervalMs,
     }),
@@ -51,10 +51,10 @@ const startWorker = async (): Promise<void> => {
     try {
       await processQueue();
     } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : 'Unknown queue worker error';
+      const detail = error instanceof Error ? error.message : "Unknown queue worker error";
       console.error(
         JSON.stringify({
-          message: 'node_queue_worker_error',
+          message: "node_queue_worker_error",
           detail,
         }),
       );
@@ -65,10 +65,10 @@ const startWorker = async (): Promise<void> => {
 };
 
 startWorker().catch((error: unknown) => {
-  const detail = error instanceof Error ? error.message : 'Unknown fatal queue worker error';
+  const detail = error instanceof Error ? error.message : "Unknown fatal queue worker error";
   console.error(
     JSON.stringify({
-      message: 'node_queue_worker_fatal',
+      message: "node_queue_worker_fatal",
       detail,
     }),
   );

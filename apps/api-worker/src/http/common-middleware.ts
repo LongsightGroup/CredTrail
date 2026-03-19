@@ -3,9 +3,9 @@ import {
   logError,
   logInfo,
   type ObservabilityContext,
-} from '@credtrail/core-domain';
-import type { Hono } from 'hono';
-import type { AppBindings, AppEnv } from '../app';
+} from "@credtrail/core-domain";
+import type { Hono } from "hono";
+import type { AppBindings, AppEnv } from "../app";
 
 interface RegisterCommonMiddlewareInput {
   app: Hono<AppEnv>;
@@ -15,9 +15,9 @@ interface RegisterCommonMiddlewareInput {
 const JSON_PRETTY_PRINT_SPACES = 2;
 
 const prettifyJsonResponse = async (response: Response): Promise<Response> => {
-  const contentType = response.headers.get('content-type');
+  const contentType = response.headers.get("content-type");
 
-  if (!contentType?.toLowerCase().includes('json')) {
+  if (!contentType?.toLowerCase().includes("json")) {
     return response;
   }
 
@@ -37,7 +37,7 @@ const prettifyJsonResponse = async (response: Response): Promise<Response> => {
   }
 
   const headers = new Headers(response.headers);
-  headers.delete('content-length');
+  headers.delete("content-length");
 
   return new Response(JSON.stringify(parsedBody, null, JSON_PRETTY_PRINT_SPACES), {
     status: response.status,
@@ -49,7 +49,7 @@ const prettifyJsonResponse = async (response: Response): Promise<Response> => {
 export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): void => {
   const { app, observabilityContext } = input;
 
-  app.use('*', async (c, next) => {
+  app.use("*", async (c, next) => {
     const startedAt = Date.now();
     const requestUrl = new URL(c.req.url);
     const canonicalHost = c.env.PLATFORM_DOMAIN.toLowerCase();
@@ -57,7 +57,7 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
 
     if (requestHost === `www.${canonicalHost}` || requestHost === `badges.${canonicalHost}`) {
       requestUrl.hostname = canonicalHost;
-      requestUrl.port = '';
+      requestUrl.port = "";
       return c.redirect(requestUrl.toString(), 308);
     }
 
@@ -65,7 +65,7 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
     c.res = await prettifyJsonResponse(c.res);
     const elapsedMs = Date.now() - startedAt;
 
-    logInfo(observabilityContext(c.env), 'http_request', {
+    logInfo(observabilityContext(c.env), "http_request", {
       method: c.req.method,
       path: requestUrl.pathname,
       status: c.res.status,
@@ -75,13 +75,13 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
 
   app.onError(async (error, c) => {
     const requestUrl = new URL(c.req.url);
-    const details = error instanceof Error ? error.message : 'Unknown error';
+    const details = error instanceof Error ? error.message : "Unknown error";
 
     await captureSentryException({
       context: observabilityContext(c.env),
       dsn: c.env.SENTRY_DSN,
       error,
-      message: 'Unhandled API worker error',
+      message: "Unhandled API worker error",
       tags: {
         path: requestUrl.pathname,
         method: c.req.method,
@@ -92,7 +92,7 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
       },
     });
 
-    logError(observabilityContext(c.env), 'api_error', {
+    logError(observabilityContext(c.env), "api_error", {
       method: c.req.method,
       path: requestUrl.pathname,
       detail: details,
@@ -100,16 +100,16 @@ export const registerCommonMiddleware = (input: RegisterCommonMiddlewareInput): 
 
     return c.json(
       {
-        error: 'Internal server error',
+        error: "Internal server error",
       },
       500,
     );
   });
 
-  app.get('/healthz', (c) => {
+  app.get("/healthz", (c) => {
     return c.json({
-      service: 'api-worker',
-      status: 'ok',
+      service: "api-worker",
+      status: "ok",
       environment: c.env.APP_ENV,
     });
   });

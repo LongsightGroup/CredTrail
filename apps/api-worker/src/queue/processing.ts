@@ -3,7 +3,7 @@ import {
   logError,
   logInfo,
   type ObservabilityContext,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   completeJobQueueMessage,
   createAuditLog,
@@ -11,13 +11,13 @@ import {
   leaseJobQueueMessages,
   recordAssertionRevocation,
   type SqlDatabase,
-} from '@credtrail/db';
+} from "@credtrail/db";
 import {
   parseQueueJob,
   type IssueBadgeQueueJob,
   type ProcessQueueRequest,
   type QueueJob,
-} from '@credtrail/validation';
+} from "@credtrail/validation";
 
 const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
@@ -46,9 +46,9 @@ interface RequestBodyContext {
 }
 
 export const readJsonBodyOrEmptyObject = async (c: RequestBodyContext): Promise<unknown> => {
-  const contentLengthHeader = c.req.header('content-length');
+  const contentLengthHeader = c.req.header("content-length");
 
-  if (contentLengthHeader === undefined || contentLengthHeader === '0') {
+  if (contentLengthHeader === undefined || contentLengthHeader === "0") {
     return {};
   }
 
@@ -65,7 +65,7 @@ export const processQueueInputWithDefaults = (input: ProcessQueueRequest): Proce
 
 interface QueueMessageEnvelope {
   tenantId: string;
-  jobType: QueueJob['jobType'];
+  jobType: QueueJob["jobType"];
   payloadJson: string;
   idempotencyKey: string;
 }
@@ -96,8 +96,8 @@ interface ProcessQueuedJobsDependencies<TBindings, TContext extends { env: TBind
     request: {
       badgeTemplateId: string;
       recipientIdentity: string;
-      recipientIdentityType: IssueBadgeQueueJob['payload']['recipientIdentityType'];
-      recipientIdentifiers?: IssueBadgeQueueJob['payload']['recipientIdentifiers'];
+      recipientIdentityType: IssueBadgeQueueJob["payload"]["recipientIdentityType"];
+      recipientIdentifiers?: IssueBadgeQueueJob["payload"]["recipientIdentifiers"];
       idempotencyKey?: string;
     },
     issuedByUserId?: string,
@@ -110,7 +110,7 @@ const processQueuedJob = async <TBindings, TContext extends { env: TBindings }>(
   dependencies: ProcessQueuedJobsDependencies<TBindings, TContext>,
 ): Promise<void> => {
   switch (job.jobType) {
-    case 'issue_badge':
+    case "issue_badge":
       await dependencies.issueBadgeForTenant(
         c,
         job.tenantId,
@@ -124,16 +124,19 @@ const processQueuedJob = async <TBindings, TContext extends { env: TBindings }>(
         job.payload.requestedByUserId,
       );
       return;
-    case 'revoke_badge': {
-      const revocationResult = await recordAssertionRevocation(dependencies.resolveDatabase(c.env), {
-        tenantId: job.tenantId,
-        assertionId: job.payload.assertionId,
-        revocationId: job.payload.revocationId,
-        reason: job.payload.reason,
-        idempotencyKey: job.idempotencyKey,
-        revokedByUserId: job.payload.requestedByUserId,
-        revokedAt: new Date().toISOString(),
-      });
+    case "revoke_badge": {
+      const revocationResult = await recordAssertionRevocation(
+        dependencies.resolveDatabase(c.env),
+        {
+          tenantId: job.tenantId,
+          assertionId: job.payload.assertionId,
+          revocationId: job.payload.revocationId,
+          reason: job.payload.reason,
+          idempotencyKey: job.idempotencyKey,
+          revokedByUserId: job.payload.requestedByUserId,
+          revokedAt: new Date().toISOString(),
+        },
+      );
       await createAuditLog(dependencies.resolveDatabase(c.env), {
         tenantId: job.tenantId,
         ...(job.payload.requestedByUserId === undefined
@@ -141,8 +144,8 @@ const processQueuedJob = async <TBindings, TContext extends { env: TBindings }>(
           : {
               actorUserId: job.payload.requestedByUserId,
             }),
-        action: 'assertion.revoked',
-        targetType: 'assertion',
+        action: "assertion.revoked",
+        targetType: "assertion",
         targetId: job.payload.assertionId,
         metadata: {
           revocationId: job.payload.revocationId,
@@ -153,9 +156,9 @@ const processQueuedJob = async <TBindings, TContext extends { env: TBindings }>(
       });
       return;
     }
-    case 'rebuild_verification_cache':
-    case 'import_migration_batch':
-      logInfo(dependencies.observabilityContext(c.env), 'queue_job_received', {
+    case "rebuild_verification_cache":
+    case "import_migration_batch":
+      logInfo(dependencies.observabilityContext(c.env), "queue_job_received", {
         jobType: job.jobType,
         tenantId: job.tenantId,
         idempotencyKey: job.idempotencyKey,
@@ -203,13 +206,13 @@ export const createProcessQueuedJobs = <TBindings, TContext extends { env: TBind
         result.processed += 1;
         result.succeeded += 1;
       } catch (error: unknown) {
-        const detail = error instanceof Error ? error.message : 'Unknown queue processing error';
+        const detail = error instanceof Error ? error.message : "Unknown queue processing error";
 
         await captureSentryException({
           context: dependencies.observabilityContext(c.env),
           dsn: (c.env as { SENTRY_DSN?: string }).SENTRY_DSN,
           error,
-          message: 'DB queue job processing failed',
+          message: "DB queue job processing failed",
           extra: {
             messageId: leasedMessage.id,
             jobType: leasedMessage.jobType,
@@ -217,7 +220,7 @@ export const createProcessQueuedJobs = <TBindings, TContext extends { env: TBind
           },
         });
 
-        logError(dependencies.observabilityContext(c.env), 'queue_job_failed', {
+        logError(dependencies.observabilityContext(c.env), "queue_job_failed", {
           messageId: leasedMessage.id,
           jobType: leasedMessage.jobType,
           tenantId: leasedMessage.tenantId,
@@ -234,9 +237,9 @@ export const createProcessQueuedJobs = <TBindings, TContext extends { env: TBind
 
         result.processed += 1;
 
-        if (status === 'failed') {
+        if (status === "failed") {
           result.deadLettered += 1;
-        } else if (status === 'pending') {
+        } else if (status === "pending") {
           result.retried += 1;
         } else {
           result.failedToFinalize += 1;

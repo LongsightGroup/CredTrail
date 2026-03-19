@@ -7,7 +7,7 @@ import {
   type ImmutableCredentialStore,
   type JsonObject,
   type ObservabilityContext,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   createAssertion,
   createAuditLog,
@@ -22,17 +22,20 @@ import {
   type RecipientIdentifierType,
   type ResolveAssertionLifecycleStateResult,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { SendIssuanceEmailNotificationInput } from '../notifications/send-issuance-email';
-import type { SignCredentialForDidInput, SignCredentialForDidResult } from '../signing/credential-signer';
+} from "@credtrail/db";
+import type { SendIssuanceEmailNotificationInput } from "../notifications/send-issuance-email";
+import type {
+  SignCredentialForDidInput,
+  SignCredentialForDidResult,
+} from "../signing/credential-signer";
 import {
   credentialStatusForAssertion,
   revocationStatusListUrlForTenant,
-} from './revocation-status';
+} from "./revocation-status";
 import {
   recipientIdentifiersForIssueRequest,
   type DirectIssueBadgeRequest,
-} from './recipient-identifiers';
+} from "./recipient-identifiers";
 
 interface IssueBadgeBindings {
   BADGE_OBJECTS: ImmutableCredentialStore;
@@ -63,7 +66,7 @@ export interface DirectIssueBadgeOptions {
 }
 
 export interface DirectIssueBadgeResult {
-  status: 'issued' | 'already_issued';
+  status: "issued" | "already_issued";
   tenantId: string;
   assertionId: string;
   idempotencyKey: string;
@@ -92,34 +95,34 @@ const assertionLifecycleBlockMessage = (
   const stateLabel = lifecycle.state;
   const reasonDetail = lifecycle.reason ?? lifecycle.reasonCode;
   const reasonSuffix =
-    reasonDetail === null ? '' : ` Reason: ${reasonDetail.replace(/\s+/g, ' ').trim()}.`;
+    reasonDetail === null ? "" : ` Reason: ${reasonDetail.replace(/\s+/g, " ").trim()}.`;
 
   return `Issuance blocked by lifecycle policy: assertion ${assertionId} is ${stateLabel}.${reasonSuffix}`;
 };
 
 const isIssuableAssertionLifecycleState = (state: AssertionLifecycleState): boolean => {
-  return state === 'active';
+  return state === "active";
 };
 
-const VC_DATA_MODEL_V2_CONTEXT_URL = 'https://www.w3.org/ns/credentials/v2';
-const OB3_CONTEXT_URL = 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json';
-const VC_STATUS_LIST_CONTEXT_URL = 'https://www.w3.org/ns/credentials/status/v1';
-const ED25519_SIGNATURE_2020_CONTEXT_URL = 'https://w3id.org/security/suites/ed25519-2020/v1';
+const VC_DATA_MODEL_V2_CONTEXT_URL = "https://www.w3.org/ns/credentials/v2";
+const OB3_CONTEXT_URL = "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json";
+const VC_STATUS_LIST_CONTEXT_URL = "https://www.w3.org/ns/credentials/status/v1";
+const ED25519_SIGNATURE_2020_CONTEXT_URL = "https://w3id.org/security/suites/ed25519-2020/v1";
 
 const ob3IdentityTypeFromRecipientIdentifierType = (
   recipientIdentifierType: RecipientIdentifierType,
 ): string => {
   switch (recipientIdentifierType) {
-    case 'emailAddress':
-      return 'emailAddress';
-    case 'sourcedId':
-      return 'sourcedId';
-    case 'nationalIdentityNumber':
-      return 'nationalIdentityNumber';
-    case 'studentId':
-      return 'ext:studentId';
-    case 'did':
-      return 'ext:did';
+    case "emailAddress":
+      return "emailAddress";
+    case "sourcedId":
+      return "sourcedId";
+    case "nationalIdentityNumber":
+      return "nationalIdentityNumber";
+    case "studentId":
+      return "ext:studentId";
+    case "did":
+      return "ext:did";
   }
 };
 
@@ -141,13 +144,13 @@ export const createIssueBadgeForTenant = <
 
     if (badgeTemplate === null) {
       throw new input.HttpErrorResponseClass(404, {
-        error: 'Badge template not found',
+        error: "Badge template not found",
       });
     }
 
     if (badgeTemplate.isArchived) {
       throw new input.HttpErrorResponseClass(409, {
-        error: 'Badge template is archived',
+        error: "Badge template is archived",
       });
     }
 
@@ -183,7 +186,7 @@ export const createIssueBadgeForTenant = <
       }
 
       return {
-        status: 'already_issued',
+        status: "already_issued",
         tenantId,
         assertionId: existingAssertion.id,
         idempotencyKey: existingAssertion.idempotencyKey,
@@ -215,7 +218,7 @@ export const createIssueBadgeForTenant = <
     );
     const learnerIdentities = await listLearnerIdentitiesByProfile(db, tenantId, learnerProfile.id);
     const learnerDidSubjectId =
-      learnerIdentities.find((identity) => identity.identityType === 'did')?.identityValue ??
+      learnerIdentities.find((identity) => identity.identityType === "did")?.identityValue ??
       learnerProfile.subjectId;
     const recipientIdentifiers = recipientIdentifiersForIssueRequest(
       request,
@@ -224,7 +227,7 @@ export const createIssueBadgeForTenant = <
     );
     const credentialSubjectIdentifiers: JsonObject[] = recipientIdentifiers.map((entry) => {
       return {
-        type: 'IdentityObject',
+        type: "IdentityObject",
         hashed: false,
         identityHash: entry.identifierValue,
         identityType: ob3IdentityTypeFromRecipientIdentifierType(entry.identifierType),
@@ -232,46 +235,48 @@ export const createIssueBadgeForTenant = <
     });
     const issuer = {
       id: issuerDid,
-      type: 'Profile',
+      type: "Profile",
       ...(options?.issuerName === undefined ? {} : { name: options.issuerName }),
       ...(options?.issuerUrl === undefined ? {} : { url: options.issuerUrl }),
     };
     const signedCredentialResult = await input.signCredentialForDid({
       context,
       did: issuerDid,
-      proofType: 'Ed25519Signature2020',
+      proofType: "Ed25519Signature2020",
       createdAt: issuedAt,
       missingPrivateKeyError:
-        'Tenant DID is missing private signing key material and no remote signer is configured',
-      ed25519KeyRequirementError: 'Tenant issuance requires an Ed25519 private key',
+        "Tenant DID is missing private signing key material and no remote signer is configured",
+      ed25519KeyRequirementError: "Tenant issuance requires an Ed25519 private key",
       credential: {
-        '@context': [
+        "@context": [
           VC_DATA_MODEL_V2_CONTEXT_URL,
           OB3_CONTEXT_URL,
           VC_STATUS_LIST_CONTEXT_URL,
           ED25519_SIGNATURE_2020_CONTEXT_URL,
         ],
         id: `urn:credtrail:assertion:${encodeURIComponent(assertionId)}`,
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         name: badgeTemplate.title,
         issuer,
         validFrom: issuedAt,
         credentialStatus: credentialStatusForAssertion(statusListCredentialUrl, statusListIndex),
         credentialSubject: {
           id: learnerDidSubjectId,
-          type: ['AchievementSubject'],
+          type: ["AchievementSubject"],
           identifier: credentialSubjectIdentifiers,
           achievement: {
             id: `urn:credtrail:badge-template:${encodeURIComponent(badgeTemplate.id)}`,
-            type: ['Achievement'],
+            type: ["Achievement"],
             name: badgeTemplate.title,
-            ...(badgeTemplate.description === null ? {} : { description: badgeTemplate.description }),
+            ...(badgeTemplate.description === null
+              ? {}
+              : { description: badgeTemplate.description }),
             ...(badgeTemplate.criteriaUri === null
               ? {}
               : {
                   criteria: {
                     id: badgeTemplate.criteriaUri,
-                    type: 'Criteria',
+                    type: "Criteria",
                   },
                 }),
             ...(badgeTemplate.imageUri === null
@@ -279,7 +284,7 @@ export const createIssueBadgeForTenant = <
               : {
                   image: {
                     id: badgeTemplate.imageUri,
-                    type: 'Image',
+                    type: "Image",
                   },
                 }),
           },
@@ -287,7 +292,7 @@ export const createIssueBadgeForTenant = <
       },
     });
 
-    if (signedCredentialResult.status !== 'ok') {
+    if (signedCredentialResult.status !== "ok") {
       throw new input.HttpErrorResponseClass(signedCredentialResult.statusCode, {
         error: signedCredentialResult.error,
         did: issuerDid,
@@ -320,8 +325,8 @@ export const createIssueBadgeForTenant = <
     await createAuditLog(db, {
       tenantId,
       ...(issuedByUserId === undefined ? {} : { actorUserId: issuedByUserId }),
-      action: 'assertion.issued',
-      targetType: 'assertion',
+      action: "assertion.issued",
+      targetType: "assertion",
       targetId: createdAssertion.id,
       metadata: {
         assertionPublicId: createdAssertion.publicId,
@@ -332,7 +337,7 @@ export const createIssueBadgeForTenant = <
       },
     });
 
-    if (request.recipientIdentityType === 'email') {
+    if (request.recipientIdentityType === "email") {
       const recipientEmail = request.recipientIdentity.trim().toLowerCase();
       const publicBadgePath = input.publicBadgePathForAssertion(createdAssertion);
       const verificationPath = `${publicBadgePath}/verification`;
@@ -355,17 +360,17 @@ export const createIssueBadgeForTenant = <
           credentialDownloadUrl: new URL(credentialDownloadPath, requestBaseUrl).toString(),
         });
       } catch (error: unknown) {
-        logWarn(input.observabilityContext(context.env), 'issuance_email_notification_failed', {
+        logWarn(input.observabilityContext(context.env), "issuance_email_notification_failed", {
           assertionId,
           tenantId,
           recipientEmail,
-          detail: error instanceof Error ? error.message : 'Unknown email notification error',
+          detail: error instanceof Error ? error.message : "Unknown email notification error",
         });
       }
     }
 
     return {
-      status: 'issued',
+      status: "issued",
       tenantId,
       assertionId,
       idempotencyKey,

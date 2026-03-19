@@ -1,9 +1,9 @@
 export const GRADEBOOK_PROVIDER_KINDS = [
-  'canvas',
-  'moodle',
-  'blackboard_ultra',
-  'd2l_brightspace',
-  'sakai',
+  "canvas",
+  "moodle",
+  "blackboard_ultra",
+  "d2l_brightspace",
+  "sakai",
 ] as const;
 
 export type GradebookProviderKind = (typeof GRADEBOOK_PROVIDER_KINDS)[number];
@@ -78,7 +78,10 @@ export interface GradebookProvider {
     assignmentId?: string;
     learnerId?: string;
   }): Promise<readonly GradebookSubmissionRecord[]>;
-  listGrades(input: { courseId: string; learnerId?: string }): Promise<readonly GradebookGradeRecord[]>;
+  listGrades(input: {
+    courseId: string;
+    learnerId?: string;
+  }): Promise<readonly GradebookGradeRecord[]>;
   listCompletions(input: {
     courseId: string;
     learnerId?: string;
@@ -92,23 +95,23 @@ interface GradebookProviderConfigBase {
 }
 
 export interface CanvasGradebookProviderConfig extends GradebookProviderConfigBase {
-  kind: 'canvas';
+  kind: "canvas";
 }
 
 export interface MoodleGradebookProviderConfig extends GradebookProviderConfigBase {
-  kind: 'moodle';
+  kind: "moodle";
 }
 
 export interface BlackboardUltraGradebookProviderConfig extends GradebookProviderConfigBase {
-  kind: 'blackboard_ultra';
+  kind: "blackboard_ultra";
 }
 
 export interface D2LBrightspaceGradebookProviderConfig extends GradebookProviderConfigBase {
-  kind: 'd2l_brightspace';
+  kind: "d2l_brightspace";
 }
 
 export interface SakaiGradebookProviderConfig extends GradebookProviderConfigBase {
-  kind: 'sakai';
+  kind: "sakai";
 }
 
 export type GradebookProviderConfig =

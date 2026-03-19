@@ -1,4 +1,4 @@
-import type { JsonObject } from '@credtrail/core-domain';
+import type { JsonObject } from "@credtrail/core-domain";
 import {
   createAuditLog,
   findAssertionById,
@@ -11,8 +11,8 @@ import {
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   parseAssertionLifecycleTransitionRequest,
   parseAssertionPathParams,
@@ -20,16 +20,16 @@ import {
   parseTenantAssertionListQuery,
   parseTenantPathParams,
   type ManualIssueBadgeRequest,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
 
 type DirectIssueBadgeRequest = Pick<
   ManualIssueBadgeRequest,
-  | 'badgeTemplateId'
-  | 'recipientIdentity'
-  | 'recipientIdentityType'
-  | 'recipientIdentifiers'
-  | 'idempotencyKey'
+  | "badgeTemplateId"
+  | "recipientIdentity"
+  | "recipientIdentityType"
+  | "recipientIdentifiers"
+  | "idempotencyKey"
 >;
 
 interface DirectIssueBadgeOptions {
@@ -39,7 +39,7 @@ interface DirectIssueBadgeOptions {
 }
 
 interface DirectIssueBadgeResult {
-  status: 'issued' | 'already_issued';
+  status: "issued" | "already_issued";
   tenantId: string;
   assertionId: string;
   idempotencyKey: string;
@@ -95,8 +95,8 @@ interface RegisterAssertionRoutesInput {
   };
 }
 
-const manualIssueResponseStatus = (status: DirectIssueBadgeResult['status']): 200 | 201 => {
-  return status === 'issued' ? 201 : 200;
+const manualIssueResponseStatus = (status: DirectIssueBadgeResult["status"]): 200 | 201 => {
+  return status === "issued" ? 201 : 200;
 };
 
 export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): void => {
@@ -112,7 +112,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
     HttpErrorResponseClass,
   } = input;
 
-  app.post('/v1/tenants/:tenantId/assertions/manual-issue', async (c): Promise<Response> => {
+  app.post("/v1/tenants/:tenantId/assertions/manual-issue", async (c): Promise<Response> => {
     const pathParams = parseTenantPathParams(c.req.param());
     const payload = await c.req.json<unknown>();
     const request = parseManualIssueBadgeRequest(payload);
@@ -129,7 +129,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
     if (template === null) {
       return c.json(
         {
-          error: 'Badge template not found',
+          error: "Badge template not found",
         },
         404,
       );
@@ -142,7 +142,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       membershipRole,
       ownerOrgUnitId: template.ownerOrgUnitId,
       badgeTemplateId: template.id,
-      requiredAction: 'issue_badge',
+      requiredAction: "issue_badge",
     });
 
     if (delegatedPermission !== null) {
@@ -161,21 +161,21 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
     }
   });
 
-  app.get('/v1/tenants/:tenantId/assertions', async (c): Promise<Response> => {
+  app.get("/v1/tenants/:tenantId/assertions", async (c): Promise<Response> => {
     const pathParams = parseTenantPathParams(c.req.param());
     let query;
 
     try {
       query = parseTenantAssertionListQuery({
-        badgeTemplateId: c.req.query('badgeTemplateId'),
-        recipientQuery: c.req.query('recipientQuery'),
-        state: c.req.query('state'),
-        limit: c.req.query('limit'),
+        badgeTemplateId: c.req.query("badgeTemplateId"),
+        recipientQuery: c.req.query("recipientQuery"),
+        state: c.req.query("state"),
+        limit: c.req.query("limit"),
       });
     } catch {
       return c.json(
         {
-          error: 'Invalid assertion list query parameters',
+          error: "Invalid assertion list query parameters",
         },
         400,
       );
@@ -195,7 +195,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       ...(query.limit === undefined ? {} : { limit: query.limit }),
     });
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     return c.json({
       tenantId: pathParams.tenantId,
@@ -204,72 +204,75 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
     });
   });
 
-  app.get('/v1/tenants/:tenantId/assertions/:assertionId/lifecycle', async (c): Promise<Response> => {
-    const pathParams = parseAssertionPathParams(c.req.param());
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+  app.get(
+    "/v1/tenants/:tenantId/assertions/:assertionId/lifecycle",
+    async (c): Promise<Response> => {
+      const pathParams = parseAssertionPathParams(c.req.param());
+      const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
 
-    if (roleCheck instanceof Response) {
-      return roleCheck;
-    }
+      if (roleCheck instanceof Response) {
+        return roleCheck;
+      }
 
-    if (!assertionBelongsToTenant(pathParams.tenantId, pathParams.assertionId)) {
-      return c.json(
-        {
-          error: 'assertionId must be a tenant-scoped identifier for the active tenant',
-        },
-        422,
+      if (!assertionBelongsToTenant(pathParams.tenantId, pathParams.assertionId)) {
+        return c.json(
+          {
+            error: "assertionId must be a tenant-scoped identifier for the active tenant",
+          },
+          422,
+        );
+      }
+
+      const db = resolveDatabase(c.env);
+      const assertion = await findAssertionById(db, pathParams.tenantId, pathParams.assertionId);
+
+      if (assertion === null) {
+        return c.json(
+          {
+            error: "Assertion not found",
+          },
+          404,
+        );
+      }
+
+      const lifecycle = await resolveAssertionLifecycleState(
+        db,
+        pathParams.tenantId,
+        pathParams.assertionId,
       );
-    }
 
-    const db = resolveDatabase(c.env);
-    const assertion = await findAssertionById(db, pathParams.tenantId, pathParams.assertionId);
+      if (lifecycle === null) {
+        return c.json(
+          {
+            error: "Assertion not found",
+          },
+          404,
+        );
+      }
 
-    if (assertion === null) {
-      return c.json(
-        {
-          error: 'Assertion not found',
-        },
-        404,
-      );
-    }
+      const events = await listAssertionLifecycleEvents(db, {
+        tenantId: pathParams.tenantId,
+        assertionId: pathParams.assertionId,
+      });
 
-    const lifecycle = await resolveAssertionLifecycleState(
-      db,
-      pathParams.tenantId,
-      pathParams.assertionId,
-    );
+      c.header("Cache-Control", "no-store");
 
-    if (lifecycle === null) {
-      return c.json(
-        {
-          error: 'Assertion not found',
-        },
-        404,
-      );
-    }
-
-    const events = await listAssertionLifecycleEvents(db, {
-      tenantId: pathParams.tenantId,
-      assertionId: pathParams.assertionId,
-    });
-
-    c.header('Cache-Control', 'no-store');
-
-    return c.json({
-      assertionId: assertion.id,
-      tenantId: assertion.tenantId,
-      state: lifecycle.state,
-      source: lifecycle.source,
-      reasonCode: lifecycle.reasonCode,
-      reason: lifecycle.reason,
-      transitionedAt: lifecycle.transitionedAt,
-      revokedAt: lifecycle.revokedAt,
-      events,
-    });
-  });
+      return c.json({
+        assertionId: assertion.id,
+        tenantId: assertion.tenantId,
+        state: lifecycle.state,
+        source: lifecycle.source,
+        reasonCode: lifecycle.reasonCode,
+        reason: lifecycle.reason,
+        transitionedAt: lifecycle.transitionedAt,
+        revokedAt: lifecycle.revokedAt,
+        events,
+      });
+    },
+  );
 
   app.post(
-    '/v1/tenants/:tenantId/assertions/:assertionId/lifecycle/transition',
+    "/v1/tenants/:tenantId/assertions/:assertionId/lifecycle/transition",
     async (c): Promise<Response> => {
       const pathParams = parseAssertionPathParams(c.req.param());
       const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
@@ -283,7 +286,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       if (!assertionBelongsToTenant(pathParams.tenantId, pathParams.assertionId)) {
         return c.json(
           {
-            error: 'assertionId must be a tenant-scoped identifier for the active tenant',
+            error: "assertionId must be a tenant-scoped identifier for the active tenant",
           },
           422,
         );
@@ -296,16 +299,16 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       } catch {
         return c.json(
           {
-            error: 'Invalid lifecycle transition request payload',
+            error: "Invalid lifecycle transition request payload",
           },
           400,
         );
       }
 
-      if (request.transitionSource === 'automation') {
+      if (request.transitionSource === "automation") {
         return c.json(
           {
-            error: 'Automation lifecycle transitions are only allowed via trusted internal jobs',
+            error: "Automation lifecycle transitions are only allowed via trusted internal jobs",
           },
           422,
         );
@@ -317,7 +320,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       if (assertion === null) {
         return c.json(
           {
-            error: 'Assertion not found',
+            error: "Assertion not found",
           },
           404,
         );
@@ -332,14 +335,14 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       if (badgeTemplate === null) {
         return c.json(
           {
-            error: 'Badge template not found',
+            error: "Badge template not found",
           },
           404,
         );
       }
 
       const requiredAction: DelegatedIssuingAuthorityAction =
-        request.toState === 'revoked' ? 'revoke_badge' : 'manage_lifecycle';
+        request.toState === "revoked" ? "revoke_badge" : "manage_lifecycle";
       const delegatedPermission = await requireDelegatedIssuingAuthorityPermission(c, {
         db,
         tenantId: pathParams.tenantId,
@@ -361,15 +364,15 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
           toState: request.toState,
           reasonCode: request.reasonCode,
           ...(request.reason === undefined ? {} : { reason: request.reason }),
-          transitionSource: 'manual',
+          transitionSource: "manual",
           actorUserId: session.userId,
           transitionedAt: request.transitionedAt ?? new Date().toISOString(),
         });
 
-        if (transitionResult.status === 'invalid_transition') {
+        if (transitionResult.status === "invalid_transition") {
           return c.json(
             {
-              error: 'Lifecycle transition not allowed',
+              error: "Lifecycle transition not allowed",
               fromState: transitionResult.fromState,
               toState: transitionResult.toState,
               currentState: transitionResult.currentState,
@@ -379,8 +382,8 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
           );
         }
 
-        if (transitionResult.status === 'already_in_state') {
-          c.header('Cache-Control', 'no-store');
+        if (transitionResult.status === "already_in_state") {
+          c.header("Cache-Control", "no-store");
 
           return c.json({
             status: transitionResult.status,
@@ -394,14 +397,14 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
         const event = transitionResult.event;
 
         if (event === null) {
-          throw new Error('Lifecycle transition result is missing event details');
+          throw new Error("Lifecycle transition result is missing event details");
         }
 
         await createAuditLog(db, {
           tenantId: pathParams.tenantId,
           actorUserId: session.userId,
-          action: 'assertion.lifecycle_transitioned',
-          targetType: 'assertion',
+          action: "assertion.lifecycle_transitioned",
+          targetType: "assertion",
           targetId: pathParams.assertionId,
           metadata: {
             eventId: event.id,
@@ -414,7 +417,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
           },
         });
 
-        c.header('Cache-Control', 'no-store');
+        c.header("Cache-Control", "no-store");
 
         return c.json({
           status: transitionResult.status,
@@ -426,19 +429,19 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
         });
       } catch (error: unknown) {
         if (error instanceof Error) {
-          if (error.message.includes('not found for tenant')) {
+          if (error.message.includes("not found for tenant")) {
             return c.json(
               {
-                error: 'Assertion not found',
+                error: "Assertion not found",
               },
               404,
             );
           }
 
           if (
-            error.message.includes('Manual lifecycle transitions require actorUserId') ||
-            error.message.includes('Automated lifecycle transitions must not set actorUserId') ||
-            error.message.includes('transitionedAt must be a valid ISO timestamp')
+            error.message.includes("Manual lifecycle transitions require actorUserId") ||
+            error.message.includes("Automated lifecycle transitions must not set actorUserId") ||
+            error.message.includes("transitionedAt must be a valid ISO timestamp")
           ) {
             return c.json(
               {
@@ -453,5 +456,4 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       }
     },
   );
-
 };

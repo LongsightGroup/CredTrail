@@ -1,39 +1,46 @@
-import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFImage,
+  type PDFFont,
+  type PDFPage,
+} from "pdf-lib";
 
 export const badgeInitialsFromName = (badgeName: string): string => {
   const trimmedName = badgeName.trim();
 
   if (trimmedName.length === 0) {
-    return 'BD';
+    return "BD";
   }
 
   const words = trimmedName.split(/\s+/).filter((word) => word.length > 0);
   const firstWord = words.at(0);
 
   if (firstWord === undefined) {
-    return 'BD';
+    return "BD";
   }
 
   const secondWord = words.at(1);
   const firstInitial = firstWord.slice(0, 1);
   const secondInitial = secondWord === undefined ? firstWord.slice(1, 2) : secondWord.slice(0, 1);
-  const initials = `${firstInitial}${secondInitial}`.replaceAll(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const initials = `${firstInitial}${secondInitial}`.replaceAll(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-  return initials.length === 0 ? 'BD' : initials;
+  return initials.length === 0 ? "BD" : initials;
 };
 
 export const credentialDownloadFilename = (assertionId: string): string => {
-  const safeAssertionId = assertionId.replaceAll(/[^a-zA-Z0-9_-]+/g, '-').replaceAll(/-+/g, '-');
-  const trimmed = safeAssertionId.replaceAll(/^-|-$/g, '');
-  const fallback = trimmed.length === 0 ? 'badge' : trimmed;
+  const safeAssertionId = assertionId.replaceAll(/[^a-zA-Z0-9_-]+/g, "-").replaceAll(/-+/g, "-");
+  const trimmed = safeAssertionId.replaceAll(/^-|-$/g, "");
+  const fallback = trimmed.length === 0 ? "badge" : trimmed;
 
   return `${fallback}.jsonld`;
 };
 
 export const credentialPdfDownloadFilename = (assertionId: string): string => {
-  const safeAssertionId = assertionId.replaceAll(/[^a-zA-Z0-9_-]+/g, '-').replaceAll(/-+/g, '-');
-  const trimmed = safeAssertionId.replaceAll(/^-|-$/g, '');
-  const fallback = trimmed.length === 0 ? 'badge' : trimmed;
+  const safeAssertionId = assertionId.replaceAll(/[^a-zA-Z0-9_-]+/g, "-").replaceAll(/-+/g, "-");
+  const trimmed = safeAssertionId.replaceAll(/^-|-$/g, "");
+  const fallback = trimmed.length === 0 ? "badge" : trimmed;
 
   return `${fallback}.pdf`;
 };
@@ -56,7 +63,7 @@ export interface BadgePdfDocumentInput {
 
 interface BadgePdfImageAsset {
   bytes: Uint8Array;
-  mimeType: 'image/png' | 'image/jpeg';
+  mimeType: "image/png" | "image/jpeg";
 }
 
 const BADGE_PDF_IMAGE_FETCH_TIMEOUT_MS = 2_500;
@@ -72,7 +79,7 @@ const parseBadgePdfDataUrl = (imageUrl: string): BadgePdfImageAsset | null => {
   }
 
   const mimeType = match[1]?.toLowerCase();
-  const base64Payload = match[2]?.replaceAll(/\s+/g, '');
+  const base64Payload = match[2]?.replaceAll(/\s+/g, "");
 
   if (base64Payload === undefined || base64Payload.length === 0) {
     return null;
@@ -87,16 +94,16 @@ const parseBadgePdfDataUrl = (imageUrl: string): BadgePdfImageAsset | null => {
 
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
 
-    if (mimeType === 'image/png') {
+    if (mimeType === "image/png") {
       return {
         bytes,
-        mimeType: 'image/png',
+        mimeType: "image/png",
       };
     }
 
     return {
       bytes,
-      mimeType: 'image/jpeg',
+      mimeType: "image/jpeg",
     };
   } catch {
     return null;
@@ -106,25 +113,25 @@ const parseBadgePdfDataUrl = (imageUrl: string): BadgePdfImageAsset | null => {
 const inferBadgePdfImageMimeType = (
   imageUrl: URL,
   contentTypeHeader: string | null,
-): BadgePdfImageAsset['mimeType'] | null => {
-  const contentType = contentTypeHeader?.split(';')[0]?.trim().toLowerCase() ?? null;
+): BadgePdfImageAsset["mimeType"] | null => {
+  const contentType = contentTypeHeader?.split(";")[0]?.trim().toLowerCase() ?? null;
 
-  if (contentType === 'image/png') {
-    return 'image/png';
+  if (contentType === "image/png") {
+    return "image/png";
   }
 
-  if (contentType === 'image/jpeg' || contentType === 'image/jpg') {
-    return 'image/jpeg';
+  if (contentType === "image/jpeg" || contentType === "image/jpg") {
+    return "image/jpeg";
   }
 
   const pathname = imageUrl.pathname.toLowerCase();
 
-  if (pathname.endsWith('.png')) {
-    return 'image/png';
+  if (pathname.endsWith(".png")) {
+    return "image/png";
   }
 
-  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
-    return 'image/jpeg';
+  if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) {
+    return "image/jpeg";
   }
 
   return null;
@@ -145,7 +152,7 @@ const loadBadgePdfImageAsset = async (imageUrl: string): Promise<BadgePdfImageAs
     return null;
   }
 
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     return null;
   }
 
@@ -156,9 +163,9 @@ const loadBadgePdfImageAsset = async (imageUrl: string): Promise<BadgePdfImageAs
 
   try {
     const response = await fetch(parsedUrl.toString(), {
-      method: 'GET',
+      method: "GET",
       headers: {
-        Accept: 'image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5',
+        Accept: "image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5",
       },
       signal: abortController.signal,
     });
@@ -167,7 +174,7 @@ const loadBadgePdfImageAsset = async (imageUrl: string): Promise<BadgePdfImageAs
       return null;
     }
 
-    const mimeType = inferBadgePdfImageMimeType(parsedUrl, response.headers.get('content-type'));
+    const mimeType = inferBadgePdfImageMimeType(parsedUrl, response.headers.get("content-type"));
 
     if (mimeType === null) {
       return null;
@@ -197,7 +204,7 @@ const splitPdfWordToWidth = (
   maxWidth: number,
 ): string[] => {
   const chunks: string[] = [];
-  let currentChunk = '';
+  let currentChunk = "";
 
   for (const character of word) {
     const candidate = `${currentChunk}${character}`;
@@ -227,7 +234,7 @@ const wrapPdfText = (
   const trimmedValue = value.trim();
 
   if (trimmedValue.length === 0) {
-    return [''];
+    return [""];
   }
 
   const paragraphs = trimmedValue.split(/\r?\n/);
@@ -237,25 +244,25 @@ const wrapPdfText = (
     const words = paragraph.split(/\s+/).filter((word) => word.length > 0);
 
     if (words.length === 0) {
-      if (lines.length > 0 && lines.at(-1) !== '') {
-        lines.push('');
+      if (lines.length > 0 && lines.at(-1) !== "") {
+        lines.push("");
       }
       continue;
     }
 
-    let currentLine = '';
+    let currentLine = "";
 
     for (const word of words) {
       if (font.widthOfTextAtSize(word, fontSize) > maxWidth) {
         if (currentLine.length > 0) {
           lines.push(currentLine);
-          currentLine = '';
+          currentLine = "";
         }
 
         const chunks = splitPdfWordToWidth(word, font, fontSize, maxWidth);
         const trailingChunk = chunks.pop();
         lines.push(...chunks);
-        currentLine = trailingChunk ?? '';
+        currentLine = trailingChunk ?? "";
         continue;
       }
 
@@ -275,7 +282,7 @@ const wrapPdfText = (
     }
   }
 
-  return lines.length === 0 ? [''] : lines;
+  return lines.length === 0 ? [""] : lines;
 };
 
 const embedBadgePdfImage = async (
@@ -283,7 +290,7 @@ const embedBadgePdfImage = async (
   asset: BadgePdfImageAsset,
 ): Promise<PDFImage | null> => {
   try {
-    if (asset.mimeType === 'image/png') {
+    if (asset.mimeType === "image/png") {
       return await pdfDocument.embedPng(asset.bytes);
     }
 
@@ -389,7 +396,12 @@ const drawPdfField = (
     color: options.labelColor,
   });
 
-  const wrappedValueLines = wrapPdfText(value, options.valueFont, options.valueSize, options.maxWidth);
+  const wrappedValueLines = wrapPdfText(
+    value,
+    options.valueFont,
+    options.valueSize,
+    options.maxWidth,
+  );
   const nextY = drawPdfTextLines(page, wrappedValueLines, x, startY - (options.labelGap ?? 13), {
     font: options.valueFont,
     size: options.valueSize,
@@ -551,17 +563,17 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
 
   const normalizedStatus = input.status.toLowerCase();
   const statusPalette =
-    normalizedStatus === 'revoked'
+    normalizedStatus === "revoked"
       ? {
           fill: rgb(0.69, 0.22, 0.17),
           text: rgb(0.99, 0.985, 0.98),
         }
-      : normalizedStatus === 'suspended'
+      : normalizedStatus === "suspended"
         ? {
             fill: rgb(0.73, 0.48, 0.14),
             text: rgb(0.99, 0.985, 0.96),
           }
-        : normalizedStatus === 'expired'
+        : normalizedStatus === "expired"
           ? {
               fill: rgb(0.36, 0.43, 0.53),
               text: rgb(0.98, 0.99, 1),
@@ -617,21 +629,21 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     height: headerFrame.height - 32,
     color: colors.accent,
   });
-  page.drawText('OPEN BADGES 3.0', {
+  page.drawText("OPEN BADGES 3.0", {
     x: headerFrame.x + 30,
     y: headerFrame.y + 76,
     size: 9.5,
     color: rgb(0.89, 0.95, 1),
     font: boldFont,
   });
-  page.drawText('Learner Badge Record', {
+  page.drawText("Learner Badge Record", {
     x: headerFrame.x + 30,
     y: headerFrame.y + 48,
     size: 24,
     color: rgb(0.98, 0.99, 1),
     font: boldFont,
   });
-  page.drawText('Recipient copy for professional review, sharing, and formal verification.', {
+  page.drawText("Recipient copy for professional review, sharing, and formal verification.", {
     x: headerFrame.x + 30,
     y: headerFrame.y + 22,
     size: 10.5,
@@ -641,12 +653,18 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
 
   const statusText = input.status.toUpperCase();
   const statusWidth = boldFont.widthOfTextAtSize(statusText, 10.3) + 24;
-  drawPdfStatusPill(page, statusText, headerFrame.x + headerFrame.width - statusWidth - 18, headerFrame.y + 66, {
-    font: boldFont,
-    size: 10.3,
-    fill: statusPalette.fill,
-    textColor: statusPalette.text,
-  });
+  drawPdfStatusPill(
+    page,
+    statusText,
+    headerFrame.x + headerFrame.width - statusWidth - 18,
+    headerFrame.y + 66,
+    {
+      font: boldFont,
+      size: 10.3,
+      fill: statusPalette.fill,
+      textColor: statusPalette.text,
+    },
+  );
 
   const heroFrame = {
     x: contentMargin,
@@ -697,7 +715,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     });
   }
 
-  page.drawText('Badge', {
+  page.drawText("Badge", {
     x: imageFrame.x + 10,
     y: imageFrame.y + imageFrame.height - 16,
     size: 9,
@@ -708,7 +726,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   const detailX = imageFrame.x + imageFrame.width + 22;
   const detailWidth = heroFrame.x + heroFrame.width - detailX - 20;
 
-  page.drawText('Awarded badge', {
+  page.drawText("Awarded badge", {
     x: detailX,
     y: heroFrame.y + heroFrame.height - 28,
     size: 9.2,
@@ -717,15 +735,21 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   });
 
   const badgeNameLines = wrapPdfText(input.badgeName, displayFont, 24, detailWidth);
-  let detailY = drawPdfTextLines(page, badgeNameLines, detailX, heroFrame.y + heroFrame.height - 56, {
-    font: displayFont,
-    size: 24,
-    color: colors.ink,
-    lineHeight: 26,
-  });
+  let detailY = drawPdfTextLines(
+    page,
+    badgeNameLines,
+    detailX,
+    heroFrame.y + heroFrame.height - 56,
+    {
+      font: displayFont,
+      size: 24,
+      color: colors.ink,
+      lineHeight: 26,
+    },
+  );
 
   detailY -= 8;
-  page.drawText('Awarded to', {
+  page.drawText("Awarded to", {
     x: detailX,
     y: detailY,
     size: 9.4,
@@ -747,7 +771,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
 
   const metaStartY = detailY - 4;
   const metaColumnWidth = (detailWidth - 18) / 2;
-  drawPdfField(page, 'Issued by', input.issuerName, detailX, metaStartY, {
+  drawPdfField(page, "Issued by", input.issuerName, detailX, metaStartY, {
     labelFont: boldFont,
     labelSize: 9.2,
     labelColor: colors.subtle,
@@ -759,7 +783,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     gapAfter: 0,
     labelGap: 12,
   });
-  drawPdfField(page, 'Issued on', input.issuedAt, detailX + metaColumnWidth + 18, metaStartY, {
+  drawPdfField(page, "Issued on", input.issuedAt, detailX + metaColumnWidth + 18, metaStartY, {
     labelFont: boldFont,
     labelSize: 9.2,
     labelColor: colors.subtle,
@@ -800,7 +824,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     accent: statusPalette.fill,
   });
 
-  page.drawText('Verification references', {
+  page.drawText("Verification references", {
     x: verificationFrame.x + 16,
     y: verificationFrame.y + verificationFrame.height - 26,
     size: 13,
@@ -810,7 +834,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   drawPdfTextLines(
     page,
     wrapPdfText(
-      'Share the public badge page for reviewers and use the JSON endpoints for direct checks.',
+      "Share the public badge page for reviewers and use the JSON endpoints for direct checks.",
       regularFont,
       9.6,
       verificationFrame.width - 32,
@@ -828,7 +852,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   let verificationY = verificationFrame.y + verificationFrame.height - 78;
   verificationY = drawPdfLinkBlock(
     page,
-    'Public badge page',
+    "Public badge page",
     input.publicBadgeUrl,
     verificationFrame.x + 16,
     verificationY,
@@ -843,7 +867,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   verificationY -= 6;
   verificationY = drawPdfLinkBlock(
     page,
-    'Verification endpoint',
+    "Verification endpoint",
     input.verificationUrl,
     verificationFrame.x + 16,
     verificationY,
@@ -856,15 +880,22 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     },
   );
   verificationY -= 6;
-  drawPdfLinkBlock(page, 'Open Badges JSON-LD', input.ob3JsonUrl, verificationFrame.x + 16, verificationY, {
-    labelFont: boldFont,
-    valueFont: regularFont,
-    labelColor: colors.subtle,
-    valueColor: colors.ink,
-    maxWidth: verificationFrame.width - 32,
-  });
+  drawPdfLinkBlock(
+    page,
+    "Open Badges JSON-LD",
+    input.ob3JsonUrl,
+    verificationFrame.x + 16,
+    verificationY,
+    {
+      labelFont: boldFont,
+      valueFont: regularFont,
+      labelColor: colors.subtle,
+      valueColor: colors.ink,
+      maxWidth: verificationFrame.width - 32,
+    },
+  );
 
-  page.drawText('Record details', {
+  page.drawText("Record details", {
     x: recordFrame.x + 16,
     y: recordFrame.y + recordFrame.height - 26,
     size: 13,
@@ -873,7 +904,12 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   });
   drawPdfTextLines(
     page,
-    wrapPdfText('Technical identifiers from the signed credential and assertion record.', regularFont, 9.6, recordFrame.width - 32),
+    wrapPdfText(
+      "Technical identifiers from the signed credential and assertion record.",
+      regularFont,
+      9.6,
+      recordFrame.width - 32,
+    ),
     recordFrame.x + 16,
     recordFrame.y + recordFrame.height - 44,
     {
@@ -885,7 +921,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   );
 
   let recordY = recordFrame.y + recordFrame.height - 78;
-  recordY = drawPdfField(page, 'Credential status', input.status, recordFrame.x + 16, recordY, {
+  recordY = drawPdfField(page, "Credential status", input.status, recordFrame.x + 16, recordY, {
     labelFont: boldFont,
     labelSize: 9.2,
     labelColor: colors.subtle,
@@ -899,7 +935,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   });
   recordY = drawPdfField(
     page,
-    'Recipient identifier',
+    "Recipient identifier",
     input.recipientIdentifier,
     recordFrame.x + 16,
     recordY,
@@ -916,7 +952,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
       labelGap: 11,
     },
   );
-  recordY = drawPdfField(page, 'Assertion ID', input.assertionId, recordFrame.x + 16, recordY, {
+  recordY = drawPdfField(page, "Assertion ID", input.assertionId, recordFrame.x + 16, recordY, {
     labelFont: boldFont,
     labelSize: 9.2,
     labelColor: colors.subtle,
@@ -928,7 +964,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     gapAfter: 8,
     labelGap: 11,
   });
-  recordY = drawPdfField(page, 'Credential ID', input.credentialId, recordFrame.x + 16, recordY, {
+  recordY = drawPdfField(page, "Credential ID", input.credentialId, recordFrame.x + 16, recordY, {
     labelFont: boldFont,
     labelSize: 9.2,
     labelColor: colors.subtle,
@@ -942,7 +978,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
   });
 
   if (input.revokedAt !== undefined) {
-    drawPdfField(page, 'Revoked at', input.revokedAt, recordFrame.x + 16, recordY, {
+    drawPdfField(page, "Revoked at", input.revokedAt, recordFrame.x + 16, recordY, {
       labelFont: boldFont,
       labelSize: 9.2,
       labelColor: colors.subtle,
@@ -973,7 +1009,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     height: noteFrame.height,
     color: colors.accent,
   });
-  page.drawText('How to use this copy', {
+  page.drawText("How to use this copy", {
     x: noteFrame.x + 18,
     y: noteFrame.y + noteFrame.height - 22,
     size: 11.2,
@@ -984,8 +1020,8 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
     page,
     wrapPdfText(
       input.revokedAt === undefined
-        ? 'Use the public badge page for human review, then rely on the verification endpoint or Open Badges JSON-LD URL above for direct system checks.'
-        : 'This credential has changed lifecycle state. Confirm the current status with the public badge page or the verification endpoint above before relying on this copy.',
+        ? "Use the public badge page for human review, then rely on the verification endpoint or Open Badges JSON-LD URL above for direct system checks."
+        : "This credential has changed lifecycle state. Confirm the current status with the public badge page or the verification endpoint above before relying on this copy.",
       regularFont,
       10.2,
       noteFrame.width - 36,
@@ -1002,7 +1038,7 @@ export const renderBadgePdfDocument = async (input: BadgePdfDocumentInput): Prom
 
   drawPdfCenteredText(
     page,
-    'Recipient copy • Generated from the authoritative Open Badges 3.0 credential record',
+    "Recipient copy • Generated from the authoritative Open Badges 3.0 credential record",
     pageWidth / 2,
     70,
     {

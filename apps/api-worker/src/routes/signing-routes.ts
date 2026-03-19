@@ -3,12 +3,12 @@ import {
   generateTenantDidSigningMaterial,
   type DataIntegrityCryptosuite,
   type JsonObject,
-} from '@credtrail/core-domain';
-import type { Hono } from 'hono';
-import { parseKeyGenerationRequest, parseSignCredentialRequest } from '@credtrail/validation';
-import type { AppContext, AppEnv } from '../app';
+} from "@credtrail/core-domain";
+import type { Hono } from "hono";
+import { parseKeyGenerationRequest, parseSignCredentialRequest } from "@credtrail/validation";
+import type { AppContext, AppEnv } from "../app";
 
-type SupportedCredentialProofType = 'Ed25519Signature2020' | 'DataIntegrityProof';
+type SupportedCredentialProofType = "Ed25519Signature2020" | "DataIntegrityProof";
 
 interface SignCredentialForDidInput {
   context: AppContext;
@@ -20,11 +20,11 @@ interface SignCredentialForDidInput {
 
 type SignCredentialForDidResult =
   | {
-      status: 'ok';
+      status: "ok";
       credential: JsonObject;
     }
   | {
-      status: 'error';
+      status: "error";
       statusCode: 400 | 404 | 422 | 500 | 502;
       error: string;
       did: string;
@@ -38,7 +38,7 @@ interface RegisterSigningRoutesInput {
 export const registerSigningRoutes = (input: RegisterSigningRoutesInput): void => {
   const { app, signCredentialForDid } = input;
 
-  app.post('/v1/signing/keys/generate', async (c) => {
+  app.post("/v1/signing/keys/generate", async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseKeyGenerationRequest(payload);
     const signingMaterial =
@@ -65,10 +65,10 @@ export const registerSigningRoutes = (input: RegisterSigningRoutesInput): void =
     );
   });
 
-  app.post('/v1/signing/credentials', async (c) => {
+  app.post("/v1/signing/credentials", async (c) => {
     const payload = await c.req.json<unknown>();
     const request = parseSignCredentialRequest(payload);
-    const proofType = request.proofType ?? 'Ed25519Signature2020';
+    const proofType = request.proofType ?? "Ed25519Signature2020";
     const signingResult = await signCredentialForDid({
       context: c,
       did: request.did,
@@ -77,7 +77,7 @@ export const registerSigningRoutes = (input: RegisterSigningRoutesInput): void =
       ...(request.cryptosuite === undefined ? {} : { cryptosuite: request.cryptosuite }),
     });
 
-    if (signingResult.status !== 'ok') {
+    if (signingResult.status !== "ok") {
       return c.json(
         {
           error: signingResult.error,

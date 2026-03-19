@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -14,7 +14,7 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
@@ -31,10 +31,10 @@ import {
   type Ob3SubjectProfileRecord,
   type OAuthAccessTokenRecord,
   type SqlDatabase,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedFindActiveOAuthAccessTokenByHash = vi.mocked(findActiveOAuthAccessTokenByHash);
 const mockedListOb3SubjectCredentials = vi.mocked(listOb3SubjectCredentials);
@@ -54,10 +54,10 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -65,16 +65,16 @@ const sampleOAuthAccessTokenRecord = (
   overrides?: Partial<OAuthAccessTokenRecord>,
 ): OAuthAccessTokenRecord => {
   return {
-    id: 'oat_123',
-    clientId: 'oc_client_123',
-    userId: 'usr_123',
-    tenantId: 'tenant_123',
-    accessTokenHash: 'access-token-hash',
+    id: "oat_123",
+    clientId: "oc_client_123",
+    userId: "usr_123",
+    tenantId: "tenant_123",
+    accessTokenHash: "access-token-hash",
     scope:
-      'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
-    expiresAt: '2026-02-11T23:00:00.000Z',
+      "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly",
+    expiresAt: "2026-02-11T23:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-11T22:00:00.000Z',
+    createdAt: "2026-02-11T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -83,18 +83,18 @@ const sampleOb3SubjectCredentialRecord = (
   overrides?: Partial<Ob3SubjectCredentialRecord>,
 ): Ob3SubjectCredentialRecord => {
   return {
-    id: 'ob3c_123',
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    credentialId: 'urn:credtrail:credential:123',
+    id: "ob3c_123",
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    credentialId: "urn:credtrail:credential:123",
     payloadJson: JSON.stringify({
-      id: 'urn:credtrail:credential:123',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
+      id: "urn:credtrail:credential:123",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
     }),
     compactJws: null,
-    issuedAt: '2026-02-11T22:00:00.000Z',
-    createdAt: '2026-02-11T22:00:00.000Z',
-    updatedAt: '2026-02-11T22:00:00.000Z',
+    issuedAt: "2026-02-11T22:00:00.000Z",
+    createdAt: "2026-02-11T22:00:00.000Z",
+    updatedAt: "2026-02-11T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -103,28 +103,28 @@ const sampleOb3SubjectProfileRecord = (
   overrides?: Partial<Ob3SubjectProfileRecord>,
 ): Ob3SubjectProfileRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
+    tenantId: "tenant_123",
+    userId: "usr_123",
     profileJson: JSON.stringify({
-      id: 'urn:credtrail:profile:tenant_123:usr_123',
-      type: ['Profile'],
-      name: 'Learner One',
-      email: 'learner@example.edu',
+      id: "urn:credtrail:profile:tenant_123:usr_123",
+      type: ["Profile"],
+      name: "Learner One",
+      email: "learner@example.edu",
     }),
-    createdAt: '2026-02-11T22:00:00.000Z',
-    updatedAt: '2026-02-11T22:00:00.000Z',
+    createdAt: "2026-02-11T22:00:00.000Z",
+    updatedAt: "2026-02-11T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const bytesToBase64UrlForTest = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const compactJwsForTest = (input: {
@@ -149,12 +149,12 @@ beforeEach(() => {
   mockedFindOb3SubjectProfile.mockReset();
   mockedFindUserById.mockReset();
   mockedFindUserById.mockResolvedValue({
-    id: 'usr_123',
-    email: 'learner@example.edu',
+    id: "usr_123",
+    email: "learner@example.edu",
   });
   mockedUpsertOb3SubjectProfile.mockReset();
 });
-describe('OB3 secure REST resource endpoints', () => {
+describe("OB3 secure REST resource endpoints", () => {
   beforeEach(() => {
     mockedFindActiveOAuthAccessTokenByHash.mockReset();
     mockedListOb3SubjectCredentials.mockReset();
@@ -163,28 +163,28 @@ describe('OB3 secure REST resource endpoints', () => {
     mockedUpsertOb3SubjectProfile.mockReset();
   });
 
-  it('requires bearer tokens for GET /ims/ob/v3p0/credentials', async () => {
-    const response = await app.request('/ims/ob/v3p0/credentials', undefined, createEnv());
+  it("requires bearer tokens for GET /ims/ob/v3p0/credentials", async () => {
+    const response = await app.request("/ims/ob/v3p0/credentials", undefined, createEnv());
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(401);
-    expect(body.imsx_codeMajor).toBe('failure');
-    expect(response.headers.get('www-authenticate')).toContain('Bearer');
+    expect(body.imsx_codeMajor).toBe("failure");
+    expect(response.headers.get("www-authenticate")).toContain("Bearer");
     expect(mockedFindActiveOAuthAccessTokenByHash).not.toHaveBeenCalled();
   });
 
-  it('enforces credential.readonly scope for GET /ims/ob/v3p0/credentials', async () => {
+  it("enforces credential.readonly scope for GET /ims/ob/v3p0/credentials", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly",
       }),
     );
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
         headers: {
-          authorization: 'Bearer access-token-read',
+          authorization: "Bearer access-token-read",
         },
       },
       createEnv(),
@@ -192,37 +192,37 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(403);
-    expect(body.imsx_codeMajor).toBe('failure');
+    expect(body.imsx_codeMajor).toBe("failure");
     expect(mockedListOb3SubjectCredentials).not.toHaveBeenCalled();
   });
 
-  it('returns paginated credential payloads with X-Total-Count and Link headers', async () => {
+  it("returns paginated credential payloads with X-Total-Count and Link headers", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly",
       }),
     );
     mockedListOb3SubjectCredentials.mockResolvedValue({
       totalCount: 3,
       credentials: [
         sampleOb3SubjectCredentialRecord({
-          id: 'ob3c_json',
-          credentialId: 'urn:credtrail:credential:json',
+          id: "ob3c_json",
+          credentialId: "urn:credtrail:credential:json",
         }),
         sampleOb3SubjectCredentialRecord({
-          id: 'ob3c_jws',
-          credentialId: 'urn:credtrail:credential:jws',
+          id: "ob3c_jws",
+          credentialId: "urn:credtrail:credential:jws",
           payloadJson: null,
-          compactJws: 'eyJhbGciOiJIUzI1NiJ9.e30.signature',
+          compactJws: "eyJhbGciOiJIUzI1NiJ9.e30.signature",
         }),
       ],
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials?limit=1&offset=1&since=2026-02-10T00:00:00.000Z',
+      "/ims/ob/v3p0/credentials?limit=1&offset=1&since=2026-02-10T00:00:00.000Z",
       {
         headers: {
-          authorization: 'Bearer access-token-read',
+          authorization: "Bearer access-token-read",
         },
       },
       createEnv(),
@@ -232,44 +232,44 @@ describe('OB3 secure REST resource endpoints', () => {
     const compactJwsStrings = Array.isArray(body.compactJwsString) ? body.compactJwsString : [];
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('x-total-count')).toBe('3');
-    expect(response.headers.get('link')).toContain('rel="next"');
-    expect(response.headers.get('link')).toContain('rel="last"');
-    expect(response.headers.get('link')).toContain('rel="first"');
-    expect(response.headers.get('link')).toContain('rel="prev"');
+    expect(response.headers.get("x-total-count")).toBe("3");
+    expect(response.headers.get("link")).toContain('rel="next"');
+    expect(response.headers.get("link")).toContain('rel="last"');
+    expect(response.headers.get("link")).toContain('rel="first"');
+    expect(response.headers.get("link")).toContain('rel="prev"');
     expect(credentials).toHaveLength(1);
     expect(compactJwsStrings).toHaveLength(1);
     expect(mockedListOb3SubjectCredentials).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
+      tenantId: "tenant_123",
+      userId: "usr_123",
       limit: 1,
       offset: 1,
-      since: '2026-02-10T00:00:00.000Z',
+      since: "2026-02-10T00:00:00.000Z",
     });
   });
 
-  it('supports JSON credential upsert with 201/200 semantics', async () => {
+  it("supports JSON credential upsert with 201/200 semantics", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
     mockedUpsertOb3SubjectCredential.mockResolvedValue({
-      status: 'created',
+      status: "created",
       credential: sampleOb3SubjectCredentialRecord(),
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "application/json",
+          authorization: "Bearer access-token-upsert",
         },
         body: JSON.stringify({
-          id: 'urn:credtrail:credential:created',
-          type: ['VerifiableCredential', 'OpenBadgeCredential'],
+          id: "urn:credtrail:credential:created",
+          type: ["VerifiableCredential", "OpenBadgeCredential"],
         }),
       },
       createEnv(),
@@ -277,40 +277,40 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(201);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    expect(body.id).toBe('urn:credtrail:credential:created');
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(body.id).toBe("urn:credtrail:credential:created");
     expect(mockedUpsertOb3SubjectCredential).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        userId: 'usr_123',
-        credentialId: 'urn:credtrail:credential:created',
+        tenantId: "tenant_123",
+        userId: "usr_123",
+        credentialId: "urn:credtrail:credential:created",
       }),
     );
   });
 
-  it('supports JSON-LD credential upserts and mirrors application/ld+json responses', async () => {
+  it("supports JSON-LD credential upserts and mirrors application/ld+json responses", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
     mockedUpsertOb3SubjectCredential.mockResolvedValue({
-      status: 'updated',
+      status: "updated",
       credential: sampleOb3SubjectCredentialRecord(),
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/ld+json',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "application/ld+json",
+          authorization: "Bearer access-token-upsert",
         },
         body: JSON.stringify({
-          id: 'urn:credtrail:credential:jsonld',
-          type: ['VerifiableCredential', 'OpenBadgeCredential'],
+          id: "urn:credtrail:credential:jsonld",
+          type: ["VerifiableCredential", "OpenBadgeCredential"],
         }),
       },
       createEnv(),
@@ -318,32 +318,32 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('application/ld+json');
-    expect(body.id).toBe('urn:credtrail:credential:jsonld');
+    expect(response.headers.get("content-type")).toContain("application/ld+json");
+    expect(body.id).toBe("urn:credtrail:credential:jsonld");
   });
 
-  it('supports VC JSON-LD credential upserts and mirrors application/vc+ld+json responses', async () => {
+  it("supports VC JSON-LD credential upserts and mirrors application/vc+ld+json responses", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
     mockedUpsertOb3SubjectCredential.mockResolvedValue({
-      status: 'created',
+      status: "created",
       credential: sampleOb3SubjectCredentialRecord(),
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/vc+ld+json',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "application/vc+ld+json",
+          authorization: "Bearer access-token-upsert",
         },
         body: JSON.stringify({
-          id: 'urn:credtrail:credential:vc-jsonld',
-          type: ['VerifiableCredential', 'OpenBadgeCredential'],
+          id: "urn:credtrail:credential:vc-jsonld",
+          type: ["VerifiableCredential", "OpenBadgeCredential"],
         }),
       },
       createEnv(),
@@ -351,31 +351,31 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(201);
-    expect(response.headers.get('content-type')).toContain('application/vc+ld+json');
-    expect(body.id).toBe('urn:credtrail:credential:vc-jsonld');
+    expect(response.headers.get("content-type")).toContain("application/vc+ld+json");
+    expect(body.id).toBe("urn:credtrail:credential:vc-jsonld");
   });
 
-  it('supports compact JWS credential upsert responses', async () => {
+  it("supports compact JWS credential upsert responses", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
     const compactJws = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        kid: 'https://issuer.example.edu/keys#key-1',
-        typ: 'JWT',
+        alg: "RS256",
+        kid: "https://issuer.example.edu/keys#key-1",
+        typ: "JWT",
       },
       payload: {
-        iss: 'https://issuer.example.edu',
-        jti: 'urn:credtrail:credential:jws',
+        iss: "https://issuer.example.edu",
+        jti: "urn:credtrail:credential:jws",
         nbf: 1762894800,
-        sub: 'mailto:learner@example.edu',
+        sub: "mailto:learner@example.edu",
       },
     });
     mockedUpsertOb3SubjectCredential.mockResolvedValue({
-      status: 'updated',
+      status: "updated",
       credential: sampleOb3SubjectCredentialRecord({
         payloadJson: null,
         compactJws,
@@ -383,12 +383,12 @@ describe('OB3 secure REST resource endpoints', () => {
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'text/plain',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "text/plain",
+          authorization: "Bearer access-token-upsert",
         },
         body: compactJws,
       },
@@ -397,42 +397,42 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(response.headers.get("content-type")).toContain("text/plain");
     expect(body).toBe(compactJws);
     expect(mockedUpsertOb3SubjectCredential).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        credentialId: 'urn:credtrail:credential:jws',
+        credentialId: "urn:credtrail:credential:jws",
       }),
     );
   });
 
-  it('rejects compact JWS payloads that miss required VC-JWT claims', async () => {
+  it("rejects compact JWS payloads that miss required VC-JWT claims", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
     const compactJws = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        kid: 'https://issuer.example.edu/keys#key-1',
-        typ: 'JWT',
+        alg: "RS256",
+        kid: "https://issuer.example.edu/keys#key-1",
+        typ: "JWT",
       },
       payload: {
-        iss: 'https://issuer.example.edu',
+        iss: "https://issuer.example.edu",
         nbf: 1762894800,
-        sub: 'mailto:learner@example.edu',
+        sub: "mailto:learner@example.edu",
       },
     });
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'text/plain',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "text/plain",
+          authorization: "Bearer access-token-upsert",
         },
         body: compactJws,
       },
@@ -441,64 +441,64 @@ describe('OB3 secure REST resource endpoints', () => {
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(400);
-    expect(body.imsx_description).toContain('jti');
+    expect(body.imsx_description).toContain("jti");
     expect(mockedUpsertOb3SubjectCredential).not.toHaveBeenCalled();
   });
 
-  it('rejects unsupported credential upsert content types', async () => {
+  it("rejects unsupported credential upsert content types", async () => {
     mockedFindActiveOAuthAccessTokenByHash.mockResolvedValue(
       sampleOAuthAccessTokenRecord({
-        scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert',
+        scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.upsert",
       }),
     );
 
     const response = await app.request(
-      '/ims/ob/v3p0/credentials',
+      "/ims/ob/v3p0/credentials",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/xml',
-          authorization: 'Bearer access-token-upsert',
+          "content-type": "application/xml",
+          authorization: "Bearer access-token-upsert",
         },
-        body: '<credential/>',
+        body: "<credential/>",
       },
       createEnv(),
     );
     const body = await response.json<Record<string, unknown>>();
 
     expect(response.status).toBe(400);
-    expect(body.imsx_description).toContain('application/vc+ld+json');
+    expect(body.imsx_description).toContain("application/vc+ld+json");
     expect(mockedUpsertOb3SubjectCredential).not.toHaveBeenCalled();
   });
 
-  it('returns and updates profile with scope-based authz', async () => {
+  it("returns and updates profile with scope-based authz", async () => {
     mockedFindActiveOAuthAccessTokenByHash
       .mockResolvedValueOnce(
         sampleOAuthAccessTokenRecord({
-          scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly',
+          scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.readonly",
         }),
       )
       .mockResolvedValueOnce(
         sampleOAuthAccessTokenRecord({
-          scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update',
+          scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/profile.update",
         }),
       );
     mockedFindOb3SubjectProfile.mockResolvedValue(sampleOb3SubjectProfileRecord());
     mockedUpsertOb3SubjectProfile.mockResolvedValue(
       sampleOb3SubjectProfileRecord({
         profileJson: JSON.stringify({
-          id: 'urn:credtrail:profile:tenant_123:usr_123',
-          type: ['Profile'],
-          name: 'Updated Learner',
+          id: "urn:credtrail:profile:tenant_123:usr_123",
+          type: ["Profile"],
+          name: "Updated Learner",
         }),
       }),
     );
 
     const getResponse = await app.request(
-      '/ims/ob/v3p0/profile',
+      "/ims/ob/v3p0/profile",
       {
         headers: {
-          authorization: 'Bearer access-token-profile-read',
+          authorization: "Bearer access-token-profile-read",
         },
       },
       createEnv(),
@@ -506,18 +506,18 @@ describe('OB3 secure REST resource endpoints', () => {
     const getBody = await getResponse.json<Record<string, unknown>>();
 
     expect(getResponse.status).toBe(200);
-    expect(getBody.id).toBe('urn:credtrail:profile:tenant_123:usr_123');
+    expect(getBody.id).toBe("urn:credtrail:profile:tenant_123:usr_123");
 
     const putResponse = await app.request(
-      '/ims/ob/v3p0/profile',
+      "/ims/ob/v3p0/profile",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer access-token-profile-update',
+          "content-type": "application/json",
+          authorization: "Bearer access-token-profile-update",
         },
         body: JSON.stringify({
-          name: 'Updated Learner',
+          name: "Updated Learner",
         }),
       },
       createEnv(),
@@ -526,12 +526,12 @@ describe('OB3 secure REST resource endpoints', () => {
 
     expect(putResponse.status).toBe(200);
     expect(Array.isArray(putBody.type)).toBe(true);
-    expect(putBody.id).toBe('urn:credtrail:profile:tenant_123:usr_123');
+    expect(putBody.id).toBe("urn:credtrail:profile:tenant_123:usr_123");
     expect(mockedUpsertOb3SubjectProfile).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        userId: 'usr_123',
+        tenantId: "tenant_123",
+        userId: "usr_123",
       }),
     );
   });

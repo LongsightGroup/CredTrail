@@ -1,13 +1,13 @@
-import type { JsonObject } from '@credtrail/core-domain';
-import type { RecipientIdentityType } from '@credtrail/validation';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import type { JsonObject } from "@credtrail/core-domain";
+import type { RecipientIdentityType } from "@credtrail/validation";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-const OPEN_BADGE_KEYWORDS = new Set(['openbadges', 'openbadge']);
+const OPEN_BADGE_KEYWORDS = new Set(["openbadges", "openbadge"]);
 
-type PngTextChunkType = 'tEXt' | 'zTXt' | 'iTXt';
+type PngTextChunkType = "tEXt" | "zTXt" | "iTXt";
 
-type ExtractedPayloadType = 'json' | 'url' | 'text';
+type ExtractedPayloadType = "json" | "url" | "text";
 
 interface ParsedTextChunk {
   chunkType: PngTextChunkType;
@@ -71,7 +71,7 @@ export interface PrepareOb2ImportConversionResult {
 export class Ob2ImportError extends Error {
   public constructor(message: string) {
     super(message);
-    this.name = 'Ob2ImportError';
+    this.name = "Ob2ImportError";
   }
 }
 
@@ -97,7 +97,7 @@ const readUint32BigEndian = (bytes: Uint8Array, offset: number): number => {
 };
 
 const decodeAscii = (bytes: Uint8Array): string => {
-  let output = '';
+  let output = "";
 
   for (const byte of bytes) {
     output += String.fromCharCode(byte);
@@ -113,7 +113,7 @@ const decodeUtf8 = (bytes: Uint8Array): string => {
 const isHttpUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
   }
@@ -130,24 +130,24 @@ const parseJsonObjectText = (value: string): JsonObject | null => {
 const decodeBase64ToBytes = (value: string): Uint8Array => {
   let normalized = value.trim();
 
-  if (normalized.startsWith('data:')) {
-    const commaIndex = normalized.indexOf(',');
+  if (normalized.startsWith("data:")) {
+    const commaIndex = normalized.indexOf(",");
 
     if (commaIndex < 0) {
-      throw new Ob2ImportError('Invalid bakedBadgeImage data URI: missing comma separator');
+      throw new Ob2ImportError("Invalid bakedBadgeImage data URI: missing comma separator");
     }
 
     const metadata = normalized.slice(0, commaIndex).toLowerCase();
 
-    if (!metadata.includes(';base64')) {
-      throw new Ob2ImportError('Invalid bakedBadgeImage data URI: expected base64 encoding');
+    if (!metadata.includes(";base64")) {
+      throw new Ob2ImportError("Invalid bakedBadgeImage data URI: expected base64 encoding");
     }
 
     normalized = normalized.slice(commaIndex + 1);
   }
 
   if (normalized.length === 0) {
-    throw new Ob2ImportError('Invalid bakedBadgeImage: empty base64 content');
+    throw new Ob2ImportError("Invalid bakedBadgeImage: empty base64 content");
   }
 
   let decoded: string;
@@ -155,7 +155,7 @@ const decodeBase64ToBytes = (value: string): Uint8Array => {
   try {
     decoded = atob(normalized);
   } catch {
-    throw new Ob2ImportError('Invalid bakedBadgeImage: unable to decode base64 content');
+    throw new Ob2ImportError("Invalid bakedBadgeImage: unable to decode base64 content");
   }
 
   const bytes = new Uint8Array(decoded.length);
@@ -168,11 +168,11 @@ const decodeBase64ToBytes = (value: string): Uint8Array => {
 };
 
 const inflateZlibBytes = async (input: Uint8Array): Promise<Uint8Array> => {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Ob2ImportError('zTXt/iTXt decompression is unavailable in this runtime');
+  if (typeof DecompressionStream === "undefined") {
+    throw new Ob2ImportError("zTXt/iTXt decompression is unavailable in this runtime");
   }
 
-  const stream = new DecompressionStream('deflate');
+  const stream = new DecompressionStream("deflate");
   const writer = stream.writable.getWriter();
   const copy = new Uint8Array(input.byteLength);
   copy.set(input);
@@ -196,7 +196,7 @@ const parseTextChunk = (data: Uint8Array): ParsedTextChunk | null => {
   }
 
   return {
-    chunkType: 'tEXt',
+    chunkType: "tEXt",
     keyword: keywordRaw,
     text: decodeUtf8(data.subarray(keywordEnd + 1)),
   };
@@ -225,7 +225,7 @@ const parseZtxtChunk = async (data: Uint8Array): Promise<ParsedTextChunk | null>
   const inflated = await inflateZlibBytes(compressedText);
 
   return {
-    chunkType: 'zTXt',
+    chunkType: "zTXt",
     keyword: keywordRaw,
     text: decodeUtf8(inflated),
   };
@@ -266,21 +266,19 @@ const parseItxtChunk = async (data: Uint8Array): Promise<ParsedTextChunk | null>
 
   if (compressionFlag === 1) {
     if (compressionMethod !== 0) {
-      throw new Ob2ImportError(
-        `Unsupported iTXt compression method: ${String(compressionMethod)}`,
-      );
+      throw new Ob2ImportError(`Unsupported iTXt compression method: ${String(compressionMethod)}`);
     }
 
     const inflated = await inflateZlibBytes(textBytes);
     return {
-      chunkType: 'iTXt',
+      chunkType: "iTXt",
       keyword: keywordRaw,
       text: decodeUtf8(inflated),
     };
   }
 
   return {
-    chunkType: 'iTXt',
+    chunkType: "iTXt",
     keyword: keywordRaw,
     text: decodeUtf8(textBytes),
   };
@@ -290,28 +288,30 @@ const parsePngTextChunk = async (
   chunkType: string,
   chunkData: Uint8Array,
 ): Promise<ParsedTextChunk | null> => {
-  if (chunkType === 'tEXt') {
+  if (chunkType === "tEXt") {
     return parseTextChunk(chunkData);
   }
 
-  if (chunkType === 'zTXt') {
+  if (chunkType === "zTXt") {
     return parseZtxtChunk(chunkData);
   }
 
-  if (chunkType === 'iTXt') {
+  if (chunkType === "iTXt") {
     return parseItxtChunk(chunkData);
   }
 
   return null;
 };
 
-const extractOb2EntitiesFromExtractedJson = (payloadJson: JsonObject): {
+const extractOb2EntitiesFromExtractedJson = (
+  payloadJson: JsonObject,
+): {
   ob2Assertion?: JsonObject | undefined;
   ob2BadgeClass?: JsonObject | undefined;
   ob2Issuer?: JsonObject | undefined;
 } => {
   const assertionFromRootType =
-    asNonEmptyString(payloadJson.type)?.toLowerCase() === 'assertion' ? payloadJson : undefined;
+    asNonEmptyString(payloadJson.type)?.toLowerCase() === "assertion" ? payloadJson : undefined;
   const assertionFromWrapper = asJsonObject(payloadJson.assertion) ?? undefined;
   const badgeClassFromWrapper =
     asJsonObject(payloadJson.badgeClass) ?? asJsonObject(payloadJson.badge) ?? undefined;
@@ -358,7 +358,7 @@ const normalizeIssuedOn = (value: unknown, warnings: string[]): string => {
   const issuedOn = asNonEmptyString(value);
 
   if (issuedOn === null) {
-    warnings.push('OB2 assertion is missing issuedOn; using current timestamp');
+    warnings.push("OB2 assertion is missing issuedOn; using current timestamp");
     return new Date().toISOString();
   }
 
@@ -411,16 +411,16 @@ const slugify = (value: string): string => {
   const normalized = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 96);
 
   if (normalized.length >= 2) {
     return normalized;
   }
 
-  return 'imported-badge';
+  return "imported-badge";
 };
 
 const normalizedRecipientIdentity = (
@@ -431,18 +431,18 @@ const normalizedRecipientIdentity = (
 ): string => {
   let identity = identityRaw.trim();
 
-  if (recipientType === 'email' && identity.toLowerCase().startsWith('mailto:')) {
-    identity = identity.slice('mailto:'.length);
+  if (recipientType === "email" && identity.toLowerCase().startsWith("mailto:")) {
+    identity = identity.slice("mailto:".length);
   }
 
   if (hashed) {
-    const separatorIndex = identity.indexOf('$');
+    const separatorIndex = identity.indexOf("$");
 
     if (separatorIndex > 0) {
       const algorithm = identity.slice(0, separatorIndex).toLowerCase();
       const hashValue = identity.slice(separatorIndex + 1);
 
-      if (algorithm === 'sha256' && hashValue.length > 0) {
+      if (algorithm === "sha256" && hashValue.length > 0) {
         identity = hashValue;
       } else {
         warnings.push(
@@ -462,34 +462,36 @@ const recipientIdentityTypeForRecipient = (
   warnings: string[],
 ): RecipientIdentityType => {
   if (hashed) {
-    if (recipientType !== undefined && recipientType.toLowerCase() !== 'email') {
-      warnings.push('Hashed OB2 recipient type is non-email; mapping to email_sha256 for import');
+    if (recipientType !== undefined && recipientType.toLowerCase() !== "email") {
+      warnings.push("Hashed OB2 recipient type is non-email; mapping to email_sha256 for import");
     }
 
-    return 'email_sha256';
+    return "email_sha256";
   }
 
   const normalizedType = recipientType?.toLowerCase();
 
-  if (normalizedType === 'email') {
-    return 'email';
+  if (normalizedType === "email") {
+    return "email";
   }
 
-  if (normalizedType === 'url') {
-    return identity.startsWith('did:') ? 'did' : 'url';
+  if (normalizedType === "url") {
+    return identity.startsWith("did:") ? "did" : "url";
   }
 
-  if (identity.startsWith('did:')) {
-    return 'did';
+  if (identity.startsWith("did:")) {
+    return "did";
   }
 
-  if (identity.includes('@')) {
-    warnings.push('Recipient type missing/unknown; inferred email identity type from address format');
-    return 'email';
+  if (identity.includes("@")) {
+    warnings.push(
+      "Recipient type missing/unknown; inferred email identity type from address format",
+    );
+    return "email";
   }
 
-  warnings.push('Recipient type missing/unknown; defaulting to url identity type');
-  return 'url';
+  warnings.push("Recipient type missing/unknown; defaulting to url identity type");
+  return "url";
 };
 
 const resolveBadgeClassObject = (
@@ -506,12 +508,12 @@ const resolveBadgeClassObject = (
   const badgeReference = asNonEmptyString(assertionBadge);
 
   if (badgeReference === null) {
-    throw new Ob2ImportError('OB2 assertion is missing badge reference');
+    throw new Ob2ImportError("OB2 assertion is missing badge reference");
   }
 
   if (ob2BadgeClass === undefined) {
     throw new Ob2ImportError(
-      'OB2 assertion badge is a reference URL; include ob2BadgeClass JSON to resolve it',
+      "OB2 assertion badge is a reference URL; include ob2BadgeClass JSON to resolve it",
     );
   }
 
@@ -545,12 +547,14 @@ const resolveIssuerObject = (
       return ob2Issuer;
     }
 
-    warnings.push('OB2 badgeClass is missing issuer metadata');
+    warnings.push("OB2 badgeClass is missing issuer metadata");
     return undefined;
   }
 
   if (ob2Issuer === undefined) {
-    warnings.push(`OB2 issuer reference (${issuerReference}) was not resolved with ob2Issuer payload`);
+    warnings.push(
+      `OB2 issuer reference (${issuerReference}) was not resolved with ob2Issuer payload`,
+    );
     return undefined;
   }
 
@@ -574,13 +578,13 @@ export const convertOb2AssertionToImportCandidate = (input: {
   const recipientObject = asJsonObject(input.ob2Assertion.recipient);
 
   if (recipientObject === null) {
-    throw new Ob2ImportError('OB2 assertion recipient is missing or invalid');
+    throw new Ob2ImportError("OB2 assertion recipient is missing or invalid");
   }
 
   const recipientIdentityRaw = asNonEmptyString(recipientObject.identity);
 
   if (recipientIdentityRaw === null) {
-    throw new Ob2ImportError('OB2 assertion recipient.identity is required');
+    throw new Ob2ImportError("OB2 assertion recipient.identity is required");
   }
 
   const recipientType = asNonEmptyString(recipientObject.type) ?? undefined;
@@ -603,7 +607,7 @@ export const convertOb2AssertionToImportCandidate = (input: {
   const badgeTitle = asNonEmptyString(badgeClass.name);
 
   if (badgeTitle === null) {
-    throw new Ob2ImportError('OB2 badgeClass.name is required to build an OB3 badge template');
+    throw new Ob2ImportError("OB2 badgeClass.name is required to build an OB3 badge template");
   }
 
   const assertionId = asNonEmptyString(input.ob2Assertion.id) ?? undefined;
@@ -612,12 +616,14 @@ export const convertOb2AssertionToImportCandidate = (input: {
   const criteriaUriCandidate = resourceUriFromUnknown(badgeClass.criteria);
   const imageUriCandidate = resourceUriFromUnknown(badgeClass.image);
   const issuerObject = resolveIssuerObject(badgeClass, input.ob2Issuer, warnings);
-  const issuerId = issuerObject === undefined ? undefined : asNonEmptyString(issuerObject.id) ?? undefined;
-  const issuerName = issuerObject === undefined ? undefined : asNonEmptyString(issuerObject.name) ?? undefined;
+  const issuerId =
+    issuerObject === undefined ? undefined : (asNonEmptyString(issuerObject.id) ?? undefined);
+  const issuerName =
+    issuerObject === undefined ? undefined : (asNonEmptyString(issuerObject.name) ?? undefined);
   const issuerUrlCandidate =
     issuerObject === undefined
       ? undefined
-      : asNonEmptyString(issuerObject.url) ?? asNonEmptyString(issuerObject.id) ?? undefined;
+      : (asNonEmptyString(issuerObject.url) ?? asNonEmptyString(issuerObject.id) ?? undefined);
   const issuerUrl =
     issuerUrlCandidate === undefined
       ? undefined
@@ -626,15 +632,15 @@ export const convertOb2AssertionToImportCandidate = (input: {
         : undefined;
 
   if (issuerUrlCandidate !== undefined && issuerUrl === undefined) {
-    warnings.push('OB2 issuer URL is not an HTTP/HTTPS URL and was omitted from issue options');
+    warnings.push("OB2 issuer URL is not an HTTP/HTTPS URL and was omitted from issue options");
   }
 
   if (criteriaUriCandidate !== undefined && !isHttpUrl(criteriaUriCandidate)) {
-    warnings.push('OB2 badge criteria URI is not an HTTP/HTTPS URL and was omitted');
+    warnings.push("OB2 badge criteria URI is not an HTTP/HTTPS URL and was omitted");
   }
 
   if (imageUriCandidate !== undefined && !isHttpUrl(imageUriCandidate)) {
-    warnings.push('OB2 badge image URI is not an HTTP/HTTPS URL and was omitted');
+    warnings.push("OB2 badge image URI is not an HTTP/HTTPS URL and was omitted");
   }
 
   const issuedOn = normalizeIssuedOn(input.ob2Assertion.issuedOn, warnings);
@@ -682,12 +688,12 @@ export const extractOpenBadgesPayloadFromPng = async (
   pngBytes: Uint8Array,
 ): Promise<ExtractedOpenBadgesPayload> => {
   if (pngBytes.length < PNG_SIGNATURE.length) {
-    throw new Ob2ImportError('Invalid PNG: file is too short');
+    throw new Ob2ImportError("Invalid PNG: file is too short");
   }
 
   for (let index = 0; index < PNG_SIGNATURE.length; index += 1) {
     if (pngBytes[index] !== PNG_SIGNATURE[index]) {
-      throw new Ob2ImportError('Invalid PNG signature for baked badge input');
+      throw new Ob2ImportError("Invalid PNG signature for baked badge input");
     }
   }
 
@@ -701,20 +707,23 @@ export const extractOpenBadgesPayloadFromPng = async (
     const chunkCrcEnd = chunkDataEnd + 4;
 
     if (chunkDataEnd > pngBytes.length || chunkCrcEnd > pngBytes.length) {
-      throw new Ob2ImportError('Invalid PNG: chunk length exceeds image data size');
+      throw new Ob2ImportError("Invalid PNG: chunk length exceeds image data size");
     }
 
-    if (chunkType === 'tEXt' || chunkType === 'zTXt' || chunkType === 'iTXt') {
+    if (chunkType === "tEXt" || chunkType === "zTXt" || chunkType === "iTXt") {
       const parsedTextChunk = await parsePngTextChunk(
         chunkType,
         pngBytes.subarray(chunkDataStart, chunkDataEnd),
       );
 
-      if (parsedTextChunk !== null && OPEN_BADGE_KEYWORDS.has(parsedTextChunk.keyword.toLowerCase())) {
+      if (
+        parsedTextChunk !== null &&
+        OPEN_BADGE_KEYWORDS.has(parsedTextChunk.keyword.toLowerCase())
+      ) {
         const payloadText = parsedTextChunk.text.trim();
 
         if (payloadText.length === 0) {
-          throw new Ob2ImportError('Baked badge Open Badges payload is empty');
+          throw new Ob2ImportError("Baked badge Open Badges payload is empty");
         }
 
         const payloadJson = parseJsonObjectText(payloadText);
@@ -723,7 +732,7 @@ export const extractOpenBadgesPayloadFromPng = async (
           return {
             chunkType: parsedTextChunk.chunkType,
             keyword: parsedTextChunk.keyword,
-            payloadType: 'json',
+            payloadType: "json",
             payloadText,
             payloadJson,
           };
@@ -733,7 +742,7 @@ export const extractOpenBadgesPayloadFromPng = async (
           return {
             chunkType: parsedTextChunk.chunkType,
             keyword: parsedTextChunk.keyword,
-            payloadType: 'url',
+            payloadType: "url",
             payloadText,
             assertionUrl: payloadText,
           };
@@ -742,7 +751,7 @@ export const extractOpenBadgesPayloadFromPng = async (
         return {
           chunkType: parsedTextChunk.chunkType,
           keyword: parsedTextChunk.keyword,
-          payloadType: 'text',
+          payloadType: "text",
           payloadText,
         };
       }
@@ -750,12 +759,12 @@ export const extractOpenBadgesPayloadFromPng = async (
 
     offset = chunkCrcEnd;
 
-    if (chunkType === 'IEND') {
+    if (chunkType === "IEND") {
       break;
     }
   }
 
-  throw new Ob2ImportError('No Open Badges payload found in baked PNG image');
+  throw new Ob2ImportError("No Open Badges payload found in baked PNG image");
 };
 
 export const prepareOb2ImportConversion = async (
@@ -772,8 +781,13 @@ export const prepareOb2ImportConversion = async (
     const pngBytes = decodeBase64ToBytes(input.bakedBadgeImage);
     extractedFromBakedBadge = await extractOpenBadgesPayloadFromPng(pngBytes);
 
-    if (extractedFromBakedBadge.payloadType === 'json' && extractedFromBakedBadge.payloadJson !== undefined) {
-      const extractedEntities = extractOb2EntitiesFromExtractedJson(extractedFromBakedBadge.payloadJson);
+    if (
+      extractedFromBakedBadge.payloadType === "json" &&
+      extractedFromBakedBadge.payloadJson !== undefined
+    ) {
+      const extractedEntities = extractOb2EntitiesFromExtractedJson(
+        extractedFromBakedBadge.payloadJson,
+      );
 
       ob2Assertion = ob2Assertion ?? extractedEntities.ob2Assertion;
       ob2BadgeClass = ob2BadgeClass ?? extractedEntities.ob2BadgeClass;
@@ -782,9 +796,9 @@ export const prepareOb2ImportConversion = async (
   }
 
   if (ob2Assertion === undefined) {
-    if (extractedFromBakedBadge?.payloadType === 'url') {
+    if (extractedFromBakedBadge?.payloadType === "url") {
       warnings.push(
-        'Baked badge payload resolved to an assertion URL; include ob2Assertion JSON for conversion',
+        "Baked badge payload resolved to an assertion URL; include ob2Assertion JSON for conversion",
       );
 
       return {
@@ -794,7 +808,7 @@ export const prepareOb2ImportConversion = async (
       };
     }
 
-    throw new Ob2ImportError('OB2 assertion JSON is required for conversion');
+    throw new Ob2ImportError("OB2 assertion JSON is required for conversion");
   }
 
   const conversion = convertOb2AssertionToImportCandidate({

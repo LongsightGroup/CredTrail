@@ -1,7 +1,7 @@
-export const BETTER_AUTH_AUTH_SYSTEM = 'better_auth';
+export const BETTER_AUTH_AUTH_SYSTEM = "better_auth";
 export const BETTER_AUTH_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
-export const BETTER_AUTH_SESSION_COOKIE_NAME = 'better-auth.session_token';
-const BETTER_AUTH_SCHEMA = 'auth';
+export const BETTER_AUTH_SESSION_COOKIE_NAME = "better-auth.session_token";
+const BETTER_AUTH_SCHEMA = "auth";
 
 export interface BetterAuthRuntimeBindings {
   APP_ENV: string;
@@ -45,7 +45,7 @@ const baseUrlFromPlatformDomain = (platformDomain: string): string => {
   const trimmed = platformDomain.trim();
 
   if (trimmed.length === 0) {
-    throw new Error('PLATFORM_DOMAIN is required for Better Auth runtime configuration');
+    throw new Error("PLATFORM_DOMAIN is required for Better Auth runtime configuration");
   }
 
   try {
@@ -63,7 +63,7 @@ export const createBetterAuthRuntimeConfig = (
 
   trustedOrigins.add(baseURL);
 
-  for (const origin of (bindings.BETTER_AUTH_TRUSTED_ORIGINS ?? '').split(',')) {
+  for (const origin of (bindings.BETTER_AUTH_TRUSTED_ORIGINS ?? "").split(",")) {
     const normalizedOrigin = normalizeOrigin(origin);
 
     if (normalizedOrigin !== null) {

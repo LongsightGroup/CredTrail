@@ -22,28 +22,28 @@ export const sendMagicLinkEmailNotification = async (
     return;
   }
 
-  const baseUrl = input.mailtrapApiBaseUrl ?? 'https://sandbox.api.mailtrap.io/api/send';
-  const endpoint = `${baseUrl.replaceAll(/\/+$/g, '')}/${encodeURIComponent(input.mailtrapInboxId)}`;
+  const baseUrl = input.mailtrapApiBaseUrl ?? "https://sandbox.api.mailtrap.io/api/send";
+  const endpoint = `${baseUrl.replaceAll(/\/+$/g, "")}/${encodeURIComponent(input.mailtrapInboxId)}`;
   const subject = `Sign in to CredTrail (${input.tenantId})`;
   const textBody = [
-    'Use the link below to sign in to CredTrail:',
-    '',
+    "Use the link below to sign in to CredTrail:",
+    "",
     input.magicLinkUrl,
-    '',
+    "",
     `Tenant: ${input.tenantId}`,
     `Expires at: ${input.expiresAtIso}`,
-  ].join('\n');
+  ].join("\n");
 
   const response = await fetch(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${input.mailtrapApiToken}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       from: {
-        email: input.mailtrapFromEmail ?? 'no-reply@credtrail.org',
-        name: input.mailtrapFromName ?? 'CredTrail',
+        email: input.mailtrapFromEmail ?? "no-reply@credtrail.org",
+        name: input.mailtrapFromName ?? "CredTrail",
       },
       to: [
         {
@@ -52,7 +52,7 @@ export const sendMagicLinkEmailNotification = async (
       ],
       subject,
       text: textBody,
-      category: 'Auth Magic Link',
+      category: "Auth Magic Link",
     }),
   });
 

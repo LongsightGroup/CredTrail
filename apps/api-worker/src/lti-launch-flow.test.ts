@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setCookie } from 'hono/cookie';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setCookie } from "hono/cookie";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -21,7 +21,7 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
@@ -44,10 +44,10 @@ import {
   type LtiIssuerRegistrationRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface ErrorResponse {
   error: string;
@@ -57,7 +57,9 @@ const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedCreateAuthIdentityLink = vi.mocked(createAuthIdentityLink);
 const mockedEnsureTenantMembership = vi.mocked(ensureTenantMembership);
 const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByAuthUserId);
-const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(findAuthIdentityLinkByCredtrailUserId);
+const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(
+  findAuthIdentityLinkByCredtrailUserId,
+);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
@@ -97,8 +99,20 @@ const authUsers: AuthUserRow[] = [];
 const authSessions: AuthSessionRow[] = [];
 const authIdentityLinks: AuthIdentityLinkRow[] = [];
 
+const coerceBoundText = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return "";
+};
+
 const fakeDbPrepare = vi.fn((sql: string) => {
-  const normalizedSql = sql.replace(/\s+/g, ' ').trim();
+  const normalizedSql = sql.replace(/\s+/g, " ").trim();
   let params: unknown[] = [];
 
   return {
@@ -108,12 +122,12 @@ const fakeDbPrepare = vi.fn((sql: string) => {
     },
     first: async <T>() => {
       if (
-        normalizedSql.includes('FROM auth.user') &&
-        normalizedSql.includes('LOWER(email) = LOWER(?)')
+        normalizedSql.includes("FROM auth.user") &&
+        normalizedSql.includes("LOWER(email) = LOWER(?)")
       ) {
-        const email = String(params[0] ?? '').toLowerCase();
+        const email = coerceBoundText(params[0]).toLowerCase();
         const row =
-          authUsers.find((candidate) => (candidate.email ?? '').toLowerCase() === email) ?? null;
+          authUsers.find((candidate) => (candidate.email ?? "").toLowerCase() === email) ?? null;
 
         return row === null
           ? null
@@ -125,15 +139,15 @@ const fakeDbPrepare = vi.fn((sql: string) => {
       }
 
       if (
-        normalizedSql.includes('FROM auth.session AS session') &&
-        normalizedSql.includes('WHERE session.token = ?')
+        normalizedSql.includes("FROM auth.session AS session") &&
+        normalizedSql.includes("WHERE session.token = ?")
       ) {
-        const token = String(params[0] ?? '');
+        const token = coerceBoundText(params[0]);
         const session = authSessions.find((candidate) => candidate.token === token) ?? null;
         const user =
           session === null
             ? null
-            : authUsers.find((candidate) => candidate.id === session.user_id) ?? null;
+            : (authUsers.find((candidate) => candidate.id === session.user_id) ?? null);
 
         return session === null
           ? null
@@ -157,9 +171,9 @@ const fakeDbPrepare = vi.fn((sql: string) => {
       };
     },
     run: async () => {
-      if (normalizedSql.includes('INSERT INTO auth.user')) {
+      if (normalizedSql.includes("INSERT INTO auth.user")) {
         authUsers.push({
-          id: String(params[0] ?? ''),
+          id: coerceBoundText(params[0]),
           email: (params[1] as string | null | undefined) ?? null,
           email_verified: Boolean(params[2]),
         });
@@ -169,12 +183,12 @@ const fakeDbPrepare = vi.fn((sql: string) => {
         };
       }
 
-      if (normalizedSql.includes('INSERT INTO auth.session')) {
+      if (normalizedSql.includes("INSERT INTO auth.session")) {
         authSessions.push({
-          id: String(params[0] ?? ''),
-          token: String(params[1] ?? ''),
-          user_id: String(params[2] ?? ''),
-          expires_at: String(params[3] ?? ''),
+          id: coerceBoundText(params[0]),
+          token: coerceBoundText(params[1]),
+          user_id: coerceBoundText(params[2]),
+          expires_at: coerceBoundText(params[3]),
           ip_address: (params[4] as string | null | undefined) ?? null,
           user_agent: (params[5] as string | null | undefined) ?? null,
         });
@@ -202,10 +216,10 @@ const createEnv = (): {
   LTI_STATE_SIGNING_SECRET?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -214,8 +228,8 @@ const sampleUserRecord = (overrides?: {
   email?: string;
 }): { id: string; email: string } => {
   return {
-    id: overrides?.id ?? 'usr_123',
-    email: overrides?.email ?? 'learner@example.edu',
+    id: overrides?.id ?? "usr_123",
+    email: overrides?.email ?? "learner@example.edu",
   };
 };
 
@@ -223,27 +237,27 @@ const sampleLtiIssuerRegistration = (
   overrides?: Partial<LtiIssuerRegistrationRecord>,
 ): LtiIssuerRegistrationRecord => {
   return {
-    issuer: 'https://canvas.example.edu',
-    tenantId: 'tenant_123',
-    authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
-    clientId: 'canvas-client-123',
+    issuer: "https://canvas.example.edu",
+    tenantId: "tenant_123",
+    authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
+    clientId: "canvas-client-123",
     tokenEndpoint: null,
     clientSecret: null,
     allowUnsignedIdToken: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleLearnerProfile = (overrides?: Partial<LearnerProfileRecord>): LearnerProfileRecord => {
   return {
-    id: 'lpr_123',
-    tenantId: 'tenant_123',
-    subjectId: 'urn:credtrail:learner:tenant_123:lpr_123',
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
     displayName: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -252,11 +266,11 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'issuer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "issuer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -280,16 +294,16 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
     createMagicLinkSession: vi.fn(),
     createLtiSession: vi.fn(
       (context: Parameters<typeof setCookie>[0], input: { tenantId: string; userId: string }) => {
-        setCookie(context, 'better-auth.session_token', 'better-lti-session', {
+        setCookie(context, "better-auth.session_token", "better-lti-session", {
           httpOnly: true,
-          sameSite: 'Lax',
-          path: '/',
+          sameSite: "Lax",
+          path: "/",
         });
         return Promise.resolve({
           userId: input.userId,
-          authSessionId: 'ba_ses_adapter',
-          authMethod: 'better_auth' as const,
-          expiresAt: '2026-02-11T22:00:00.000Z',
+          authSessionId: "ba_ses_adapter",
+          authMethod: "better_auth" as const,
+          expiresAt: "2026-02-11T22:00:00.000Z",
         });
       },
     ),
@@ -298,11 +312,10 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
     revokeCurrentSession: vi.fn(() => Promise.resolve()),
   };
 
-  vi.doMock('./auth/better-auth-adapter', async () => {
-    const actual =
-      await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-        './auth/better-auth-adapter',
-      );
+  vi.doMock("./auth/better-auth-adapter", async () => {
+    const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+      "./auth/better-auth-adapter",
+    );
 
     return {
       ...actual,
@@ -310,7 +323,7 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
     };
   });
 
-  const { app: isolatedApp } = await import('./index');
+  const { app: isolatedApp } = await import("./index");
 
   return {
     app: isolatedApp,
@@ -338,30 +351,30 @@ const sampleBadgeTemplate = (overrides?: {
   updatedAt: string;
 } => {
   return {
-    id: overrides?.id ?? 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: overrides?.title ?? 'TypeScript Foundations',
-    description: overrides?.description ?? 'Awarded for completing TypeScript fundamentals.',
-    criteriaUri: 'https://example.edu/criteria',
-    imageUri: 'https://example.edu/image.png',
-    createdByUserId: 'usr_123',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    id: overrides?.id ?? "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: overrides?.title ?? "TypeScript Foundations",
+    description: overrides?.description ?? "Awarded for completing TypeScript fundamentals.",
+    criteriaUri: "https://example.edu/criteria",
+    imageUri: "https://example.edu/image.png",
+    createdByUserId: "usr_123",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: null,
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const bytesToBase64UrlForTest = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const compactJwsForTest = (input: {
@@ -378,25 +391,25 @@ const compactJwsForTest = (input: {
 };
 
 const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unknown> => {
-  const normalized = segment.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = `${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`;
   const decoded = atob(padded);
 
   return JSON.parse(decoded) as Record<string, unknown>;
 };
 
 afterEach(() => {
-  vi.doUnmock('./auth/better-auth-adapter');
+  vi.doUnmock("./auth/better-auth-adapter");
 });
 
-describe('LTI 1.3 core launch flow', () => {
-  const issuer = 'https://canvas.example.edu';
-  const authorizationEndpoint = 'https://canvas.example.edu/api/lti/authorize_redirect';
-  const clientId = 'canvas-client-123';
-  const tenantId = 'tenant_123';
-  const targetLinkUri = 'https://tool.example.edu/v1/lti/launch';
-  const deploymentId = 'deployment-123';
-  const linkedUserId = 'usr_lti_123';
+describe("LTI 1.3 core launch flow", () => {
+  const issuer = "https://canvas.example.edu";
+  const authorizationEndpoint = "https://canvas.example.edu/api/lti/authorize_redirect";
+  const clientId = "canvas-client-123";
+  const tenantId = "tenant_123";
+  const targetLinkUri = "https://tool.example.edu/v1/lti/launch";
+  const deploymentId = "deployment-123";
+  const linkedUserId = "usr_lti_123";
 
   beforeEach(() => {
     authUsers.length = 0;
@@ -409,14 +422,14 @@ describe('LTI 1.3 core launch flow', () => {
     mockedCreateAuthIdentityLink.mockImplementation(
       async (_db, input): Promise<(typeof authIdentityLinks)[number]> => {
         const link = {
-          id: 'ail_123',
+          id: "ail_123",
           authSystem: input.authSystem,
           authUserId: input.authUserId,
           authAccountId: input.authAccountId ?? null,
           credtrailUserId: input.credtrailUserId,
           emailSnapshot: input.emailSnapshot ?? null,
-          createdAt: '2026-02-10T22:00:00.000Z',
-          updatedAt: '2026-02-10T22:00:00.000Z',
+          createdAt: "2026-02-10T22:00:00.000Z",
+          updatedAt: "2026-02-10T22:00:00.000Z",
         };
         authIdentityLinks.push(link);
         return link;
@@ -425,22 +438,23 @@ describe('LTI 1.3 core launch flow', () => {
     mockedListLtiIssuerRegistrations.mockReset();
     mockedListLtiIssuerRegistrations.mockResolvedValue([]);
     mockedFindAuthIdentityLinkByAuthUserId.mockReset();
-    mockedFindAuthIdentityLinkByAuthUserId.mockImplementation(async (_db, authSystem, authUserId) => {
-      return (
-        authIdentityLinks.find(
-          (candidate) =>
-            candidate.authSystem === authSystem && candidate.authUserId === authUserId,
-        ) ?? null
-      );
-    });
+    mockedFindAuthIdentityLinkByAuthUserId.mockImplementation(
+      async (_db, authSystem, authUserId) => {
+        return (
+          authIdentityLinks.find(
+            (candidate) =>
+              candidate.authSystem === authSystem && candidate.authUserId === authUserId,
+          ) ?? null
+        );
+      },
+    );
     mockedFindAuthIdentityLinkByCredtrailUserId.mockReset();
     mockedFindAuthIdentityLinkByCredtrailUserId.mockImplementation(
       async (_db, authSystem, credtrailUserId) => {
         return (
           authIdentityLinks.find(
             (candidate) =>
-              candidate.authSystem === authSystem &&
-              candidate.credtrailUserId === credtrailUserId,
+              candidate.authSystem === authSystem && candidate.credtrailUserId === credtrailUserId,
           ) ?? null
         );
       },
@@ -469,7 +483,7 @@ describe('LTI 1.3 core launch flow', () => {
       membership: sampleTenantMembership({
         tenantId,
         userId: linkedUserId,
-        role: 'viewer',
+        role: "viewer",
       }),
       created: true,
     });
@@ -478,9 +492,9 @@ describe('LTI 1.3 core launch flow', () => {
       membership: sampleTenantMembership({
         tenantId,
         userId: linkedUserId,
-        role: 'issuer',
+        role: "issuer",
       }),
-      previousRole: 'viewer',
+      previousRole: "viewer",
       changed: true,
     });
   });
@@ -497,64 +511,64 @@ describe('LTI 1.3 core launch flow', () => {
         allowUnsignedIdToken: options?.allowUnsignedIdToken ?? true,
       },
     });
-    env.LTI_STATE_SIGNING_SECRET = 'test-lti-state-secret';
+    env.LTI_STATE_SIGNING_SECRET = "test-lti-state-secret";
     return env;
   };
 
-  it('establishes a Better Auth browser session for LTI launches without legacy session writes', async () => {
+  it("establishes a Better Auth browser session for LTI launches without legacy session writes", async () => {
     const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders();
     const env = createLtiEnv();
     const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
         deploymentId,
       )}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        typ: 'JWT',
+        alg: "RS256",
+        typ: "JWT",
       },
       payload: {
         iss: issuer,
-        sub: 'user-123',
+        sub: "user-123",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-          id: 'resource-link-123',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-123",
         },
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
-        'https://purl.imsglobal.org/spec/lti/claim/context': {
-          id: 'course-123',
-          label: 'TS101',
-          title: 'TypeScript 101',
+        "https://purl.imsglobal.org/spec/lti/claim/context": {
+          id: "course-123",
+          label: "TS101",
+          title: "TypeScript 101",
         },
-        name: 'Instructor Example',
+        name: "Instructor Example",
       },
     });
 
     const response = await isolatedApp.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -565,8 +579,8 @@ describe('LTI 1.3 core launch flow', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('set-cookie') ?? '').toContain(
-      'better-auth.session_token=better-lti-session',
+    expect(response.headers.get("set-cookie") ?? "").toContain(
+      "better-auth.session_token=better-lti-session",
     );
     expect(betterAuthProvider.createLtiSession).toHaveBeenCalledWith(
       expect.anything(),
@@ -577,11 +591,11 @@ describe('LTI 1.3 core launch flow', () => {
     );
   });
 
-  it('redirects OIDC login initiation to issuer authorization endpoint with required parameters', async () => {
+  it("redirects OIDC login initiation to issuer authorization endpoint with required parameters", async () => {
     const env = createLtiEnv();
     const response = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
         deploymentId,
       )}`,
@@ -590,24 +604,24 @@ describe('LTI 1.3 core launch flow', () => {
     );
 
     expect(response.status).toBe(302);
-    const location = response.headers.get('location');
+    const location = response.headers.get("location");
     expect(location).not.toBeNull();
 
-    const redirectUrl = new URL(location ?? '');
+    const redirectUrl = new URL(location ?? "");
     expect(`${redirectUrl.origin}${redirectUrl.pathname}`).toBe(authorizationEndpoint);
-    expect(redirectUrl.searchParams.get('scope')).toBe('openid');
-    expect(redirectUrl.searchParams.get('response_type')).toBe('id_token');
-    expect(redirectUrl.searchParams.get('response_mode')).toBe('form_post');
-    expect(redirectUrl.searchParams.get('prompt')).toBe('none');
-    expect(redirectUrl.searchParams.get('client_id')).toBe(clientId);
-    expect(redirectUrl.searchParams.get('redirect_uri')).toBe('http://localhost/v1/lti/launch');
-    expect(redirectUrl.searchParams.get('state')).toBeTruthy();
-    expect(redirectUrl.searchParams.get('nonce')).toBeTruthy();
+    expect(redirectUrl.searchParams.get("scope")).toBe("openid");
+    expect(redirectUrl.searchParams.get("response_type")).toBe("id_token");
+    expect(redirectUrl.searchParams.get("response_mode")).toBe("form_post");
+    expect(redirectUrl.searchParams.get("prompt")).toBe("none");
+    expect(redirectUrl.searchParams.get("client_id")).toBe(clientId);
+    expect(redirectUrl.searchParams.get("redirect_uri")).toBe("http://localhost/v1/lti/launch");
+    expect(redirectUrl.searchParams.get("state")).toBeTruthy();
+    expect(redirectUrl.searchParams.get("nonce")).toBeTruthy();
   });
 
-  it('uses DB-backed issuer registrations when env registry is not configured', async () => {
+  it("uses DB-backed issuer registrations when env registry is not configured", async () => {
     const env = createEnv();
-    env.LTI_STATE_SIGNING_SECRET = 'test-lti-state-secret';
+    env.LTI_STATE_SIGNING_SECRET = "test-lti-state-secret";
     mockedListLtiIssuerRegistrations.mockResolvedValue([
       sampleLtiIssuerRegistration({
         issuer,
@@ -620,29 +634,29 @@ describe('LTI 1.3 core launch flow', () => {
 
     const response = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
       undefined,
       env,
     );
 
     expect(response.status).toBe(302);
-    const location = response.headers.get('location');
+    const location = response.headers.get("location");
     expect(location).not.toBeNull();
 
-    const redirectUrl = new URL(location ?? '');
+    const redirectUrl = new URL(location ?? "");
     expect(`${redirectUrl.origin}${redirectUrl.pathname}`).toBe(authorizationEndpoint);
-    expect(redirectUrl.searchParams.get('client_id')).toBe(clientId);
+    expect(redirectUrl.searchParams.get("client_id")).toBe(clientId);
   });
 
-  it('prefers DB issuer registrations over env defaults for the same issuer', async () => {
-    const dbClientId = 'db-client-777';
-    const dbAuthorizationEndpoint = 'https://canvas.example.edu/db/authorize_redirect';
+  it("prefers DB issuer registrations over env defaults for the same issuer", async () => {
+    const dbClientId = "db-client-777";
+    const dbAuthorizationEndpoint = "https://canvas.example.edu/db/authorize_redirect";
     const env = createLtiEnv();
     env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
       [issuer]: {
-        authorizationEndpoint: 'https://canvas.example.edu/env/authorize_redirect',
-        clientId: 'env-client-123',
+        authorizationEndpoint: "https://canvas.example.edu/env/authorize_redirect",
+        clientId: "env-client-123",
         tenantId,
         allowUnsignedIdToken: true,
       },
@@ -659,68 +673,68 @@ describe('LTI 1.3 core launch flow', () => {
 
     const response = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&client_id=${encodeURIComponent(dbClientId)}`,
       undefined,
       env,
     );
 
     expect(response.status).toBe(302);
-    const location = response.headers.get('location');
+    const location = response.headers.get("location");
     expect(location).not.toBeNull();
 
-    const redirectUrl = new URL(location ?? '');
+    const redirectUrl = new URL(location ?? "");
     expect(`${redirectUrl.origin}${redirectUrl.pathname}`).toBe(dbAuthorizationEndpoint);
-    expect(redirectUrl.searchParams.get('client_id')).toBe(dbClientId);
+    expect(redirectUrl.searchParams.get("client_id")).toBe(dbClientId);
   });
 
-  it('accepts an instructor launch and renders launch completion page', async () => {
+  it("accepts an instructor launch and renders launch completion page", async () => {
     const env = createLtiEnv();
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
         deploymentId,
       )}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        typ: 'JWT',
+        alg: "RS256",
+        typ: "JWT",
       },
       payload: {
         iss: issuer,
-        sub: 'user-123',
+        sub: "user-123",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-          id: 'resource-link-123',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-123",
         },
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -731,34 +745,34 @@ describe('LTI 1.3 core launch flow', () => {
     );
     const body = await response.text();
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=');
-    expect(body).toContain('LTI 1.3 launch complete');
-    expect(body).toContain('Instructor');
-    expect(body).toContain('issuer');
-    expect(body).toContain('LtiResourceLinkRequest');
-    expect(body).toContain('/tenants/tenant_123/learner/dashboard');
-    expect(body).toContain('/assets/ui/foundation.');
-    expect(body).toContain('/assets/ui/lti-pages.');
-    expect(body).not.toContain('.lti-launch__hero {');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=");
+    expect(body).toContain("LTI 1.3 launch complete");
+    expect(body).toContain("Instructor");
+    expect(body).toContain("issuer");
+    expect(body).toContain("LtiResourceLinkRequest");
+    expect(body).toContain("/tenants/tenant_123/learner/dashboard");
+    expect(body).toContain("/assets/ui/foundation.");
+    expect(body).toContain("/assets/ui/lti-pages.");
+    expect(body).not.toContain(".lti-launch__hero {");
     expect(mockedResolveLearnerProfileForIdentity).toHaveBeenCalledWith(fakeDb, {
       tenantId,
-      identityType: 'saml_subject',
-      identityValue: 'https://canvas.example.edu::user-123',
+      identityType: "saml_subject",
+      identityValue: "https://canvas.example.edu::user-123",
     });
     expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(
       fakeDb,
-      expect.stringContaining('@credtrail-lti.local'),
+      expect.stringContaining("@credtrail-lti.local"),
     );
     expect(mockedEnsureTenantMembership).toHaveBeenCalledWith(fakeDb, tenantId, linkedUserId);
     expect(mockedUpsertTenantMembershipRole).toHaveBeenCalledWith(fakeDb, {
       tenantId,
       userId: linkedUserId,
-      role: 'issuer',
+      role: "issuer",
     });
   });
 
-  it('pulls NRPS roster for instructor launch and renders bulk issuance view', async () => {
+  it("pulls NRPS roster for instructor launch and renders bulk issuance view", async () => {
     const env = createLtiEnv();
     const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
     env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
@@ -766,8 +780,8 @@ describe('LTI 1.3 core launch flow', () => {
         authorizationEndpoint,
         clientId,
         tenantId,
-        tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
-        clientSecret: 'canvas-secret',
+        tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
+        clientSecret: "canvas-secret",
         allowUnsignedIdToken: true,
       },
     });
@@ -776,13 +790,13 @@ describe('LTI 1.3 core launch flow', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            access_token: 'nrps-access-token',
-            token_type: 'Bearer',
+            access_token: "nrps-access-token",
+            token_type: "Bearer",
           }),
           {
             status: 200,
             headers: {
-              'content-type': 'application/json',
+              "content-type": "application/json",
             },
           },
         ),
@@ -790,90 +804,91 @@ describe('LTI 1.3 core launch flow', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            id: 'membership-container-001',
+            id: "membership-container-001",
             context: {
-              id: 'course-42',
+              id: "course-42",
             },
             members: [
               {
-                user_id: 'learner-001',
-                name: 'Learner One',
-                email: 'learner-one@example.edu',
-                lis_person_sourcedid: 'sourced-learner-001',
-                roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
-                status: 'Active',
+                user_id: "learner-001",
+                name: "Learner One",
+                email: "learner-one@example.edu",
+                lis_person_sourcedid: "sourced-learner-001",
+                roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"],
+                status: "Active",
               },
               {
-                user_id: 'teacher-001',
-                name: 'Instructor One',
-                roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+                user_id: "teacher-001",
+                name: "Instructor One",
+                roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"],
               },
             ],
           }),
           {
             status: 200,
             headers: {
-              'content-type': 'application/json',
+              "content-type": "application/json",
             },
           },
         ),
       );
-    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     try {
       const loginResponse = await app.request(
         `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-          'opaque-login-hint',
+          "opaque-login-hint",
         )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
           deploymentId,
         )}`,
         undefined,
         env,
       );
-      const loginLocation = loginResponse.headers.get('location');
-      const loginUrl = new URL(loginLocation ?? '');
-      const state = loginUrl.searchParams.get('state') ?? '';
-      const nonce = loginUrl.searchParams.get('nonce') ?? '';
+      const loginLocation = loginResponse.headers.get("location");
+      const loginUrl = new URL(loginLocation ?? "");
+      const state = loginUrl.searchParams.get("state") ?? "";
+      const nonce = loginUrl.searchParams.get("nonce") ?? "";
       const nowEpochSeconds = Math.floor(Date.now() / 1000);
       const idToken = compactJwsForTest({
         header: {
-          alg: 'RS256',
-          typ: 'JWT',
+          alg: "RS256",
+          typ: "JWT",
         },
         payload: {
           iss: issuer,
-          sub: 'instructor-001',
+          sub: "instructor-001",
           aud: clientId,
           exp: nowEpochSeconds + 300,
           iat: nowEpochSeconds - 10,
           nonce,
-          'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-          'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-          'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-          'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': rosterTargetLinkUri,
-          'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-            id: 'resource-link-nrps-1',
+          "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+          "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+          "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+          "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": rosterTargetLinkUri,
+          "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+            id: "resource-link-nrps-1",
           },
-          'https://purl.imsglobal.org/spec/lti/claim/context': {
-            id: 'course-42',
-            title: 'Course 42',
+          "https://purl.imsglobal.org/spec/lti/claim/context": {
+            id: "course-42",
+            title: "Course 42",
           },
-          'https://purl.imsglobal.org/spec/lti/claim/roles': [
-            'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+          "https://purl.imsglobal.org/spec/lti/claim/roles": [
+            "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
           ],
-          'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice': {
-            context_memberships_url: 'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
-            service_versions: ['2.0'],
+          "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
+            context_memberships_url:
+              "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
+            service_versions: ["2.0"],
           },
         },
       });
 
       const response = await app.request(
-        '/v1/lti/launch',
+        "/v1/lti/launch",
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'content-type': 'application/x-www-form-urlencoded',
+            "content-type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
             id_token: idToken,
@@ -885,72 +900,72 @@ describe('LTI 1.3 core launch flow', () => {
       const body = await response.text();
 
       expect(response.status).toBe(200);
-      expect(body).toContain('Bulk issuance view');
-      expect(body).toContain('Loaded 1 learner members from LMS NRPS roster.');
-      expect(body).toContain('badge_template_001');
-      expect(body).toContain('learner-one@example.edu');
+      expect(body).toContain("Bulk issuance view");
+      expect(body).toContain("Loaded 1 learner members from LMS NRPS roster.");
+      expect(body).toContain("badge_template_001");
+      expect(body).toContain("learner-one@example.edu");
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(fetchMock.mock.calls[0]?.[0]).toBe('https://canvas.example.edu/login/oauth2/token');
+      expect(fetchMock.mock.calls[0]?.[0]).toBe("https://canvas.example.edu/login/oauth2/token");
       expect(fetchMock.mock.calls[1]?.[0]).toBe(
-        'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
+        "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
       );
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('renders unavailable NRPS state when issuer token settings are missing', async () => {
+  it("renders unavailable NRPS state when issuer token settings are missing", async () => {
     const env = createLtiEnv();
     const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
         deploymentId,
       )}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        typ: 'JWT',
+        alg: "RS256",
+        typ: "JWT",
       },
       payload: {
         iss: issuer,
-        sub: 'instructor-002',
+        sub: "instructor-002",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': rosterTargetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-          id: 'resource-link-nrps-2',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": rosterTargetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-nrps-2",
         },
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
-        'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice': {
-          context_memberships_url: 'https://canvas.example.edu/api/lti/courses/42/names_and_roles',
-          service_versions: ['2.0'],
+        "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
+          context_memberships_url: "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
+          service_versions: ["2.0"],
         },
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -962,61 +977,61 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Bulk issuance view');
+    expect(body).toContain("Bulk issuance view");
     expect(body).toContain(
-      'NRPS roster unavailable: issuer registration is missing token endpoint and client secret.',
+      "NRPS roster unavailable: issuer registration is missing token endpoint and client secret.",
     );
   });
 
-  it('accepts a learner launch and links local account session with email claim', async () => {
+  it("accepts a learner launch and links local account session with email claim", async () => {
     const env = createLtiEnv();
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        typ: 'JWT',
+        alg: "RS256",
+        typ: "JWT",
       },
       payload: {
         iss: issuer,
-        sub: 'user-456',
+        sub: "user-456",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        email: 'Learner@Example.edu',
-        'https://purl.imsglobal.org/spec/lti/claim/lis': {
-          person_sourcedid: 'sourced-learner-456',
+        email: "Learner@Example.edu",
+        "https://purl.imsglobal.org/spec/lti/claim/lis": {
+          person_sourcedid: "sourced-learner-456",
         },
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-          id: 'resource-link-456',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-456",
         },
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner",
         ],
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -1028,71 +1043,71 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('Learner');
-    expect(body).toContain('viewer');
-    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, 'Learner@Example.edu');
+    expect(body).toContain("Learner");
+    expect(body).toContain("viewer");
+    expect(mockedUpsertUserByEmail).toHaveBeenCalledWith(fakeDb, "Learner@Example.edu");
     expect(mockedAddLearnerIdentityAlias).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
         tenantId,
-        learnerProfileId: 'lpr_123',
-        identityType: 'sourced_id',
-        identityValue: 'sourced-learner-456',
+        learnerProfileId: "lpr_123",
+        identityType: "sourced_id",
+        identityValue: "sourced-learner-456",
       }),
     );
     expect(mockedUpsertTenantMembershipRole).not.toHaveBeenCalled();
   });
 
-  it('accepts instructor deep linking launch and renders badge template placement forms', async () => {
+  it("accepts instructor deep linking launch and renders badge template placement forms", async () => {
     const env = createLtiEnv();
-    const deepLinkReturnUrl = 'https://canvas.example.edu/api/lti/deep_link_return';
+    const deepLinkReturnUrl = "https://canvas.example.edu/api/lti/deep_link_return";
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
         deploymentId,
       )}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
-        typ: 'JWT',
+        alg: "RS256",
+        typ: "JWT",
       },
       payload: {
         iss: issuer,
-        sub: 'user-999',
+        sub: "user-999",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiDeepLinkingRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiDeepLinkingRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
-        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
+        "https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings": {
           deep_link_return_url: deepLinkReturnUrl,
-          accept_types: ['ltiResourceLink'],
-          data: 'opaque-deep-link-state',
+          accept_types: ["ltiResourceLink"],
+          data: "opaque-deep-link-state",
         },
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -1104,25 +1119,25 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(response.headers.get('set-cookie')).toContain('better-auth.session_token=');
-    expect(body).toContain('Select badge template placement');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=");
+    expect(body).toContain("Select badge template placement");
     expect(body).toContain(deepLinkReturnUrl);
     expect(body).toContain('name="JWT"');
-    expect(body).toContain('TypeScript Foundations');
-    expect(body).toContain('badgeTemplateId=badge_template_001');
-    expect(body).toContain('/assets/ui/foundation.');
-    expect(body).toContain('/assets/ui/lti-pages.');
+    expect(body).toContain("TypeScript Foundations");
+    expect(body).toContain("badgeTemplateId=badge_template_001");
+    expect(body).toContain("/assets/ui/foundation.");
+    expect(body).toContain("/assets/ui/lti-pages.");
     const jwtMatch = /name="JWT" value="([^"]+)"/.exec(body);
     expect(jwtMatch).not.toBeNull();
-    const jwtValue = jwtMatch?.[1] ?? '';
-    const jwtSegments = jwtValue.split('.');
+    const jwtValue = jwtMatch?.[1] ?? "";
+    const jwtSegments = jwtValue.split(".");
     expect(jwtSegments).toHaveLength(3);
-    const header = parseBase64UrlJsonSegmentForTest(jwtSegments[0] ?? '');
-    const payload = parseBase64UrlJsonSegmentForTest(jwtSegments[1] ?? '');
-    expect(header.alg).toBe('none');
-    expect(payload['https://purl.imsglobal.org/spec/lti/claim/message_type']).toBe(
-      'LtiDeepLinkingResponse',
+    const header = parseBase64UrlJsonSegmentForTest(jwtSegments[0] ?? "");
+    const payload = parseBase64UrlJsonSegmentForTest(jwtSegments[1] ?? "");
+    expect(header.alg).toBe("none");
+    expect(payload["https://purl.imsglobal.org/spec/lti/claim/message_type"]).toBe(
+      "LtiDeepLinkingResponse",
     );
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId,
@@ -1130,51 +1145,51 @@ describe('LTI 1.3 core launch flow', () => {
     });
   });
 
-  it('rejects deep linking launch for learner role', async () => {
+  it("rejects deep linking launch for learner role", async () => {
     const env = createLtiEnv();
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
+        alg: "RS256",
       },
       payload: {
         iss: issuer,
-        sub: 'user-learner-deep-link',
+        sub: "user-learner-deep-link",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiDeepLinkingRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/roles': [
-          'http://purl.imsglobal.org/vocab/lis/v2/membership#Learner',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiDeepLinkingRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner",
         ],
-        'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings': {
-          deep_link_return_url: 'https://canvas.example.edu/api/lti/deep_link_return',
-          accept_types: ['ltiResourceLink'],
+        "https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings": {
+          deep_link_return_url: "https://canvas.example.edu/api/lti/deep_link_return",
+          accept_types: ["ltiResourceLink"],
         },
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -1186,53 +1201,53 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toContain('requires instructor role');
+    expect(body.error).toContain("requires instructor role");
     expect(mockedListBadgeTemplates).not.toHaveBeenCalled();
   });
 
-  it('rejects launch when unsigned-id-token mode is disabled for issuer config', async () => {
+  it("rejects launch when unsigned-id-token mode is disabled for issuer config", async () => {
     const env = createLtiEnv({
       allowUnsignedIdToken: false,
     });
     const loginResponse = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-        'opaque-login-hint',
+        "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get('location');
-    const loginUrl = new URL(loginLocation ?? '');
-    const state = loginUrl.searchParams.get('state') ?? '';
-    const nonce = loginUrl.searchParams.get('nonce') ?? '';
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
-        alg: 'RS256',
+        alg: "RS256",
       },
       payload: {
         iss: issuer,
-        sub: 'user-789',
+        sub: "user-789",
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
         nonce,
-        'https://purl.imsglobal.org/spec/lti/claim/deployment_id': deploymentId,
-        'https://purl.imsglobal.org/spec/lti/claim/message_type': 'LtiResourceLinkRequest',
-        'https://purl.imsglobal.org/spec/lti/claim/version': '1.3.0',
-        'https://purl.imsglobal.org/spec/lti/claim/target_link_uri': targetLinkUri,
-        'https://purl.imsglobal.org/spec/lti/claim/resource_link': {
-          id: 'resource-link-789',
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-789",
         },
       },
     });
 
     const response = await app.request(
-      '/v1/lti/launch',
+      "/v1/lti/launch",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'content-type': 'application/x-www-form-urlencoded',
+          "content-type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
           id_token: idToken,
@@ -1244,6 +1259,6 @@ describe('LTI 1.3 core launch flow', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(501);
-    expect(body.error).toContain('requires signature verification');
+    expect(body.error).toContain("requires signature verification");
   });
 });

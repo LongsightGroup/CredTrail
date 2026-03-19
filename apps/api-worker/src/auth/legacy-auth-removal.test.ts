@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync } from "node:fs";
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -20,9 +20,9 @@ import {
   findAuthIdentityLinkByCredtrailUserId,
   upsertUserByEmail,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { BetterAuthResolvedSession } from './better-auth-adapter';
-import { createBetterAuthProvider } from './better-auth-adapter';
+} from "@credtrail/db";
+import type { BetterAuthResolvedSession } from "./better-auth-adapter";
+import { createBetterAuthProvider } from "./better-auth-adapter";
 
 interface FakeBindings {
   APP_ENV?: string;
@@ -34,7 +34,9 @@ interface FakeContext {
 
 const mockedCreateAuthIdentityLink = vi.mocked(createAuthIdentityLink);
 const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByAuthUserId);
-const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(findAuthIdentityLinkByCredtrailUserId);
+const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(
+  findAuthIdentityLinkByCredtrailUserId,
+);
 const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 
 const fakeDb = {
@@ -55,14 +57,14 @@ const sampleLink = (overrides?: {
   updatedAt: string;
 } => {
   return {
-    id: 'ail_123',
-    authSystem: 'better_auth',
-    authUserId: overrides?.authUserId ?? 'ba_usr_123',
+    id: "ail_123",
+    authSystem: "better_auth",
+    authUserId: overrides?.authUserId ?? "ba_usr_123",
     authAccountId: null,
-    credtrailUserId: overrides?.credtrailUserId ?? 'usr_123',
+    credtrailUserId: overrides?.credtrailUserId ?? "usr_123",
     emailSnapshot: null,
-    createdAt: '2026-03-18T18:00:00.000Z',
-    updatedAt: '2026-03-18T18:00:00.000Z',
+    createdAt: "2026-03-18T18:00:00.000Z",
+    updatedAt: "2026-03-18T18:00:00.000Z",
   };
 };
 
@@ -70,11 +72,11 @@ const sampleBetterAuthSession = (
   overrides?: Partial<BetterAuthResolvedSession>,
 ): BetterAuthResolvedSession => {
   return {
-    sessionId: 'ba_ses_lti_123',
+    sessionId: "ba_ses_lti_123",
     accountId: null,
-    expiresAt: '2026-03-25T18:00:00.000Z',
+    expiresAt: "2026-03-25T18:00:00.000Z",
     user: {
-      id: 'ba_usr_123',
+      id: "ba_usr_123",
       email: null,
       emailVerified: false,
     },
@@ -89,40 +91,42 @@ beforeEach(() => {
   mockedUpsertUserByEmail.mockReset();
 });
 
-describe('legacy auth removal cleanup contract', () => {
-  it('does not expose a composite auth provider helper once runtime fallback is removed', async () => {
-    const adapterModule = await import('./better-auth-adapter');
+describe("legacy auth removal cleanup contract", () => {
+  it("does not expose a composite auth provider helper once runtime fallback is removed", async () => {
+    const adapterModule = await import("./better-auth-adapter");
 
-    expect(adapterModule).not.toHaveProperty('createCompositeAuthProvider');
+    expect(adapterModule).not.toHaveProperty("createCompositeAuthProvider");
   });
 
-  it('describes hosted auth as Better Auth-backed in the app README', () => {
-    const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8');
+  it("describes hosted auth as Better Auth-backed in the app README", () => {
+    const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
 
-    expect(readme).toContain('Better Auth-backed passwordless email login');
-    expect(readme).toContain('Better Auth-backed institutional sign-in');
-    expect(readme).toContain('Better Auth sessions with tenant-scoped authorization');
-    expect(readme).not.toContain('Magic link authentication');
-    expect(readme).not.toContain('Session management - Server-side sessions with secure cookie handling');
+    expect(readme).toContain("Better Auth-backed passwordless email login");
+    expect(readme).toContain("Better Auth-backed institutional sign-in");
+    expect(readme).toContain("Better Auth sessions with tenant-scoped authorization");
+    expect(readme).not.toContain("Magic link authentication");
+    expect(readme).not.toContain(
+      "Session management - Server-side sessions with secure cookie handling",
+    );
   });
 
-  it('keeps active auth runtime sources free of legacy auth helper symbols', () => {
+  it("keeps active auth runtime sources free of legacy auth helper symbols", () => {
     const source = [
-      readFileSync(new URL('./better-auth-adapter.ts', import.meta.url), 'utf8'),
-      readFileSync(new URL('../index.ts', import.meta.url), 'utf8'),
-      readFileSync(new URL('../../../../packages/db/src/index.ts', import.meta.url), 'utf8'),
-    ].join('\n');
+      readFileSync(new URL("./better-auth-adapter.ts", import.meta.url), "utf8"),
+      readFileSync(new URL("../index.ts", import.meta.url), "utf8"),
+      readFileSync(new URL("../../../../packages/db/src/index.ts", import.meta.url), "utf8"),
+    ].join("\n");
 
     expect(source).not.toMatch(
       /createLegacyAuthProvider|resolveLegacySessionRecord|createCompositeAuthProvider|credtrail_session|legacy_magic_link|legacy_lti|createMagicLinkToken|findMagicLinkTokenByHash|markMagicLinkTokenUsed|createSession|findActiveSessionByHash|touchSession|revokeSessionByHash/,
     );
   });
 
-  it('creates Better Auth-backed LTI sessions without runtime fallback plumbing', async () => {
+  it("creates Better Auth-backed LTI sessions without runtime fallback plumbing", async () => {
     mockedFindAuthIdentityLinkByAuthUserId.mockResolvedValue(
       sampleLink({
-        authUserId: 'ba_usr_123',
-        credtrailUserId: 'usr_123',
+        authUserId: "ba_usr_123",
+        credtrailUserId: "usr_123",
       }),
     );
 
@@ -147,25 +151,25 @@ describe('legacy auth removal cleanup contract', () => {
 
     const context = { env: {} } satisfies FakeContext;
     const principal = await provider.createLtiSession(context, {
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
+      tenantId: "tenant_123",
+      userId: "usr_123",
     });
 
     expect(createLtiSession).toHaveBeenCalledWith(context, {
-      tenantId: 'tenant_123',
-      userId: 'usr_123',
+      tenantId: "tenant_123",
+      userId: "usr_123",
     });
     expect(principal).toEqual({
-      userId: 'usr_123',
-      authSessionId: 'ba_ses_lti_123',
-      authMethod: 'better_auth',
-      expiresAt: '2026-03-25T18:00:00.000Z',
+      userId: "usr_123",
+      authSessionId: "ba_ses_lti_123",
+      authMethod: "better_auth",
+      expiresAt: "2026-03-25T18:00:00.000Z",
     });
     expect(cacheAuthenticatedPrincipal).toHaveBeenCalledWith(context, {
-      userId: 'usr_123',
-      authSessionId: 'ba_ses_lti_123',
-      authMethod: 'better_auth',
-      expiresAt: '2026-03-25T18:00:00.000Z',
+      userId: "usr_123",
+      authSessionId: "ba_ses_lti_123",
+      authMethod: "better_auth",
+      expiresAt: "2026-03-25T18:00:00.000Z",
     });
   });
 });

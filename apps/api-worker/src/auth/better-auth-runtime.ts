@@ -4,35 +4,35 @@ import {
   findAuthIdentityLinkByCredtrailUserId,
   findUserById,
   type SqlDatabase,
-} from '@credtrail/db';
-import { betterAuth } from 'better-auth';
+} from "@credtrail/db";
+import { betterAuth } from "better-auth";
 import {
   createAdapterFactory,
   type CleanedWhere,
   type CustomAdapter,
   type DBAdapterInstance,
   type JoinConfig,
-} from 'better-auth/adapters';
-import { magicLink, twoFactor } from 'better-auth/plugins';
-import { genericOAuth, type GenericOAuthConfig } from 'better-auth/plugins/generic-oauth';
-import type { BetterAuthRuntimeConfig } from './better-auth-config';
+} from "better-auth/adapters";
+import { magicLink, twoFactor } from "better-auth/plugins";
+import { genericOAuth, type GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
+import type { BetterAuthRuntimeConfig } from "./better-auth-config";
 
-const BETTER_AUTH_BASE_PATH = '/api/auth';
-const REQUESTED_TENANT_COOKIE_NAME = 'credtrail_requested_tenant';
-const HOSTED_MAGIC_LINK_TOKEN_PREFIX = 'ctml';
+const BETTER_AUTH_BASE_PATH = "/api/auth";
+const REQUESTED_TENANT_COOKIE_NAME = "credtrail_requested_tenant";
+const HOSTED_MAGIC_LINK_TOKEN_PREFIX = "ctml";
 
-type SupportedAuthModel = 'user' | 'session' | 'account' | 'verification' | 'twoFactor';
+type SupportedAuthModel = "user" | "session" | "account" | "verification" | "twoFactor";
 
 const MODEL_TABLES: Record<SupportedAuthModel, string> = {
-  user: 'auth.user',
-  session: 'auth.session',
-  account: 'auth.account',
-  verification: 'auth.verification',
-  twoFactor: 'auth.two_factor',
+  user: "auth.user",
+  session: "auth.session",
+  account: "auth.account",
+  verification: "auth.verification",
+  twoFactor: "auth.two_factor",
 };
 
 const quoteIdentifier = (identifier: string): string => {
-  const parts = identifier.split('.');
+  const parts = identifier.split(".");
 
   for (const part of parts) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(part)) {
@@ -40,7 +40,7 @@ const quoteIdentifier = (identifier: string): string => {
     }
   }
 
-  return parts.map((part) => `"${part}"`).join('.');
+  return parts.map((part) => `"${part}"`).join(".");
 };
 
 const tableNameForModel = (model: string): string => {
@@ -109,7 +109,7 @@ const whereClauseToSql = (
 } => {
   if (where === undefined || where.length === 0) {
     return {
-      sql: '',
+      sql: "",
       params: [],
     };
   }
@@ -118,40 +118,39 @@ const whereClauseToSql = (
   const params: unknown[] = [];
 
   for (const clause of where) {
-    const connector =
-      fragments.length === 0 ? '' : clause.connector === 'OR' ? ' OR ' : ' AND ';
+    const connector = fragments.length === 0 ? "" : clause.connector === "OR" ? " OR " : " AND ";
     const field = columnName(model, clause.field);
 
     switch (clause.operator) {
-      case 'in':
-      case 'not_in': {
+      case "in":
+      case "not_in": {
         const values = Array.isArray(clause.value) ? clause.value : [clause.value];
 
         if (values.length === 0) {
-          fragments.push(`${connector}${clause.operator === 'in' ? 'FALSE' : 'TRUE'}`);
+          fragments.push(`${connector}${clause.operator === "in" ? "FALSE" : "TRUE"}`);
           continue;
         }
 
-        const placeholders = values.map(() => '?').join(', ');
+        const placeholders = values.map(() => "?").join(", ");
         fragments.push(
-          `${connector}${field} ${clause.operator === 'in' ? 'IN' : 'NOT IN'} (${placeholders})`,
+          `${connector}${field} ${clause.operator === "in" ? "IN" : "NOT IN"} (${placeholders})`,
         );
         params.push(...values.map(normalizeValue));
         continue;
       }
-      case 'contains':
+      case "contains":
         fragments.push(`${connector}${field} LIKE ?`);
         params.push(`%${String(clause.value)}%`);
         continue;
-      case 'starts_with':
+      case "starts_with":
         fragments.push(`${connector}${field} LIKE ?`);
         params.push(`${String(clause.value)}%`);
         continue;
-      case 'ends_with':
+      case "ends_with":
         fragments.push(`${connector}${field} LIKE ?`);
         params.push(`%${String(clause.value)}`);
         continue;
-      case 'ne':
+      case "ne":
         if (clause.value === null) {
           fragments.push(`${connector}${field} IS NOT NULL`);
         } else {
@@ -159,23 +158,23 @@ const whereClauseToSql = (
           params.push(normalizeValue(clause.value));
         }
         continue;
-      case 'lt':
-      case 'lte':
-      case 'gt':
-      case 'gte': {
+      case "lt":
+      case "lte":
+      case "gt":
+      case "gte": {
         const operator =
-          clause.operator === 'lt'
-            ? '<'
-            : clause.operator === 'lte'
-              ? '<='
-              : clause.operator === 'gt'
-                ? '>'
-                : '>=';
+          clause.operator === "lt"
+            ? "<"
+            : clause.operator === "lte"
+              ? "<="
+              : clause.operator === "gt"
+                ? ">"
+                : ">=";
         fragments.push(`${connector}${field} ${operator} ?`);
         params.push(normalizeValue(clause.value));
         continue;
       }
-      case 'eq':
+      case "eq":
       default:
         if (clause.value === null) {
           fragments.push(`${connector}${field} IS NULL`);
@@ -188,7 +187,7 @@ const whereClauseToSql = (
   }
 
   return {
-    sql: ` WHERE ${fragments.join('')}`,
+    sql: ` WHERE ${fragments.join("")}`,
     params,
   };
 };
@@ -199,10 +198,12 @@ const listRows = async (
     model: string;
     where?: CleanedWhere[] | undefined;
     select?: string[] | undefined;
-    sortBy?: {
-      field: string;
-      direction: 'asc' | 'desc';
-    } | undefined;
+    sortBy?:
+      | {
+          field: string;
+          direction: "asc" | "desc";
+        }
+      | undefined;
     limit?: number | undefined;
     offset?: number | undefined;
   },
@@ -211,15 +212,15 @@ const listRows = async (
     input.select !== undefined && input.select.length > 0
       ? input.select
           .map((field) => `${columnName(input.model, field)} AS ${quoteIdentifier(field)}`)
-          .join(', ')
-      : '*';
+          .join(", ")
+      : "*";
   const whereClause = whereClauseToSql(input.model, input.where);
   const orderBySql =
     input.sortBy === undefined
-      ? ''
+      ? ""
       : ` ORDER BY ${columnName(input.model, input.sortBy.field)} ${input.sortBy.direction.toUpperCase()}`;
-  const limitSql = input.limit === undefined ? '' : ' LIMIT ?';
-  const offsetSql = input.offset === undefined ? '' : ' OFFSET ?';
+  const limitSql = input.limit === undefined ? "" : " LIMIT ?";
+  const offsetSql = input.offset === undefined ? "" : " OFFSET ?";
   const params = [...whereClause.params];
 
   if (input.limit !== undefined) {
@@ -231,7 +232,9 @@ const listRows = async (
   }
 
   const result = await db
-    .prepare(`SELECT ${selectSql} FROM ${tableNameForModel(input.model)}${whereClause.sql}${orderBySql}${limitSql}${offsetSql}`)
+    .prepare(
+      `SELECT ${selectSql} FROM ${tableNameForModel(input.model)}${whereClause.sql}${orderBySql}${limitSql}${offsetSql}`,
+    )
     .bind(...params)
     .all<Record<string, unknown>>();
 
@@ -256,7 +259,7 @@ const attachJoinedRows = async (
 
     if (baseValues.length === 0) {
       for (const row of outputRows) {
-        row[joinModel] = joinConfig.relation === 'one-to-one' ? null : [];
+        row[joinModel] = joinConfig.relation === "one-to-one" ? null : [];
       }
       continue;
     }
@@ -267,13 +270,13 @@ const attachJoinedRows = async (
       where: [
         {
           field: joinConfig.on.to,
-          operator: 'in',
+          operator: "in",
           value: joinValues,
-          connector: 'AND',
+          connector: "AND",
         },
       ],
       limit:
-        joinConfig.relation === 'one-to-one'
+        joinConfig.relation === "one-to-one"
           ? undefined
           : (joinConfig.limit ?? 100) * Math.max(baseValues.length, 1),
     });
@@ -284,7 +287,7 @@ const attachJoinedRows = async (
       );
 
       row[joinModel] =
-        joinConfig.relation === 'one-to-one'
+        joinConfig.relation === "one-to-one"
           ? (relatedRows[0] ?? null)
           : relatedRows.slice(0, joinConfig.limit ?? 100);
     }
@@ -299,13 +302,11 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
       const dataRecord = data as Record<string, unknown>;
       const keys = Object.keys(dataRecord);
       const values = keys.map((key) => dataRecord[key]);
-      const columnsSql = keys.map((key) => columnName(model, key)).join(', ');
-      const placeholders = keys.map(() => '?').join(', ');
+      const columnsSql = keys.map((key) => columnName(model, key)).join(", ");
+      const placeholders = keys.map(() => "?").join(", ");
 
       await db
-        .prepare(
-          `INSERT INTO ${tableNameForModel(model)} (${columnsSql}) VALUES (${placeholders})`,
-        )
+        .prepare(`INSERT INTO ${tableNameForModel(model)} (${columnsSql}) VALUES (${placeholders})`)
         .bind(...values.map(normalizeValue))
         .run();
 
@@ -330,9 +331,12 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         return (rows[0] ?? null) as never;
       }
 
-      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(', ');
+      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(", ");
       const whereClause = whereClauseToSql(model, where);
-      const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
+      const params = [
+        ...keys.map((key) => normalizeValue(updateRecord[key])),
+        ...whereClause.params,
+      ];
 
       await db
         .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
@@ -359,9 +363,12 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
         return matchingRows.length;
       }
 
-      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(', ');
+      const assignments = keys.map((key) => `${columnName(model, key)} = ?`).join(", ");
       const whereClause = whereClauseToSql(model, where);
-      const params = [...keys.map((key) => normalizeValue(updateRecord[key])), ...whereClause.params];
+      const params = [
+        ...keys.map((key) => normalizeValue(updateRecord[key])),
+        ...whereClause.params,
+      ];
 
       await db
         .prepare(`UPDATE ${tableNameForModel(model)} SET ${assignments}${whereClause.sql}`)
@@ -445,8 +452,8 @@ const createBetterAuthCustomAdapter = (db: SqlDatabase): CustomAdapter => {
 export const createBetterAuthDatabaseAdapter = (db: SqlDatabase): DBAdapterInstance => {
   return createAdapterFactory({
     config: {
-      adapterId: 'credtrail-sql',
-      adapterName: 'CredTrail SQL Better Auth Adapter',
+      adapterId: "credtrail-sql",
+      adapterName: "CredTrail SQL Better Auth Adapter",
       usePlural: false,
       supportsBooleans: true,
       supportsDates: false,
@@ -460,18 +467,18 @@ export const createBetterAuthDatabaseAdapter = (db: SqlDatabase): DBAdapterInsta
 
 const encodeBase64Url = (value: string): string => {
   const bytes = new TextEncoder().encode(value);
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const decodeBase64Url = (value: string): string => {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = `${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`;
   const raw = atob(padded);
   const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
@@ -483,7 +490,7 @@ export const buildHostedMagicLinkToken = (tenantId: string): string => {
       tenantId,
     }),
   );
-  const nonce = crypto.randomUUID().replace(/-/g, '');
+  const nonce = crypto.randomUUID().replace(/-/g, "");
 
   return `${HOSTED_MAGIC_LINK_TOKEN_PREFIX}.${payload}.${nonce}`;
 };
@@ -493,7 +500,7 @@ export const parseHostedMagicLinkToken = (
 ): {
   tenantId: string;
 } | null => {
-  const [prefix, payload] = token.split('.');
+  const [prefix, payload] = token.split(".");
 
   if (prefix !== HOSTED_MAGIC_LINK_TOKEN_PREFIX || payload === undefined) {
     return null;
@@ -504,7 +511,7 @@ export const parseHostedMagicLinkToken = (
       tenantId?: unknown;
     };
 
-    if (typeof parsed.tenantId !== 'string' || parsed.tenantId.trim().length === 0) {
+    if (typeof parsed.tenantId !== "string" || parsed.tenantId.trim().length === 0) {
       return null;
     }
 
@@ -517,7 +524,7 @@ export const parseHostedMagicLinkToken = (
 };
 
 export const tenantIdFromNextPath = (nextPath: string | undefined): string | null => {
-  if (!nextPath?.startsWith('/')) {
+  if (!nextPath?.startsWith("/")) {
     return null;
   }
 
@@ -531,9 +538,9 @@ export const buildHostedMagicLinkUrl = (input: {
   token: string;
   nextPath: string;
 }): string => {
-  const url = new URL('/auth/magic-link/verify', input.baseURL);
-  url.searchParams.set('token', input.token);
-  url.searchParams.set('next', input.nextPath);
+  const url = new URL("/auth/magic-link/verify", input.baseURL);
+  url.searchParams.set("token", input.token);
+  url.searchParams.set("next", input.nextPath);
   return url.toString();
 };
 
@@ -588,7 +595,7 @@ const createBetterAuthUser = async (input: {
   db: SqlDatabase;
   email: string | null;
 }): Promise<BetterAuthDatabaseUserRecord> => {
-  const userId = `ba_usr_${crypto.randomUUID().replace(/-/g, '')}`;
+  const userId = `ba_usr_${crypto.randomUUID().replace(/-/g, "")}`;
   const email = normalizedEmail(input.email);
 
   await input.db
@@ -636,7 +643,7 @@ const resolveBetterAuthUser = async (input: {
   const credtrailUser = await findUserById(input.db, input.credtrailUserId);
 
   if (credtrailUser === null) {
-    throw new Error('CredTrail user not found for Better Auth session creation');
+    throw new Error("CredTrail user not found for Better Auth session creation");
   }
 
   const matchedAuthUser =
@@ -714,8 +721,8 @@ export const createBetterAuthSessionForCredtrailUser = async (input: {
     runtimeConfig: input.runtimeConfig,
     credtrailUserId: input.credtrailUserId,
   });
-  const sessionId = `ba_ses_${crypto.randomUUID().replace(/-/g, '')}`;
-  const sessionToken = crypto.randomUUID().replace(/-/g, '');
+  const sessionId = `ba_ses_${crypto.randomUUID().replace(/-/g, "")}`;
+  const sessionToken = crypto.randomUUID().replace(/-/g, "");
   const expiresAt = new Date(
     Date.now() + input.runtimeConfig.session.expiresInSeconds * 1000,
   ).toISOString();
@@ -747,7 +754,7 @@ export const createBetterAuthSessionForCredtrailUser = async (input: {
   const session = await findBetterAuthSessionByToken(input.db, sessionToken);
 
   if (session === null) {
-    throw new Error('Better Auth session creation succeeded but the session could not be loaded');
+    throw new Error("Better Auth session creation succeeded but the session could not be loaded");
   }
 
   return {
@@ -762,19 +769,9 @@ export const createCredtrailBetterAuth = (input: {
   magicLinkTtlSeconds: number;
   generateMagicLinkToken?: (() => string) | undefined;
   oauthProviders?: readonly GenericOAuthConfig[] | undefined;
-  sendMagicLink: (data: {
-    email: string;
-    token: string;
-    url: string;
-  }) => Promise<void>;
-  sendResetPassword?: (
-    data: {
-      email: string;
-      url: string;
-      token: string;
-    },
-  ) => Promise<void>;
-}): ReturnType<typeof betterAuth> => {
+  sendMagicLink: (data: { email: string; token: string; url: string }) => Promise<void>;
+  sendResetPassword?: (data: { email: string; url: string; token: string }) => Promise<void>;
+}) => {
   const plugins: (
     | ReturnType<typeof magicLink>
     | ReturnType<typeof genericOAuth>
@@ -783,7 +780,7 @@ export const createCredtrailBetterAuth = (input: {
     magicLink({
       expiresIn: input.magicLinkTtlSeconds,
       generateToken: () => {
-        return input.generateMagicLinkToken?.() ?? crypto.randomUUID().replace(/-/g, '');
+        return input.generateMagicLinkToken?.() ?? crypto.randomUUID().replace(/-/g, "");
       },
       sendMagicLink: async ({ email, token, url }) => {
         await input.sendMagicLink({
@@ -832,10 +829,10 @@ export const createCredtrailBetterAuth = (input: {
       session_token: {
         name: input.runtimeConfig.session.cookieName,
         attributes: {
-          path: '/',
-          sameSite: 'lax',
+          path: "/",
+          sameSite: "lax",
           httpOnly: true,
-          secure: input.runtimeConfig.baseURL.startsWith('https://'),
+          secure: input.runtimeConfig.baseURL.startsWith("https://"),
         },
       },
     },

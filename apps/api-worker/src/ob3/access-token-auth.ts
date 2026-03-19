@@ -1,5 +1,5 @@
-import { findActiveOAuthAccessTokenByHash, type SqlDatabase } from '@credtrail/db';
-import { parseBearerAuthorizationHeader, splitSpaceDelimited } from './oauth-utils';
+import { findActiveOAuthAccessTokenByHash, type SqlDatabase } from "@credtrail/db";
+import { parseBearerAuthorizationHeader, splitSpaceDelimited } from "./oauth-utils";
 
 export interface Ob3AccessTokenContext {
   userId: string;
@@ -39,10 +39,10 @@ export const createOb3AccessTokenAuthenticator = <
     context: ContextType,
     requiredScope: string,
   ): Promise<Ob3AccessTokenContext | Response> => {
-    const bearerToken = parseBearerAuthorizationHeader(context.req.header('authorization'));
+    const bearerToken = parseBearerAuthorizationHeader(context.req.header("authorization"));
 
     if (bearerToken === null) {
-      return input.ob3ErrorJson(context, 401, 'Bearer access token is required', {
+      return input.ob3ErrorJson(context, 401, "Bearer access token is required", {
         includeWwwAuthenticate: true,
       });
     }
@@ -54,7 +54,7 @@ export const createOb3AccessTokenAuthenticator = <
     });
 
     if (accessToken === null) {
-      return input.ob3ErrorJson(context, 401, 'Access token is invalid or expired', {
+      return input.ob3ErrorJson(context, 401, "Access token is invalid or expired", {
         includeWwwAuthenticate: true,
       });
     }
@@ -62,7 +62,7 @@ export const createOb3AccessTokenAuthenticator = <
     const scopes = splitSpaceDelimited(accessToken.scope);
 
     if (!scopes.includes(requiredScope)) {
-      return input.ob3ErrorJson(context, 403, 'Access token does not grant the required scope');
+      return input.ob3ErrorJson(context, 403, "Access token does not grant the required scope");
     }
 
     return {

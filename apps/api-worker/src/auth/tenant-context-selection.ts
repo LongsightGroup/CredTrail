@@ -1,6 +1,6 @@
-import type { AccessibleTenantContextRecord, TenantMembershipRole } from '@credtrail/db';
-import type { RequestedTenantContext } from './auth-context';
-import { tenantIdFromNextPath } from './better-auth-runtime';
+import type { AccessibleTenantContextRecord, TenantMembershipRole } from "@credtrail/db";
+import type { RequestedTenantContext } from "./auth-context";
+import { tenantIdFromNextPath } from "./better-auth-runtime";
 
 export interface AccessibleTenantContextView extends AccessibleTenantContextRecord {
   preferredPath: string;
@@ -8,21 +8,21 @@ export interface AccessibleTenantContextView extends AccessibleTenantContextReco
 
 export type TenantContextSelectionResult =
   | {
-      kind: 'redirect';
+      kind: "redirect";
       tenantId: string;
       location: string;
     }
   | {
-      kind: 'chooser';
+      kind: "chooser";
       location: string;
     }
   | {
-      kind: 'unavailable';
-      reason: 'no_access' | 'requested_tenant_forbidden';
+      kind: "unavailable";
+      reason: "no_access" | "requested_tenant_forbidden";
     };
 
 const isAdminLandingRole = (role: TenantMembershipRole): boolean => {
-  return role === 'owner' || role === 'admin';
+  return role === "owner" || role === "admin";
 };
 
 export const preferredTenantLandingPath = (
@@ -46,14 +46,14 @@ export const toAccessibleTenantContextViews = (
 };
 
 export const buildOrganizationsPath = (nextPath?: string | null): string => {
-  const normalizedNextPath = nextPath?.trim() ?? '';
+  const normalizedNextPath = nextPath?.trim() ?? "";
 
-  if (!normalizedNextPath.startsWith('/')) {
-    return '/account/organizations';
+  if (!normalizedNextPath.startsWith("/")) {
+    return "/account/organizations";
   }
 
-  const url = new URL('/account/organizations', 'https://credtrail.local');
-  url.searchParams.set('next', normalizedNextPath);
+  const url = new URL("/account/organizations", "https://credtrail.local");
+  url.searchParams.set("next", normalizedNextPath);
   return `${url.pathname}${url.search}`;
 };
 
@@ -68,10 +68,10 @@ export const resolveChosenTenantLocation = (input: {
     return null;
   }
 
-  const normalizedNextPath = input.nextPath?.trim() ?? '';
+  const normalizedNextPath = input.nextPath?.trim() ?? "";
   const nextTenantId = tenantIdFromNextPath(normalizedNextPath);
 
-  if (normalizedNextPath.startsWith('/') && nextTenantId === context.tenantId) {
+  if (normalizedNextPath.startsWith("/") && nextTenantId === context.tenantId) {
     return normalizedNextPath;
   }
 
@@ -85,12 +85,12 @@ export const resolveTenantContextSelection = (input: {
 }): TenantContextSelectionResult => {
   if (input.contexts.length === 0) {
     return {
-      kind: 'unavailable',
-      reason: 'no_access',
+      kind: "unavailable",
+      reason: "no_access",
     };
   }
 
-  const normalizedNextPath = input.nextPath?.trim() ?? '';
+  const normalizedNextPath = input.nextPath?.trim() ?? "";
   const nextTenantId = tenantIdFromNextPath(normalizedNextPath);
 
   if (nextTenantId !== null) {
@@ -102,19 +102,19 @@ export const resolveTenantContextSelection = (input: {
 
     if (nextTenantLocation === null) {
       return {
-        kind: 'unavailable',
-        reason: 'requested_tenant_forbidden',
+        kind: "unavailable",
+        reason: "requested_tenant_forbidden",
       };
     }
 
     return {
-      kind: 'redirect',
+      kind: "redirect",
       tenantId: nextTenantId,
       location: nextTenantLocation,
     };
   }
 
-  const rememberedTenantId = input.requestedTenant?.tenantId?.trim() ?? '';
+  const rememberedTenantId = input.requestedTenant?.tenantId?.trim() ?? "";
 
   if (rememberedTenantId.length > 0) {
     const rememberedLocation = resolveChosenTenantLocation({
@@ -124,7 +124,7 @@ export const resolveTenantContextSelection = (input: {
 
     if (rememberedLocation !== null) {
       return {
-        kind: 'redirect',
+        kind: "redirect",
         tenantId: rememberedTenantId,
         location: rememberedLocation,
       };
@@ -132,15 +132,24 @@ export const resolveTenantContextSelection = (input: {
   }
 
   if (input.contexts.length === 1) {
+    const [context] = input.contexts;
+
+    if (context === undefined) {
+      return {
+        kind: "unavailable",
+        reason: "no_access",
+      };
+    }
+
     return {
-      kind: 'redirect',
-      tenantId: input.contexts[0].tenantId,
-      location: input.contexts[0].preferredPath,
+      kind: "redirect",
+      tenantId: context.tenantId,
+      location: context.preferredPath,
     };
   }
 
   return {
-    kind: 'chooser',
+    kind: "chooser",
     location: buildOrganizationsPath(normalizedNextPath),
   };
 };

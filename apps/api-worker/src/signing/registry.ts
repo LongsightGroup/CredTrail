@@ -1,11 +1,11 @@
-import type { SqlDatabase } from '@credtrail/db';
+import type { SqlDatabase } from "@credtrail/db";
 import {
   parseTenantSigningRegistry,
   parseTenantSigningRegistryEntry,
   type TenantSigningRegistry,
   type TenantSigningRegistryEntry,
-} from '@credtrail/validation';
-import type { SigningPublicJwk } from './key-material';
+} from "@credtrail/validation";
+import type { SigningPublicJwk } from "./key-material";
 
 export interface HistoricalSigningKeyEntry {
   keyId: string;
@@ -34,7 +34,7 @@ const parseSigningRegistryFromEnv = (rawRegistry: string | undefined): TenantSig
   try {
     parsedRegistry = JSON.parse(rawRegistry) as unknown;
   } catch {
-    throw new Error('TENANT_SIGNING_REGISTRY_JSON is not valid JSON');
+    throw new Error("TENANT_SIGNING_REGISTRY_JSON is not valid JSON");
   }
 
   return parseTenantSigningRegistry(parsedRegistry);
@@ -52,15 +52,15 @@ const parseSigningKeyHistoryRegistryFromEnv = (
   try {
     parsedRegistry = JSON.parse(rawRegistry) as unknown;
   } catch {
-    throw new Error('TENANT_SIGNING_KEY_HISTORY_JSON is not valid JSON');
+    throw new Error("TENANT_SIGNING_KEY_HISTORY_JSON is not valid JSON");
   }
 
   if (
     parsedRegistry === null ||
-    typeof parsedRegistry !== 'object' ||
+    typeof parsedRegistry !== "object" ||
     Array.isArray(parsedRegistry)
   ) {
-    throw new Error('TENANT_SIGNING_KEY_HISTORY_JSON must be an object keyed by DID');
+    throw new Error("TENANT_SIGNING_KEY_HISTORY_JSON must be an object keyed by DID");
   }
 
   const output: SigningKeyHistoryRegistry = {};
@@ -73,7 +73,7 @@ const parseSigningKeyHistoryRegistryFromEnv = (
     const parsedEntries: HistoricalSigningKeyEntry[] = [];
 
     for (const [index, entry] of registryValue.entries()) {
-      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
         throw new Error(
           `TENANT_SIGNING_KEY_HISTORY_JSON["${did}"][${String(index)}] must be an object`,
         );
@@ -81,7 +81,7 @@ const parseSigningKeyHistoryRegistryFromEnv = (
 
       const entryObject = entry as Record<string, unknown>;
       const keyIdRaw = entryObject.keyId;
-      const keyId = typeof keyIdRaw === 'string' ? keyIdRaw.trim() : '';
+      const keyId = typeof keyIdRaw === "string" ? keyIdRaw.trim() : "";
 
       if (keyId.length === 0) {
         throw new Error(
@@ -89,7 +89,7 @@ const parseSigningKeyHistoryRegistryFromEnv = (
         );
       }
 
-      if (!Object.hasOwn(entryObject, 'publicJwk')) {
+      if (!Object.hasOwn(entryObject, "publicJwk")) {
         throw new Error(
           `TENANT_SIGNING_KEY_HISTORY_JSON["${did}"][${String(index)}].publicJwk is required`,
         );
@@ -127,27 +127,27 @@ const parseRemoteSignerRegistryFromEnv = (
   try {
     parsedRegistry = JSON.parse(rawRegistry) as unknown;
   } catch {
-    throw new Error('TENANT_REMOTE_SIGNER_REGISTRY_JSON is not valid JSON');
+    throw new Error("TENANT_REMOTE_SIGNER_REGISTRY_JSON is not valid JSON");
   }
 
   if (
     parsedRegistry === null ||
-    typeof parsedRegistry !== 'object' ||
+    typeof parsedRegistry !== "object" ||
     Array.isArray(parsedRegistry)
   ) {
-    throw new Error('TENANT_REMOTE_SIGNER_REGISTRY_JSON must be an object keyed by DID');
+    throw new Error("TENANT_REMOTE_SIGNER_REGISTRY_JSON must be an object keyed by DID");
   }
 
   const output: RemoteSignerRegistry = {};
 
   for (const [did, entry] of Object.entries(parsedRegistry as Record<string, unknown>)) {
-    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
       throw new Error(`TENANT_REMOTE_SIGNER_REGISTRY_JSON["${did}"] must be an object`);
     }
 
     const entryObject = entry as Record<string, unknown>;
     const urlRaw = entryObject.url;
-    const url = typeof urlRaw === 'string' ? urlRaw : null;
+    const url = typeof urlRaw === "string" ? urlRaw : null;
 
     if (url === null || url.trim().length === 0) {
       throw new Error(
@@ -159,7 +159,7 @@ const parseRemoteSignerRegistryFromEnv = (
     const authorizationHeader = entryObject.authorizationHeader;
 
     if (authorizationHeader !== undefined && authorizationHeader !== null) {
-      if (typeof authorizationHeader !== 'string' || authorizationHeader.trim().length === 0) {
+      if (typeof authorizationHeader !== "string" || authorizationHeader.trim().length === 0) {
         throw new Error(
           `TENANT_REMOTE_SIGNER_REGISTRY_JSON["${did}"].authorizationHeader must be a non-empty string when provided`,
         );
@@ -173,7 +173,7 @@ const parseRemoteSignerRegistryFromEnv = (
 
     if (timeoutMs !== undefined) {
       if (
-        typeof timeoutMs !== 'number' ||
+        typeof timeoutMs !== "number" ||
         !Number.isInteger(timeoutMs) ||
         timeoutMs <= 0 ||
         timeoutMs > MAX_REMOTE_SIGNER_TIMEOUT_MS
@@ -240,9 +240,7 @@ interface SigningRegistryBindings {
   TENANT_REMOTE_SIGNER_REGISTRY_JSON?: string | undefined;
 }
 
-interface CreateSigningRegistryResolversInput<
-  BindingsType extends SigningRegistryBindings,
-> {
+interface CreateSigningRegistryResolversInput<BindingsType extends SigningRegistryBindings> {
   resolveDatabase: (bindings: BindingsType) => SqlDatabase;
   findTenantSigningRegistrationByDid: (
     db: SqlDatabase,

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   getImmutableCredentialObject,
   immutableCredentialObjectKey,
   storeImmutableCredentialObject,
   type ImmutableCredentialStore,
-} from './r2';
+} from "./r2";
 
 interface StoredMockObject {
   key: string;
@@ -52,7 +52,7 @@ const createMockStore = (): ImmutableCredentialStore => {
         etag: `etag-${sequenceText}`,
         version: `version-${sequenceText}`,
         size: value.length,
-        uploaded: new Date('2026-02-10T00:00:00.000Z'),
+        uploaded: new Date("2026-02-10T00:00:00.000Z"),
       };
       objects.set(key, object);
       return Promise.resolve(object);
@@ -64,56 +64,56 @@ const createMockStore = (): ImmutableCredentialStore => {
   };
 };
 
-describe('immutableCredentialObjectKey', () => {
-  it('builds tenant-prefixed object keys', () => {
+describe("immutableCredentialObjectKey", () => {
+  it("builds tenant-prefixed object keys", () => {
     expect(
       immutableCredentialObjectKey({
-        tenantId: 'tenant-a',
-        assertionId: 'tenant-a:assertion-123',
+        tenantId: "tenant-a",
+        assertionId: "tenant-a:assertion-123",
       }),
-    ).toBe('tenants/tenant-a/assertions/tenant-a%3Aassertion-123.jsonld');
+    ).toBe("tenants/tenant-a/assertions/tenant-a%3Aassertion-123.jsonld");
   });
 
-  it('encodes reserved characters in path segments', () => {
+  it("encodes reserved characters in path segments", () => {
     expect(
       immutableCredentialObjectKey({
-        tenantId: 'tenant/a',
-        assertionId: 'assertion/123',
+        tenantId: "tenant/a",
+        assertionId: "assertion/123",
       }),
-    ).toBe('tenants/tenant%2Fa/assertions/assertion%2F123.jsonld');
+    ).toBe("tenants/tenant%2Fa/assertions/assertion%2F123.jsonld");
   });
 });
 
-describe('immutable credential object store adapter', () => {
-  it('stores and retrieves immutable VC objects', async () => {
+describe("immutable credential object store adapter", () => {
+  it("stores and retrieves immutable VC objects", async () => {
     const store = createMockStore();
     const stored = await storeImmutableCredentialObject(store, {
-      tenantId: 'tenant-a',
-      assertionId: 'tenant-a:assertion-001',
+      tenantId: "tenant-a",
+      assertionId: "tenant-a:assertion-001",
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
       },
     });
 
-    expect(stored.key).toBe('tenants/tenant-a/assertions/tenant-a%3Aassertion-001.jsonld');
+    expect(stored.key).toBe("tenants/tenant-a/assertions/tenant-a%3Aassertion-001.jsonld");
 
     const loaded = await getImmutableCredentialObject(store, {
-      tenantId: 'tenant-a',
-      assertionId: 'tenant-a:assertion-001',
+      tenantId: "tenant-a",
+      assertionId: "tenant-a:assertion-001",
     });
 
     expect(loaded).not.toBeNull();
-    expect(loaded?.type).toEqual(['VerifiableCredential', 'OpenBadgeCredential']);
+    expect(loaded?.type).toEqual(["VerifiableCredential", "OpenBadgeCredential"]);
   });
 
-  it('rejects overwriting existing immutable objects', async () => {
+  it("rejects overwriting existing immutable objects", async () => {
     const store = createMockStore();
     const payload = {
-      tenantId: 'tenant-a',
-      assertionId: 'tenant-a:assertion-001',
+      tenantId: "tenant-a",
+      assertionId: "tenant-a:assertion-001",
       credential: {
-        id: 'urn:vc:1',
+        id: "urn:vc:1",
       },
     };
 
@@ -121,6 +121,6 @@ describe('immutable credential object store adapter', () => {
 
     await expect(async () => {
       await storeImmutableCredentialObject(store, payload);
-    }).rejects.toThrowError('Immutable credential already exists');
+    }).rejects.toThrowError("Immutable credential already exists");
   });
 });

@@ -8,18 +8,18 @@ import {
   type SqlDatabase,
   type TenantMembershipOrgUnitScopeRole,
   type TenantMembershipRole,
-} from '@credtrail/db';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
+} from "@credtrail/db";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-context";
 
-export const ISSUER_ROLES: TenantMembershipRole[] = ['owner', 'admin', 'issuer'];
-export const TENANT_MEMBER_ROLES: TenantMembershipRole[] = ['owner', 'admin', 'issuer', 'viewer'];
-export const ADMIN_ROLES: TenantMembershipRole[] = ['owner', 'admin'];
+export const ISSUER_ROLES: TenantMembershipRole[] = ["owner", "admin", "issuer"];
+export const TENANT_MEMBER_ROLES: TenantMembershipRole[] = ["owner", "admin", "issuer", "viewer"];
+export const ADMIN_ROLES: TenantMembershipRole[] = ["owner", "admin"];
 
 export const isUniqueConstraintError = (error: unknown): boolean => {
   return (
     error instanceof Error &&
-    (error.message.includes('UNIQUE constraint failed') ||
-      error.message.includes('duplicate key value violates unique constraint'))
+    (error.message.includes("UNIQUE constraint failed") ||
+      error.message.includes("duplicate key value violates unique constraint"))
   );
 };
 
@@ -117,7 +117,7 @@ export const requirePrincipalTenantRole = async <
   if (input.principal === null) {
     return input.context.json(
       {
-        error: 'Not authenticated',
+        error: "Not authenticated",
       },
       401,
     );
@@ -132,7 +132,7 @@ export const requirePrincipalTenantRole = async <
   if (membership === null) {
     return input.context.json(
       {
-        error: 'Membership not found for requested tenant',
+        error: "Membership not found for requested tenant",
       },
       403,
     );
@@ -141,7 +141,7 @@ export const requirePrincipalTenantRole = async <
   if (!hasRequiredRole(membership.role, input.allowedRoles)) {
     return input.context.json(
       {
-        error: 'Insufficient role for requested action',
+        error: "Insufficient role for requested action",
       },
       403,
     );
@@ -155,7 +155,7 @@ export const requirePrincipalTenantRole = async <
 };
 
 const canBypassOrgScopeChecks = (membershipRole: TenantMembershipRole): boolean => {
-  return membershipRole === 'owner' || membershipRole === 'admin';
+  return membershipRole === "owner" || membershipRole === "admin";
 };
 
 const sessionCompatibilityFromPrincipal = (
@@ -166,7 +166,7 @@ const sessionCompatibilityFromPrincipal = (
     id: principal.authSessionId,
     tenantId: requestedTenant.tenantId,
     userId: principal.userId,
-    sessionTokenHash: '',
+    sessionTokenHash: "",
     expiresAt: principal.expiresAt,
     lastSeenAt: principal.expiresAt,
     revokedAt: null,
@@ -187,7 +187,7 @@ const hasScopedOrgUnitPermission = async (input: {
     return true;
   }
 
-  if (input.membershipRole !== 'issuer') {
+  if (input.membershipRole !== "issuer") {
     return false;
   }
 
@@ -221,19 +221,19 @@ export const createTenantAccessHelpers = <
     if (configuredToken === undefined || configuredToken.length === 0) {
       return context.json(
         {
-          error: 'Bootstrap admin API is not configured',
+          error: "Bootstrap admin API is not configured",
         },
         503,
       );
     }
 
-    const authorizationHeader = context.req.header('authorization');
+    const authorizationHeader = context.req.header("authorization");
     const expectedAuthorization = `Bearer ${configuredToken}`;
 
     if (authorizationHeader !== expectedAuthorization) {
       return context.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
@@ -251,7 +251,7 @@ export const createTenantAccessHelpers = <
     if (configuredToken === undefined || configuredToken.length === 0) {
       return context.json(
         {
-          error: 'Bootstrap admin API is not configured',
+          error: "Bootstrap admin API is not configured",
         },
         503,
       );
@@ -260,7 +260,7 @@ export const createTenantAccessHelpers = <
     if (token === null || token !== configuredToken) {
       return context.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
@@ -284,7 +284,7 @@ export const createTenantAccessHelpers = <
   > => {
     const requestedTenant: RequestedTenantContext = {
       tenantId,
-      source: 'route',
+      source: "route",
       authoritative: true,
     };
     const pendingBreakGlassTenantId = input.resolvePendingBreakGlassTenantId?.(context);
@@ -292,8 +292,8 @@ export const createTenantAccessHelpers = <
     if (pendingBreakGlassTenantId === tenantId) {
       return context.json(
         {
-          error: 'Local MFA enrollment must be completed before tenant access is granted',
-          reason: 'break_glass_mfa_setup_pending',
+          error: "Local MFA enrollment must be completed before tenant access is granted",
+          reason: "break_glass_mfa_setup_pending",
         },
         423,
       );
@@ -347,7 +347,7 @@ export const createTenantAccessHelpers = <
 
     return context.json(
       {
-        error: 'Insufficient org-unit scope for requested action',
+        error: "Insufficient org-unit scope for requested action",
       },
       403,
     );
@@ -381,21 +381,21 @@ export const createTenantAccessHelpers = <
       return null;
     }
 
-    if (request.membershipRole === 'issuer') {
+    if (request.membershipRole === "issuer") {
       return requireScopedOrgUnitPermission(context, {
         db: request.db,
         tenantId: request.tenantId,
         userId: request.userId,
         membershipRole: request.membershipRole,
         orgUnitId: request.ownerOrgUnitId,
-        requiredRole: 'issuer',
+        requiredRole: "issuer",
         allowWhenNoScopes: true,
       });
     }
 
     return context.json(
       {
-        error: 'Insufficient role for requested action',
+        error: "Insufficient role for requested action",
       },
       403,
     );

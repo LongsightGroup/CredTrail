@@ -1,10 +1,10 @@
-import { createTenantScopedId } from '@credtrail/core-domain';
+import { createTenantScopedId } from "@credtrail/core-domain";
 import type {
   IssueBadgeQueueJob,
   IssueBadgeRequest,
   RevokeBadgeQueueJob,
   RevokeBadgeRequest,
-} from '@credtrail/validation';
+} from "@credtrail/validation";
 
 export const issueBadgeQueueJobFromRequest = (
   request: IssueBadgeRequest,
@@ -13,7 +13,7 @@ export const issueBadgeQueueJobFromRequest = (
   const idempotencyKey = request.idempotencyKey ?? crypto.randomUUID();
 
   const job: IssueBadgeQueueJob = {
-    jobType: 'issue_badge',
+    jobType: "issue_badge",
     tenantId: request.tenantId,
     payload: {
       assertionId,
@@ -48,7 +48,7 @@ export const revokeBadgeQueueJobFromRequest = (
   const idempotencyKey = request.idempotencyKey ?? crypto.randomUUID();
 
   const job: RevokeBadgeQueueJob = {
-    jobType: 'revoke_badge',
+    jobType: "revoke_badge",
     tenantId: request.tenantId,
     payload: {
       revocationId,

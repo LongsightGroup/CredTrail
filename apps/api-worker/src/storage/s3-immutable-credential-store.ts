@@ -4,8 +4,8 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
-} from '@aws-sdk/client-s3';
-import type { ImmutableCredentialStore } from '@credtrail/core-domain';
+} from "@aws-sdk/client-s3";
+import type { ImmutableCredentialStore } from "@credtrail/core-domain";
 
 interface CreateS3ImmutableCredentialStoreOptions {
   bucket: string;
@@ -26,7 +26,7 @@ interface AwsErrorLike {
 }
 
 const asAwsErrorLike = (error: unknown): AwsErrorLike => {
-  if (error === null || typeof error !== 'object') {
+  if (error === null || typeof error !== "object") {
     return {};
   }
 
@@ -38,24 +38,25 @@ const statusCodeFromError = (error: unknown): number | undefined => {
 };
 
 const errorNameFromError = (error: unknown): string => {
-  return asAwsErrorLike(error).name ?? '';
+  return asAwsErrorLike(error).name ?? "";
 };
 
 const isNotFoundError = (error: unknown): boolean => {
   const statusCode = statusCodeFromError(error);
   const name = errorNameFromError(error);
-  return statusCode === 404 || name === 'NotFound' || name === 'NoSuchKey';
+  return statusCode === 404 || name === "NotFound" || name === "NoSuchKey";
 };
 
 const isConflictError = (error: unknown): boolean => {
   const statusCode = statusCodeFromError(error);
   const name = errorNameFromError(error);
-  return statusCode === 412 || name === 'PreconditionFailed';
+  return statusCode === 412 || name === "PreconditionFailed";
 };
 
 const readBodyAsText = async (body: unknown): Promise<string> => {
-  if (body !== null && typeof body === 'object' && 'transformToString' in body) {
-    const transformToString = (body as { transformToString: () => Promise<string> }).transformToString;
+  if (body !== null && typeof body === "object" && "transformToString" in body) {
+    const transformToString = (body as { transformToString: () => Promise<string> })
+      .transformToString;
     return transformToString();
   }
 
@@ -63,13 +64,13 @@ const readBodyAsText = async (body: unknown): Promise<string> => {
     return new TextDecoder().decode(body);
   }
 
-  if (typeof body === 'string') {
+  if (typeof body === "string") {
     return body;
   }
 
   if (
     body !== null &&
-    typeof body === 'object' &&
+    typeof body === "object" &&
     Symbol.asyncIterator in (body as Record<PropertyKey, unknown>)
   ) {
     const chunks: Uint8Array[] = [];
@@ -80,12 +81,12 @@ const readBodyAsText = async (body: unknown): Promise<string> => {
         continue;
       }
 
-      if (typeof chunk === 'string') {
+      if (typeof chunk === "string") {
         chunks.push(new TextEncoder().encode(chunk));
         continue;
       }
 
-      throw new Error('Unexpected S3 response chunk type');
+      throw new Error("Unexpected S3 response chunk type");
     }
 
     const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
@@ -100,7 +101,7 @@ const readBodyAsText = async (body: unknown): Promise<string> => {
     return new TextDecoder().decode(merged);
   }
 
-  throw new Error('Unable to read S3 object body');
+  throw new Error("Unable to read S3 object body");
 };
 
 export const createS3ImmutableCredentialStore = (
@@ -172,14 +173,14 @@ export const createS3ImmutableCredentialStore = (
             ContentType: putOptions?.httpMetadata?.contentType,
             CacheControl: putOptions?.httpMetadata?.cacheControl,
             Metadata: putOptions?.customMetadata,
-            IfNoneMatch: '*',
+            IfNoneMatch: "*",
           }),
         )) as { ETag?: string; VersionId?: string };
 
         return {
           key,
-          etag: result.ETag ?? '',
-          version: result.VersionId ?? '',
+          etag: result.ETag ?? "",
+          version: result.VersionId ?? "",
           size: new TextEncoder().encode(value).length,
           uploaded: new Date(),
         };

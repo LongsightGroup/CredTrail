@@ -9,10 +9,10 @@ import type {
   TenantMembershipRole,
   TenantOrgUnitRecord,
   TenantRecord,
-} from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
-import { renderPageAssetTags } from '../ui/page-assets';
-import { escapeHtml, formatIsoTimestamp } from '../utils/display-format';
+} from "@credtrail/db";
+import { renderPageShell } from "@credtrail/ui-components";
+import { renderPageAssetTags } from "../ui/page-assets";
+import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
 const formatScopesSummary = (scopesJson: string): string => {
   try {
@@ -23,9 +23,9 @@ const formatScopesSummary = (scopesJson: string): string => {
     }
 
     return parsed
-      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
       .filter((entry) => entry.length > 0)
-      .join(', ');
+      .join(", ");
   } catch {
     return scopesJson;
   }
@@ -33,11 +33,11 @@ const formatScopesSummary = (scopesJson: string): string => {
 
 const serializeJsonScriptContent = (value: unknown): string => {
   return JSON.stringify(value)
-    .replaceAll('<', '\\u003c')
-    .replaceAll('>', '\\u003e')
-    .replaceAll('&', '\\u0026')
-    .replaceAll('\u2028', '\\u2028')
-    .replaceAll('\u2029', '\\u2029');
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
 };
 
 const formatJsonTextareaValue = (value: string): string => {
@@ -49,15 +49,15 @@ const formatJsonTextareaValue = (value: string): string => {
 };
 
 type InstitutionAdminView =
-  | 'home'
-  | 'operations'
-  | 'operationsReviewQueue'
-  | 'operationsIssuedBadges'
-  | 'operationsBadgeStatus'
-  | 'rules'
-  | 'access'
-  | 'accessApiKeys'
-  | 'accessOrgUnits';
+  | "home"
+  | "operations"
+  | "operationsReviewQueue"
+  | "operationsIssuedBadges"
+  | "operationsBadgeStatus"
+  | "rules"
+  | "access"
+  | "accessApiKeys"
+  | "accessOrgUnits";
 
 interface InstitutionAdminPageInput {
   tenant: TenantRecord;
@@ -141,7 +141,7 @@ const renderInstitutionAdminPage = (
               </td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   const orgUnitRows =
     input.orgUnits.length === 0
@@ -152,10 +152,10 @@ const renderInstitutionAdminPage = (
               <td>${escapeHtml(orgUnit.displayName)}</td>
               <td>${escapeHtml(orgUnit.unitType)}</td>
               <td>${escapeHtml(orgUnit.id)}</td>
-              <td>${orgUnit.isActive ? 'Active' : 'Inactive'}</td>
+              <td>${orgUnit.isActive ? "Active" : "Inactive"}</td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   const apiKeyRows =
     input.activeApiKeys.length === 0
@@ -170,7 +170,7 @@ const renderInstitutionAdminPage = (
               <td>${escapeHtml(apiKey.label)}</td>
               <td>${escapeHtml(apiKey.keyPrefix)}</td>
               <td>${escapeHtml(formatScopesSummary(apiKey.scopesJson))}</td>
-              <td>${escapeHtml(apiKey.expiresAt === null ? 'Never' : formatIsoTimestamp(apiKey.expiresAt))}</td>
+              <td>${escapeHtml(apiKey.expiresAt === null ? "Never" : formatIsoTimestamp(apiKey.expiresAt))}</td>
               <td>
                 <button
                   type="button"
@@ -183,7 +183,7 @@ const renderInstitutionAdminPage = (
               </td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   const ruleRows =
     input.badgeRules.length === 0
@@ -192,7 +192,8 @@ const renderInstitutionAdminPage = (
         )}">Create your first rule</a>.</td></tr>`
       : input.badgeRules
           .map((rule) => {
-            const templateTitle = templateById.get(rule.badgeTemplateId)?.title ?? rule.badgeTemplateId;
+            const templateTitle =
+              templateById.get(rule.badgeTemplateId)?.title ?? rule.badgeTemplateId;
             const versions = versionsByRuleId.get(rule.id) ?? [];
             const latestVersion = versions[0] ?? null;
             const submitApprovalPath =
@@ -216,31 +217,31 @@ const renderInstitutionAdminPage = (
             const actionButtons: string[] = [];
 
             if (latestVersion !== null) {
-              if (latestVersion.status === 'draft' || latestVersion.status === 'rejected') {
+              if (latestVersion.status === "draft" || latestVersion.status === "rejected") {
                 actionButtons.push(
                   `<button type="button" class="ct-admin__button ct-admin__button--tiny" data-rule-submit-path="${escapeHtml(
-                    submitApprovalPath ?? '',
+                    submitApprovalPath ?? "",
                   )}" data-rule-label="${escapeHtml(rule.name)}">Submit</button>`,
                 );
               }
 
-              if (latestVersion.status === 'pending_approval') {
+              if (latestVersion.status === "pending_approval") {
                 actionButtons.push(
                   `<button type="button" class="ct-admin__button ct-admin__button--tiny" data-rule-decision-path="${escapeHtml(
-                    approvePath ?? '',
+                    approvePath ?? "",
                   )}" data-rule-decision="approved" data-rule-label="${escapeHtml(rule.name)}">Approve</button>`,
                 );
                 actionButtons.push(
                   `<button type="button" class="ct-admin__button ct-admin__button--tiny ct-admin__button--danger" data-rule-decision-path="${escapeHtml(
-                    approvePath ?? '',
+                    approvePath ?? "",
                   )}" data-rule-decision="rejected" data-rule-label="${escapeHtml(rule.name)}">Reject</button>`,
                 );
               }
 
-              if (latestVersion.status === 'approved' || latestVersion.status === 'active') {
+              if (latestVersion.status === "approved" || latestVersion.status === "active") {
                 actionButtons.push(
                   `<button type="button" class="ct-admin__button ct-admin__button--tiny" data-rule-activate-path="${escapeHtml(
-                    activatePath ?? '',
+                    activatePath ?? "",
                   )}" data-rule-label="${escapeHtml(rule.name)}">Activate</button>`,
                 );
               }
@@ -250,20 +251,20 @@ const renderInstitutionAdminPage = (
               <td><strong>${escapeHtml(rule.name)}</strong><div class="ct-admin__meta">${escapeHtml(rule.id)}</div></td>
               <td>${escapeHtml(templateTitle)}</td>
               <td>${escapeHtml(rule.lmsProviderKind)}</td>
-              <td>${escapeHtml(rule.activeVersionId ?? 'none')}</td>
+              <td>${escapeHtml(rule.activeVersionId ?? "none")}</td>
               <td>${escapeHtml(
                 latestVersion === null
-                  ? 'none'
+                  ? "none"
                   : `v${String(latestVersion.versionNumber)} (${latestVersion.id})`,
               )}</td>
               <td><span class="ct-admin__status-pill ct-admin__status-pill--${escapeHtml(
-                latestVersion?.status ?? 'none',
-              )}">${escapeHtml(latestVersion?.status ?? 'none')}</span></td>
+                latestVersion?.status ?? "none",
+              )}">${escapeHtml(latestVersion?.status ?? "none")}</span></td>
               <td>${escapeHtml(formatIsoTimestamp(rule.updatedAt))}</td>
-              <td>${actionButtons.length > 0 ? actionButtons.join(' ') : '<span class="ct-admin__meta">No actions</span>'}</td>
+              <td>${actionButtons.length > 0 ? actionButtons.join(" ") : '<span class="ct-admin__meta">No actions</span>'}</td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   const manualIssueApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/assertions/manual-issue`;
   const createApiKeyPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/api-keys`;
@@ -283,7 +284,7 @@ const renderInstitutionAdminPage = (
   const revokedApiKeyCount = String(input.revokedApiKeyCount);
   const ruleCount = String(input.badgeRules.length);
   const userLabel = input.userEmail ?? input.userId;
-  const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? '';
+  const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
   const orgUnitParentOptions = input.orgUnits
     .filter((orgUnit) => orgUnit.isActive)
     .map((orgUnit) => {
@@ -291,7 +292,7 @@ const renderInstitutionAdminPage = (
         orgUnit.unitType,
       )}">${escapeHtml(`${orgUnit.displayName} (${orgUnit.unitType})`)}</option>`;
     })
-    .join('\n');
+    .join("\n");
   const activeOrgUnitOptions = input.orgUnits
     .filter((orgUnit) => orgUnit.isActive)
     .map((orgUnit) => {
@@ -299,36 +300,42 @@ const renderInstitutionAdminPage = (
         `${orgUnit.displayName} (${orgUnit.unitType})`,
       )}</option>`;
     })
-    .join('\n');
+    .join("\n");
   const templateOptions = input.badgeTemplates
     .map((template, index) => {
-      return `<option value="${escapeHtml(template.id)}"${index === 0 ? ' selected' : ''}>${escapeHtml(
+      return `<option value="${escapeHtml(template.id)}"${index === 0 ? " selected" : ""}>${escapeHtml(
         `${template.title} (${template.id})`,
       )}</option>`;
     })
-    .join('\n');
+    .join("\n");
   const templateFilterOptions = input.badgeTemplates
     .map((template) => {
       return `<option value="${escapeHtml(template.id)}">${escapeHtml(template.title)}</option>`;
     })
-    .join('\n');
-  const formatRuleOption = (rule: BadgeIssuanceRuleRecord, includeSelected: boolean, index: number): string => {
-      const versions = versionsByRuleId.get(rule.id) ?? [];
-      const latestVersion = versions[0] ?? null;
+    .join("\n");
+  const formatRuleOption = (
+    rule: BadgeIssuanceRuleRecord,
+    includeSelected: boolean,
+    index: number,
+  ): string => {
+    const versions = versionsByRuleId.get(rule.id) ?? [];
+    const latestVersion = versions[0] ?? null;
 
-      return `<option value="${escapeHtml(rule.id)}"${includeSelected && index === 0 ? ' selected' : ''} data-version-id="${escapeHtml(
-        latestVersion?.id ?? '',
-      )}" data-version-status="${escapeHtml(latestVersion?.status ?? 'none')}" data-rule-label="${escapeHtml(
-        rule.name,
-      )}">${escapeHtml(
-        `${rule.name} (${rule.id}) · latest ${latestVersion === null ? 'none' : `v${String(
-          latestVersion.versionNumber,
-        )} ${latestVersion.status}`}`,
-      )}</option>`;
-    };
+    return `<option value="${escapeHtml(rule.id)}"${includeSelected && index === 0 ? " selected" : ""} data-version-id="${escapeHtml(
+      latestVersion?.id ?? "",
+    )}" data-version-status="${escapeHtml(latestVersion?.status ?? "none")}" data-rule-label="${escapeHtml(
+      rule.name,
+    )}">${escapeHtml(
+      `${rule.name} (${rule.id}) · latest ${
+        latestVersion === null
+          ? "none"
+          : `v${String(latestVersion.versionNumber)} ${latestVersion.status}`
+      }`,
+    )}</option>`;
+  };
   const ruleOptions = input.badgeRules
     .map((rule, index) => formatRuleOption(rule, true, index))
-    .join('\n');
+    .join("\n");
   const templateSelectOptions =
     templateOptions.length > 0
       ? templateOptions
@@ -343,19 +350,21 @@ const renderInstitutionAdminPage = (
   const authProvidersApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-providers`;
   const enterpriseAuthPolicy = input.enterpriseAuthPolicy ?? {
     tenantId: input.tenant.id,
-    loginMode: 'local' as const,
+    loginMode: "local" as const,
     breakGlassEnabled: false,
     localMfaRequired: false,
     defaultProviderId: null,
-    enforceForRoles: 'all_users' as const,
-    createdAt: '',
-    updatedAt: '',
+    enforceForRoles: "all_users" as const,
+    createdAt: "",
+    updatedAt: "",
   };
   const enterpriseAuthProviders = input.enterpriseAuthProviders ?? [];
   const supportedEnterpriseAuthProviders = enterpriseAuthProviders.filter(
-    (provider) => provider.protocol === 'oidc',
+    (provider) => provider.protocol === "oidc",
   );
-  const legacySamlProviders = enterpriseAuthProviders.filter((provider) => provider.protocol === 'saml');
+  const legacySamlProviders = enterpriseAuthProviders.filter(
+    (provider) => provider.protocol === "saml",
+  );
   const legacyDefaultProvider = legacySamlProviders.find(
     (provider) => provider.id === enterpriseAuthPolicy.defaultProviderId,
   );
@@ -363,10 +372,10 @@ const renderInstitutionAdminPage = (
   const enterpriseAuthProviderOptions = supportedEnterpriseAuthProviders
     .map((provider) => {
       return `<option value="${escapeHtml(provider.id)}"${
-        enterpriseAuthPolicy.defaultProviderId === provider.id ? ' selected' : ''
+        enterpriseAuthPolicy.defaultProviderId === provider.id ? " selected" : ""
       }>${escapeHtml(provider.label)}</option>`;
     })
-    .join('\n');
+    .join("\n");
   const enterpriseAuthProviderRows =
     supportedEnterpriseAuthProviders.length === 0
       ? `<tr><td colspan="6" class="ct-admin__empty">No OIDC enterprise providers configured yet.</td></tr>`
@@ -377,8 +386,8 @@ const renderInstitutionAdminPage = (
                 provider.id,
               )}</div></td>
               <td>${escapeHtml(provider.protocol)}</td>
-              <td>${provider.isDefault ? 'Default' : 'Secondary'}</td>
-              <td>${provider.enabled ? 'Enabled' : 'Disabled'}</td>
+              <td>${provider.isDefault ? "Default" : "Secondary"}</td>
+              <td>${provider.enabled ? "Enabled" : "Disabled"}</td>
               <td>${escapeHtml(formatIsoTimestamp(provider.updatedAt))}</td>
               <td>
                 <button
@@ -388,8 +397,8 @@ const renderInstitutionAdminPage = (
                   data-provider-id="${escapeHtml(provider.id)}"
                   data-provider-protocol="${escapeHtml(provider.protocol)}"
                   data-provider-label="${escapeHtml(provider.label)}"
-                  data-provider-enabled="${provider.enabled ? 'true' : 'false'}"
-                  data-provider-is-default="${provider.isDefault ? 'true' : 'false'}"
+                  data-provider-enabled="${provider.enabled ? "true" : "false"}"
+                  data-provider-is-default="${provider.isDefault ? "true" : "false"}"
                   data-provider-config-json="${escapeHtml(provider.configJson)}"
                 >
                   Edit
@@ -405,7 +414,7 @@ const renderInstitutionAdminPage = (
               </td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
   const legacySamlRows =
     legacySamlProviders.length === 0
       ? '<tr><td colspan="5" class="ct-admin__empty">No legacy SAML compatibility entries detected.</td></tr>'
@@ -415,8 +424,8 @@ const renderInstitutionAdminPage = (
               <td><strong>${escapeHtml(provider.label)}</strong><div class="ct-admin__meta">${escapeHtml(
                 provider.id,
               )}</div></td>
-              <td>${provider.isDefault ? 'Default' : 'Secondary'}</td>
-              <td>${provider.enabled ? 'Enabled' : 'Disabled'}</td>
+              <td>${provider.isDefault ? "Default" : "Secondary"}</td>
+              <td>${provider.enabled ? "Enabled" : "Disabled"}</td>
               <td>${escapeHtml(formatIsoTimestamp(provider.updatedAt))}</td>
               <td>
                 <button
@@ -430,10 +439,10 @@ const renderInstitutionAdminPage = (
               </td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
   const enterpriseAuthPanelMarkup =
-    input.tenant.planTier !== 'enterprise'
-      ? ''
+    input.tenant.planTier !== "enterprise"
+      ? ""
       : `<article id="enterprise-auth-panel" class="ct-admin__panel ct-stack">
           <h2>Enterprise Auth</h2>
           <p>Hosted enterprise sign-in supports OIDC providers. Legacy SAML compatibility stays visible for cleanup only.</p>
@@ -441,9 +450,9 @@ const renderInstitutionAdminPage = (
             <label>
               Login mode
               <select name="loginMode" required>
-                <option value="local"${enterpriseAuthPolicy.loginMode === 'local' ? ' selected' : ''}>Local only</option>
-                <option value="hybrid"${enterpriseAuthPolicy.loginMode === 'hybrid' ? ' selected' : ''}>Hybrid</option>
-                <option value="sso_required"${enterpriseAuthPolicy.loginMode === 'sso_required' ? ' selected' : ''}>SSO required</option>
+                <option value="local"${enterpriseAuthPolicy.loginMode === "local" ? " selected" : ""}>Local only</option>
+                <option value="hybrid"${enterpriseAuthPolicy.loginMode === "hybrid" ? " selected" : ""}>Hybrid</option>
+                <option value="sso_required"${enterpriseAuthPolicy.loginMode === "sso_required" ? " selected" : ""}>SSO required</option>
               </select>
             </label>
             <label>
@@ -456,20 +465,20 @@ const renderInstitutionAdminPage = (
             <p class="ct-admin__hint">SSO enforcement applies to the tenant login experience. Role-specific enforcement is not configurable in the hosted runtime.</p>
             ${
               legacyDefaultProvider === undefined
-                ? ''
+                ? ""
                 : `<p class="ct-admin__hint">This tenant still references <strong>${escapeHtml(
                     legacyDefaultProvider.label,
                   )}</strong> as a legacy default. Choose an OIDC provider before requiring institution sign-in.</p>`
             }
             <label class="ct-admin__checkbox-row ct-checkbox-row">
               <input name="breakGlassEnabled" type="checkbox"${
-                enterpriseAuthPolicy.breakGlassEnabled ? ' checked' : ''
+                enterpriseAuthPolicy.breakGlassEnabled ? " checked" : ""
               } />
               Break-glass local access enabled
             </label>
             <label class="ct-admin__checkbox-row ct-checkbox-row">
               <input name="localMfaRequired" type="checkbox"${
-                enterpriseAuthPolicy.localMfaRequired ? ' checked' : ''
+                enterpriseAuthPolicy.localMfaRequired ? " checked" : ""
               } />
               Require MFA for local access
             </label>
@@ -534,7 +543,7 @@ const renderInstitutionAdminPage = (
           </div>
           ${
             legacySamlProviders.length === 0
-              ? ''
+              ? ""
               : `<section class="ct-stack" aria-labelledby="legacy-saml-title">
                   <h3 id="legacy-saml-title">Legacy SAML compatibility</h3>
                   <p>These entries remain visible so you can audit or remove older SAML setup after an OIDC cutover. They are not editable from the hosted provider workflow.</p>
@@ -591,10 +600,10 @@ const renderInstitutionAdminPage = (
                       : breakGlassAccounts
                           .map((account) => {
                             const localStatus = account.twoFactorEnabled
-                              ? 'MFA ready'
+                              ? "MFA ready"
                               : account.localCredentialEnabled
-                                ? 'Password ready'
-                                : 'Setup pending';
+                                ? "Password ready"
+                                : "Setup pending";
 
                             return `<tr>
                               <td><strong>${escapeHtml(account.email)}</strong><div class="ct-admin__meta">${escapeHtml(
@@ -603,12 +612,12 @@ const renderInstitutionAdminPage = (
                               <td>${escapeHtml(localStatus)}</td>
                               <td>${escapeHtml(
                                 account.lastUsedAt === null
-                                  ? 'Never'
+                                  ? "Never"
                                   : formatIsoTimestamp(account.lastUsedAt),
                               )}</td>
                               <td>${escapeHtml(
                                 account.lastEnrollmentEmailSentAt === null
-                                  ? 'Not sent'
+                                  ? "Not sent"
                                   : formatIsoTimestamp(account.lastEnrollmentEmailSentAt),
                               )}</td>
                               <td>
@@ -623,7 +632,7 @@ const renderInstitutionAdminPage = (
                               </td>
                             </tr>`;
                           })
-                          .join('\n')
+                          .join("\n")
                   }
                 </tbody>
               </table>
@@ -634,10 +643,10 @@ const renderInstitutionAdminPage = (
               ? `<details class="ct-admin__panel ct-admin__panel--nested">
                   <summary>Selected provider config preview</summary>
                   <pre class="ct-admin__code-output">${escapeHtml(
-                    formatJsonTextareaValue(enterpriseAuthProviders[0]?.configJson ?? '{}'),
+                    formatJsonTextareaValue(enterpriseAuthProviders[0]?.configJson ?? "{}"),
                   )}</pre>
                 </details>`
-              : ''
+              : ""
           }
         </article>`;
   const adminPageContextJson = serializeJsonScriptContent({
@@ -652,40 +661,40 @@ const renderInstitutionAdminPage = (
     badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
-    authPolicyApiPath: input.tenant.planTier === 'enterprise' ? authPolicyApiPath : '',
-    authProvidersApiPath: input.tenant.planTier === 'enterprise' ? authProvidersApiPath : '',
+    authPolicyApiPath: input.tenant.planTier === "enterprise" ? authPolicyApiPath : "",
+    authProvidersApiPath: input.tenant.planTier === "enterprise" ? authProvidersApiPath : "",
     breakGlassAccountsApiPath:
-      input.tenant.planTier === 'enterprise'
+      input.tenant.planTier === "enterprise"
         ? `/v1/tenants/${encodeURIComponent(input.tenant.id)}/break-glass-accounts`
-        : '',
+        : "",
   });
   const renderAdminNav = (): string => {
     const operationsCurrent =
-      view === 'operations' ||
-      view === 'operationsReviewQueue' ||
-      view === 'operationsIssuedBadges' ||
-      view === 'operationsBadgeStatus';
+      view === "operations" ||
+      view === "operationsReviewQueue" ||
+      view === "operationsIssuedBadges" ||
+      view === "operationsBadgeStatus";
     const accessCurrent =
-      view === 'access' || view === 'accessApiKeys' || view === 'accessOrgUnits';
+      view === "access" || view === "accessApiKeys" || view === "accessOrgUnits";
     const links = [
-      { href: tenantAdminPath, label: 'Home', isCurrent: view === 'home' },
-      { href: operationsPath, label: 'Operations', isCurrent: operationsCurrent },
-      { href: rulesWorkspacePath, label: 'Rules', isCurrent: view === 'rules' },
-      { href: accessPath, label: 'Access', isCurrent: accessCurrent },
-      { href: adminAuditLogPath, label: 'Audit logs', isCurrent: false },
+      { href: tenantAdminPath, label: "Home", isCurrent: view === "home" },
+      { href: operationsPath, label: "Operations", isCurrent: operationsCurrent },
+      { href: rulesWorkspacePath, label: "Rules", isCurrent: view === "rules" },
+      { href: accessPath, label: "Access", isCurrent: accessCurrent },
+      { href: adminAuditLogPath, label: "Audit logs", isCurrent: false },
       {
         href: showcasePath,
-        label: 'Public showcase',
+        label: "Public showcase",
         isCurrent: false,
-        target: '_blank',
-        rel: 'noopener noreferrer',
+        target: "_blank",
+        rel: "noopener noreferrer",
       },
     ];
 
     if (switchOrganizationPath.length > 0) {
       links.push({
         href: switchOrganizationPath,
-        label: 'Switch organization',
+        label: "Switch organization",
         isCurrent: false,
       });
     }
@@ -695,24 +704,20 @@ const renderInstitutionAdminPage = (
         .map((link) => {
           const attributes = [
             `href="${escapeHtml(link.href)}"`,
-            link.isCurrent ? 'aria-current="page"' : '',
-            link.target === undefined ? '' : `target="${escapeHtml(link.target)}"`,
-            link.rel === undefined ? '' : `rel="${escapeHtml(link.rel)}"`,
+            link.isCurrent ? 'aria-current="page"' : "",
+            link.target === undefined ? "" : `target="${escapeHtml(link.target)}"`,
+            link.rel === undefined ? "" : `rel="${escapeHtml(link.rel)}"`,
           ]
             .filter((value) => value.length > 0)
-            .join(' ');
+            .join(" ");
 
           return `<a ${attributes}>${escapeHtml(link.label)}</a>`;
         })
-        .join('\n')}
+        .join("\n")}
     </nav>`;
   };
 
-  const renderHero = (
-    title: string,
-    description: string,
-    noteMarkup = '',
-  ): string => {
+  const renderHero = (title: string, description: string, noteMarkup = ""): string => {
     const heroContent = `<div class="ct-stack">
         <p class="ct-admin__eyebrow">Institution Admin</p>
         <h1>${escapeHtml(title)}</h1>
@@ -758,7 +763,7 @@ const renderInstitutionAdminPage = (
       ${
         input.badgeRules.length === 0
           ? '<p class="ct-admin__hint">No badge rules found. Create your first rule.</p>'
-          : ''
+          : ""
       }
       <div class="ct-admin__workspace-stats ct-cluster">
         <span class="ct-admin__status-pill">${ruleCount} active rule records</span>
@@ -767,7 +772,7 @@ const renderInstitutionAdminPage = (
       <div class="ct-admin__workspace-actions ct-cluster">
         <a class="ct-admin__cta-link" href="${escapeHtml(
           input.badgeRules.length === 0 ? ruleBuilderPath : rulesWorkspacePath,
-        )}">${escapeHtml(input.badgeRules.length === 0 ? 'Create first rule' : 'Open rules')}</a>
+        )}">${escapeHtml(input.badgeRules.length === 0 ? "Create first rule" : "Open rules")}</a>
       </div>
     </article>
     <article class="ct-admin__workspace-card ct-stack">
@@ -1375,30 +1380,30 @@ const renderInstitutionAdminPage = (
   </article>`;
 
   const pageTitle =
-    view === 'home'
+    view === "home"
       ? `Institution Admin · ${input.tenant.displayName}`
-      : view === 'operations'
+      : view === "operations"
         ? `Operations · Institution Admin · ${input.tenant.displayName}`
-        : view === 'operationsReviewQueue'
+        : view === "operationsReviewQueue"
           ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
-          : view === 'operationsIssuedBadges'
+          : view === "operationsIssuedBadges"
             ? `Issued Badges · Institution Admin · ${input.tenant.displayName}`
-            : view === 'operationsBadgeStatus'
+            : view === "operationsBadgeStatus"
               ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
-              : view === 'rules'
+              : view === "rules"
                 ? `Rules · Institution Admin · ${input.tenant.displayName}`
-                : view === 'access'
+                : view === "access"
                   ? `Access · Institution Admin · ${input.tenant.displayName}`
-                  : view === 'accessApiKeys'
+                  : view === "accessApiKeys"
                     ? `API Keys · Institution Admin · ${input.tenant.displayName}`
                     : `Org Units · Institution Admin · ${input.tenant.displayName}`;
 
   const pageMarkup =
-    view === 'home'
+    view === "home"
       ? `<section class="ct-admin ct-stack">
           ${renderHero(
-            'Institution Admin',
-            'Choose a workspace instead of forcing every task onto one page.',
+            "Institution Admin",
+            "Choose a workspace instead of forcing every task onto one page.",
             `<aside class="ct-admin__hero-note ct-stack">
               <h2>Start Here</h2>
               <p>Operations is the primary daily workspace. Use the Rules and Access pages to configure policy and permissions.</p>
@@ -1408,51 +1413,51 @@ const renderInstitutionAdminPage = (
           ${workspaceCardsMarkup}
           <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
         </section>`
-      : view === 'operations'
+      : view === "operations"
         ? `<section class="ct-admin ct-stack">
             ${renderHero(
-              'Operations',
-              'Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.',
+              "Operations",
+              "Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.",
             )}
             ${operationsWorkspaceCardsMarkup}
             ${manualIssuePanelMarkup}
             <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
           </section>`
-        : view === 'operationsReviewQueue'
+        : view === "operationsReviewQueue"
           ? `<section class="ct-admin ct-stack">
               ${renderHero(
-                'Rule Review Queue',
-                'Review pending badge decisions without mixing them into the rest of operations.',
+                "Rule Review Queue",
+                "Review pending badge decisions without mixing them into the rest of operations.",
               )}
               ${operationsWorkspaceCardsMarkup}
               ${ruleReviewQueuePanelMarkup}
               <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
             </section>`
-          : view === 'operationsIssuedBadges'
+          : view === "operationsIssuedBadges"
             ? `<section class="ct-admin ct-stack">
                 ${renderHero(
-                  'Issued Badges',
-                  'Search issued badges and take audit or revocation actions from one page.',
+                  "Issued Badges",
+                  "Search issued badges and take audit or revocation actions from one page.",
                 )}
                 ${operationsWorkspaceCardsMarkup}
                 ${issuedBadgesPanelMarkup}
                 <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
               </section>`
-            : view === 'operationsBadgeStatus'
+            : view === "operationsBadgeStatus"
               ? `<section class="ct-admin ct-stack">
                   ${renderHero(
-                    'Badge Status',
-                    'Look up a badge, inspect its current state, and apply status changes with a reason.',
+                    "Badge Status",
+                    "Look up a badge, inspect its current state, and apply status changes with a reason.",
                   )}
                   ${operationsWorkspaceCardsMarkup}
                   ${badgeStatusPanelMarkup}
                   <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
                 </section>`
-        : view === 'rules'
-          ? `<section class="ct-admin ct-stack">
+              : view === "rules"
+                ? `<section class="ct-admin ct-stack">
               ${renderHero(
-                'Rules',
-                'Keep authoring, template maintenance, and governance context together in one focused workspace.',
+                "Rules",
+                "Keep authoring, template maintenance, and governance context together in one focused workspace.",
               )}
               <section class="ct-admin__layout ct-grid ct-grid--sidebar">
                 <div class="ct-admin__grid ct-stack">
@@ -1469,11 +1474,11 @@ const renderInstitutionAdminPage = (
               </section>
               <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
             </section>`
-          : view === 'access'
-            ? `<section class="ct-admin ct-stack">
+                : view === "access"
+                  ? `<section class="ct-admin ct-stack">
                 ${renderHero(
-                  'Access',
-                  'Manage permissions and enterprise auth here. API keys and org units each have their own page.',
+                  "Access",
+                  "Manage permissions and enterprise auth here. API keys and org units each have their own page.",
                 )}
                 ${accessWorkspaceCardsMarkup}
                 <section class="ct-admin__layout ct-grid ct-grid--sidebar">
@@ -1484,11 +1489,11 @@ const renderInstitutionAdminPage = (
                 </section>
                 <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
               </section>`
-            : view === 'accessApiKeys'
-              ? `<section class="ct-admin ct-stack">
+                  : view === "accessApiKeys"
+                    ? `<section class="ct-admin ct-stack">
                   ${renderHero(
-                    'API Keys',
-                    'Create, review, and revoke tenant API keys without mixing them into org structure work.',
+                    "API Keys",
+                    "Create, review, and revoke tenant API keys without mixing them into org structure work.",
                   )}
                   ${accessWorkspaceCardsMarkup}
                   <section class="ct-admin__layout ct-grid ct-grid--sidebar">
@@ -1501,10 +1506,10 @@ const renderInstitutionAdminPage = (
                   </section>
                   <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
                 </section>`
-              : `<section class="ct-admin ct-stack">
+                    : `<section class="ct-admin ct-stack">
                   ${renderHero(
-                    'Org Units',
-                    'Create and review org structure without mixing it into API key management.',
+                    "Org Units",
+                    "Create and review org structure without mixing it into API key management.",
                   )}
                   ${accessWorkspaceCardsMarkup}
                   <section class="ct-admin__layout ct-grid ct-grid--sidebar">
@@ -1521,44 +1526,44 @@ const renderInstitutionAdminPage = (
   return renderPageShell(
     pageTitle,
     pageMarkup,
-    renderPageAssetTags(['foundationCss', 'institutionAdminCss', 'institutionAdminJs']),
+    renderPageAssetTags(["foundationCss", "institutionAdminCss", "institutionAdminJs"]),
   );
 };
 
 export const institutionAdminDashboardPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'home');
+  return renderInstitutionAdminPage(input, "home");
 };
 
 export const institutionAdminOperationsPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'operations');
+  return renderInstitutionAdminPage(input, "operations");
 };
 
 export const institutionAdminOperationsReviewQueuePage = (
   input: InstitutionAdminPageInput,
 ): string => {
-  return renderInstitutionAdminPage(input, 'operationsReviewQueue');
+  return renderInstitutionAdminPage(input, "operationsReviewQueue");
 };
 
 export const institutionAdminIssuedBadgesPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'operationsIssuedBadges');
+  return renderInstitutionAdminPage(input, "operationsIssuedBadges");
 };
 
 export const institutionAdminBadgeStatusPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'operationsBadgeStatus');
+  return renderInstitutionAdminPage(input, "operationsBadgeStatus");
 };
 
 export const institutionAdminRulesPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'rules');
+  return renderInstitutionAdminPage(input, "rules");
 };
 
 export const institutionAdminAccessPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'access');
+  return renderInstitutionAdminPage(input, "access");
 };
 
 export const institutionAdminApiKeysPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'accessApiKeys');
+  return renderInstitutionAdminPage(input, "accessApiKeys");
 };
 
 export const institutionAdminOrgUnitsPage = (input: InstitutionAdminPageInput): string => {
-  return renderInstitutionAdminPage(input, 'accessOrgUnits');
+  return renderInstitutionAdminPage(input, "accessOrgUnits");
 };

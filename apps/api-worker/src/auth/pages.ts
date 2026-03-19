@@ -1,7 +1,7 @@
-import { renderPageShell } from '@credtrail/ui-components';
-import type { AccessibleTenantContextView } from './tenant-context-selection';
-import { renderPageAssetTags } from '../ui/page-assets';
-import { escapeHtml } from '../utils/display-format';
+import { renderPageShell } from "@credtrail/ui-components";
+import type { AccessibleTenantContextView } from "./tenant-context-selection";
+import { renderPageAssetTags } from "../ui/page-assets";
+import { escapeHtml } from "../utils/display-format";
 
 const renderLoginSteps = (
   steps: readonly {
@@ -19,7 +19,7 @@ const renderLoginSteps = (
           </span>
         </li>`,
       )
-      .join('')}
+      .join("")}
   </ol>`;
 
 export const magicLinkLoginPage = (input: {
@@ -31,7 +31,7 @@ export const magicLinkLoginPage = (input: {
   enterpriseProviders?: readonly {
     id: string;
     label: string;
-    protocol: 'oidc' | 'saml';
+    protocol: "oidc" | "saml";
     isDefault: boolean;
     startPath: string;
   }[];
@@ -55,34 +55,32 @@ export const magicLinkLoginPage = (input: {
 
   const accessContextNotice =
     adminPathMatch === null
-      ? ''
+      ? ""
       : `<p class="ct-login__context">
-          ${input.reason === 'auth_required' ? 'Sign in required.' : 'Continue sign-in.'}
+          ${input.reason === "auth_required" ? "Sign in required." : "Continue sign-in."}
           You are opening <strong>${escapeHtml(adminTenantLabel)}</strong> institution admin. Use an email that already has access to this tenant.
         </p>`;
   const tenantLinkHref =
-    effectiveTenantId.length === 0
-      ? '/'
-      : `/showcase/${encodeURIComponent(effectiveTenantId)}`;
+    effectiveTenantId.length === 0 ? "/" : `/showcase/${encodeURIComponent(effectiveTenantId)}`;
   const tenantLinkLabel =
     effectiveTenantId.length === 0
-      ? 'Back to home'
+      ? "Back to home"
       : `View ${escapeHtml(effectiveTenantId)} badge showcase`;
   const enterpriseProviders = input.enterpriseProviders ?? [];
   const localLoginAllowed = input.localLoginAllowed ?? true;
   const explicitLocalLoginPath = input.explicitLocalLoginPath ?? null;
-  const hasExplicitNotice = (input.notice ?? '').trim().length > 0;
+  const hasExplicitNotice = (input.notice ?? "").trim().length > 0;
   const loginReasonNotice =
-    input.reason === 'sso_failed'
+    input.reason === "sso_failed"
       ? '<p class="ct-login__context">Institution sign-in did not complete. Try again or contact your CredTrail administrator.</p>'
-      : input.reason === 'sso_required'
+      : input.reason === "sso_required"
         ? '<p class="ct-login__context">Institution sign-in is required for this tenant.</p>'
-        : input.reason === 'sso_unavailable' && !hasExplicitNotice
+        : input.reason === "sso_unavailable" && !hasExplicitNotice
           ? '<p class="ct-login__context">Hosted institution sign-in is not available for this tenant right now. Contact your CredTrail administrator.</p>'
-        : '';
+          : "";
   const enterpriseSignInMarkup =
     enterpriseProviders.length === 0
-      ? ''
+      ? ""
       : `<section class="ct-stack" aria-labelledby="enterprise-sso-title">
           <h2 id="enterprise-sso-title" class="ct-login__form-title">Institution sign-in</h2>
           <p class="ct-login__form-text">
@@ -95,11 +93,11 @@ export const magicLinkLoginPage = (input: {
                   Continue with ${escapeHtml(provider.label)}
                 </a>`;
               })
-              .join('')}
+              .join("")}
           </div>
         </section>`;
   const localLoginMarkup = !localLoginAllowed
-    ? ''
+    ? ""
     : `<section class="ct-stack" aria-labelledby="magic-link-login-title">
           <h2 id="magic-link-login-title" class="ct-login__form-title">Email me a sign-in link</h2>
           <p class="ct-login__form-text">
@@ -127,7 +125,7 @@ export const magicLinkLoginPage = (input: {
         </section>`;
   const explicitLocalFallbackMarkup =
     explicitLocalLoginPath === null
-      ? ''
+      ? ""
       : `<p class="ct-login__help">
           Institution SSO is required for normal access.
           If your tenant administrator designated your account for emergency fallback access, use
@@ -136,38 +134,38 @@ export const magicLinkLoginPage = (input: {
   const loginIntroText =
     enterpriseProviders.length > 0
       ? localLoginAllowed
-        ? 'Choose your institution sign-in or request a hosted CredTrail sign-in link.'
-        : 'Continue with your institution sign-in to open this CredTrail tenant.'
-      : 'Enter your tenant ID and institution email. CredTrail will email you a secure sign-in link.';
+        ? "Choose your institution sign-in or request a hosted CredTrail sign-in link."
+        : "Continue with your institution sign-in to open this CredTrail tenant."
+      : "Enter your tenant ID and institution email. CredTrail will email you a secure sign-in link.";
   const loginStepsMarkup = renderLoginSteps([
     enterpriseProviders.length > 0
       ? {
-          title: 'Choose how to continue.',
+          title: "Choose how to continue.",
           body: localLoginAllowed
-            ? 'Use institution sign-in, or request a hosted link when your tenant allows it.'
-            : 'Use your institution identity provider to sign in.',
+            ? "Use institution sign-in, or request a hosted link when your tenant allows it."
+            : "Use your institution identity provider to sign in.",
         }
       : {
-          title: 'Enter tenant and email.',
-          body: 'Use the email your institution already uses for CredTrail access.',
+          title: "Enter tenant and email.",
+          body: "Use the email your institution already uses for CredTrail access.",
         },
     enterpriseProviders.length > 0
       ? {
-          title: 'Finish verification.',
-          body: 'Your identity provider or one-time link completes the sign-in step.',
+          title: "Finish verification.",
+          body: "Your identity provider or one-time link completes the sign-in step.",
         }
       : {
-          title: 'Use the link from your inbox.',
-          body: 'The CredTrail email expires in 10 minutes.',
+          title: "Use the link from your inbox.",
+          body: "The CredTrail email expires in 10 minutes.",
         },
     {
-      title: 'Return to your tenant.',
-      body: 'CredTrail brings you back to the page you were trying to open.',
+      title: "Return to your tenant.",
+      body: "CredTrail brings you back to the page you were trying to open.",
     },
   ]);
 
   return renderPageShell(
-    'Sign In · CredTrail',
+    "Sign In · CredTrail",
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
         <div class="ct-login__hero ct-stack">
@@ -180,7 +178,7 @@ export const magicLinkLoginPage = (input: {
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${loginReasonNotice}
-          ${!hasExplicitNotice ? '' : `<p class="ct-login__context">${escapeHtml(input.notice ?? '')}</p>`}
+          ${!hasExplicitNotice ? "" : `<p class="ct-login__context">${escapeHtml(input.notice ?? "")}</p>`}
           ${enterpriseSignInMarkup}
           ${localLoginMarkup}
           ${explicitLocalFallbackMarkup}
@@ -190,7 +188,7 @@ export const magicLinkLoginPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'authLoginCss', 'authLoginJs']),
+    renderPageAssetTags(["foundationCss", "authLoginCss", "authLoginJs"]),
   );
 };
 
@@ -202,13 +200,14 @@ export const organizationChooserPage = (input: {
   const organizationRows = input.organizations
     .map((organization) => {
       const isCurrent = input.currentTenantId === organization.tenantId;
-      const roleLabel = organization.membershipRole === 'owner' ? 'Owner' : organization.membershipRole;
+      const roleLabel =
+        organization.membershipRole === "owner" ? "Owner" : organization.membershipRole;
 
       return `<li class="ct-login__organization-row">
         <div class="ct-login__organization-copy">
           <p class="ct-login__organization-name">
             ${escapeHtml(organization.tenantDisplayName)}
-            ${isCurrent ? '<span class="ct-login__organization-current">Current</span>' : ''}
+            ${isCurrent ? '<span class="ct-login__organization-current">Current</span>' : ""}
           </p>
           <p class="ct-login__organization-meta">
             ${escapeHtml(organization.tenantId)} · ${escapeHtml(roleLabel)} · ${escapeHtml(organization.tenantPlanTier)}
@@ -217,14 +216,14 @@ export const organizationChooserPage = (input: {
         <form method="post" action="/account/organizations/select">
           <input type="hidden" name="tenantId" value="${escapeHtml(organization.tenantId)}" />
           <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
-          <button type="submit" class="ct-login__submit">${isCurrent ? 'Reopen tenant' : 'Open tenant'}</button>
+          <button type="submit" class="ct-login__submit">${isCurrent ? "Reopen tenant" : "Open tenant"}</button>
         </form>
       </li>`;
     })
-    .join('');
+    .join("");
 
   return renderPageShell(
-    'Choose Organization · CredTrail',
+    "Choose Organization · CredTrail",
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
         <div class="ct-login__hero ct-stack">
@@ -235,12 +234,12 @@ export const organizationChooserPage = (input: {
           </p>
           ${renderLoginSteps([
             {
-              title: 'Select the organization you need.',
-              body: 'Each choice opens the tenant admin or learner surface for this session.',
+              title: "Select the organization you need.",
+              body: "Each choice opens the tenant admin or learner surface for this session.",
             },
             {
-              title: 'Keep tenant work separate.',
-              body: 'CredTrail stays tenant-scoped even when one account can access multiple organizations.',
+              title: "Keep tenant work separate.",
+              body: "CredTrail stays tenant-scoped even when one account can access multiple organizations.",
             },
           ])}
         </div>
@@ -257,32 +256,32 @@ export const organizationChooserPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+    renderPageAssetTags(["foundationCss", "authLoginCss"]),
   );
 };
 
 const localReasonNotice = (reason: string | undefined): string => {
   switch (reason) {
-    case 'break_glass_invalid_credentials':
-      return 'Local sign-in did not complete. Check your email, password, and break-glass eligibility.';
-    case 'break_glass_invalid_code':
-      return 'The verification code was not accepted. Try again with a fresh code.';
-    case 'break_glass_invalid_password':
-      return 'Current password was not accepted for MFA enrollment.';
-    case 'break_glass_not_authenticated':
-      return 'Sign in locally before completing MFA enrollment.';
-    case 'break_glass_not_allowlisted':
-      return 'This account is not currently approved for break-glass local access.';
-    case 'break_glass_mfa_setup_pending':
-      return 'Finish local MFA enrollment before CredTrail grants tenant access.';
-    case 'break_glass_unavailable':
-      return 'Break-glass local access is not available for this tenant.';
-    case 'password_reset_complete':
-      return 'Password updated. Sign in locally and complete MFA enrollment before using break-glass access.';
-    case 'reset_sent':
-      return 'If this email is approved for break-glass access, a setup link has been sent.';
+    case "break_glass_invalid_credentials":
+      return "Local sign-in did not complete. Check your email, password, and break-glass eligibility.";
+    case "break_glass_invalid_code":
+      return "The verification code was not accepted. Try again with a fresh code.";
+    case "break_glass_invalid_password":
+      return "Current password was not accepted for MFA enrollment.";
+    case "break_glass_not_authenticated":
+      return "Sign in locally before completing MFA enrollment.";
+    case "break_glass_not_allowlisted":
+      return "This account is not currently approved for break-glass local access.";
+    case "break_glass_mfa_setup_pending":
+      return "Finish local MFA enrollment before CredTrail grants tenant access.";
+    case "break_glass_unavailable":
+      return "Break-glass local access is not available for this tenant.";
+    case "password_reset_complete":
+      return "Password updated. Sign in locally and complete MFA enrollment before using break-glass access.";
+    case "reset_sent":
+      return "If this email is approved for break-glass access, a setup link has been sent.";
     default:
-      return '';
+      return "";
   }
 };
 
@@ -294,7 +293,7 @@ export const localBreakGlassLoginPage = (input: {
   const notice = localReasonNotice(input.reason);
 
   return renderPageShell(
-    'Break-Glass Local Access · CredTrail',
+    "Break-Glass Local Access · CredTrail",
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
         <div class="ct-login__hero ct-stack">
@@ -305,25 +304,21 @@ export const localBreakGlassLoginPage = (input: {
           </p>
           ${renderLoginSteps([
             {
-              title: 'Use your break-glass credentials.',
-              body: 'This access path is reserved for designated fallback accounts only.',
+              title: "Use your break-glass credentials.",
+              body: "This access path is reserved for designated fallback accounts only.",
             },
             {
-              title: 'Complete local MFA.',
-              body: 'CredTrail requires a valid TOTP challenge before tenant access is granted.',
+              title: "Complete local MFA.",
+              body: "CredTrail requires a valid TOTP challenge before tenant access is granted.",
             },
             {
-              title: 'Return to the requested tenant path.',
-              body: 'After verification, CredTrail sends you back to the page you originally requested.',
+              title: "Return to the requested tenant path.",
+              body: "After verification, CredTrail sends you back to the page you originally requested.",
             },
           ])}
         </div>
         <div class="ct-login__form-wrap ct-stack">
-          ${
-            notice.length === 0
-              ? ''
-              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
-          }
+          ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}
           <section class="ct-stack" aria-labelledby="break-glass-local-title">
             <h2 id="break-glass-local-title" class="ct-login__form-title">Local break-glass sign-in</h2>
             <form class="ct-login__form ct-stack" method="post" action="/auth/local/sign-in">
@@ -363,7 +358,7 @@ export const localBreakGlassLoginPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+    renderPageAssetTags(["foundationCss", "authLoginCss"]),
   );
 };
 
@@ -376,7 +371,7 @@ export const localResetPasswordPage = (input: {
   const notice = localReasonNotice(input.reason);
 
   return renderPageShell(
-    'Reset Local Password · CredTrail',
+    "Reset Local Password · CredTrail",
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
         <div class="ct-login__hero ct-stack">
@@ -387,11 +382,7 @@ export const localResetPasswordPage = (input: {
           </p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
-          ${
-            notice.length === 0
-              ? ''
-              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
-          }
+          ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}
           <form class="ct-login__form ct-stack" method="post" action="/auth/local/reset-password">
             <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
             <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
@@ -405,7 +396,7 @@ export const localResetPasswordPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+    renderPageAssetTags(["foundationCss", "authLoginCss"]),
   );
 };
 
@@ -439,34 +430,30 @@ export const localTwoFactorPage = (input: {
           )}</pre>
           ${
             input.setup.backupCodes.length === 0
-              ? ''
+              ? ""
               : `<pre class="ct-login__dev" style="white-space:pre-wrap;">${escapeHtml(
-                  input.setup.backupCodes.join('\n'),
+                  input.setup.backupCodes.join("\n"),
                 )}</pre>`
           }
         </div>`;
 
   return renderPageShell(
-    'Local MFA · CredTrail',
+    "Local MFA · CredTrail",
     `<section class="ct-login ct-stack">
       <div class="ct-login__card ct-grid">
         <div class="ct-login__hero ct-stack">
           <p class="ct-login__eyebrow">Local MFA</p>
           <h1 class="ct-login__title">${
             input.setup === null || input.setup === undefined
-              ? 'Complete local MFA enrollment'
-              : 'Verify your authenticator code'
+              ? "Complete local MFA enrollment"
+              : "Verify your authenticator code"
           }</h1>
           <p class="ct-login__lede">
             Break-glass local access is not active until a valid TOTP code is verified.
           </p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
-          ${
-            notice.length === 0
-              ? ''
-              : `<p class="ct-login__context">${escapeHtml(notice)}</p>`
-          }
+          ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}
           ${enrollmentMarkup}
           <form class="ct-login__form ct-stack" method="post" action="/auth/local/two-factor/verify">
             <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
@@ -480,6 +467,6 @@ export const localTwoFactorPage = (input: {
         </div>
       </div>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'authLoginCss']),
+    renderPageAssetTags(["foundationCss", "authLoginCss"]),
   );
 };

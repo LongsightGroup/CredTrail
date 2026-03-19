@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -12,9 +12,9 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/core-domain', async () => {
+vi.mock("@credtrail/core-domain", async () => {
   const actual =
-    await vi.importActual<typeof import('@credtrail/core-domain')>('@credtrail/core-domain');
+    await vi.importActual<typeof import("@credtrail/core-domain")>("@credtrail/core-domain");
 
   return {
     ...actual,
@@ -22,7 +22,7 @@ vi.mock('@credtrail/core-domain', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
@@ -36,7 +36,7 @@ import {
   getImmutableCredentialObject,
   signCredentialWithDataIntegrityProof,
   signCredentialWithEd25519Signature2020,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   findAssertionById,
   resolveAssertionLifecycleState,
@@ -45,24 +45,24 @@ import {
   type AssertionRecord,
   type SqlDatabase,
   type TenantSigningRegistrationRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface VerificationResponse {
   assertionId: string;
   tenantId: string;
   issuedAt: string;
   verification: {
-    status: 'active' | 'suspended' | 'expired' | 'revoked';
+    status: "active" | "suspended" | "expired" | "revoked";
     reason: string | null;
     checkedAt: string;
     expiresAt: string | null;
     revokedAt: string | null;
     assertionLifecycle: {
-      state: 'active' | 'suspended' | 'revoked' | 'expired';
-      source: 'lifecycle_event' | 'assertion_revocation' | 'default_active';
+      state: "active" | "suspended" | "revoked" | "expired";
+      source: "lifecycle_event" | "assertion_revocation" | "default_active";
       reasonCode: string | null;
       reason: string | null;
       transitionedAt: string | null;
@@ -71,31 +71,31 @@ interface VerificationResponse {
     statusList: {
       id: string;
       type: string;
-      statusPurpose: 'revocation';
+      statusPurpose: "revocation";
       statusListIndex: string;
       statusListCredential: string;
     } | null;
     checks: {
       jsonLdSafeMode: {
-        status: 'valid' | 'invalid' | 'unchecked';
+        status: "valid" | "invalid" | "unchecked";
         reason: string | null;
       };
       credentialSchema: {
-        status: 'valid' | 'invalid' | 'unchecked';
+        status: "valid" | "invalid" | "unchecked";
         reason: string | null;
       };
       credentialSubject: {
-        status: 'valid' | 'invalid' | 'unchecked';
+        status: "valid" | "invalid" | "unchecked";
         reason: string | null;
       };
       dates: {
-        status: 'valid' | 'invalid' | 'unchecked';
+        status: "valid" | "invalid" | "unchecked";
         reason: string | null;
         validFrom: string | null;
         validUntil: string | null;
       };
       credentialStatus: {
-        status: 'valid' | 'invalid' | 'unchecked';
+        status: "valid" | "invalid" | "unchecked";
         reason: string | null;
         type: string | null;
         statusPurpose: string | null;
@@ -105,7 +105,7 @@ interface VerificationResponse {
       };
     };
     proof: {
-      status: 'valid' | 'invalid' | 'unchecked';
+      status: "valid" | "invalid" | "unchecked";
       format: string | null;
       cryptosuite: string | null;
       verificationMethod: string | null;
@@ -137,10 +137,10 @@ const createEnv = (): {
   TENANT_SIGNING_KEY_HISTORY_JSON?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -149,8 +149,8 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedResolveAssertionLifecycleState.mockReset();
   mockedResolveAssertionLifecycleState.mockResolvedValue({
-    state: 'active',
-    source: 'default_active',
+    state: "active",
+    source: "default_active",
     reasonCode: null,
     reason: null,
     transitionedAt: null,
@@ -164,26 +164,26 @@ const sampleAssertion = (overrides?: {
   statusListIndex?: number | null;
 }): AssertionRecord => {
   return {
-    id: 'tenant_123:assertion_456',
-    tenantId: 'tenant_123',
-    publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-    learnerProfileId: 'lpr_123',
-    badgeTemplateId: 'badge_template_001',
-    recipientIdentity: 'learner@example.edu',
-    recipientIdentityType: 'email',
-    vcR2Key: 'tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld',
+    id: "tenant_123:assertion_456",
+    tenantId: "tenant_123",
+    publicId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+    learnerProfileId: "lpr_123",
+    badgeTemplateId: "badge_template_001",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
+    vcR2Key: "tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld",
     statusListIndex: overrides?.statusListIndex === undefined ? 0 : overrides.statusListIndex,
-    idempotencyKey: 'idem_abc',
-    issuedAt: '2026-02-10T22:00:00.000Z',
-    issuedByUserId: 'usr_123',
+    idempotencyKey: "idem_abc",
+    issuedAt: "2026-02-10T22:00:00.000Z",
+    issuedByUserId: "usr_123",
     revokedAt: overrides?.revokedAt ?? null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const asJsonObject = (value: unknown): JsonObject | null => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
@@ -194,28 +194,28 @@ const sampleTenantSigningRegistration = (
   overrides?: Partial<TenantSigningRegistrationRecord>,
 ): TenantSigningRegistrationRecord => {
   return {
-    tenantId: 'sakai',
-    did: 'did:web:credtrail.test:sakai',
-    keyId: 'key-1',
+    tenantId: "sakai",
+    did: "did:web:credtrail.test:sakai",
+    keyId: "key-1",
     publicJwkJson: JSON.stringify({
-      kty: 'OKP',
-      crv: 'Ed25519',
-      x: 'A'.repeat(32),
+      kty: "OKP",
+      crv: "Ed25519",
+      x: "A".repeat(32),
     }),
     privateJwkJson: JSON.stringify({
-      kty: 'OKP',
-      crv: 'Ed25519',
-      x: 'A'.repeat(32),
-      d: 'B'.repeat(32),
+      kty: "OKP",
+      crv: "Ed25519",
+      x: "A".repeat(32),
+      d: "B".repeat(32),
     }),
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const requireJwkString = (value: string | undefined, field: string): string => {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Missing ${field} in exported JWK`);
   }
 
@@ -223,25 +223,25 @@ const requireJwkString = (value: string | undefined, field: string): string => {
 };
 
 const generateP256SigningMaterial = async (
-  kid = 'key-p256',
+  kid = "key-p256",
 ): Promise<{ publicJwk: P256PublicJwk; privateJwk: P256PrivateJwk }> => {
-  const generated = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
-    'sign',
-    'verify',
+  const generated = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
   ]);
-  const exportedPublicJwk = await crypto.subtle.exportKey('jwk', generated.publicKey);
-  const exportedPrivateJwk = await crypto.subtle.exportKey('jwk', generated.privateKey);
+  const exportedPublicJwk = await crypto.subtle.exportKey("jwk", generated.publicKey);
+  const exportedPrivateJwk = await crypto.subtle.exportKey("jwk", generated.privateKey);
 
   const publicJwk: P256PublicJwk = {
-    kty: 'EC',
-    crv: 'P-256',
-    x: requireJwkString(exportedPublicJwk.x, 'x'),
-    y: requireJwkString(exportedPublicJwk.y, 'y'),
+    kty: "EC",
+    crv: "P-256",
+    x: requireJwkString(exportedPublicJwk.x, "x"),
+    y: requireJwkString(exportedPublicJwk.y, "y"),
     kid,
   };
   const privateJwk: P256PrivateJwk = {
     ...publicJwk,
-    d: requireJwkString(exportedPrivateJwk.d, 'd'),
+    d: requireJwkString(exportedPrivateJwk.d, "d"),
   };
 
   return {
@@ -249,39 +249,39 @@ const generateP256SigningMaterial = async (
     privateJwk,
   };
 };
-describe('GET /credentials/v1/:credentialId', () => {
+describe("GET /credentials/v1/:credentialId", () => {
   beforeEach(() => {
     mockedFindAssertionById.mockReset();
     mockedGetImmutableCredentialObject.mockReset();
     mockedListAssertionStatusListEntries.mockReset();
   });
 
-  it('returns credential verification details for a valid credential', async () => {
+  it("returns credential verification details for a valid credential", async () => {
     const env = createEnv();
     const statusListSigningMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-status-list',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-status-list",
     });
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
         achievement: {
-          id: 'urn:credtrail:badge:001',
-          type: ['Achievement'],
-          name: 'Sakai Contributor',
+          id: "urn:credtrail:badge:001",
+          type: ["Achievement"],
+          name: "Sakai Contributor",
         },
       },
       credentialStatus: {
-        id: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation#0',
-        type: 'BitstringStatusListEntry',
-        statusPurpose: 'revocation',
-        statusListIndex: '0',
-        statusListCredential: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation',
+        id: "http://localhost/credentials/v1/status-lists/tenant_123/revocation#0",
+        type: "BitstringStatusListEntry",
+        statusPurpose: "revocation",
+        statusListIndex: "0",
+        statusListCredential: "http://localhost/credentials/v1/status-lists/tenant_123/revocation",
       },
     };
 
@@ -289,7 +289,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: statusListSigningMaterial.did,
         keyId: statusListSigningMaterial.keyId,
         publicJwkJson: JSON.stringify(statusListSigningMaterial.publicJwk),
@@ -304,128 +304,128 @@ describe('GET /credentials/v1/:credentialId', () => {
     ]);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(body.verification.status).toBe('active');
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body.verification.status).toBe("active");
     expect(body.verification.reason).toBeNull();
-    expect(body.verification.assertionLifecycle.state).toBe('active');
+    expect(body.verification.assertionLifecycle.state).toBe("active");
     expect(body.verification.checkedAt.length).toBeGreaterThan(0);
     expect(body.verification.expiresAt).toBeNull();
     expect(body.verification.revokedAt).toBeNull();
-    expect(body.verification.statusList?.statusPurpose).toBe('revocation');
-    expect(body.verification.statusList?.statusListIndex).toBe('0');
+    expect(body.verification.statusList?.statusPurpose).toBe("revocation");
+    expect(body.verification.statusList?.statusListIndex).toBe("0");
     expect(body.verification.statusList?.statusListCredential).toBe(
-      'http://localhost/credentials/v1/status-lists/tenant_123/revocation',
+      "http://localhost/credentials/v1/status-lists/tenant_123/revocation",
     );
-    expect(body.verification.checks.jsonLdSafeMode.status).toBe('valid');
-    expect(body.verification.checks.credentialSchema.status).toBe('unchecked');
-    expect(body.verification.checks.credentialSubject.status).toBe('valid');
-    expect(body.verification.checks.dates.status).toBe('valid');
-    expect(body.verification.checks.dates.validFrom).toBe('2026-02-10T22:00:00.000Z');
-    expect(body.verification.checks.credentialStatus.status).toBe('valid');
+    expect(body.verification.checks.jsonLdSafeMode.status).toBe("valid");
+    expect(body.verification.checks.credentialSchema.status).toBe("unchecked");
+    expect(body.verification.checks.credentialSubject.status).toBe("valid");
+    expect(body.verification.checks.dates.status).toBe("valid");
+    expect(body.verification.checks.dates.validFrom).toBe("2026-02-10T22:00:00.000Z");
+    expect(body.verification.checks.credentialStatus.status).toBe("valid");
     expect(body.verification.checks.credentialStatus.revoked).toBe(false);
-    expect(body.verification.proof.status).toBe('unchecked');
+    expect(body.verification.proof.status).toBe("unchecked");
     expect(body.credential).toEqual(credential);
     expect(mockedFindAssertionById).toHaveBeenCalledWith(
       fakeDb,
-      'tenant_123',
-      'tenant_123:assertion_456',
+      "tenant_123",
+      "tenant_123:assertion_456",
     );
     expect(mockedGetImmutableCredentialObject).toHaveBeenCalledWith(env.BADGE_OBJECTS, {
-      tenantId: 'tenant_123',
-      assertionId: 'tenant_123:assertion_456',
+      tenantId: "tenant_123",
+      assertionId: "tenant_123:assertion_456",
     });
   });
 
-  it('marks credential status as revoked when assertion is revoked', async () => {
+  it("marks credential status as revoked when assertion is revoked", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential"],
     };
 
     mockedFindAssertionById.mockResolvedValue(
       sampleAssertion({
-        revokedAt: '2026-02-11T01:00:00.000Z',
+        revokedAt: "2026-02-11T01:00:00.000Z",
       }),
     );
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.status).toBe('revoked');
-    expect(body.verification.reason).toBe('credential has been revoked by issuer');
-    expect(body.verification.revokedAt).toBe('2026-02-11T01:00:00.000Z');
-    expect(body.verification.assertionLifecycle.state).toBe('active');
-    expect(body.verification.proof.status).toBe('unchecked');
+    expect(body.verification.status).toBe("revoked");
+    expect(body.verification.reason).toBe("credential has been revoked by issuer");
+    expect(body.verification.revokedAt).toBe("2026-02-11T01:00:00.000Z");
+    expect(body.verification.assertionLifecycle.state).toBe("active");
+    expect(body.verification.proof.status).toBe("unchecked");
   });
 
-  it('returns suspended lifecycle status when assertion lifecycle is suspended', async () => {
+  it("returns suspended lifecycle status when assertion lifecycle is suspended", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential"],
     };
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedResolveAssertionLifecycleState.mockResolvedValue({
-      state: 'suspended',
-      source: 'lifecycle_event',
-      reasonCode: 'administrative_hold',
-      reason: 'Credential is suspended pending review',
-      transitionedAt: '2026-02-12T02:30:00.000Z',
+      state: "suspended",
+      source: "lifecycle_event",
+      reasonCode: "administrative_hold",
+      reason: "Credential is suspended pending review",
+      transitionedAt: "2026-02-12T02:30:00.000Z",
       revokedAt: null,
     });
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('x-credtrail-credential-state')).toBe('suspended');
-    expect(body.verification.status).toBe('suspended');
-    expect(body.verification.reason).toBe('Credential is suspended pending review');
-    expect(body.verification.assertionLifecycle.state).toBe('suspended');
-    expect(body.verification.assertionLifecycle.reasonCode).toBe('administrative_hold');
+    expect(response.headers.get("x-credtrail-credential-state")).toBe("suspended");
+    expect(body.verification.status).toBe("suspended");
+    expect(body.verification.reason).toBe("Credential is suspended pending review");
+    expect(body.verification.assertionLifecycle.state).toBe("suspended");
+    expect(body.verification.assertionLifecycle.reasonCode).toBe("administrative_hold");
   });
 
-  it('marks credential status as revoked when status list entry is revoked', async () => {
+  it("marks credential status as revoked when status list entry is revoked", async () => {
     const env = createEnv();
     const statusListSigningMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-status-list',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-status-list",
     });
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
       credentialStatus: {
-        id: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation#1',
-        type: 'BitstringStatusListEntry',
-        statusPurpose: 'revocation',
-        statusListIndex: '1',
-        statusListCredential: 'http://localhost/credentials/v1/status-lists/tenant_123/revocation',
+        id: "http://localhost/credentials/v1/status-lists/tenant_123/revocation#1",
+        type: "BitstringStatusListEntry",
+        statusPurpose: "revocation",
+        statusListIndex: "1",
+        statusListCredential: "http://localhost/credentials/v1/status-lists/tenant_123/revocation",
       },
     };
 
@@ -438,7 +438,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: statusListSigningMaterial.did,
         keyId: statusListSigningMaterial.keyId,
         publicJwkJson: JSON.stringify(statusListSigningMaterial.publicJwk),
@@ -452,29 +452,29 @@ describe('GET /credentials/v1/:credentialId', () => {
       },
       {
         statusListIndex: 1,
-        revokedAt: '2026-02-11T01:00:00.000Z',
+        revokedAt: "2026-02-11T01:00:00.000Z",
       },
     ]);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.status).toBe('revoked');
-    expect(body.verification.reason).toBe('credential has been revoked by issuer');
-    expect(body.verification.checks.credentialStatus.status).toBe('valid');
+    expect(body.verification.status).toBe("revoked");
+    expect(body.verification.reason).toBe("credential has been revoked by issuer");
+    expect(body.verification.checks.credentialStatus.status).toBe("valid");
     expect(body.verification.checks.credentialStatus.revoked).toBe(true);
   });
 
-  it('returns null status list metadata when assertion has no status list index', async () => {
+  it("returns null status list metadata when assertion has no status list index", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential'],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential"],
     };
 
     mockedFindAssertionById.mockResolvedValue(
@@ -485,27 +485,27 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.status).toBe('active');
+    expect(body.verification.status).toBe("active");
     expect(body.verification.statusList).toBeNull();
-    expect(body.verification.proof.status).toBe('unchecked');
+    expect(body.verification.proof.status).toBe("unchecked");
   });
 
-  it('marks credential status as expired when validUntil has passed', async () => {
+  it("marks credential status as expired when validUntil has passed", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      validUntil: '2025-01-01T00:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      validUntil: "2025-01-01T00:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
     };
 
@@ -513,31 +513,31 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.status).toBe('expired');
-    expect(body.verification.reason).toBe('credential validUntil/expirationDate has passed');
-    expect(body.verification.expiresAt).toBe('2025-01-01T00:00:00.000Z');
+    expect(body.verification.status).toBe("expired");
+    expect(body.verification.reason).toBe("credential validUntil/expirationDate has passed");
+    expect(body.verification.expiresAt).toBe("2025-01-01T00:00:00.000Z");
     expect(body.verification.revokedAt).toBeNull();
   });
 
-  it('marks jsonLdSafeMode as invalid when unknown terms are present', async () => {
+  it("marks jsonLdSafeMode as invalid when unknown terms are present", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
-      unknownTerm: 'should-fail-safe-mode',
+      unknownTerm: "should-fail-safe-mode",
     };
 
     mockedFindAssertionById.mockResolvedValue(
@@ -548,32 +548,32 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.jsonLdSafeMode.status).toBe('invalid');
-    expect(body.verification.checks.jsonLdSafeMode.reason).toContain('unknownTerm');
+    expect(body.verification.checks.jsonLdSafeMode.status).toBe("invalid");
+    expect(body.verification.checks.jsonLdSafeMode.reason).toContain("unknownTerm");
   });
 
-  it('marks credentialSchema as invalid when 1EdTech validator type is missing', async () => {
+  it("marks credentialSchema as invalid when 1EdTech validator type is missing", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
       credentialSchema: [
         {
-          id: 'https://credtrail.test/schemas/badge-credential.json',
-          type: 'JsonSchemaValidator2018',
+          id: "https://credtrail.test/schemas/badge-credential.json",
+          type: "JsonSchemaValidator2018",
         },
       ],
     };
@@ -586,47 +586,47 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.credentialSchema.status).toBe('invalid');
+    expect(body.verification.checks.credentialSchema.status).toBe("invalid");
     expect(body.verification.checks.credentialSchema.reason).toContain(
-      '1EdTechJsonSchemaValidator2019',
+      "1EdTechJsonSchemaValidator2019",
     );
   });
 
-  it('validates credentialSchema required properties when schema is loadable', async () => {
+  it("validates credentialSchema required properties when schema is loadable", async () => {
     const env = createEnv();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
-          required: ['issuer', 'credentialSubject'],
+          required: ["issuer", "credentialSubject"],
         }),
         {
           status: 200,
           headers: {
-            'content-type': 'application/schema+json',
+            "content-type": "application/schema+json",
           },
         },
       ),
     );
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
       credentialSchema: [
         {
-          id: 'https://schema.credtrail.test/achievement-credential.schema.json',
-          type: '1EdTechJsonSchemaValidator2019',
+          id: "https://schema.credtrail.test/achievement-credential.schema.json",
+          type: "1EdTechJsonSchemaValidator2019",
         },
       ],
     };
@@ -639,46 +639,46 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.credentialSchema.status).toBe('valid');
+    expect(body.verification.checks.credentialSchema.status).toBe("valid");
 
     fetchSpy.mockRestore();
   });
 
-  it('marks credentialSchema invalid when required schema fields are missing from credential', async () => {
+  it("marks credentialSchema invalid when required schema fields are missing from credential", async () => {
     const env = createEnv();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
-          required: ['customEvidence'],
+          required: ["customEvidence"],
         }),
         {
           status: 200,
           headers: {
-            'content-type': 'application/schema+json',
+            "content-type": "application/schema+json",
           },
         },
       ),
     );
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
       credentialSchema: [
         {
-          id: 'https://schema.credtrail.test/achievement-credential.schema.json',
-          type: '1EdTechJsonSchemaValidator2019',
+          id: "https://schema.credtrail.test/achievement-credential.schema.json",
+          type: "1EdTechJsonSchemaValidator2019",
         },
       ],
     };
@@ -691,32 +691,32 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.credentialSchema.status).toBe('invalid');
-    expect(body.verification.checks.credentialSchema.reason).toContain('customEvidence');
+    expect(body.verification.checks.credentialSchema.status).toBe("invalid");
+    expect(body.verification.checks.credentialSchema.reason).toContain("customEvidence");
 
     fetchSpy.mockRestore();
   });
 
-  it('marks credentialSubject as invalid when id and identifier are missing', async () => {
+  it("marks credentialSubject as invalid when id and identifier are missing", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
         achievement: {
-          id: 'urn:credtrail:badge:001',
-          type: ['Achievement'],
-          name: 'Sakai Contributor',
+          id: "urn:credtrail:badge:001",
+          type: ["Achievement"],
+          name: "Sakai Contributor",
         },
       },
     };
@@ -729,29 +729,29 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.credentialSubject.status).toBe('invalid');
+    expect(body.verification.checks.credentialSubject.status).toBe("invalid");
     expect(body.verification.checks.credentialSubject.reason).toContain(
-      'id or at least one identifier',
+      "id or at least one identifier",
     );
   });
 
-  it('marks credentialSubject as invalid when OpenBadgeCredential omits achievement details', async () => {
+  it("marks credentialSubject as invalid when OpenBadgeCredential omits achievement details", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2026-02-10T22:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2026-02-10T22:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
     };
 
@@ -763,29 +763,29 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.credentialSubject.status).toBe('invalid');
+    expect(body.verification.checks.credentialSubject.status).toBe("invalid");
     expect(body.verification.checks.credentialSubject.reason).toBe(
-      'credentialSubject.achievement must be an object for OpenBadgeCredential',
+      "credentialSubject.achievement must be an object for OpenBadgeCredential",
     );
   });
 
-  it('marks dates as invalid when validFrom is in the future', async () => {
+  it("marks dates as invalid when validFrom is in the future", async () => {
     const env = createEnv();
     const credential: JsonObject = {
-      '@context': ['https://www.w3.org/ns/credentials/v2'],
-      id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-      type: ['VerifiableCredential', 'OpenBadgeCredential'],
-      issuer: 'did:web:credtrail.test:tenant_123',
-      validFrom: '2999-01-01T00:00:00.000Z',
+      "@context": ["https://www.w3.org/ns/credentials/v2"],
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      type: ["VerifiableCredential", "OpenBadgeCredential"],
+      issuer: "did:web:credtrail.test:tenant_123",
+      validFrom: "2999-01-01T00:00:00.000Z",
       credentialSubject: {
-        id: 'mailto:learner@example.edu',
+        id: "mailto:learner@example.edu",
       },
     };
 
@@ -797,51 +797,51 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.checks.dates.status).toBe('invalid');
+    expect(body.verification.checks.dates.status).toBe("invalid");
     expect(body.verification.checks.dates.reason).toBe(
-      'credential validFrom/issuanceDate is in the future',
+      "credential validFrom/issuanceDate is in the future",
     );
-    expect(body.verification.checks.dates.validFrom).toBe('2999-01-01T00:00:00.000Z');
+    expect(body.verification.checks.dates.validFrom).toBe("2999-01-01T00:00:00.000Z");
   });
 
-  it('verifies Ed25519Signature2020 proofs when issuer signing keys are resolvable', async () => {
+  it("verifies Ed25519Signature2020 proofs when issuer signing keys are resolvable", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const credential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: signingMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: `${signingMaterial.did}#${signingMaterial.keyId}`,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -850,49 +850,49 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('valid');
-    expect(body.verification.proof.format).toBe('Ed25519Signature2020');
+    expect(body.verification.proof.status).toBe("valid");
+    expect(body.verification.proof.format).toBe("Ed25519Signature2020");
     expect(body.verification.proof.verificationMethod).toBe(
-      'did:web:credtrail.test:tenant_123#key-1',
+      "did:web:credtrail.test:tenant_123#key-1",
     );
   });
 
-  it('verifies proof arrays by selecting the assertionMethod proof entry', async () => {
+  it("verifies proof arrays by selecting the assertionMethod proof entry", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const signedCredential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: signingMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: `${signingMaterial.did}#${signingMaterial.keyId}`,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
     const signedProof = asJsonObject(signedCredential.proof);
 
     if (signedProof === null) {
-      throw new Error('Signed credential proof object was unexpectedly null');
+      throw new Error("Signed credential proof object was unexpectedly null");
     }
 
     const credential: JsonObject = {
@@ -900,7 +900,7 @@ describe('GET /credentials/v1/:credentialId', () => {
       proof: [
         {
           ...signedProof,
-          proofPurpose: 'authentication',
+          proofPurpose: "authentication",
         },
         signedProof,
       ],
@@ -910,7 +910,7 @@ describe('GET /credentials/v1/:credentialId', () => {
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -919,105 +919,105 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('valid');
-    expect(body.verification.proof.format).toBe('Ed25519Signature2020');
+    expect(body.verification.proof.status).toBe("valid");
+    expect(body.verification.proof.format).toBe("Ed25519Signature2020");
     expect(body.verification.proof.verificationMethod).toBe(
-      'did:web:credtrail.test:tenant_123#key-1',
+      "did:web:credtrail.test:tenant_123#key-1",
     );
   });
 
-  it('verifies DataIntegrityProof ecdsa-sd-2023 proofs when issuer signing keys are resolvable', async () => {
+  it("verifies DataIntegrityProof ecdsa-sd-2023 proofs when issuer signing keys are resolvable", async () => {
     const env = createEnv();
-    const signingMaterial = await generateP256SigningMaterial('key-p256');
-    const did = 'did:web:credtrail.test:tenant_123';
+    const signingMaterial = await generateP256SigningMaterial("key-p256");
+    const did = "did:web:credtrail.test:tenant_123";
     const credential = await signCredentialWithDataIntegrityProof({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
-      verificationMethod: `${did}#${signingMaterial.publicJwk.kid ?? 'key-p256'}`,
-      cryptosuite: 'ecdsa-sd-2023',
-      createdAt: '2026-02-11T00:00:00.000Z',
+      verificationMethod: `${did}#${signingMaterial.publicJwk.kid ?? "key-p256"}`,
+      cryptosuite: "ecdsa-sd-2023",
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did,
-        keyId: signingMaterial.publicJwk.kid ?? 'key-p256',
+        keyId: signingMaterial.publicJwk.kid ?? "key-p256",
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
         privateJwkJson: JSON.stringify(signingMaterial.privateJwk),
       }),
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('valid');
-    expect(body.verification.proof.format).toBe('DataIntegrityProof');
-    expect(body.verification.proof.cryptosuite).toBe('ecdsa-sd-2023');
+    expect(body.verification.proof.status).toBe("valid");
+    expect(body.verification.proof.format).toBe("DataIntegrityProof");
+    expect(body.verification.proof.cryptosuite).toBe("ecdsa-sd-2023");
     expect(body.verification.proof.verificationMethod).toBe(
-      'did:web:credtrail.test:tenant_123#key-p256',
+      "did:web:credtrail.test:tenant_123#key-p256",
     );
   });
 
-  it('verifies DataIntegrityProof eddsa-rdfc-2022 proofs when issuer signing keys are resolvable', async () => {
+  it("verifies DataIntegrityProof eddsa-rdfc-2022 proofs when issuer signing keys are resolvable", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const credential = await signCredentialWithDataIntegrityProof({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: signingMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: `${signingMaterial.did}#${signingMaterial.keyId}`,
-      cryptosuite: 'eddsa-rdfc-2022',
-      createdAt: '2026-02-11T00:00:00.000Z',
+      cryptosuite: "eddsa-rdfc-2022",
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -1026,149 +1026,149 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('valid');
-    expect(body.verification.proof.format).toBe('DataIntegrityProof');
-    expect(body.verification.proof.cryptosuite).toBe('eddsa-rdfc-2022');
+    expect(body.verification.proof.status).toBe("valid");
+    expect(body.verification.proof.format).toBe("DataIntegrityProof");
+    expect(body.verification.proof.cryptosuite).toBe("eddsa-rdfc-2022");
     expect(body.verification.proof.verificationMethod).toBe(
-      'did:web:credtrail.test:tenant_123#key-1',
+      "did:web:credtrail.test:tenant_123#key-1",
     );
   });
 
-  it('verifies DataIntegrityProof credentials with both EdDSA and ECDSA cryptosuites through the same endpoint', async () => {
+  it("verifies DataIntegrityProof credentials with both EdDSA and ECDSA cryptosuites through the same endpoint", async () => {
     const env = createEnv();
     const assertDataIntegrityVerification = async (input: {
       credential: JsonObject;
       registration: TenantSigningRegistrationRecord;
-      cryptosuite: 'eddsa-rdfc-2022' | 'ecdsa-sd-2023';
+      cryptosuite: "eddsa-rdfc-2022" | "ecdsa-sd-2023";
     }): Promise<void> => {
       mockedFindAssertionById.mockResolvedValue(sampleAssertion());
       mockedGetImmutableCredentialObject.mockResolvedValue(input.credential);
       mockedFindTenantSigningRegistrationByDid.mockResolvedValue(input.registration);
 
       const response = await app.request(
-        '/credentials/v1/tenant_123%3Aassertion_456',
+        "/credentials/v1/tenant_123%3Aassertion_456",
         undefined,
         env,
       );
       const body = await response.json<VerificationResponse>();
 
       expect(response.status).toBe(200);
-      expect(body.verification.proof.status).toBe('valid');
-      expect(body.verification.proof.format).toBe('DataIntegrityProof');
+      expect(body.verification.proof.status).toBe("valid");
+      expect(body.verification.proof.format).toBe("DataIntegrityProof");
       expect(body.verification.proof.cryptosuite).toBe(input.cryptosuite);
     };
 
-    const did = 'did:web:credtrail.test:tenant_123';
-    const ecdsaSigningMaterial = await generateP256SigningMaterial('key-p256-interchangeable');
+    const did = "did:web:credtrail.test:tenant_123";
+    const ecdsaSigningMaterial = await generateP256SigningMaterial("key-p256-interchangeable");
     const ecdsaCredential = await signCredentialWithDataIntegrityProof({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: ecdsaSigningMaterial.privateJwk,
-      verificationMethod: `${did}#${ecdsaSigningMaterial.publicJwk.kid ?? 'key-p256-interchangeable'}`,
-      cryptosuite: 'ecdsa-sd-2023',
-      createdAt: '2026-02-11T00:00:00.000Z',
+      verificationMethod: `${did}#${ecdsaSigningMaterial.publicJwk.kid ?? "key-p256-interchangeable"}`,
+      cryptosuite: "ecdsa-sd-2023",
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     await assertDataIntegrityVerification({
       credential: ecdsaCredential,
       registration: sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did,
-        keyId: ecdsaSigningMaterial.publicJwk.kid ?? 'key-p256-interchangeable',
+        keyId: ecdsaSigningMaterial.publicJwk.kid ?? "key-p256-interchangeable",
         publicJwkJson: JSON.stringify(ecdsaSigningMaterial.publicJwk),
         privateJwkJson: JSON.stringify(ecdsaSigningMaterial.privateJwk),
       }),
-      cryptosuite: 'ecdsa-sd-2023',
+      cryptosuite: "ecdsa-sd-2023",
     });
 
     const eddsaSigningMaterial = await generateTenantDidSigningMaterial({
       did,
-      keyId: 'key-ed25519-interchangeable',
+      keyId: "key-ed25519-interchangeable",
     });
     const eddsaCredential = await signCredentialWithDataIntegrityProof({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: eddsaSigningMaterial.privateJwk,
       verificationMethod: `${did}#${eddsaSigningMaterial.keyId}`,
-      cryptosuite: 'eddsa-rdfc-2022',
-      createdAt: '2026-02-11T00:00:00.000Z',
+      cryptosuite: "eddsa-rdfc-2022",
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     await assertDataIntegrityVerification({
       credential: eddsaCredential,
       registration: sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did,
         keyId: eddsaSigningMaterial.keyId,
         publicJwkJson: JSON.stringify(eddsaSigningMaterial.publicJwk),
         privateJwkJson: JSON.stringify(eddsaSigningMaterial.privateJwk),
       }),
-      cryptosuite: 'eddsa-rdfc-2022',
+      cryptosuite: "eddsa-rdfc-2022",
     });
   });
 
-  it('returns invalid when proof verificationMethod DID does not match issuer DID', async () => {
+  it("returns invalid when proof verificationMethod DID does not match issuer DID", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const credential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
-        issuer: 'did:web:credtrail.test:tenant_mismatch',
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
+        issuer: "did:web:credtrail.test:tenant_mismatch",
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: `${signingMaterial.did}#${signingMaterial.keyId}`,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -1177,50 +1177,50 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('invalid');
+    expect(body.verification.proof.status).toBe("invalid");
     expect(body.verification.proof.reason).toBe(
-      'verificationMethod DID must match credential issuer DID',
+      "verificationMethod DID must match credential issuer DID",
     );
   });
 
-  it('returns invalid when proof verificationMethod key fragment does not match resolved signing key id', async () => {
+  it("returns invalid when proof verificationMethod key fragment does not match resolved signing key id", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const credential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: signingMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: `${signingMaterial.did}#key-2`,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -1229,32 +1229,32 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('invalid');
+    expect(body.verification.proof.status).toBe("invalid");
     expect(body.verification.proof.reason).toBe(
-      'verificationMethod key fragment must match an active or historical signing key id',
+      "verificationMethod key fragment must match an active or historical signing key id",
     );
   });
 
-  it('verifies proofs signed with historical key ids when key rotation history is configured', async () => {
+  it("verifies proofs signed with historical key ids when key rotation history is configured", async () => {
     const oldSigningMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-old',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-old",
     });
     const newSigningMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-new',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-new",
     });
     const env = {
       ...createEnv(),
       TENANT_SIGNING_KEY_HISTORY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': [
+        "did:web:credtrail.test:tenant_123": [
           {
             keyId: oldSigningMaterial.keyId,
             publicJwk: oldSigningMaterial.publicJwk,
@@ -1264,29 +1264,29 @@ describe('GET /credentials/v1/:credentialId', () => {
     };
     const credential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: oldSigningMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: oldSigningMaterial.privateJwk,
       verificationMethod: `${oldSigningMaterial.did}#${oldSigningMaterial.keyId}`,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: newSigningMaterial.did,
         keyId: newSigningMaterial.keyId,
         publicJwkJson: JSON.stringify(newSigningMaterial.publicJwk),
@@ -1295,50 +1295,50 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('valid');
+    expect(body.verification.proof.status).toBe("valid");
     expect(body.verification.proof.verificationMethod).toBe(
-      'did:web:credtrail.test:tenant_123#key-old',
+      "did:web:credtrail.test:tenant_123#key-old",
     );
   });
 
-  it('returns invalid when proof verificationMethod omits key fragment', async () => {
+  it("returns invalid when proof verificationMethod omits key fragment", async () => {
     const env = createEnv();
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-1",
     });
     const credential = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
         issuer: signingMaterial.did,
         credentialSubject: {
-          id: 'mailto:learner@example.edu',
+          id: "mailto:learner@example.edu",
           achievement: {
-            id: 'urn:credtrail:badge:001',
-            type: ['Achievement'],
-            name: 'Sakai Contributor',
+            id: "urn:credtrail:badge:001",
+            type: ["Achievement"],
+            name: "Sakai Contributor",
           },
         },
       },
       privateJwk: signingMaterial.privateJwk,
       verificationMethod: signingMaterial.did,
-      createdAt: '2026-02-11T00:00:00.000Z',
+      createdAt: "2026-02-11T00:00:00.000Z",
     });
 
     mockedFindAssertionById.mockResolvedValue(sampleAssertion());
     mockedGetImmutableCredentialObject.mockResolvedValue(credential);
     mockedFindTenantSigningRegistrationByDid.mockResolvedValue(
       sampleTenantSigningRegistration({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
         did: signingMaterial.did,
         keyId: signingMaterial.keyId,
         publicJwkJson: JSON.stringify(signingMaterial.publicJwk),
@@ -1347,41 +1347,41 @@ describe('GET /credentials/v1/:credentialId', () => {
     );
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<VerificationResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.verification.proof.status).toBe('invalid');
-    expect(body.verification.proof.reason).toBe('verificationMethod must include a key fragment');
+    expect(body.verification.proof.status).toBe("invalid");
+    expect(body.verification.proof.reason).toBe("verificationMethod must include a key fragment");
   });
 
-  it('returns 400 for non-tenant-scoped credential identifiers', async () => {
+  it("returns 400 for non-tenant-scoped credential identifiers", async () => {
     const env = createEnv();
-    const response = await app.request('/credentials/v1/assertion_456', undefined, env);
+    const response = await app.request("/credentials/v1/assertion_456", undefined, env);
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe('Invalid credential identifier');
+    expect(body.error).toBe("Invalid credential identifier");
     expect(mockedFindAssertionById).not.toHaveBeenCalled();
   });
 
-  it('returns 404 when credential metadata is not found', async () => {
+  it("returns 404 when credential metadata is not found", async () => {
     const env = createEnv();
 
     mockedFindAssertionById.mockResolvedValue(null);
 
     const response = await app.request(
-      '/credentials/v1/tenant_123%3Aassertion_456',
+      "/credentials/v1/tenant_123%3Aassertion_456",
       undefined,
       env,
     );
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(404);
-    expect(body.error).toBe('Credential not found');
+    expect(body.error).toBe("Credential not found");
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
   });
 });

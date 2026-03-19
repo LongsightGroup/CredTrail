@@ -3,8 +3,8 @@ import {
   findActiveTenantApiKeyByHash,
   touchTenantApiKeyLastUsedAt,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   parseIssueBadgeRequest,
   parseProgrammaticIssueBadgeRequest,
@@ -14,8 +14,8 @@ import {
   type IssueBadgeQueueJob,
   type ProcessQueueRequest,
   type RevokeBadgeQueueJob,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
 
 interface IssueBadgeQueueEnvelope {
   assertionId: string;
@@ -54,7 +54,9 @@ interface RegisterQueueRoutesInput {
   readJsonBodyOrEmptyObject: (c: AppContext) => Promise<unknown>;
   processQueuedJobs: (c: AppContext, input: ProcessQueueConfig) => Promise<ProcessQueueRunResult>;
   processQueueInputWithDefaults: (input: ProcessQueueRequest) => ProcessQueueConfig;
-  issueBadgeQueueJobFromRequest: (request: ReturnType<typeof parseIssueBadgeRequest>) => IssueBadgeQueueEnvelope;
+  issueBadgeQueueJobFromRequest: (
+    request: ReturnType<typeof parseIssueBadgeRequest>,
+  ) => IssueBadgeQueueEnvelope;
   revokeBadgeQueueJobFromRequest: (
     request: ReturnType<typeof parseRevokeBadgeRequest>,
   ) => RevokeBadgeQueueEnvelope;
@@ -80,7 +82,9 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
         return [];
       }
 
-      return parsed.filter((value): value is string => typeof value === 'string' && value.length > 0);
+      return parsed.filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      );
     } catch {
       return [];
     }
@@ -88,15 +92,15 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
   const isValidationError = (error: unknown): error is { issues: ValidationIssue[] } => {
     const isValidationIssue = (issue: unknown): issue is ValidationIssue => {
-      if (typeof issue !== 'object' || issue === null) {
+      if (typeof issue !== "object" || issue === null) {
         return false;
       }
 
       const candidate = issue as Record<string, unknown>;
-      return Array.isArray(candidate.path) && typeof candidate.message === 'string';
+      return Array.isArray(candidate.path) && typeof candidate.message === "string";
     };
 
-    if (!(error instanceof Error) || !('issues' in error)) {
+    if (!(error instanceof Error) || !("issues" in error)) {
       return false;
     }
 
@@ -123,7 +127,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
         return {
           response: c.json(
             {
-              error: 'Invalid request payload',
+              error: "Invalid request payload",
               details: error.issues.map((issue) => ({
                 path: issue.path.map((segment) => String(segment)),
                 message: issue.message,
@@ -144,19 +148,19 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     if (configuredToken === undefined || configuredToken.length === 0) {
       return c.json(
         {
-          error: 'Route unavailable',
+          error: "Route unavailable",
         },
         404,
       );
     }
 
-    const authorizationHeader = c.req.header('authorization');
+    const authorizationHeader = c.req.header("authorization");
     const expectedAuthorization = `Bearer ${configuredToken}`;
 
     if (authorizationHeader !== expectedAuthorization) {
       return c.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
@@ -169,16 +173,16 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     c: AppContext,
     input: {
       tenantId: string;
-      requiredScope: 'queue.issue' | 'queue.revoke';
+      requiredScope: "queue.issue" | "queue.revoke";
     },
   ): Promise<{ actorUserId: string } | { response: Response }> => {
-    const rawApiKey = c.req.header('x-api-key')?.trim();
+    const rawApiKey = c.req.header("x-api-key")?.trim();
 
     if (rawApiKey === undefined || rawApiKey.length === 0) {
       return {
         response: c.json(
           {
-            error: 'x-api-key header is required',
+            error: "x-api-key header is required",
           },
           401,
         ),
@@ -196,7 +200,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
       return {
         response: c.json(
           {
-            error: 'Invalid or expired API key',
+            error: "Invalid or expired API key",
           },
           401,
         ),
@@ -207,7 +211,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
       return {
         response: c.json(
           {
-            error: 'API key tenant does not match request tenant',
+            error: "API key tenant does not match request tenant",
           },
           403,
         ),
@@ -215,7 +219,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     }
 
     const scopes = parseApiKeyScopes(keyRecord.scopesJson);
-    const hasRequiredScope = scopes.includes('*') || scopes.includes(input.requiredScope);
+    const hasRequiredScope = scopes.includes("*") || scopes.includes(input.requiredScope);
 
     if (!hasRequiredScope) {
       return {
@@ -234,7 +238,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
       return {
         response: c.json(
           {
-            error: 'API key is missing an owning user and cannot perform write operations',
+            error: "API key is missing an owning user and cannot perform write operations",
           },
           403,
         ),
@@ -262,12 +266,12 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
   function createQueuedIssueResponse(
     c: AppContext,
     queued: IssueBadgeQueueEnvelope,
-    channel?: 'programmatic_api_key',
+    channel?: "programmatic_api_key",
   ): Response {
     if (channel === undefined) {
       return c.json(
         {
-          status: 'queued',
+          status: "queued",
           jobType: queued.job.jobType,
           assertionId: queued.assertionId,
           idempotencyKey: queued.job.idempotencyKey,
@@ -278,7 +282,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
     return c.json(
       {
-        status: 'queued',
+        status: "queued",
         channel,
         jobType: queued.job.jobType,
         assertionId: queued.assertionId,
@@ -293,13 +297,13 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     input: {
       assertionId: string;
       queued: RevokeBadgeQueueEnvelope;
-      channel?: 'programmatic_api_key';
+      channel?: "programmatic_api_key";
     },
   ): Response {
     if (input.channel === undefined) {
       return c.json(
         {
-          status: 'queued',
+          status: "queued",
           jobType: input.queued.job.jobType,
           assertionId: input.assertionId,
           revocationId: input.queued.revocationId,
@@ -311,7 +315,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
     return c.json(
       {
-        status: 'queued',
+        status: "queued",
         channel: input.channel,
         jobType: input.queued.job.jobType,
         assertionId: input.assertionId,
@@ -322,17 +326,17 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     );
   }
 
-  app.post('/v1/jobs/process', async (c) => {
+  app.post("/v1/jobs/process", async (c) => {
     const configuredToken = c.env.JOB_PROCESSOR_TOKEN?.trim();
 
     if (configuredToken !== undefined && configuredToken.length > 0) {
-      const authorizationHeader = c.req.header('authorization');
+      const authorizationHeader = c.req.header("authorization");
       const expectedAuthorization = `Bearer ${configuredToken}`;
 
       if (authorizationHeader !== expectedAuthorization) {
         return c.json(
           {
-            error: 'Unauthorized',
+            error: "Unauthorized",
           },
           401,
         );
@@ -344,14 +348,14 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
 
     return c.json(
       {
-        status: 'ok',
+        status: "ok",
         ...result,
       },
       200,
     );
   });
 
-  app.post('/v1/issue', async (c) => {
+  app.post("/v1/issue", async (c) => {
     const authError = authorizeTrustedInternalRequest(c);
 
     if (authError !== null) {
@@ -361,7 +365,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     const payload = await c.req.json<unknown>();
     const parsedRequest = parseRequest(c, parseIssueBadgeRequest, payload);
 
-    if ('response' in parsedRequest) {
+    if ("response" in parsedRequest) {
       return parsedRequest.response;
     }
 
@@ -372,7 +376,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     return createQueuedIssueResponse(c, queued);
   });
 
-  app.post('/v1/revoke', async (c) => {
+  app.post("/v1/revoke", async (c) => {
     const authError = authorizeTrustedInternalRequest(c);
 
     if (authError !== null) {
@@ -382,7 +386,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     const payload = await c.req.json<unknown>();
     const parsedRequest = parseRequest(c, parseRevokeBadgeRequest, payload);
 
-    if ('response' in parsedRequest) {
+    if ("response" in parsedRequest) {
       return parsedRequest.response;
     }
 
@@ -396,21 +400,21 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     });
   });
 
-  app.post('/v1/programmatic/issue', async (c) => {
+  app.post("/v1/programmatic/issue", async (c) => {
     const payload = await c.req.json<unknown>();
     const parsedRequest = parseRequest(c, parseProgrammaticIssueBadgeRequest, payload);
 
-    if ('response' in parsedRequest) {
+    if ("response" in parsedRequest) {
       return parsedRequest.response;
     }
 
     const request = parsedRequest.value;
     const authResult = await authorizeProgrammaticRequest(c, {
       tenantId: request.tenantId,
-      requiredScope: 'queue.issue',
+      requiredScope: "queue.issue",
     });
 
-    if ('response' in authResult) {
+    if ("response" in authResult) {
       return authResult.response;
     }
 
@@ -420,24 +424,24 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     });
     await enqueueQueuedJob(c, queued.job);
 
-    return createQueuedIssueResponse(c, queued, 'programmatic_api_key');
+    return createQueuedIssueResponse(c, queued, "programmatic_api_key");
   });
 
-  app.post('/v1/programmatic/revoke', async (c) => {
+  app.post("/v1/programmatic/revoke", async (c) => {
     const payload = await c.req.json<unknown>();
     const parsedRequest = parseRequest(c, parseProgrammaticRevokeBadgeRequest, payload);
 
-    if ('response' in parsedRequest) {
+    if ("response" in parsedRequest) {
       return parsedRequest.response;
     }
 
     const request = parsedRequest.value;
     const authResult = await authorizeProgrammaticRequest(c, {
       tenantId: request.tenantId,
-      requiredScope: 'queue.revoke',
+      requiredScope: "queue.revoke",
     });
 
-    if ('response' in authResult) {
+    if ("response" in authResult) {
       return authResult.response;
     }
 
@@ -450,7 +454,7 @@ export const registerQueueRoutes = (input: RegisterQueueRoutesInput): void => {
     return createQueuedRevokeResponse(c, {
       assertionId: request.assertionId,
       queued,
-      channel: 'programmatic_api_key',
+      channel: "programmatic_api_key",
     });
   });
 };

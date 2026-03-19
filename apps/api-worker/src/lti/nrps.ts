@@ -2,10 +2,10 @@ import {
   LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE,
   LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY,
   type LtiLaunchClaims,
-} from '@credtrail/lti';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+} from "@credtrail/lti";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
-const NRPS_LEARNER_ROLE_MARKERS = ['#learner', '#student'];
+const NRPS_LEARNER_ROLE_MARKERS = ["#learner", "#student"];
 
 const asJsonArray = (value: unknown): readonly unknown[] | null => {
   return Array.isArray(value) ? value : null;
@@ -14,7 +14,7 @@ const asJsonArray = (value: unknown): readonly unknown[] | null => {
 const isAbsoluteHttpUrl = (value: string): boolean => {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -34,23 +34,23 @@ const normalizeRoles = (candidate: unknown): string[] => {
 
 const roleSummary = (roles: readonly string[]): string => {
   if (roles.length === 0) {
-    return '';
+    return "";
   }
 
-  return roles.join(', ');
+  return roles.join(", ");
 };
 
 const parseNrpsAccessToken = (candidate: unknown): string => {
   const payload = asJsonObject(candidate);
 
   if (payload === null) {
-    throw new Error('NRPS token response must be a JSON object');
+    throw new Error("NRPS token response must be a JSON object");
   }
 
   const accessToken = asNonEmptyString(payload.access_token);
 
   if (accessToken === null) {
-    throw new Error('NRPS token response is missing access_token');
+    throw new Error("NRPS token response is missing access_token");
   }
 
   return accessToken;
@@ -101,11 +101,15 @@ const parseNrpsMember = (candidate: unknown): LtiNrpsMember | null => {
   const isLearner = normalizedRoles.some((role) =>
     NRPS_LEARNER_ROLE_MARKERS.some((marker) => role.includes(marker)),
   );
-  const derivedDisplayName = [asNonEmptyString(member.given_name), asNonEmptyString(member.family_name)]
+  const derivedDisplayName = [
+    asNonEmptyString(member.given_name),
+    asNonEmptyString(member.family_name),
+  ]
     .filter((entry): entry is string => entry !== null)
-    .join(' ')
+    .join(" ")
     .trim();
-  const displayName = asNonEmptyString(member.name) ?? (derivedDisplayName.length === 0 ? null : derivedDisplayName);
+  const displayName =
+    asNonEmptyString(member.name) ?? (derivedDisplayName.length === 0 ? null : derivedDisplayName);
   const email = asNonEmptyString(member.email);
   const sourcedId = asNonEmptyString(member.lis_person_sourcedid);
   const status = asNonEmptyString(member.status);
@@ -128,13 +132,13 @@ const parseNrpsRoster = (candidate: unknown): LtiNrpsRoster => {
   const payload = asJsonObject(candidate);
 
   if (payload === null) {
-    throw new Error('NRPS membership response must be a JSON object');
+    throw new Error("NRPS membership response must be a JSON object");
   }
 
   const memberEntries = asJsonArray(payload.members);
 
   if (memberEntries === null) {
-    throw new Error('NRPS membership response is missing members[]');
+    throw new Error("NRPS membership response is missing members[]");
   }
 
   const members = memberEntries
@@ -191,14 +195,14 @@ export const fetchNrpsRoster = async (input: {
   const fetchImpl = input.fetchImpl ?? fetch;
   const scope = input.scope ?? LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY;
   const tokenResponse = await fetchImpl(input.tokenEndpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      accept: 'application/json',
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
       authorization: basicAuthHeaderValue(input.clientId, input.clientSecret),
     },
     body: new URLSearchParams({
-      grant_type: 'client_credentials',
+      grant_type: "client_credentials",
       scope,
     }).toString(),
   });
@@ -210,9 +214,9 @@ export const fetchNrpsRoster = async (input: {
   const tokenResponsePayload = await tokenResponse.json<unknown>().catch(() => null);
   const accessToken = parseNrpsAccessToken(tokenResponsePayload);
   const rosterResponse = await fetchImpl(input.contextMembershipsUrl, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      accept: 'application/vnd.ims.lti-nrps.v2.membershipcontainer+json, application/json',
+      accept: "application/vnd.ims.lti-nrps.v2.membershipcontainer+json, application/json",
       authorization: `Bearer ${accessToken}`,
     },
   });

@@ -1,4 +1,4 @@
-import type { ImmutableCredentialStore } from '@credtrail/core-domain';
+import type { ImmutableCredentialStore } from "@credtrail/core-domain";
 
 export const createR2ImmutableCredentialStore = (bucket: R2Bucket): ImmutableCredentialStore => {
   return {
@@ -27,9 +27,11 @@ export const createR2ImmutableCredentialStore = (bucket: R2Bucket): ImmutableCre
     async put(key, value, options) {
       const object = await bucket.put(key, value, {
         ...(options?.httpMetadata === undefined ? {} : { httpMetadata: options.httpMetadata }),
-        ...(options?.customMetadata === undefined ? {} : { customMetadata: options.customMetadata }),
+        ...(options?.customMetadata === undefined
+          ? {}
+          : { customMetadata: options.customMetadata }),
         onlyIf: {
-          etagDoesNotMatch: '*',
+          etagDoesNotMatch: "*",
         },
       });
 

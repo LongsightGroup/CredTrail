@@ -1,16 +1,13 @@
-import type {
-  RecipientIdentifierInput,
-  RecipientIdentifierType,
-} from '@credtrail/db';
-import type { ManualIssueBadgeRequest } from '@credtrail/validation';
+import type { RecipientIdentifierInput, RecipientIdentifierType } from "@credtrail/db";
+import type { ManualIssueBadgeRequest } from "@credtrail/validation";
 
 export type DirectIssueBadgeRequest = Pick<
   ManualIssueBadgeRequest,
-  | 'badgeTemplateId'
-  | 'recipientIdentity'
-  | 'recipientIdentityType'
-  | 'recipientIdentifiers'
-  | 'idempotencyKey'
+  | "badgeTemplateId"
+  | "recipientIdentity"
+  | "recipientIdentityType"
+  | "recipientIdentifiers"
+  | "idempotencyKey"
 >;
 
 const normalizeRecipientIdentifierValue = (
@@ -19,7 +16,7 @@ const normalizeRecipientIdentifierValue = (
 ): string => {
   const trimmedValue = identifierValue.trim();
 
-  if (identifierType === 'emailAddress') {
+  if (identifierType === "emailAddress") {
     return trimmedValue.toLowerCase();
   }
 
@@ -58,7 +55,7 @@ const uniqueRecipientIdentifierInputs = (
       continue;
     }
 
-    const dedupeKey = entry.identifierType + '::' + normalizedValue;
+    const dedupeKey = entry.identifierType + "::" + normalizedValue;
 
     if (seen.has(dedupeKey)) {
       continue;
@@ -75,28 +72,28 @@ const uniqueRecipientIdentifierInputs = (
 };
 
 const recipientIdentifiersFromIdentityAliases = (
-  identityType: 'email' | 'email_sha256' | 'did' | 'url' | 'saml_subject' | 'sourced_id',
+  identityType: "email" | "email_sha256" | "did" | "url" | "saml_subject" | "sourced_id",
   identityValue: string,
 ): RecipientIdentifierInput | null => {
   switch (identityType) {
-    case 'email':
+    case "email":
       return toDbRecipientIdentifierInput({
-        identifierType: 'emailAddress',
+        identifierType: "emailAddress",
         identifier: identityValue,
       });
-    case 'did':
+    case "did":
       return toDbRecipientIdentifierInput({
-        identifierType: 'did',
+        identifierType: "did",
         identifier: identityValue,
       });
-    case 'sourced_id':
+    case "sourced_id":
       return toDbRecipientIdentifierInput({
-        identifierType: 'sourcedId',
+        identifierType: "sourcedId",
         identifier: identityValue,
       });
-    case 'email_sha256':
-    case 'url':
-    case 'saml_subject':
+    case "email_sha256":
+    case "url":
+    case "saml_subject":
       return null;
   }
 };
@@ -105,14 +102,14 @@ export const recipientIdentifiersForIssueRequest = (
   request: DirectIssueBadgeRequest,
   learnerProfileId: string,
   learnerIdentities: readonly {
-    identityType: 'email' | 'email_sha256' | 'did' | 'url' | 'saml_subject' | 'sourced_id';
+    identityType: "email" | "email_sha256" | "did" | "url" | "saml_subject" | "sourced_id";
     identityValue: string;
   }[],
 ): RecipientIdentifierInput[] => {
   const entries: RecipientIdentifierInput[] = [];
 
   const stableLearnerIdentifier = toDbRecipientIdentifierInput({
-    identifierType: 'studentId',
+    identifierType: "studentId",
     identifier: learnerProfileId,
   });
 
@@ -121,10 +118,10 @@ export const recipientIdentifiersForIssueRequest = (
   }
 
   const requestPrimaryIdentifierType =
-    request.recipientIdentityType === 'email'
-      ? 'emailAddress'
-      : request.recipientIdentityType === 'did'
-        ? 'did'
+    request.recipientIdentityType === "email"
+      ? "emailAddress"
+      : request.recipientIdentityType === "did"
+        ? "did"
         : null;
 
   if (requestPrimaryIdentifierType !== null) {

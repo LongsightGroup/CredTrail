@@ -1,14 +1,14 @@
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
-import type { AppBindings } from '../app';
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
+import type { AppBindings } from "../app";
 
 const bytesToBase64Url = (bytes: Uint8Array): string => {
-  let raw = '';
+  let raw = "";
 
   for (const byte of bytes) {
     raw += String.fromCharCode(byte);
   }
 
-  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 };
 
 const textToBase64Url = (value: string): string => {
@@ -16,8 +16,8 @@ const textToBase64Url = (value: string): string => {
 };
 
 const base64UrlToText = (value: string): string | null => {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = `${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`;
 
   try {
     return atob(padded);
@@ -27,7 +27,7 @@ const base64UrlToText = (value: string): string | null => {
 };
 
 const sha256Base64Url = async (value: string): Promise<string> => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return bytesToBase64Url(new Uint8Array(digest));
 };
 
@@ -40,11 +40,11 @@ export interface CanvasOAuthStatePayload {
 
 export type CanvasOAuthStateValidationResult =
   | {
-      status: 'ok';
+      status: "ok";
       payload: CanvasOAuthStatePayload;
     }
   | {
-      status: 'invalid';
+      status: "invalid";
       reason: string;
     };
 
@@ -102,12 +102,12 @@ export const validateCanvasOAuthStateToken = async (
   secret: string,
   nowIso: string,
 ): Promise<CanvasOAuthStateValidationResult> => {
-  const tokenParts = stateToken.split('.');
+  const tokenParts = stateToken.split(".");
 
   if (tokenParts.length !== 2) {
     return {
-      status: 'invalid',
-      reason: 'state token format is invalid',
+      status: "invalid",
+      reason: "state token format is invalid",
     };
   }
 
@@ -115,8 +115,8 @@ export const validateCanvasOAuthStateToken = async (
 
   if (payloadEncoded === undefined || signature === undefined) {
     return {
-      status: 'invalid',
-      reason: 'state token format is invalid',
+      status: "invalid",
+      reason: "state token format is invalid",
     };
   }
 
@@ -124,8 +124,8 @@ export const validateCanvasOAuthStateToken = async (
 
   if (signature !== expectedSignature) {
     return {
-      status: 'invalid',
-      reason: 'state token signature is invalid',
+      status: "invalid",
+      reason: "state token signature is invalid",
     };
   }
 
@@ -133,8 +133,8 @@ export const validateCanvasOAuthStateToken = async (
 
   if (payloadJson === null) {
     return {
-      status: 'invalid',
-      reason: 'state payload encoding is invalid',
+      status: "invalid",
+      reason: "state payload encoding is invalid",
     };
   }
 
@@ -144,8 +144,8 @@ export const validateCanvasOAuthStateToken = async (
     parsedPayload = JSON.parse(payloadJson);
   } catch {
     return {
-      status: 'invalid',
-      reason: 'state payload is not valid JSON',
+      status: "invalid",
+      reason: "state payload is not valid JSON",
     };
   }
 
@@ -153,8 +153,8 @@ export const validateCanvasOAuthStateToken = async (
 
   if (payload === null) {
     return {
-      status: 'invalid',
-      reason: 'state payload is missing required fields',
+      status: "invalid",
+      reason: "state payload is missing required fields",
     };
   }
 
@@ -164,32 +164,34 @@ export const validateCanvasOAuthStateToken = async (
 
   if (!Number.isFinite(nowMs) || !Number.isFinite(issuedAtMs) || !Number.isFinite(expiresAtMs)) {
     return {
-      status: 'invalid',
-      reason: 'state payload timestamps are invalid',
+      status: "invalid",
+      reason: "state payload timestamps are invalid",
     };
   }
 
   if (issuedAtMs > nowMs + 30_000) {
     return {
-      status: 'invalid',
-      reason: 'state token issuedAt is in the future',
+      status: "invalid",
+      reason: "state token issuedAt is in the future",
     };
   }
 
   if (expiresAtMs <= nowMs) {
     return {
-      status: 'invalid',
-      reason: 'state token is expired',
+      status: "invalid",
+      reason: "state token is expired",
     };
   }
 
   return {
-    status: 'ok',
+    status: "ok",
     payload,
   };
 };
 
-const parseCanvasTokenResponse = (input: unknown): {
+const parseCanvasTokenResponse = (
+  input: unknown,
+): {
   accessToken: string;
   refreshToken?: string | undefined;
   expiresInSeconds?: number | undefined;
@@ -199,13 +201,13 @@ const parseCanvasTokenResponse = (input: unknown): {
   const payload = asJsonObject(input);
 
   if (payload === null) {
-    throw new Error('Canvas token response must be a JSON object');
+    throw new Error("Canvas token response must be a JSON object");
   }
 
   const accessToken = asNonEmptyString(payload.access_token);
 
   if (accessToken === null) {
-    throw new Error('Canvas token response is missing access_token');
+    throw new Error("Canvas token response is missing access_token");
   }
 
   const refreshToken = asNonEmptyString(payload.refresh_token) ?? undefined;
@@ -216,12 +218,12 @@ const parseCanvasTokenResponse = (input: unknown): {
   let expiresInSeconds: number | undefined;
   let refreshTokenExpiresInSeconds: number | undefined;
 
-  if (typeof expiresInRaw === 'number' && Number.isFinite(expiresInRaw) && expiresInRaw > 0) {
+  if (typeof expiresInRaw === "number" && Number.isFinite(expiresInRaw) && expiresInRaw > 0) {
     expiresInSeconds = Math.floor(expiresInRaw);
   }
 
   if (
-    typeof refreshTokenExpiresInRaw === 'number' &&
+    typeof refreshTokenExpiresInRaw === "number" &&
     Number.isFinite(refreshTokenExpiresInRaw) &&
     refreshTokenExpiresInRaw > 0
   ) {
@@ -253,13 +255,13 @@ export const exchangeCanvasAuthorizationCode = async (input: {
 }> => {
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(input.tokenEndpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      accept: 'application/json',
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
     },
     body: new URLSearchParams({
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       client_id: input.clientId,
       client_secret: input.clientSecret,
       code: input.code,
@@ -290,13 +292,13 @@ export const refreshCanvasAccessToken = async (input: {
 }> => {
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(input.tokenEndpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      accept: 'application/json',
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
     },
     body: new URLSearchParams({
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       client_id: input.clientId,
       client_secret: input.clientSecret,
       refresh_token: input.refreshToken,

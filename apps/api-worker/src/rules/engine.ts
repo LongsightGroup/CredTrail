@@ -1,4 +1,7 @@
-import type { BadgeIssuanceRuleCondition, BadgeIssuanceRuleDefinition } from '@credtrail/validation';
+import type {
+  BadgeIssuanceRuleCondition,
+  BadgeIssuanceRuleDefinition,
+} from "@credtrail/validation";
 
 export interface BadgeIssuanceRuleGradeFact {
   courseId: string;
@@ -45,7 +48,7 @@ export interface BadgeIssuanceRuleEvaluationNode {
   type: string;
   matched: boolean;
   detail: string;
-  resultKind?: 'matched' | 'failed_condition' | 'missing_data';
+  resultKind?: "matched" | "failed_condition" | "missing_data";
   children?: BadgeIssuanceRuleEvaluationNode[];
 }
 
@@ -72,38 +75,38 @@ export const extractBadgeIssuanceRuleRequirements = (
   const prerequisiteBadgeTemplateIds = new Set<string>();
 
   const collect = (condition: BadgeIssuanceRuleCondition): void => {
-    if ('all' in condition) {
+    if ("all" in condition) {
       for (const child of condition.all) {
         collect(child);
       }
       return;
     }
 
-    if ('any' in condition) {
+    if ("any" in condition) {
       for (const child of condition.any) {
         collect(child);
       }
       return;
     }
 
-    if ('not' in condition) {
+    if ("not" in condition) {
       collect(condition.not);
       return;
     }
 
     switch (condition.type) {
-      case 'grade_threshold':
-      case 'course_completion':
+      case "grade_threshold":
+      case "course_completion":
         if (condition.courseId !== undefined) {
           courseIds.add(condition.courseId);
         }
         return;
-      case 'program_completion':
+      case "program_completion":
         for (const courseId of condition.courseIds ?? []) {
           courseIds.add(courseId);
         }
         return;
-      case 'assignment_submission': {
+      case "assignment_submission": {
         courseIds.add(condition.courseId);
         assignmentRefs.set(
           assignmentKey({
@@ -117,12 +120,12 @@ export const extractBadgeIssuanceRuleRequirements = (
         );
         return;
       }
-      case 'prerequisite_badge':
+      case "prerequisite_badge":
         if (condition.badgeTemplateId !== undefined) {
           prerequisiteBadgeTemplateIds.add(condition.badgeTemplateId);
         }
         return;
-      case 'time_window':
+      case "time_window":
         return;
     }
   };
@@ -137,77 +140,82 @@ export const extractBadgeIssuanceRuleRequirements = (
 };
 
 const evaluatePredicate = (
-  condition: Exclude<BadgeIssuanceRuleCondition, { all: BadgeIssuanceRuleCondition[] } | { any: BadgeIssuanceRuleCondition[] } | { not: BadgeIssuanceRuleCondition }>,
+  condition: Exclude<
+    BadgeIssuanceRuleCondition,
+    | { all: BadgeIssuanceRuleCondition[] }
+    | { any: BadgeIssuanceRuleCondition[] }
+    | { not: BadgeIssuanceRuleCondition }
+  >,
   facts: BadgeIssuanceRuleEvaluationFacts,
 ): BadgeIssuanceRuleEvaluationNode => {
   switch (condition.type) {
-    case 'grade_threshold': {
-      const courseId = condition.courseId ?? 'unknown course';
+    case "grade_threshold": {
+      const courseId = condition.courseId ?? "unknown course";
       const grade = facts.grades.find(
         (candidate) => candidate.courseId === courseId && candidate.learnerId === facts.learnerId,
       );
 
       if (grade === undefined) {
         return {
-          type: 'grade_threshold',
+          type: "grade_threshold",
           matched: false,
           detail: `No grade fact found for course ${courseId}`,
-          resultKind: 'missing_data',
+          resultKind: "missing_data",
         };
       }
 
-      const scoreField = condition.scoreField ?? 'final_score';
+      const scoreField = condition.scoreField ?? "final_score";
       const score =
-        scoreField === 'current_score'
+        scoreField === "current_score"
           ? grade.currentScore
-          : grade.finalScore ?? grade.currentScore;
+          : (grade.finalScore ?? grade.currentScore);
 
       if (score === null) {
         return {
-          type: 'grade_threshold',
+          type: "grade_threshold",
           matched: false,
           detail: `Score is unavailable for course ${courseId}`,
-          resultKind: 'missing_data',
+          resultKind: "missing_data",
         };
       }
 
       if (condition.minScore !== undefined && score < condition.minScore) {
         return {
-          type: 'grade_threshold',
+          type: "grade_threshold",
           matched: false,
           detail: `Score ${score.toFixed(2)} is below minimum ${condition.minScore.toFixed(2)}`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       if (condition.maxScore !== undefined && score > condition.maxScore) {
         return {
-          type: 'grade_threshold',
+          type: "grade_threshold",
           matched: false,
           detail: `Score ${score.toFixed(2)} exceeds maximum ${condition.maxScore.toFixed(2)}`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       return {
-        type: 'grade_threshold',
+        type: "grade_threshold",
         matched: true,
         detail: `Score ${score.toFixed(2)} satisfies threshold for course ${courseId}`,
-        resultKind: 'matched',
+        resultKind: "matched",
       };
     }
-    case 'course_completion': {
-      const courseId = condition.courseId ?? 'unknown course';
+    case "course_completion": {
+      const courseId = condition.courseId ?? "unknown course";
       const completion = facts.completions.find(
         (candidate) => candidate.courseId === courseId && candidate.learnerId === facts.learnerId,
       );
 
       if (completion === undefined) {
         return {
-          type: 'course_completion',
+          type: "course_completion",
           matched: false,
           detail: `No completion fact found for course ${courseId}`,
-          resultKind: 'missing_data',
+          resultKind: "missing_data",
         };
       }
 
@@ -215,33 +223,34 @@ const evaluatePredicate = (
 
       if (requireCompleted && !completion.completed) {
         return {
-          type: 'course_completion',
+          type: "course_completion",
           matched: false,
           detail: `Course ${courseId} is not marked completed`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       if (
         condition.minCompletionPercent !== undefined &&
-        (completion.completionPercent === null || completion.completionPercent < condition.minCompletionPercent)
+        (completion.completionPercent === null ||
+          completion.completionPercent < condition.minCompletionPercent)
       ) {
         return {
-          type: 'course_completion',
+          type: "course_completion",
           matched: false,
           detail: `Completion percent for course ${courseId} is below ${String(condition.minCompletionPercent)}`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       return {
-        type: 'course_completion',
+        type: "course_completion",
         matched: true,
         detail: `Completion criteria satisfied for course ${courseId}`,
-        resultKind: 'matched',
+        resultKind: "matched",
       };
     }
-    case 'program_completion': {
+    case "program_completion": {
       const courseIds = condition.courseIds ?? [];
       const minimumCompleted = condition.minimumCompleted ?? courseIds.length;
       let completedCount = 0;
@@ -258,21 +267,21 @@ const evaluatePredicate = (
 
       if (completedCount < minimumCompleted) {
         return {
-          type: 'program_completion',
+          type: "program_completion",
           matched: false,
           detail: `Completed ${String(completedCount)}/${String(courseIds.length)} courses; requires ${String(minimumCompleted)}`,
-          resultKind: completedCount === 0 ? 'missing_data' : 'failed_condition',
+          resultKind: completedCount === 0 ? "missing_data" : "failed_condition",
         };
       }
 
       return {
-        type: 'program_completion',
+        type: "program_completion",
         matched: true,
         detail: `Completed ${String(completedCount)}/${String(courseIds.length)} required courses`,
-        resultKind: 'matched',
+        resultKind: "matched",
       };
     }
-    case 'assignment_submission': {
+    case "assignment_submission": {
       const assignmentId = condition.assignmentId;
       const submission = facts.submissions.find(
         (candidate) =>
@@ -283,106 +292,112 @@ const evaluatePredicate = (
 
       if (submission === undefined) {
         return {
-          type: 'assignment_submission',
+          type: "assignment_submission",
           matched: false,
           detail: `No submission found for assignment ${assignmentId}`,
-          resultKind: 'missing_data',
+          resultKind: "missing_data",
         };
       }
 
       const requireSubmitted = condition.requireSubmitted ?? true;
       const submitted =
         submission.submittedAt !== null ||
-        (submission.workflowState !== null && submission.workflowState !== 'unsubmitted');
+        (submission.workflowState !== null && submission.workflowState !== "unsubmitted");
 
       if (requireSubmitted && !submitted) {
         return {
-          type: 'assignment_submission',
+          type: "assignment_submission",
           matched: false,
           detail: `Assignment ${assignmentId} has not been submitted`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
-      if (condition.minScore !== undefined && (submission.score === null || submission.score < condition.minScore)) {
+      if (
+        condition.minScore !== undefined &&
+        (submission.score === null || submission.score < condition.minScore)
+      ) {
         return {
-          type: 'assignment_submission',
+          type: "assignment_submission",
           matched: false,
           detail: `Assignment score is below required threshold ${String(condition.minScore)}`,
-          resultKind: submission.score === null ? 'missing_data' : 'failed_condition',
+          resultKind: submission.score === null ? "missing_data" : "failed_condition",
         };
       }
 
       if (
         condition.workflowStates !== undefined &&
-        (submission.workflowState === null || !condition.workflowStates.includes(submission.workflowState))
+        (submission.workflowState === null ||
+          !condition.workflowStates.includes(submission.workflowState))
       ) {
         return {
-          type: 'assignment_submission',
+          type: "assignment_submission",
           matched: false,
-          detail: `Submission workflow state ${submission.workflowState ?? 'null'} is not allowed`,
-          resultKind: submission.workflowState === null ? 'missing_data' : 'failed_condition',
+          detail: `Submission workflow state ${submission.workflowState ?? "null"} is not allowed`,
+          resultKind: submission.workflowState === null ? "missing_data" : "failed_condition",
         };
       }
 
       return {
-        type: 'assignment_submission',
+        type: "assignment_submission",
         matched: true,
         detail: `Submission criteria satisfied for assignment ${assignmentId}`,
-        resultKind: 'matched',
+        resultKind: "matched",
       };
     }
-    case 'prerequisite_badge': {
-      const badgeTemplateId = condition.badgeTemplateId ?? '';
+    case "prerequisite_badge": {
+      const badgeTemplateId = condition.badgeTemplateId ?? "";
       const matched = facts.earnedBadgeTemplateIds.includes(badgeTemplateId);
 
       return {
-        type: 'prerequisite_badge',
+        type: "prerequisite_badge",
         matched,
         detail: matched
           ? `Prerequisite badge ${badgeTemplateId} is present`
           : `Prerequisite badge ${badgeTemplateId} is missing`,
-        resultKind: matched ? 'matched' : 'failed_condition',
+        resultKind: matched ? "matched" : "failed_condition",
       };
     }
-    case 'time_window': {
+    case "time_window": {
       const nowMs = Date.parse(facts.nowIso);
 
       if (!Number.isFinite(nowMs)) {
         return {
-          type: 'time_window',
+          type: "time_window",
           matched: false,
-          detail: 'Evaluation timestamp is invalid',
-          resultKind: 'missing_data',
+          detail: "Evaluation timestamp is invalid",
+          resultKind: "missing_data",
         };
       }
 
-      const notBeforeMs = condition.notBefore === undefined ? undefined : Date.parse(condition.notBefore);
-      const notAfterMs = condition.notAfter === undefined ? undefined : Date.parse(condition.notAfter);
+      const notBeforeMs =
+        condition.notBefore === undefined ? undefined : Date.parse(condition.notBefore);
+      const notAfterMs =
+        condition.notAfter === undefined ? undefined : Date.parse(condition.notAfter);
 
       if (notBeforeMs !== undefined && Number.isFinite(notBeforeMs) && nowMs < notBeforeMs) {
         return {
-          type: 'time_window',
+          type: "time_window",
           matched: false,
           detail: `Current time is before ${String(condition.notBefore)}`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       if (notAfterMs !== undefined && Number.isFinite(notAfterMs) && nowMs > notAfterMs) {
         return {
-          type: 'time_window',
+          type: "time_window",
           matched: false,
           detail: `Current time is after ${String(condition.notAfter)}`,
-          resultKind: 'failed_condition',
+          resultKind: "failed_condition",
         };
       }
 
       return {
-        type: 'time_window',
+        type: "time_window",
         matched: true,
-        detail: 'Evaluation timestamp is within allowed window',
-        resultKind: 'matched',
+        detail: "Evaluation timestamp is within allowed window",
+        resultKind: "matched",
       };
     }
   }
@@ -392,37 +407,37 @@ const evaluateCondition = (
   condition: BadgeIssuanceRuleCondition,
   facts: BadgeIssuanceRuleEvaluationFacts,
 ): BadgeIssuanceRuleEvaluationNode => {
-  if ('all' in condition) {
+  if ("all" in condition) {
     const children = condition.all.map((child) => evaluateCondition(child, facts));
     const matched = children.every((child) => child.matched);
 
     return {
-      type: 'all',
+      type: "all",
       matched,
-      detail: matched ? 'All conditions matched' : 'At least one condition failed',
+      detail: matched ? "All conditions matched" : "At least one condition failed",
       children,
     };
   }
 
-  if ('any' in condition) {
+  if ("any" in condition) {
     const children = condition.any.map((child) => evaluateCondition(child, facts));
     const matched = children.some((child) => child.matched);
 
     return {
-      type: 'any',
+      type: "any",
       matched,
-      detail: matched ? 'At least one condition matched' : 'No conditions matched',
+      detail: matched ? "At least one condition matched" : "No conditions matched",
       children,
     };
   }
 
-  if ('not' in condition) {
+  if ("not" in condition) {
     const child = evaluateCondition(condition.not, facts);
 
     return {
-      type: 'not',
+      type: "not",
       matched: !child.matched,
-      detail: !child.matched ? 'Negated condition matched' : 'Negated condition failed',
+      detail: !child.matched ? "Negated condition matched" : "Negated condition failed",
       children: [child],
     };
   }
@@ -460,12 +475,12 @@ export const summarizeBadgeIssuanceRuleEvaluation = (
       return;
     }
 
-    if (node.resultKind === 'matched') {
+    if (node.resultKind === "matched") {
       summary.matchedLeafCount += 1;
       return;
     }
 
-    if (node.resultKind === 'missing_data') {
+    if (node.resultKind === "missing_data") {
       summary.missingDataCount += 1;
       return;
     }

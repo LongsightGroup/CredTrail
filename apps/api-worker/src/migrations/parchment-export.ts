@@ -1,6 +1,6 @@
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
-export type ParchmentExportFileFormat = 'csv' | 'json';
+export type ParchmentExportFileFormat = "csv" | "json";
 
 export interface ParchmentExportUploadRow {
   rowNumber: number;
@@ -15,7 +15,7 @@ export interface ParseParchmentExportFileResult {
 export class ParchmentExportFileParseError extends Error {
   public constructor(message: string) {
     super(message);
-    this.name = 'ParchmentExportFileParseError';
+    this.name = "ParchmentExportFileParseError";
   }
 }
 
@@ -44,85 +44,88 @@ interface CanonicalParchmentRow {
   narrative?: string;
 }
 
-type CanonicalParchmentCsvField = Exclude<keyof CanonicalParchmentRow, 'recipientHashed'>;
+type CanonicalParchmentCsvField = Exclude<keyof CanonicalParchmentRow, "recipientHashed">;
 
 const normalizeHeader = (value: string): string => {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 };
 
 const canonicalFieldForCsvHeader = (header: string): CanonicalParchmentCsvField | null => {
   switch (header) {
-    case 'identifier':
-    case 'recipientemail':
-    case 'email':
-    case 'issuedtoemail':
-      return 'recipientIdentity';
-    case 'recipienttype':
-      return 'recipientType';
-    case 'firstname':
-    case 'issuedtofirstname':
-    case 'recipientfirstname':
-      return 'firstName';
-    case 'lastname':
-    case 'issuedtolastname':
-    case 'recipientlastname':
-      return 'lastName';
-    case 'recipientname':
-    case 'issuedtoname':
-    case 'name':
-      return 'recipientName';
-    case 'issuedat':
-    case 'issueddate':
-    case 'issuedon':
-    case 'awardedat':
-    case 'issuedate':
-      return 'issuedAt';
-    case 'badgeclassid':
-    case 'badgeid':
-    case 'badge':
-    case 'badgetemplateid':
-      return 'badgeClassId';
-    case 'badgeclassname':
-    case 'badgename':
-    case 'title':
-    case 'badgetemplatename':
-      return 'badgeClassName';
-    case 'badgeclassdescription':
-    case 'badgedescription':
-    case 'badgetemplatedescription':
-      return 'badgeClassDescription';
-    case 'badgeclassimageurl':
-    case 'badgeimageurl':
-    case 'imageurl':
-      return 'badgeClassImageUrl';
-    case 'badgeclasscriteriaurl':
-    case 'badgecriteriaurl':
-    case 'criteriaurl':
-      return 'badgeClassCriteriaUrl';
-    case 'issuerid':
-    case 'organizationid':
-      return 'issuerId';
-    case 'issuername':
-    case 'organizationname':
-      return 'issuerName';
-    case 'issuerurl':
-    case 'organizationurl':
-      return 'issuerUrl';
-    case 'id':
-    case 'assertionid':
-    case 'credentialid':
-    case 'issuedbadgeid':
-      return 'assertionId';
-    case 'evidence':
-    case 'evidenceurl':
-    case 'artifacturl':
-      return 'evidenceUrl';
-    case 'evidencenarrative':
-    case 'artifactnarrative':
-    case 'artifactdescription':
-      return 'evidenceNarrative';
-    case 'narrative':
-      return 'narrative';
+    case "identifier":
+    case "recipientemail":
+    case "email":
+    case "issuedtoemail":
+      return "recipientIdentity";
+    case "recipienttype":
+      return "recipientType";
+    case "firstname":
+    case "issuedtofirstname":
+    case "recipientfirstname":
+      return "firstName";
+    case "lastname":
+    case "issuedtolastname":
+    case "recipientlastname":
+      return "lastName";
+    case "recipientname":
+    case "issuedtoname":
+    case "name":
+      return "recipientName";
+    case "issuedat":
+    case "issueddate":
+    case "issuedon":
+    case "awardedat":
+    case "issuedate":
+      return "issuedAt";
+    case "badgeclassid":
+    case "badgeid":
+    case "badge":
+    case "badgetemplateid":
+      return "badgeClassId";
+    case "badgeclassname":
+    case "badgename":
+    case "title":
+    case "badgetemplatename":
+      return "badgeClassName";
+    case "badgeclassdescription":
+    case "badgedescription":
+    case "badgetemplatedescription":
+      return "badgeClassDescription";
+    case "badgeclassimageurl":
+    case "badgeimageurl":
+    case "imageurl":
+      return "badgeClassImageUrl";
+    case "badgeclasscriteriaurl":
+    case "badgecriteriaurl":
+    case "criteriaurl":
+      return "badgeClassCriteriaUrl";
+    case "issuerid":
+    case "organizationid":
+      return "issuerId";
+    case "issuername":
+    case "organizationname":
+      return "issuerName";
+    case "issuerurl":
+    case "organizationurl":
+      return "issuerUrl";
+    case "id":
+    case "assertionid":
+    case "credentialid":
+    case "issuedbadgeid":
+      return "assertionId";
+    case "evidence":
+    case "evidenceurl":
+    case "artifacturl":
+      return "evidenceUrl";
+    case "evidencenarrative":
+    case "artifactnarrative":
+    case "artifactdescription":
+      return "evidenceNarrative";
+    case "narrative":
+      return "narrative";
     default:
       return null;
   }
@@ -131,11 +134,11 @@ const canonicalFieldForCsvHeader = (header: string): CanonicalParchmentCsvField 
 const parseCsvMatrix = (input: string): string[][] => {
   const rows: string[][] = [];
   let currentRow: string[] = [];
-  let currentField = '';
+  let currentField = "";
   let insideQuotes = false;
 
   for (let index = 0; index < input.length; index += 1) {
-    const character = input[index] ?? '';
+    const character = input[index] ?? "";
 
     if (insideQuotes) {
       if (character === '"') {
@@ -159,21 +162,21 @@ const parseCsvMatrix = (input: string): string[][] => {
       continue;
     }
 
-    if (character === ',') {
+    if (character === ",") {
       currentRow.push(currentField);
-      currentField = '';
+      currentField = "";
       continue;
     }
 
-    if (character === '\n') {
+    if (character === "\n") {
       currentRow.push(currentField);
       rows.push(currentRow);
       currentRow = [];
-      currentField = '';
+      currentField = "";
       continue;
     }
 
-    if (character === '\r') {
+    if (character === "\r") {
       continue;
     }
 
@@ -181,7 +184,7 @@ const parseCsvMatrix = (input: string): string[][] => {
   }
 
   if (insideQuotes) {
-    throw new ParchmentExportFileParseError('Invalid CSV: unclosed quoted value');
+    throw new ParchmentExportFileParseError("Invalid CSV: unclosed quoted value");
   }
 
   currentRow.push(currentField);
@@ -200,7 +203,7 @@ const getPathValue = (value: unknown, path: readonly string[]): unknown => {
     return undefined;
   }
 
-  const joinedPath = path.join('.');
+  const joinedPath = path.join(".");
 
   if (Object.prototype.hasOwnProperty.call(rootObject, joinedPath)) {
     return rootObject[joinedPath];
@@ -259,19 +262,22 @@ const pickObject = (
   return undefined;
 };
 
-const pickBoolean = (value: unknown, paths: readonly (readonly string[])[]): boolean | undefined => {
+const pickBoolean = (
+  value: unknown,
+  paths: readonly (readonly string[])[],
+): boolean | undefined => {
   for (const path of paths) {
     const candidate = getPathValue(value, path);
 
-    if (typeof candidate === 'boolean') {
+    if (typeof candidate === "boolean") {
       return candidate;
     }
 
-    if (candidate === 'true') {
+    if (candidate === "true") {
       return true;
     }
 
-    if (candidate === 'false') {
+    if (candidate === "false") {
       return false;
     }
   }
@@ -280,7 +286,7 @@ const pickBoolean = (value: unknown, paths: readonly (readonly string[])[]): boo
 };
 
 const extractEvidenceObject = (value: unknown): Record<string, unknown> | undefined => {
-  const evidenceValue = getPathValue(value, ['evidence']);
+  const evidenceValue = getPathValue(value, ["evidence"]);
   const evidenceArray = Array.isArray(evidenceValue) ? (evidenceValue as unknown[]) : null;
 
   if (evidenceArray !== null) {
@@ -304,29 +310,30 @@ const extractEvidenceObject = (value: unknown): Record<string, unknown> | undefi
   return directEvidenceObject ?? undefined;
 };
 
-const rowToOb2Candidate = (row: CanonicalParchmentRow, rowNumber: number): Record<string, unknown> => {
+const rowToOb2Candidate = (
+  row: CanonicalParchmentRow,
+  rowNumber: number,
+): Record<string, unknown> => {
   const recipientName =
     row.recipientName ??
     [row.firstName, row.lastName]
       .filter((segment): segment is string => segment !== undefined)
-      .join(' ')
+      .join(" ")
       .trim();
   const badgeClassName =
-    row.badgeClassName ??
-    row.badgeClassId ??
-    `Parchment imported badge ${String(rowNumber)}`;
+    row.badgeClassName ?? row.badgeClassId ?? `Parchment imported badge ${String(rowNumber)}`;
   const issuerReference = row.issuerId ?? row.issuerUrl;
   const issuerObject =
     row.issuerName === undefined && issuerReference === undefined
       ? undefined
       : {
-          type: 'Issuer',
+          type: "Issuer",
           ...(issuerReference === undefined ? {} : { id: issuerReference }),
           ...(row.issuerName === undefined ? {} : { name: row.issuerName }),
           ...(row.issuerUrl === undefined ? {} : { url: row.issuerUrl }),
         };
   const badgeClass: Record<string, unknown> = {
-    type: 'BadgeClass',
+    type: "BadgeClass",
     ...(row.badgeClassId === undefined ? {} : { id: row.badgeClassId }),
     name: badgeClassName,
     ...(row.badgeClassDescription === undefined ? {} : { description: row.badgeClassDescription }),
@@ -335,7 +342,7 @@ const rowToOb2Candidate = (row: CanonicalParchmentRow, rowNumber: number): Recor
       : {
           image: {
             id: row.badgeClassImageUrl,
-            type: 'Image',
+            type: "Image",
           },
         }),
     ...(row.badgeClassCriteriaUrl === undefined
@@ -343,7 +350,7 @@ const rowToOb2Candidate = (row: CanonicalParchmentRow, rowNumber: number): Recor
       : {
           criteria: {
             id: row.badgeClassCriteriaUrl,
-            type: 'Criteria',
+            type: "Criteria",
           },
         }),
     ...(issuerReference === undefined
@@ -360,10 +367,10 @@ const rowToOb2Candidate = (row: CanonicalParchmentRow, rowNumber: number): Recor
           ...(row.evidenceNarrative === undefined ? {} : { narrative: row.evidenceNarrative }),
         };
   const assertion: Record<string, unknown> = {
-    type: 'Assertion',
+    type: "Assertion",
     ...(row.assertionId === undefined ? {} : { id: row.assertionId }),
     recipient: {
-      type: row.recipientType ?? 'email',
+      type: row.recipientType ?? "email",
       ...(row.recipientIdentity === undefined ? {} : { identity: row.recipientIdentity }),
       ...(recipientName.length === 0 ? {} : { name: recipientName }),
       ...(row.recipientHashed === undefined ? {} : { hashed: row.recipientHashed }),
@@ -378,81 +385,97 @@ const rowToOb2Candidate = (row: CanonicalParchmentRow, rowNumber: number): Recor
   return {
     ob2Assertion: assertion,
     ob2BadgeClass: badgeClass,
-    ...(issuerReference === undefined || issuerObject === undefined ? {} : { ob2Issuer: issuerObject }),
+    ...(issuerReference === undefined || issuerObject === undefined
+      ? {}
+      : { ob2Issuer: issuerObject }),
   };
 };
 
 const canonicalParchmentRowFromJson = (row: Record<string, unknown>): CanonicalParchmentRow => {
-  const badgeClass = pickObject(row, [['badgeclass'], ['badgeClass'], ['badge_class'], ['badge']]);
+  const badgeClass = pickObject(row, [["badgeclass"], ["badgeClass"], ["badge_class"], ["badge"]]);
   const issuerObject =
-    pickObject(row, [['issuer']]) ??
-    (badgeClass === undefined ? undefined : pickObject(badgeClass, [['issuer']]));
+    pickObject(row, [["issuer"]]) ??
+    (badgeClass === undefined ? undefined : pickObject(badgeClass, [["issuer"]]));
   const evidenceObject = extractEvidenceObject(row);
   const canonicalRow: CanonicalParchmentRow = {};
   const recipientIdentity = pickString(row, [
-    ['identifier'],
-    ['recipient_email'],
-    ['recipientEmail'],
-    ['email'],
-    ['recipient', 'identity'],
+    ["identifier"],
+    ["recipient_email"],
+    ["recipientEmail"],
+    ["email"],
+    ["recipient", "identity"],
   ]);
-  const recipientType = pickString(row, [['recipient_type'], ['recipient', 'type']]);
-  const recipientHashed = pickBoolean(row, [['recipient_hashed'], ['recipient', 'hashed']]);
-  const recipientSalt = pickString(row, [['recipient_salt'], ['recipient', 'salt']]);
+  const recipientType = pickString(row, [["recipient_type"], ["recipient", "type"]]);
+  const recipientHashed = pickBoolean(row, [["recipient_hashed"], ["recipient", "hashed"]]);
+  const recipientSalt = pickString(row, [["recipient_salt"], ["recipient", "salt"]]);
   const firstName = pickString(row, [
-    ['first_name'],
-    ['recipient_first_name'],
-    ['issued_to_first_name'],
-    ['recipient', 'firstName'],
+    ["first_name"],
+    ["recipient_first_name"],
+    ["issued_to_first_name"],
+    ["recipient", "firstName"],
   ]);
   const lastName = pickString(row, [
-    ['last_name'],
-    ['recipient_last_name'],
-    ['issued_to_last_name'],
-    ['recipient', 'lastName'],
+    ["last_name"],
+    ["recipient_last_name"],
+    ["issued_to_last_name"],
+    ["recipient", "lastName"],
   ]);
-  const recipientName = pickString(row, [['recipient_name'], ['issued_to_name'], ['recipient', 'name']]);
-  const issuedAt = pickString(row, [['issued_on'], ['issued_at'], ['awarded_at'], ['issue_date']]);
+  const recipientName = pickString(row, [
+    ["recipient_name"],
+    ["issued_to_name"],
+    ["recipient", "name"],
+  ]);
+  const issuedAt = pickString(row, [["issued_on"], ["issued_at"], ["awarded_at"], ["issue_date"]]);
   const badgeClassId =
-    (badgeClass === undefined ? undefined : asNonEmptyString(badgeClass.id) ?? undefined) ??
-    pickString(row, [['badge_class_id'], ['badgeClassId'], ['badge_template_id']]);
+    (badgeClass === undefined ? undefined : (asNonEmptyString(badgeClass.id) ?? undefined)) ??
+    pickString(row, [["badge_class_id"], ["badgeClassId"], ["badge_template_id"]]);
   const badgeClassName =
-    (badgeClass === undefined ? undefined : asNonEmptyString(badgeClass.name) ?? undefined) ??
-    pickString(row, [['badge_class_name'], ['badgeClassName'], ['badge_name']]);
+    (badgeClass === undefined ? undefined : (asNonEmptyString(badgeClass.name) ?? undefined)) ??
+    pickString(row, [["badge_class_name"], ["badgeClassName"], ["badge_name"]]);
   const badgeClassDescription =
-    (badgeClass === undefined ? undefined : asNonEmptyString(badgeClass.description) ?? undefined) ??
-    pickString(row, [['badge_class_description'], ['badgeClassDescription'], ['badge_description']]);
+    (badgeClass === undefined
+      ? undefined
+      : (asNonEmptyString(badgeClass.description) ?? undefined)) ??
+    pickString(row, [
+      ["badge_class_description"],
+      ["badgeClassDescription"],
+      ["badge_description"],
+    ]);
   const badgeClassImageUrl =
     (badgeClass === undefined
       ? undefined
-      : pickString(badgeClass, [['image', 'id'], ['image_url'], ['image']])) ??
-    pickString(row, [['badge_class_image_url'], ['badgeClassImageUrl'], ['badge_image_url']]);
+      : pickString(badgeClass, [["image", "id"], ["image_url"], ["image"]])) ??
+    pickString(row, [["badge_class_image_url"], ["badgeClassImageUrl"], ["badge_image_url"]]);
   const badgeClassCriteriaUrl =
     (badgeClass === undefined
       ? undefined
-      : pickString(badgeClass, [['criteria', 'id'], ['criteria_url'], ['criteria']])) ??
-    pickString(row, [['badge_class_criteria_url'], ['badgeClassCriteriaUrl'], ['badge_criteria_url']]);
+      : pickString(badgeClass, [["criteria", "id"], ["criteria_url"], ["criteria"]])) ??
+    pickString(row, [
+      ["badge_class_criteria_url"],
+      ["badgeClassCriteriaUrl"],
+      ["badge_criteria_url"],
+    ]);
   const issuerId =
-    (issuerObject === undefined ? undefined : asNonEmptyString(issuerObject.id) ?? undefined) ??
-    pickString(row, [['issuer_id'], ['issuerId']]);
+    (issuerObject === undefined ? undefined : (asNonEmptyString(issuerObject.id) ?? undefined)) ??
+    pickString(row, [["issuer_id"], ["issuerId"]]);
   const issuerName =
-    (issuerObject === undefined ? undefined : asNonEmptyString(issuerObject.name) ?? undefined) ??
-    pickString(row, [['issuer_name'], ['issuerName']]);
+    (issuerObject === undefined ? undefined : (asNonEmptyString(issuerObject.name) ?? undefined)) ??
+    pickString(row, [["issuer_name"], ["issuerName"]]);
   const issuerUrl =
-    (issuerObject === undefined ? undefined : asNonEmptyString(issuerObject.url) ?? undefined) ??
-    pickString(row, [['issuer_url'], ['issuerUrl']]);
-  const assertionId = pickString(row, [['id'], ['assertion_id'], ['credential_id']]);
+    (issuerObject === undefined ? undefined : (asNonEmptyString(issuerObject.url) ?? undefined)) ??
+    pickString(row, [["issuer_url"], ["issuerUrl"]]);
+  const assertionId = pickString(row, [["id"], ["assertion_id"], ["credential_id"]]);
   const evidenceUrl =
     (evidenceObject === undefined
       ? undefined
-      : pickString(evidenceObject, [['id'], ['url'], ['artifact_url']])) ??
-    pickString(row, [['evidence_url'], ['artifact_url']]);
+      : pickString(evidenceObject, [["id"], ["url"], ["artifact_url"]])) ??
+    pickString(row, [["evidence_url"], ["artifact_url"]]);
   const evidenceNarrative =
     (evidenceObject === undefined
       ? undefined
-      : pickString(evidenceObject, [['narrative'], ['description']])) ??
-    pickString(row, [['evidence_narrative'], ['artifact_narrative']]);
-  const narrative = pickString(row, [['narrative']]);
+      : pickString(evidenceObject, [["narrative"], ["description"]])) ??
+    pickString(row, [["evidence_narrative"], ["artifact_narrative"]]);
+  const narrative = pickString(row, [["narrative"]]);
 
   if (recipientIdentity !== undefined) {
     canonicalRow.recipientIdentity = recipientIdentity;
@@ -541,7 +564,7 @@ const parseCsvRows = (input: string): ParchmentExportUploadRow[] => {
   const rows = parseCsvMatrix(input);
 
   if (rows.length === 0) {
-    throw new ParchmentExportFileParseError('CSV upload is empty');
+    throw new ParchmentExportFileParseError("CSV upload is empty");
   }
 
   const headerRow = rows[0] ?? [];
@@ -552,7 +575,7 @@ const parseCsvRows = (input: string): ParchmentExportUploadRow[] => {
 
   if (!hasRecognizedHeader) {
     throw new ParchmentExportFileParseError(
-      'CSV header does not contain recognized Parchment/Canvas Credentials columns',
+      "CSV header does not contain recognized Parchment/Canvas Credentials columns",
     );
   }
 
@@ -570,7 +593,7 @@ const parseCsvRows = (input: string): ParchmentExportUploadRow[] => {
         continue;
       }
 
-      const cellValue = row[columnIndex] ?? '';
+      const cellValue = row[columnIndex] ?? "";
 
       if (cellValue.trim().length > 0) {
         hasData = true;
@@ -599,10 +622,15 @@ const flattenJsonRows = (parsed: unknown): unknown[] => {
   const objectValue = asJsonObject(parsed);
 
   if (objectValue === null) {
-    throw new ParchmentExportFileParseError('JSON upload must be an array or object');
+    throw new ParchmentExportFileParseError("JSON upload must be an array or object");
   }
 
-  const listCandidates = [objectValue.data, objectValue.rows, objectValue.result, objectValue.assertions];
+  const listCandidates = [
+    objectValue.data,
+    objectValue.rows,
+    objectValue.result,
+    objectValue.assertions,
+  ];
 
   for (const candidate of listCandidates) {
     if (Array.isArray(candidate)) {
@@ -641,7 +669,9 @@ const flattenJsonRows = (parsed: unknown): unknown[] => {
           ...(assertion.badgeclass === undefined && assertion.badgeClass === undefined
             ? { badgeclass: badgeClass }
             : {}),
-          ...(assertion.issuer === undefined && topLevelIssuer !== null ? { issuer: topLevelIssuer } : {}),
+          ...(assertion.issuer === undefined && topLevelIssuer !== null
+            ? { issuer: topLevelIssuer }
+            : {}),
         });
       }
     }
@@ -652,7 +682,7 @@ const flattenJsonRows = (parsed: unknown): unknown[] => {
   }
 
   throw new ParchmentExportFileParseError(
-    'JSON upload must include rows in an array, data, rows, result, assertions, or badge_classes assertions',
+    "JSON upload must include rows in an array, data, rows, result, assertions, or badge_classes assertions",
   );
 };
 
@@ -662,7 +692,7 @@ const parseJsonRows = (input: string): ParchmentExportUploadRow[] => {
   try {
     parsed = JSON.parse(input) as unknown;
   } catch {
-    throw new ParchmentExportFileParseError('JSON upload is not valid JSON');
+    throw new ParchmentExportFileParseError("JSON upload is not valid JSON");
   }
 
   const rows = flattenJsonRows(parsed);
@@ -697,19 +727,19 @@ const detectFormat = (input: {
   const fileName = input.fileName.trim().toLowerCase();
   const mimeType = input.mimeType.trim().toLowerCase();
 
-  if (fileName.endsWith('.json') || mimeType.includes('application/json')) {
-    return 'json';
+  if (fileName.endsWith(".json") || mimeType.includes("application/json")) {
+    return "json";
   }
 
-  if (fileName.endsWith('.csv') || mimeType.includes('text/csv')) {
-    return 'csv';
+  if (fileName.endsWith(".csv") || mimeType.includes("text/csv")) {
+    return "csv";
   }
 
   try {
     JSON.parse(input.content);
-    return 'json';
+    return "json";
   } catch {
-    return 'csv';
+    return "csv";
   }
 };
 
@@ -719,10 +749,10 @@ export const parseParchmentExportFile = (input: {
   content: string;
 }): ParseParchmentExportFileResult => {
   const format = detectFormat(input);
-  const rows = format === 'json' ? parseJsonRows(input.content) : parseCsvRows(input.content);
+  const rows = format === "json" ? parseJsonRows(input.content) : parseCsvRows(input.content);
 
   if (rows.length === 0) {
-    throw new ParchmentExportFileParseError('Parchment export does not contain any data rows');
+    throw new ParchmentExportFileParseError("Parchment export does not contain any data rows");
   }
 
   if (rows.length > MAX_PARCHMENT_EXPORT_ROWS) {

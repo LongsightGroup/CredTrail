@@ -4,18 +4,18 @@ import type {
   BadgeTemplateRecord,
   TenantMembershipRole,
   TenantRecord,
-} from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
-import { renderPageAssetTags } from '../ui/page-assets';
-import { escapeHtml } from '../utils/display-format';
+} from "@credtrail/db";
+import { renderPageShell } from "@credtrail/ui-components";
+import { renderPageAssetTags } from "../ui/page-assets";
+import { escapeHtml } from "../utils/display-format";
 
 const serializeJsonScriptContent = (value: unknown): string => {
   return JSON.stringify(value)
-    .replaceAll('<', '\\u003c')
-    .replaceAll('>', '\\u003e')
-    .replaceAll('&', '\\u0026')
-    .replaceAll('\u2028', '\\u2028')
-    .replaceAll('\u2029', '\\u2029');
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
 };
 
 export const institutionAdminRuleBuilderPage = (input: {
@@ -59,15 +59,15 @@ export const institutionAdminRuleBuilderPage = (input: {
   const tenantUsersApiPathPrefix = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/users`;
   const showcasePath = `/showcase/${encodeURIComponent(input.tenant.id)}`;
   const userLabel = input.userEmail ?? input.userId;
-  const tutorialEmbedUrl = input.ruleBuilderTutorialEmbedUrl?.trim() ?? '';
+  const tutorialEmbedUrl = input.ruleBuilderTutorialEmbedUrl?.trim() ?? "";
 
   const templateOptions = input.badgeTemplates
     .map((template, index) => {
-      return `<option value="${escapeHtml(template.id)}"${index === 0 ? ' selected' : ''}>${escapeHtml(
+      return `<option value="${escapeHtml(template.id)}"${index === 0 ? " selected" : ""}>${escapeHtml(
         `${template.title} (${template.id})`,
       )}</option>`;
     })
-    .join('\n');
+    .join("\n");
 
   const templateSelectOptions =
     templateOptions.length > 0
@@ -80,12 +80,14 @@ export const institutionAdminRuleBuilderPage = (input: {
       const latestVersion = versions[0] ?? null;
 
       return `<option value="${escapeHtml(rule.id)}">${escapeHtml(
-        `${rule.name} (${rule.id}) · latest ${latestVersion === null ? 'none' : `v${String(
-          latestVersion.versionNumber,
-        )} ${latestVersion.status}`}`,
+        `${rule.name} (${rule.id}) · latest ${
+          latestVersion === null
+            ? "none"
+            : `v${String(latestVersion.versionNumber)} ${latestVersion.status}`
+        }`,
       )}</option>`;
     })
-    .join('\n');
+    .join("\n");
 
   const ruleCloneSelectOptions =
     ruleCloneOptions.length > 0
@@ -698,6 +700,6 @@ export const institutionAdminRuleBuilderPage = (input: {
 
       <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
     </section>`,
-    renderPageAssetTags(['foundationCss', 'institutionAdminCss', 'institutionAdminJs']),
+    renderPageAssetTags(["foundationCss", "institutionAdminCss", "institutionAdminJs"]),
   );
 };

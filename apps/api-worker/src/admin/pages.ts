@@ -1,6 +1,6 @@
-import type { AuditLogRecord } from '@credtrail/db';
-import { renderPageShell } from '@credtrail/ui-components';
-import { escapeHtml, formatIsoTimestamp } from '../utils/display-format';
+import type { AuditLogRecord } from "@credtrail/db";
+import { renderPageShell } from "@credtrail/ui-components";
+import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
 export interface AuditLogAdminPageFilterState {
   tenantId?: string;
@@ -10,7 +10,7 @@ export interface AuditLogAdminPageFilterState {
 
 const metadataSummaryText = (metadataJson: string | null): string => {
   if (metadataJson === null) {
-    return 'No metadata';
+    return "No metadata";
   }
 
   try {
@@ -27,8 +27,8 @@ export const auditLogAdminPage = (input: {
   filterState: AuditLogAdminPageFilterState;
   submissionError?: string;
 }): string => {
-  const filterTenantId = input.filterState.tenantId ?? '';
-  const filterAction = input.filterState.action ?? '';
+  const filterTenantId = input.filterState.tenantId ?? "";
+  const filterAction = input.filterState.action ?? "";
   const filterLimit = String(input.filterState.limit ?? 100);
   const rows =
     input.logs.length === 0
@@ -42,7 +42,7 @@ export const auditLogAdminPage = (input: {
             return `<tr>
               <td style="padding:0.5rem;vertical-align:top;white-space:nowrap;">${escapeHtml(formatIsoTimestamp(log.occurredAt))}</td>
               <td style="padding:0.5rem;vertical-align:top;word-break:break-word;">${escapeHtml(log.action)}</td>
-              <td style="padding:0.5rem;vertical-align:top;word-break:break-word;">${escapeHtml(log.actorUserId ?? 'system')}</td>
+              <td style="padding:0.5rem;vertical-align:top;word-break:break-word;">${escapeHtml(log.actorUserId ?? "system")}</td>
               <td style="padding:0.5rem;vertical-align:top;word-break:break-word;">${escapeHtml(log.targetType)}:${escapeHtml(log.targetId)}</td>
               <td style="padding:0.5rem;vertical-align:top;">
                 <details>
@@ -52,10 +52,10 @@ export const auditLogAdminPage = (input: {
               </td>
             </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   return renderPageShell(
-    'Audit Logs | CredTrail',
+    "Audit Logs | CredTrail",
     `<section style="display:grid;gap:1rem;max-width:72rem;">
       <h1 style="margin:0;">Audit log viewer</h1>
       <p style="margin:0;color:#334155;">
@@ -63,7 +63,7 @@ export const auditLogAdminPage = (input: {
       </p>
       ${
         input.submissionError === undefined
-          ? ''
+          ? ""
           : `<p style="margin:0;padding:0.75rem;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;">${escapeHtml(input.submissionError)}</p>`
       }
       <form method="get" action="/admin/audit-logs" style="display:grid;gap:0.75rem;padding:1rem;border:1px solid #cbd5e1;border-radius:0.5rem;">

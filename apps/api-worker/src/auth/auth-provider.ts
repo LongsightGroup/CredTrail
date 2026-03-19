@@ -1,4 +1,4 @@
-import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-context";
 
 export interface LtiSessionInput {
   tenantId: string;
@@ -14,7 +14,7 @@ export interface RequestMagicLinkInput {
 export interface RequestMagicLinkResult {
   tenantId: string;
   email: string;
-  deliveryStatus: 'sent' | 'skipped' | 'failed';
+  deliveryStatus: "sent" | "skipped" | "failed";
   expiresAt?: string | undefined;
   debugMagicLinkToken?: string | undefined;
   debugMagicLinkUrl?: string | undefined;
@@ -29,10 +29,7 @@ export interface InternalAuthProvider<ContextType> {
     context: ContextType,
     token: string,
   ): Promise<AuthenticatedPrincipal | null>;
-  createLtiSession(
-    context: ContextType,
-    input: LtiSessionInput,
-  ): Promise<AuthenticatedPrincipal>;
+  createLtiSession(context: ContextType, input: LtiSessionInput): Promise<AuthenticatedPrincipal>;
   resolveAuthenticatedPrincipal(context: ContextType): Promise<AuthenticatedPrincipal | null>;
   resolveRequestedTenantContext(context: ContextType): Promise<RequestedTenantContext | null>;
   revokeCurrentSession(context: ContextType): Promise<void>;

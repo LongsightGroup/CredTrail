@@ -1,5 +1,5 @@
-import type { JsonObject } from '@credtrail/core-domain';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import type { JsonObject } from "@credtrail/core-domain";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 import {
   OB3_BASE_PATH,
   OB3_OAUTH_SUPPORTED_SCOPE_SET,
@@ -8,7 +8,7 @@ import {
   OAUTH_PKCE_CODE_VERIFIER_PATTERN,
   OAUTH_RESPONSE_TYPE_CODE,
   OAUTH_TOKEN_ENDPOINT_AUTH_METHOD_CLIENT_SECRET_BASIC,
-} from './constants';
+} from "./constants";
 
 export interface OAuthClientMetadata {
   clientId: string;
@@ -20,7 +20,7 @@ export interface OAuthClientMetadata {
   tokenEndpointAuthMethod: string;
 }
 
-export type RedirectUriValidationError = 'invalid_url' | 'invalid_scheme';
+export type RedirectUriValidationError = "invalid_url" | "invalid_scheme";
 
 export const isPkceCodeChallenge = (value: string): boolean => {
   return OAUTH_PKCE_CODE_CHALLENGE_PATTERN.test(value);
@@ -39,7 +39,7 @@ export const parseBearerAuthorizationHeader = (
 
   const [scheme, token] = authorizationHeader.split(/\s+/, 2);
 
-  if (scheme?.toLowerCase() !== 'bearer') {
+  if (scheme?.toLowerCase() !== "bearer") {
     return null;
   }
 
@@ -54,20 +54,20 @@ export const normalizeOb3ProfileType = (value: unknown): string[] => {
       .filter((entry): entry is string => entry !== null);
     const deduplicated = Array.from(new Set<string>(normalized));
 
-    if (!deduplicated.includes('Profile')) {
-      deduplicated.push('Profile');
+    if (!deduplicated.includes("Profile")) {
+      deduplicated.push("Profile");
     }
 
-    return deduplicated.length === 0 ? ['Profile'] : deduplicated;
+    return deduplicated.length === 0 ? ["Profile"] : deduplicated;
   }
 
   const singularType = asNonEmptyString(value);
 
   if (singularType === null) {
-    return ['Profile'];
+    return ["Profile"];
   }
 
-  return singularType === 'Profile' ? ['Profile'] : [singularType, 'Profile'];
+  return singularType === "Profile" ? ["Profile"] : [singularType, "Profile"];
 };
 
 export const ob3ProfileIdForAccessToken = (input: { tenantId: string; userId: string }): string => {
@@ -101,7 +101,7 @@ export const defaultOb3Profile = (input: {
       tenantId: input.tenantId,
       userId: input.userId,
     }),
-    type: ['Profile'],
+    type: ["Profile"],
     ...(input.email === undefined ? {} : { email: input.email, name: input.email }),
   };
 };
@@ -111,8 +111,8 @@ const parseCompactJwsSegmentObject = (segment: string): JsonObject | null => {
     return null;
   }
 
-  const normalizedBase64 = segment.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedBase64 = `${normalizedBase64}${'='.repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
+  const normalizedBase64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = `${normalizedBase64}${"=".repeat((4 - (normalizedBase64.length % 4)) % 4)}`;
 
   try {
     const segmentRaw = atob(paddedBase64);
@@ -123,7 +123,7 @@ const parseCompactJwsSegmentObject = (segment: string): JsonObject | null => {
 };
 
 export const parseCompactJwsPayloadObject = (compactJws: string): JsonObject | null => {
-  const segments = compactJws.split('.');
+  const segments = compactJws.split(".");
 
   if (segments.length !== 3) {
     return null;
@@ -139,7 +139,7 @@ export const parseCompactJwsPayloadObject = (compactJws: string): JsonObject | n
 };
 
 export const parseCompactJwsHeaderObject = (compactJws: string): JsonObject | null => {
-  const segments = compactJws.split('.');
+  const segments = compactJws.split(".");
 
   if (segments.length !== 3) {
     return null;
@@ -159,10 +159,10 @@ export const resolveOb3CredentialIdFromCompactJws = (compactJws: string): string
   const payload = parseCompactJwsPayloadObject(compactJws);
 
   if (header === null || payload === null) {
-    throw new Error('Compact JWS must contain JSON JOSE header and payload objects');
+    throw new Error("Compact JWS must contain JSON JOSE header and payload objects");
   }
 
-  const allowedJoseHeaders = new Set(['alg', 'kid', 'jwk', 'typ']);
+  const allowedJoseHeaders = new Set(["alg", "kid", "jwk", "typ"]);
 
   for (const headerName of Object.keys(header)) {
     if (!allowedJoseHeaders.has(headerName)) {
@@ -176,23 +176,23 @@ export const resolveOb3CredentialIdFromCompactJws = (compactJws: string): string
   const jwk = asJsonObject(header.jwk);
 
   if (alg === null) {
-    throw new Error('JOSE header must include a non-empty alg value');
+    throw new Error("JOSE header must include a non-empty alg value");
   }
 
-  if (alg.toLowerCase() === 'none') {
+  if (alg.toLowerCase() === "none") {
     throw new Error('JOSE header alg must not be "none"');
   }
 
-  if (typ !== null && typ !== 'JWT') {
+  if (typ !== null && typ !== "JWT") {
     throw new Error('JOSE header typ must be "JWT" when provided');
   }
 
   if (kid === null && jwk === null) {
-    throw new Error('JOSE header must include kid or jwk');
+    throw new Error("JOSE header must include kid or jwk");
   }
 
   if (jwk !== null && asNonEmptyString(jwk.d) !== null) {
-    throw new Error('JOSE header jwk must not include private key material');
+    throw new Error("JOSE header jwk must not include private key material");
   }
 
   const iss = asNonEmptyString(payload.iss);
@@ -202,23 +202,23 @@ export const resolveOb3CredentialIdFromCompactJws = (compactJws: string): string
   const exp = payload.exp;
 
   if (iss === null) {
-    throw new Error('JWT payload must include a non-empty iss claim');
+    throw new Error("JWT payload must include a non-empty iss claim");
   }
 
   if (jti === null) {
-    throw new Error('JWT payload must include a non-empty jti claim');
+    throw new Error("JWT payload must include a non-empty jti claim");
   }
 
-  if (typeof nbf !== 'number' || !Number.isFinite(nbf)) {
-    throw new Error('JWT payload must include a numeric nbf claim');
+  if (typeof nbf !== "number" || !Number.isFinite(nbf)) {
+    throw new Error("JWT payload must include a numeric nbf claim");
   }
 
   if (sub === null) {
-    throw new Error('JWT payload must include a non-empty sub claim');
+    throw new Error("JWT payload must include a non-empty sub claim");
   }
 
-  if (exp !== undefined && (typeof exp !== 'number' || !Number.isFinite(exp))) {
-    throw new Error('JWT payload exp must be numeric when provided');
+  if (exp !== undefined && (typeof exp !== "number" || !Number.isFinite(exp))) {
+    throw new Error("JWT payload exp must be numeric when provided");
   }
 
   return jti;
@@ -248,7 +248,9 @@ export const parsePositiveIntegerQueryParam = (
   return normalized;
 };
 
-export const normalizeSinceQueryParam = (rawSince: string | undefined): string | null | undefined => {
+export const normalizeSinceQueryParam = (
+  rawSince: string | undefined,
+): string | null | undefined => {
   if (rawSince === undefined) {
     return undefined;
   }
@@ -269,11 +271,11 @@ const ob3CredentialsPageUrl = (input: {
   since: string | undefined;
 }): string => {
   const url = new URL(`${OB3_BASE_PATH}/credentials`, input.requestUrl);
-  url.searchParams.set('limit', String(input.limit));
-  url.searchParams.set('offset', String(input.offset));
+  url.searchParams.set("limit", String(input.limit));
+  url.searchParams.set("offset", String(input.offset));
 
   if (input.since !== undefined) {
-    url.searchParams.set('since', input.since);
+    url.searchParams.set("since", input.since);
   }
 
   return url.toString();
@@ -331,7 +333,7 @@ export const ob3CredentialsLinkHeader = (input: {
     );
   }
 
-  return links.join(', ');
+  return links.join(", ");
 };
 
 export const splitSpaceDelimited = (value: string): string[] => {
@@ -383,7 +385,7 @@ export const parseStringArray = (value: unknown): string[] | null => {
   const parsed: string[] = [];
 
   for (const entry of value) {
-    if (typeof entry !== 'string') {
+    if (typeof entry !== "string") {
       return null;
     }
 
@@ -405,11 +407,11 @@ export const validateRedirectUri = (redirectUri: string): RedirectUriValidationE
   try {
     parsedRedirectUri = new URL(redirectUri);
   } catch {
-    return 'invalid_url';
+    return "invalid_url";
   }
 
-  if (parsedRedirectUri.protocol !== 'https:' && parsedRedirectUri.protocol !== 'http:') {
-    return 'invalid_scheme';
+  if (parsedRedirectUri.protocol !== "https:" && parsedRedirectUri.protocol !== "http:") {
+    return "invalid_scheme";
   }
 
   return null;
@@ -487,7 +489,7 @@ export const parseBasicAuthorizationHeader = (
 
   const [scheme, credentials] = authorizationHeader.split(/\s+/, 2);
 
-  if (scheme?.toLowerCase() !== 'basic' || credentials === undefined) {
+  if (scheme?.toLowerCase() !== "basic" || credentials === undefined) {
     return null;
   }
 
@@ -499,7 +501,7 @@ export const parseBasicAuthorizationHeader = (
     return null;
   }
 
-  const separatorIndex = decodedCredentials.indexOf(':');
+  const separatorIndex = decodedCredentials.indexOf(":");
 
   if (separatorIndex <= 0) {
     return null;

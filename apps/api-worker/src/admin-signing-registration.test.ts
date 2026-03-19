@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -10,23 +10,23 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-import { generateTenantDidSigningMaterial } from '@credtrail/core-domain';
+import { generateTenantDidSigningMaterial } from "@credtrail/core-domain";
 import {
   createAuditLog,
   upsertTenantSigningRegistration,
   type AuditLogRecord,
   type SqlDatabase,
   type TenantSigningRegistrationRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedUpsertTenantSigningRegistration = vi.mocked(upsertTenantSigningRegistration);
@@ -43,10 +43,10 @@ const createEnv = (): {
   BOOTSTRAP_ADMIN_TOKEN?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -54,22 +54,22 @@ const sampleTenantSigningRegistration = (
   overrides?: Partial<TenantSigningRegistrationRecord>,
 ): TenantSigningRegistrationRecord => {
   return {
-    tenantId: 'sakai',
-    did: 'did:web:credtrail.test:sakai',
-    keyId: 'key-1',
+    tenantId: "sakai",
+    did: "did:web:credtrail.test:sakai",
+    keyId: "key-1",
     publicJwkJson: JSON.stringify({
-      kty: 'OKP',
-      crv: 'Ed25519',
-      x: 'A'.repeat(32),
+      kty: "OKP",
+      crv: "Ed25519",
+      x: "A".repeat(32),
     }),
     privateJwkJson: JSON.stringify({
-      kty: 'OKP',
-      crv: 'Ed25519',
-      x: 'A'.repeat(32),
-      d: 'B'.repeat(32),
+      kty: "OKP",
+      crv: "Ed25519",
+      x: "A".repeat(32),
+      d: "B".repeat(32),
     }),
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -77,15 +77,15 @@ const sampleTenantSigningRegistration = (
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
     ...overrides,
-    id: 'aud_123',
-    tenantId: 'sakai',
+    id: "aud_123",
+    tenantId: "sakai",
     actorUserId: null,
-    action: 'tenant.signing_registration_upserted',
-    targetType: 'tenant',
-    targetId: 'sakai',
+    action: "tenant.signing_registration_upserted",
+    targetType: "tenant",
+    targetId: "sakai",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
@@ -94,21 +94,21 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
 });
 
-describe('PUT /v1/admin/tenants/:tenantId/signing-registration', () => {
+describe("PUT /v1/admin/tenants/:tenantId/signing-registration", () => {
   beforeEach(() => {
     mockedCreateAuditLog.mockReset();
     mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
     mockedUpsertTenantSigningRegistration.mockReset();
   });
 
-  it('stores tenant signing registration via admin API', async () => {
+  it("stores tenant signing registration via admin API", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:sakai',
-      keyId: 'key-1',
+      did: "did:web:credtrail.test:sakai",
+      keyId: "key-1",
     });
     mockedUpsertTenantSigningRegistration.mockResolvedValue(
       sampleTenantSigningRegistration({
@@ -120,12 +120,12 @@ describe('PUT /v1/admin/tenants/:tenantId/signing-registration', () => {
     );
 
     const response = await app.request(
-      '/v1/admin/tenants/sakai/signing-registration',
+      "/v1/admin/tenants/sakai/signing-registration",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer bootstrap-secret',
+          "content-type": "application/json",
+          authorization: "Bearer bootstrap-secret",
         },
         body: JSON.stringify({
           keyId: signingMaterial.keyId,
@@ -143,18 +143,18 @@ describe('PUT /v1/admin/tenants/:tenantId/signing-registration', () => {
     }>();
 
     expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('sakai');
-    expect(body.did).toBe('did:web:credtrail.test:sakai');
-    expect(body.keyId).toBe('key-1');
+    expect(body.tenantId).toBe("sakai");
+    expect(body.did).toBe("did:web:credtrail.test:sakai");
+    expect(body.keyId).toBe("key-1");
     expect(body.hasPrivateKey).toBe(true);
     const firstCall = mockedUpsertTenantSigningRegistration.mock.calls[0];
     const input = firstCall?.[1];
 
     expect(firstCall?.[0]).toBe(fakeDb);
-    expect(input?.tenantId).toBe('sakai');
-    expect(input?.did).toBe('did:web:credtrail.test:sakai');
+    expect(input?.tenantId).toBe("sakai");
+    expect(input?.did).toBe("did:web:credtrail.test:sakai");
     expect(input?.keyId).toBe(signingMaterial.keyId);
-    expect(JSON.parse(input?.publicJwkJson ?? '{}')).toEqual(signingMaterial.publicJwk);
-    expect(JSON.parse(input?.privateJwkJson ?? '{}')).toEqual(signingMaterial.privateJwk);
+    expect(JSON.parse(input?.publicJwkJson ?? "{}")).toEqual(signingMaterial.publicJwk);
+    expect(JSON.parse(input?.privateJwkJson ?? "{}")).toEqual(signingMaterial.privateJwk);
   });
 });

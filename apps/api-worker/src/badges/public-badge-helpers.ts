@@ -1,10 +1,10 @@
-import type { JsonObject } from '@credtrail/core-domain';
-import type { AssertionRecord } from '@credtrail/db';
-import { badgeInitialsFromName } from './pdf';
-import { escapeHtml } from '../utils/display-format';
-import { asJsonObject, asNonEmptyString } from '../utils/value-parsers';
+import type { JsonObject } from "@credtrail/core-domain";
+import type { AssertionRecord } from "@credtrail/db";
+import { badgeInitialsFromName } from "./pdf";
+import { escapeHtml } from "../utils/display-format";
+import { asJsonObject, asNonEmptyString } from "../utils/value-parsers";
 
-const IMS_GLOBAL_OB3_VALIDATOR_BASE_URL = 'https://vc.1ed.tech/upload';
+const IMS_GLOBAL_OB3_VALIDATOR_BASE_URL = "https://vc.1ed.tech/upload";
 
 export interface AchievementDetails {
   badgeClassUri: string | null;
@@ -23,12 +23,12 @@ export const githubUsernameFromUrl = (value: string): string | null => {
   try {
     const parsedUrl = new URL(value);
 
-    if (parsedUrl.hostname !== 'github.com' && parsedUrl.hostname !== 'www.github.com') {
+    if (parsedUrl.hostname !== "github.com" && parsedUrl.hostname !== "www.github.com") {
       return null;
     }
 
     const firstPath = parsedUrl.pathname
-      .split('/')
+      .split("/")
       .map((segment) => segment.trim())
       .find((segment) => segment.length > 0);
 
@@ -43,12 +43,12 @@ export const githubUsernameFromUrl = (value: string): string | null => {
 };
 
 export const recipientDisplayNameFromAssertion = (assertion: AssertionRecord): string | null => {
-  if (assertion.recipientIdentityType === 'email') {
+  if (assertion.recipientIdentityType === "email") {
     const email = assertion.recipientIdentity.trim();
     return email.length === 0 ? null : email;
   }
 
-  if (assertion.recipientIdentityType === 'url') {
+  if (assertion.recipientIdentityType === "url") {
     const username = githubUsernameFromUrl(assertion.recipientIdentity);
 
     if (username !== null) {
@@ -57,7 +57,7 @@ export const recipientDisplayNameFromAssertion = (assertion: AssertionRecord): s
 
     try {
       const parsedUrl = new URL(assertion.recipientIdentity);
-      return parsedUrl.hostname.replace(/^www\./, '');
+      return parsedUrl.hostname.replace(/^www\./, "");
     } catch {
       return null;
     }
@@ -71,7 +71,7 @@ export const githubAvatarUrlForUsername = (username: string): string => {
 };
 
 export const recipientAvatarUrlFromAssertion = (assertion: AssertionRecord): string | null => {
-  if (assertion.recipientIdentityType !== 'url') {
+  if (assertion.recipientIdentityType !== "url") {
     return null;
   }
 
@@ -104,8 +104,8 @@ export const achievementDetailsFromCredential = (credential: JsonObject): Achiev
 
 export const imsOb3ValidatorUrl = (targetUrl: string): string => {
   const validatorUrl = new URL(IMS_GLOBAL_OB3_VALIDATOR_BASE_URL);
-  validatorUrl.searchParams.set('validatorId', 'OB30Inspector');
-  validatorUrl.searchParams.set('uri', targetUrl);
+  validatorUrl.searchParams.set("validatorId", "OB30Inspector");
+  validatorUrl.searchParams.set("uri", targetUrl);
   return validatorUrl.toString();
 };
 
@@ -147,7 +147,7 @@ export const badgeHeroImageMarkup = (
     const initials = badgeInitialsFromName(badgeName);
     const fallbackAttribute =
       fallbackImageUri === null || fallbackImageUri === imageUri
-        ? ''
+        ? ""
         : ` data-fallback-src="${escapeHtml(fallbackImageUri)}"`;
 
     return `<div class="public-badge__hero-image-frame">

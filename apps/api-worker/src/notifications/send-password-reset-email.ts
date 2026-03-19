@@ -21,29 +21,29 @@ export const sendPasswordResetEmailNotification = async (
     return;
   }
 
-  const baseUrl = input.mailtrapApiBaseUrl ?? 'https://sandbox.api.mailtrap.io/api/send';
-  const endpoint = `${baseUrl.replaceAll(/\/+$/g, '')}/${encodeURIComponent(input.mailtrapInboxId)}`;
+  const baseUrl = input.mailtrapApiBaseUrl ?? "https://sandbox.api.mailtrap.io/api/send";
+  const endpoint = `${baseUrl.replaceAll(/\/+$/g, "")}/${encodeURIComponent(input.mailtrapInboxId)}`;
   const subject = `Set up local CredTrail access (${input.tenantId})`;
   const textBody = [
-    'Use the link below to set or reset your local CredTrail password for break-glass access:',
-    '',
+    "Use the link below to set or reset your local CredTrail password for break-glass access:",
+    "",
     input.resetUrl,
-    '',
+    "",
     `Tenant: ${input.tenantId}`,
-    '',
-    'After setting your password, complete local MFA enrollment before relying on break-glass access.',
-  ].join('\n');
+    "",
+    "After setting your password, complete local MFA enrollment before relying on break-glass access.",
+  ].join("\n");
 
   const response = await fetch(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${input.mailtrapApiToken}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       from: {
-        email: input.mailtrapFromEmail ?? 'no-reply@credtrail.org',
-        name: input.mailtrapFromName ?? 'CredTrail',
+        email: input.mailtrapFromEmail ?? "no-reply@credtrail.org",
+        name: input.mailtrapFromName ?? "CredTrail",
       },
       to: [
         {
@@ -52,7 +52,7 @@ export const sendPasswordResetEmailNotification = async (
       ],
       subject,
       text: textBody,
-      category: 'Auth Password Reset',
+      category: "Auth Password Reset",
     }),
   });
 

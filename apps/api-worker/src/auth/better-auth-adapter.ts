@@ -4,14 +4,14 @@ import {
   findAuthIdentityLinkByCredtrailUserId,
   upsertUserByEmail,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from './auth-context';
+} from "@credtrail/db";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-context";
 import type {
   InternalAuthProvider,
   LtiSessionInput,
   RequestMagicLinkInput,
   RequestMagicLinkResult,
-} from './auth-provider';
+} from "./auth-provider";
 
 export interface BetterAuthResolvedUser {
   id: string;
@@ -49,9 +49,7 @@ export interface BetterAuthAdapterInput<
   ) => Promise<BetterAuthResolvedSession>;
   resolveSession: (context: ContextType) => Promise<BetterAuthResolvedSession | null>;
   revokeSession: (context: ContextType) => Promise<void>;
-  resolveRequestedTenantContext?: (
-    context: ContextType,
-  ) => Promise<RequestedTenantContext | null>;
+  resolveRequestedTenantContext?: (context: ContextType) => Promise<RequestedTenantContext | null>;
   cacheAuthenticatedPrincipal?: (
     context: ContextType,
     principal: AuthenticatedPrincipal | null,
@@ -63,9 +61,7 @@ export interface BetterAuthAdapterInput<
   authSystem?: string | undefined;
 }
 
-const normalizeVerifiedEmail = (
-  session: BetterAuthResolvedSession | null,
-): string | null => {
+const normalizeVerifiedEmail = (session: BetterAuthResolvedSession | null): string | null => {
   const email = session?.user?.email?.trim();
 
   if (session?.user?.emailVerified !== true || email === undefined || email.length === 0) {
@@ -131,7 +127,7 @@ export const resolveAuthenticatedPrincipalFromSession = async (input: {
   const userId = await resolveCredtrailUserId(
     input.db,
     input.session,
-    input.authSystem ?? 'better_auth',
+    input.authSystem ?? "better_auth",
   );
 
   if (userId === null) {
@@ -141,7 +137,7 @@ export const resolveAuthenticatedPrincipalFromSession = async (input: {
   return {
     userId,
     authSessionId,
-    authMethod: 'better_auth',
+    authMethod: "better_auth",
     expiresAt: input.session.expiresAt,
   };
 };
@@ -215,7 +211,7 @@ export const createMagicLinkSession = async <
   input: BetterAuthAdapterInput<ContextType, BindingsType>,
 ): Promise<AuthenticatedPrincipal | null> => {
   if (input.createMagicLinkSession === undefined) {
-    throw new Error('Better Auth magic-link verification is not wired yet');
+    throw new Error("Better Auth magic-link verification is not wired yet");
   }
 
   const session = await input.createMagicLinkSession(context, token);
@@ -249,7 +245,7 @@ export const createLtiSession = async <
   input: BetterAuthAdapterInput<ContextType, BindingsType>,
 ): Promise<AuthenticatedPrincipal> => {
   if (input.createLtiSession === undefined) {
-    throw new Error('Better Auth LTI session creation is not wired yet');
+    throw new Error("Better Auth LTI session creation is not wired yet");
   }
 
   const session = await input.createLtiSession(context, sessionInput);
@@ -261,7 +257,7 @@ export const createLtiSession = async <
 
   if (principal === null) {
     input.cacheAuthenticatedPrincipal?.(context, null);
-    throw new Error('Better Auth LTI session could not be linked to a CredTrail user');
+    throw new Error("Better Auth LTI session could not be linked to a CredTrail user");
   }
 
   input.cacheAuthenticatedPrincipal?.(context, principal);

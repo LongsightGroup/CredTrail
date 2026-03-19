@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -10,7 +10,7 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
@@ -22,10 +22,10 @@ import {
   type AuditLogRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedUpsertTenantMembershipRole = vi.mocked(upsertTenantMembershipRole);
@@ -42,25 +42,25 @@ const createEnv = (): {
   BOOTSTRAP_ADMIN_TOKEN?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
     ...overrides,
-    id: 'audit_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'test.action',
-    targetType: 'test_target',
-    targetId: 'target_123',
+    id: "audit_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "test.action",
+    targetType: "test_target",
+    targetId: "target_123",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
@@ -68,11 +68,11 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'issuer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "issuer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -82,39 +82,39 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
 });
 
-describe('PUT /v1/admin/tenants/:tenantId/users/:userId/role', () => {
+describe("PUT /v1/admin/tenants/:tenantId/users/:userId/role", () => {
   beforeEach(() => {
     mockedUpsertTenantMembershipRole.mockReset();
     mockedCreateAuditLog.mockReset();
     mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
-  it('upserts membership role via bootstrap admin API and writes audit log', async () => {
+  it("upserts membership role via bootstrap admin API and writes audit log", async () => {
     const env = {
       ...createEnv(),
-      BOOTSTRAP_ADMIN_TOKEN: 'bootstrap-secret',
+      BOOTSTRAP_ADMIN_TOKEN: "bootstrap-secret",
     };
 
     mockedUpsertTenantMembershipRole.mockResolvedValue({
       membership: sampleTenantMembership({
-        tenantId: 'sakai',
-        userId: 'usr_admin',
-        role: 'admin',
+        tenantId: "sakai",
+        userId: "usr_admin",
+        role: "admin",
       }),
-      previousRole: 'viewer',
+      previousRole: "viewer",
       changed: true,
     });
 
     const response = await app.request(
-      '/v1/admin/tenants/sakai/users/usr_admin/role',
+      "/v1/admin/tenants/sakai/users/usr_admin/role",
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer bootstrap-secret',
+          "content-type": "application/json",
+          authorization: "Bearer bootstrap-secret",
         },
         body: JSON.stringify({
-          role: 'admin',
+          role: "admin",
         }),
       },
       env,
@@ -128,23 +128,23 @@ describe('PUT /v1/admin/tenants/:tenantId/users/:userId/role', () => {
     }>();
 
     expect(response.status).toBe(201);
-    expect(body.tenantId).toBe('sakai');
-    expect(body.userId).toBe('usr_admin');
-    expect(body.role).toBe('admin');
-    expect(body.previousRole).toBe('viewer');
+    expect(body.tenantId).toBe("sakai");
+    expect(body.userId).toBe("usr_admin");
+    expect(body.role).toBe("admin");
+    expect(body.previousRole).toBe("viewer");
     expect(body.changed).toBe(true);
     expect(mockedUpsertTenantMembershipRole).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'sakai',
-      userId: 'usr_admin',
-      role: 'admin',
+      tenantId: "sakai",
+      userId: "usr_admin",
+      role: "admin",
     });
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'sakai',
-        action: 'membership.role_changed',
-        targetType: 'membership',
-        targetId: 'sakai:usr_admin',
+        tenantId: "sakai",
+        action: "membership.role_changed",
+        targetType: "membership",
+        targetId: "sakai:usr_admin",
       }),
     );
   });

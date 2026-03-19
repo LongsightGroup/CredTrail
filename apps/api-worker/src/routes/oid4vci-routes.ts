@@ -1,20 +1,20 @@
-import type { ImmutableCredentialStore } from '@credtrail/core-domain';
+import type { ImmutableCredentialStore } from "@credtrail/core-domain";
 import {
   consumeOid4vciPreAuthorizedCode,
   createOid4vciAccessToken,
   createOid4vciPreAuthorizedCode,
   findActiveOid4vciAccessTokenByHash,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
-import type { VerificationViewModel } from '../badges/public-badge-model';
-import { VC_DATA_MODEL_CONTEXT_URL } from '../credentials/verification-checks';
-import type { AppBindings, AppContext, AppEnv } from '../app';
+} from "@credtrail/db";
+import type { Hono } from "hono";
+import type { VerificationViewModel } from "../badges/public-badge-model";
+import { VC_DATA_MODEL_CONTEXT_URL } from "../credentials/verification-checks";
+import type { AppBindings, AppContext, AppEnv } from "../app";
 
-const PRE_AUTHORIZED_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:pre-authorized_code';
-const OID4VCI_TOKEN_ENDPOINT_PATH = '/credentials/v1/token';
-const OID4VCI_CREDENTIAL_ENDPOINT_PATH = '/credentials/v1/credentials';
-const DCC_VCAPI_EXCHANGE_ENDPOINT_PREFIX = '/credentials/v1/dcc/exchanges';
+const PRE_AUTHORIZED_CODE_GRANT = "urn:ietf:params:oauth:grant-type:pre-authorized_code";
+const OID4VCI_TOKEN_ENDPOINT_PATH = "/credentials/v1/token";
+const OID4VCI_CREDENTIAL_ENDPOINT_PATH = "/credentials/v1/credentials";
+const DCC_VCAPI_EXCHANGE_ENDPOINT_PREFIX = "/credentials/v1/dcc/exchanges";
 
 interface RegisterOid4vciRoutesInput {
   app: Hono<AppEnv>;
@@ -25,14 +25,14 @@ interface RegisterOid4vciRoutesInput {
     badgeIdentifier: string,
   ) => Promise<
     | {
-        status: 'not_found';
+        status: "not_found";
       }
     | {
-        status: 'redirect';
+        status: "redirect";
         canonicalPath: string;
       }
     | {
-        status: 'ok';
+        status: "ok";
         value: VerificationViewModel;
       }
   >;
@@ -42,10 +42,10 @@ interface RegisterOid4vciRoutesInput {
     credentialId: string,
   ) => Promise<
     | {
-        status: 'invalid_id' | 'not_found';
+        status: "invalid_id" | "not_found";
       }
     | {
-        status: 'ok';
+        status: "ok";
         value: VerificationViewModel;
       }
   >;
@@ -78,15 +78,16 @@ const oid4vciErrorJson = (
   error: string,
   errorDescription?: string,
 ): Response => {
-  const payload: Oid4vciErrorPayload = errorDescription === undefined
-    ? { error }
-    : {
-        error,
-        error_description: errorDescription,
-      };
+  const payload: Oid4vciErrorPayload =
+    errorDescription === undefined
+      ? { error }
+      : {
+          error,
+          error_description: errorDescription,
+        };
 
   if (status === 401) {
-    c.header('WWW-Authenticate', `Bearer error="${error}"`);
+    c.header("WWW-Authenticate", `Bearer error="${error}"`);
   }
 
   return c.json(payload, status);
@@ -99,7 +100,7 @@ const extractBearerToken = (authorizationHeader: string | undefined): string | n
 
   const [scheme, token] = authorizationHeader.trim().split(/\s+/, 2);
 
-  if (scheme !== 'Bearer' || token === undefined || token.length === 0) {
+  if (scheme !== "Bearer" || token === undefined || token.length === 0) {
     return null;
   }
 
@@ -132,24 +133,24 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       token_endpoint: tokenEndpoint,
       credential_configurations_supported: {
         OpenBadgeCredential: {
-          format: 'ldp_vc',
-          scope: 'OpenBadgeCredential',
+          format: "ldp_vc",
+          scope: "OpenBadgeCredential",
           credential_definition: {
-            '@context': [VC_DATA_MODEL_CONTEXT_URL],
-            type: ['VerifiableCredential', 'OpenBadgeCredential'],
+            "@context": [VC_DATA_MODEL_CONTEXT_URL],
+            type: ["VerifiableCredential", "OpenBadgeCredential"],
           },
         },
       },
       credentials_supported: [
         {
-          id: 'OpenBadgeCredential',
-          format: 'ldp_vc',
-          types: ['VerifiableCredential', 'OpenBadgeCredential'],
+          id: "OpenBadgeCredential",
+          format: "ldp_vc",
+          types: ["VerifiableCredential", "OpenBadgeCredential"],
         },
       ],
       grants_supported: [PRE_AUTHORIZED_CODE_GRANT],
       x_credtrail: {
-        credential_offer_create_endpoint: new URL('/credentials/offer', baseUrl).toString(),
+        credential_offer_create_endpoint: new URL("/credentials/offer", baseUrl).toString(),
       },
     };
   };
@@ -174,14 +175,14 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
   > => {
     const result = await loadPublicBadgeViewModel(db, badgeObjects, badgeIdentifier);
 
-    if (result.status === 'not_found') {
+    if (result.status === "not_found") {
       return {
         status: 404,
       };
     }
 
-    if (result.status === 'redirect') {
-      if (!result.canonicalPath.startsWith('/badges/')) {
+    if (result.status === "redirect") {
+      if (!result.canonicalPath.startsWith("/badges/")) {
         return {
           status: 404,
         };
@@ -189,7 +190,7 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
 
       return {
         status: 308,
-        canonicalBadgeIdentifier: result.canonicalPath.slice('/badges/'.length),
+        canonicalBadgeIdentifier: result.canonicalPath.slice("/badges/".length),
       };
     }
 
@@ -219,7 +220,11 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
         payload: Record<string, unknown>;
       }
   > => {
-    const canonicalBadge = await loadCanonicalPublicBadgeByIdentifier(db, badgeObjects, badgeIdentifier);
+    const canonicalBadge = await loadCanonicalPublicBadgeByIdentifier(
+      db,
+      badgeObjects,
+      badgeIdentifier,
+    );
 
     if (canonicalBadge.status === 404) {
       return canonicalBadge;
@@ -264,11 +269,11 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     const result = await createOfferResponse(requestUrl, db, badgeObjects, badgeIdentifier);
 
     if (result.status === 404) {
-      return new Response(JSON.stringify({ error: 'Badge not found' }), {
+      return new Response(JSON.stringify({ error: "Badge not found" }), {
         status: 404,
         headers: {
-          'content-type': 'application/json; charset=utf-8',
-          'cache-control': 'no-store',
+          "content-type": "application/json; charset=utf-8",
+          "cache-control": "no-store",
         },
       });
     }
@@ -278,7 +283,7 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
         status: 308,
         headers: {
           location: `/credentials/v1/offers/${encodeURIComponent(result.canonicalBadgeIdentifier)}`,
-          'cache-control': 'no-store',
+          "cache-control": "no-store",
         },
       });
     }
@@ -286,39 +291,35 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     return new Response(JSON.stringify(result.payload), {
       status: 200,
       headers: {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
       },
     });
   };
 
-  const handleTokenRequest = async (
-    c: AppContext,
-  ): Promise<Response> => {
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+  const handleTokenRequest = async (c: AppContext): Promise<Response> => {
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
     let grantType: string | null = null;
     let preAuthorizedCode: string | null = null;
 
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       const requestPayload = await c.req.json<unknown>().catch(() => null);
       const body =
-        requestPayload !== null && typeof requestPayload === 'object'
+        requestPayload !== null && typeof requestPayload === "object"
           ? (requestPayload as Record<string, unknown>)
           : null;
 
       if (body === null) {
-        return oid4vciErrorJson(c, 400, 'invalid_request', 'Request body must be a JSON object');
+        return oid4vciErrorJson(c, 400, "invalid_request", "Request body must be a JSON object");
       }
 
       grantType = asNonEmptyString(body.grant_type);
-      preAuthorizedCode = asNonEmptyString(
-        body['pre-authorized_code'] ?? body.pre_authorized_code,
-      );
+      preAuthorizedCode = asNonEmptyString(body["pre-authorized_code"] ?? body.pre_authorized_code);
     } else {
       const formData = new URLSearchParams(await c.req.text());
-      grantType = asNonEmptyString(formData.get('grant_type'));
+      grantType = asNonEmptyString(formData.get("grant_type"));
       preAuthorizedCode = asNonEmptyString(
-        formData.get('pre-authorized_code') ?? formData.get('pre_authorized_code'),
+        formData.get("pre-authorized_code") ?? formData.get("pre_authorized_code"),
       );
     }
 
@@ -326,18 +327,13 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       return oid4vciErrorJson(
         c,
         400,
-        'unsupported_grant_type',
-        'Only pre-authorized code flow is supported',
+        "unsupported_grant_type",
+        "Only pre-authorized code flow is supported",
       );
     }
 
     if (preAuthorizedCode === null) {
-      return oid4vciErrorJson(
-        c,
-        400,
-        'invalid_request',
-        'pre-authorized_code is required',
-      );
+      return oid4vciErrorJson(c, 400, "invalid_request", "pre-authorized_code is required");
     }
 
     const nowIso = new Date().toISOString();
@@ -350,8 +346,8 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       return oid4vciErrorJson(
         c,
         400,
-        'invalid_grant',
-        'pre-authorized_code is invalid, expired, or already used',
+        "invalid_grant",
+        "pre-authorized_code is invalid, expired, or already used",
       );
     }
 
@@ -363,23 +359,21 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       expiresAt: addSecondsToIso(nowIso, accessTokenTtlSeconds),
     });
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
     return c.json({
       access_token: accessToken,
-      token_type: 'Bearer',
+      token_type: "Bearer",
       expires_in: accessTokenTtlSeconds,
       c_nonce: generateOpaqueToken(),
       c_nonce_expires_in: accessTokenTtlSeconds,
     });
   };
 
-  const handleCredentialRequest = async (
-    c: AppContext,
-  ): Promise<Response> => {
-    const bearerToken = extractBearerToken(c.req.header('authorization'));
+  const handleCredentialRequest = async (c: AppContext): Promise<Response> => {
+    const bearerToken = extractBearerToken(c.req.header("authorization"));
 
     if (bearerToken === null) {
-      return oid4vciErrorJson(c, 401, 'invalid_token', 'Bearer access token is required');
+      return oid4vciErrorJson(c, 401, "invalid_token", "Bearer access token is required");
     }
 
     const tokenRecord = await findActiveOid4vciAccessTokenByHash(resolveDatabase(c.env), {
@@ -388,41 +382,43 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     });
 
     if (tokenRecord === null) {
-      return oid4vciErrorJson(c, 401, 'invalid_token', 'Access token is invalid or expired');
+      return oid4vciErrorJson(c, 401, "invalid_token", "Access token is invalid or expired");
     }
 
-    const contentType = c.req.header('content-type')?.toLowerCase() ?? '';
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
     const requestPayload =
-      contentType.includes('application/json') && !contentType.includes('application/x-www-form-urlencoded')
+      contentType.includes("application/json") &&
+      !contentType.includes("application/x-www-form-urlencoded")
         ? await c.req.json<unknown>().catch(() => null)
         : null;
     const body =
-      requestPayload !== null && typeof requestPayload === 'object'
+      requestPayload !== null && typeof requestPayload === "object"
         ? (requestPayload as Record<string, unknown>)
         : null;
 
     if (requestPayload !== null && body === null) {
-      return oid4vciErrorJson(c, 400, 'invalid_request', 'Credential request must be a JSON object');
-    }
-
-    const requestedFormat =
-      body === null
-        ? null
-        : asNonEmptyString(body.format ?? body.credential_format);
-
-    if (requestedFormat !== null && requestedFormat !== 'ldp_vc') {
       return oid4vciErrorJson(
         c,
         400,
-        'unsupported_credential_format',
-        'Only ldp_vc format is supported',
+        "invalid_request",
+        "Credential request must be a JSON object",
+      );
+    }
+
+    const requestedFormat =
+      body === null ? null : asNonEmptyString(body.format ?? body.credential_format);
+
+    if (requestedFormat !== null && requestedFormat !== "ldp_vc") {
+      return oid4vciErrorJson(
+        c,
+        400,
+        "unsupported_credential_format",
+        "Only ldp_vc format is supported",
       );
     }
 
     const requestedCredentialIdentifier =
-      body === null
-        ? null
-        : asNonEmptyString(body.credential_identifier);
+      body === null ? null : asNonEmptyString(body.credential_identifier);
 
     if (
       requestedCredentialIdentifier !== null &&
@@ -431,8 +427,8 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       return oid4vciErrorJson(
         c,
         400,
-        'invalid_credential_request',
-        'credential_identifier does not match authorized credential',
+        "invalid_credential_request",
+        "credential_identifier does not match authorized credential",
       );
     }
 
@@ -442,13 +438,13 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       tokenRecord.assertionId,
     );
 
-    if (verification.status !== 'ok') {
-      return oid4vciErrorJson(c, 404, 'invalid_token', 'Credential not found for this token');
+    if (verification.status !== "ok") {
+      return oid4vciErrorJson(c, 404, "invalid_token", "Credential not found for this token");
     }
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
     return c.json({
-      format: 'ldp_vc',
+      format: "ldp_vc",
       credential: verification.value.credential,
       credential_identifier: verification.value.assertion.id,
     });
@@ -464,12 +460,12 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       badgeIdentifier,
     );
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     if (canonicalBadge.status === 404) {
       return c.json(
         {
-          error: 'Badge not found',
+          error: "Badge not found",
         },
         404,
       );
@@ -489,38 +485,38 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     return c.json({
       credentialRequestOrigin: new URL(c.req.url).origin,
       verifiablePresentation: {
-        '@context': [VC_DATA_MODEL_CONTEXT_URL],
-        type: ['VerifiablePresentation'],
+        "@context": [VC_DATA_MODEL_CONTEXT_URL],
+        type: ["VerifiablePresentation"],
         verifiableCredential: [canonicalBadge.model.credential],
       },
       redirectUrl: new URL(publicBadgePath, c.req.url).toString(),
     });
   };
 
-  app.get('/.well-known/openid-credential-issuer', (c) => {
-    c.header('Cache-Control', 'no-store');
+  app.get("/.well-known/openid-credential-issuer", (c) => {
+    c.header("Cache-Control", "no-store");
     return c.json(buildIssuerMetadata(c.req.url));
   });
 
-  app.get('/credentials/v1/offers/:badgeIdentifier', async (c) => {
+  app.get("/credentials/v1/offers/:badgeIdentifier", async (c) => {
     return handleOfferByBadgeIdentifier(
       c,
       c.req.url,
       resolveDatabase(c.env),
       c.env.BADGE_OBJECTS,
-      c.req.param('badgeIdentifier'),
+      c.req.param("badgeIdentifier"),
     );
   });
 
-  app.post('/credentials/offer', async (c) => {
+  app.post("/credentials/offer", async (c) => {
     const requestPayload = await c.req.json<unknown>().catch(() => null);
     const body =
-      requestPayload !== null && typeof requestPayload === 'object'
+      requestPayload !== null && typeof requestPayload === "object"
         ? (requestPayload as Record<string, unknown>)
         : null;
 
     if (body === null) {
-      return oid4vciErrorJson(c, 400, 'invalid_request', 'Request body must be a JSON object');
+      return oid4vciErrorJson(c, 400, "invalid_request", "Request body must be a JSON object");
     }
 
     const badgeIdentifier = asNonEmptyString(
@@ -531,8 +527,8 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       return oid4vciErrorJson(
         c,
         400,
-        'invalid_request',
-        'badgeIdentifier is required to create an offer',
+        "invalid_request",
+        "badgeIdentifier is required to create an offer",
       );
     }
 
@@ -543,10 +539,10 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
       badgeIdentifier,
     );
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     if (result.status === 404) {
-      return oid4vciErrorJson(c, 404, 'invalid_request', 'Badge not found');
+      return oid4vciErrorJson(c, 404, "invalid_request", "Badge not found");
     }
 
     if (result.status === 308) {
@@ -576,19 +572,19 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     );
   });
 
-  app.get('/credentials/v1/dcc/request/:badgeIdentifier', async (c) => {
+  app.get("/credentials/v1/dcc/request/:badgeIdentifier", async (c) => {
     const canonicalBadge = await loadCanonicalPublicBadgeByIdentifier(
       resolveDatabase(c.env),
       c.env.BADGE_OBJECTS,
-      c.req.param('badgeIdentifier'),
+      c.req.param("badgeIdentifier"),
     );
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     if (canonicalBadge.status === 404) {
       return c.json(
         {
-          error: 'Badge not found',
+          error: "Badge not found",
         },
         404,
       );
@@ -611,10 +607,10 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
         vcapi: exchangeUrl,
       },
     };
-    const appLinkDeepLinkUrl = new URL('https://lcw.app/request');
-    appLinkDeepLinkUrl.searchParams.set('request', JSON.stringify(requestPayload));
-    const customProtocolDeepLinkUrl = new URL('dccrequest://');
-    customProtocolDeepLinkUrl.searchParams.set('request', JSON.stringify(requestPayload));
+    const appLinkDeepLinkUrl = new URL("https://lcw.app/request");
+    appLinkDeepLinkUrl.searchParams.set("request", JSON.stringify(requestPayload));
+    const customProtocolDeepLinkUrl = new URL("dccrequest://");
+    customProtocolDeepLinkUrl.searchParams.set("request", JSON.stringify(requestPayload));
 
     return c.json({
       ...requestPayload,
@@ -623,19 +619,19 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     });
   });
 
-  app.post('/credentials/v1/dcc/exchanges/:badgeIdentifier', async (c) => {
-    return handleDccVcApiExchange(c, c.req.param('badgeIdentifier'));
+  app.post("/credentials/v1/dcc/exchanges/:badgeIdentifier", async (c) => {
+    return handleDccVcApiExchange(c, c.req.param("badgeIdentifier"));
   });
 
-  app.get('/credentials/v1/dcc/exchanges/:badgeIdentifier', async (c) => {
-    return handleDccVcApiExchange(c, c.req.param('badgeIdentifier'));
+  app.get("/credentials/v1/dcc/exchanges/:badgeIdentifier", async (c) => {
+    return handleDccVcApiExchange(c, c.req.param("badgeIdentifier"));
   });
 
   app.post(OID4VCI_TOKEN_ENDPOINT_PATH, async (c) => {
     return handleTokenRequest(c);
   });
 
-  app.post('/token', async (c) => {
+  app.post("/token", async (c) => {
     return handleTokenRequest(c);
   });
 
@@ -643,7 +639,7 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     return handleCredentialRequest(c);
   });
 
-  app.post('/credentials', async (c) => {
+  app.post("/credentials", async (c) => {
     return handleCredentialRequest(c);
   });
 };

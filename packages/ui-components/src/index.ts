@@ -1,17 +1,17 @@
 const escapeHtml = (value: string): string => {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 };
 
 export const renderPageShell = (
   title: string,
   bodyContent: string,
-  headContent = '',
-  variant: 'shell' | 'open' = 'shell',
+  headContent = "",
+  variant: "shell" | "open" = "shell",
 ): string => {
   const safeTitle = escapeHtml(title);
 

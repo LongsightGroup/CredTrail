@@ -101,6 +101,9 @@ Run from the workspace root:
 - `pnpm check:ob3-openapi`
 - `pnpm cert:preflight`
 - `pnpm lint`
+- `pnpm lint:fix`
+- `pnpm format`
+- `pnpm format:check`
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm test:e2e`

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockedIssueBadgeForTenant, mockedCreateGradebookProvider } = vi.hoisted(() => {
   return {
@@ -10,15 +10,19 @@ const { mockedIssueBadgeForTenant, mockedCreateGradebookProvider } = vi.hoisted(
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -45,27 +49,27 @@ vi.mock('@credtrail/db', async () => {
     updateTenantCanvasGradebookIntegrationTokens: vi.fn(),
     listAuditLogs: vi.fn(),
     listIssuedBadgeTemplateIdsForRecipient: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findTenantMembership: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./badges/direct-issue', () => {
+vi.mock("./badges/direct-issue", () => {
   return {
     createIssueBadgeForTenant: vi.fn(() => mockedIssueBadgeForTenant),
   };
 });
 
-vi.mock('./lms/gradebook-provider', async () => {
-  const actual = await vi.importActual<typeof import('./lms/gradebook-provider')>(
-    './lms/gradebook-provider',
+vi.mock("./lms/gradebook-provider", async () => {
+  const actual = await vi.importActual<typeof import("./lms/gradebook-provider")>(
+    "./lms/gradebook-provider",
   );
 
   return {
@@ -74,11 +78,10 @@ vi.mock('./lms/gradebook-provider', async () => {
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -102,7 +105,6 @@ import {
   createBadgeIssuanceRuleVersion,
   decideBadgeIssuanceRuleVersion,
   findActiveBadgeIssuanceRuleVersion,
-  findActiveSessionByHash,
   findBadgeIssuanceRuleEvaluationById,
   findBadgeIssuanceRuleById,
   findBadgeIssuanceRuleVersionById,
@@ -118,7 +120,6 @@ import {
   listBadgeIssuanceRules,
   resolveBadgeIssuanceRuleEvaluationReview,
   submitBadgeIssuanceRuleVersionForApproval,
-  touchSession,
   type AuditLogRecord,
   type BadgeIssuanceRuleEvaluationRecord,
   type BadgeIssuanceRuleApprovalEventRecord,
@@ -130,9 +131,9 @@ import {
   type SqlDatabase,
   type TenantCanvasGradebookIntegrationRecord,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
-import { app } from './index';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
+import { app } from "./index";
 
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
@@ -163,9 +164,7 @@ const mockedCreateBadgeIssuanceRuleEvaluation = vi.mocked(createBadgeIssuanceRul
 const mockedResolveBadgeIssuanceRuleEvaluationReview = vi.mocked(
   resolveBadgeIssuanceRuleEvaluationReview,
 );
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedFindTenantCanvasGradebookIntegration = vi.mocked(findTenantCanvasGradebookIntegration);
 const mockedListIssuedBadgeTemplateIdsForRecipient = vi.mocked(
   listIssuedBadgeTemplateIdsForRecipient,
@@ -175,20 +174,20 @@ const sampleCanvasIntegration = (
   overrides?: Partial<TenantCanvasGradebookIntegrationRecord>,
 ): TenantCanvasGradebookIntegrationRecord => {
   return {
-    tenantId: 'tenant_123',
-    apiBaseUrl: 'https://canvas.example.edu',
-    authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
-    tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
-    clientId: 'client-id',
-    clientSecret: 'client-secret',
-    scope: 'url:GET|/api/v1/courses',
-    accessToken: 'canvas-token',
-    refreshToken: 'canvas-refresh-token',
+    tenantId: "tenant_123",
+    apiBaseUrl: "https://canvas.example.edu",
+    authorizationEndpoint: "https://canvas.example.edu/login/oauth2/auth",
+    tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    scope: "url:GET|/api/v1/courses",
+    accessToken: "canvas-token",
+    refreshToken: "canvas-refresh-token",
     accessTokenExpiresAt: null,
     refreshTokenExpiresAt: null,
-    connectedAt: '2026-02-17T00:00:00.000Z',
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    connectedAt: "2026-02-17T00:00:00.000Z",
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -204,65 +203,65 @@ const createEnv = (): {
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleSession = (overrides?: Partial<SessionRecord>): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-20T00:00:00.000Z',
-    lastSeenAt: '2026-02-17T00:00:00.000Z',
+    id: "ses_123",
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    sessionTokenHash: "session-hash",
+    expiresAt: "2026-02-20T00:00:00.000Z",
+    lastSeenAt: "2026-02-17T00:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-17T00:00:00.000Z',
+    createdAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleMembership = (overrides?: Partial<TenantMembershipRecord>): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'admin',
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "admin",
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
-    id: 'audit_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'badge_rule.test',
-    targetType: 'badge_rule',
-    targetId: 'brl_123',
+    id: "audit_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "badge_rule.test",
+    targetType: "badge_rule",
+    targetId: "brl_123",
     metadataJson: null,
-    occurredAt: '2026-02-17T00:00:00.000Z',
-    createdAt: '2026-02-17T00:00:00.000Z',
+    occurredAt: "2026-02-17T00:00:00.000Z",
+    createdAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleRule = (overrides?: Partial<BadgeIssuanceRuleRecord>): BadgeIssuanceRuleRecord => {
   return {
-    id: 'brl_123',
-    tenantId: 'tenant_123',
-    name: 'CS101 Rule',
-    description: 'Issue badge for CS101 excellence',
-    badgeTemplateId: 'badge_template_cs101',
-    lmsProviderKind: 'canvas',
-    activeVersionId: 'brv_123',
-    createdByUserId: 'usr_123',
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    id: "brl_123",
+    tenantId: "tenant_123",
+    name: "CS101 Rule",
+    description: "Issue badge for CS101 excellence",
+    badgeTemplateId: "badge_template_cs101",
+    lmsProviderKind: "canvas",
+    activeVersionId: "brv_123",
+    createdByUserId: "usr_123",
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -271,26 +270,26 @@ const sampleVersion = (
   overrides?: Partial<BadgeIssuanceRuleVersionRecord>,
 ): BadgeIssuanceRuleVersionRecord => {
   return {
-    id: 'brv_123',
-    tenantId: 'tenant_123',
-    ruleId: 'brl_123',
+    id: "brv_123",
+    tenantId: "tenant_123",
+    ruleId: "brl_123",
     versionNumber: 1,
-    status: 'draft',
+    status: "draft",
     ruleJson: JSON.stringify({
       conditions: {
-        type: 'grade_threshold',
-        courseId: 'course_101',
+        type: "grade_threshold",
+        courseId: "course_101",
         minScore: 80,
       },
     }),
-    changeSummary: 'Initial draft',
-    createdByUserId: 'usr_123',
+    changeSummary: "Initial draft",
+    createdByUserId: "usr_123",
     approvedByUserId: null,
     approvedAt: null,
     activatedByUserId: null,
     activatedAt: null,
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -299,24 +298,24 @@ const sampleEvaluationRecord = (
   overrides?: Partial<BadgeIssuanceRuleEvaluationRecord>,
 ): BadgeIssuanceRuleEvaluationRecord => {
   return {
-    id: 'bre_123',
-    tenantId: 'tenant_123',
-    ruleId: 'brl_123',
-    versionId: 'brv_123',
-    learnerId: 'learner_123',
-    recipientIdentity: 'learner@example.edu',
-    recipientIdentityType: 'email',
+    id: "bre_123",
+    tenantId: "tenant_123",
+    ruleId: "brl_123",
+    versionId: "brv_123",
+    learnerId: "learner_123",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
     matched: true,
-    issuanceStatus: 'issued',
-    assertionId: 'tenant_123:assertion_1',
-    evaluationJson: '{}',
+    issuanceStatus: "issued",
+    assertionId: "tenant_123:assertion_1",
+    evaluationJson: "{}",
     reviewStatus: null,
     reviewDecision: null,
     reviewComment: null,
     reviewedByUserId: null,
     reviewedAt: null,
-    evaluatedAt: '2026-02-17T00:00:00.000Z',
-    createdAt: '2026-02-17T00:00:00.000Z',
+    evaluatedAt: "2026-02-17T00:00:00.000Z",
+    createdAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -325,15 +324,15 @@ const sampleValueListRecord = (
   overrides?: Partial<BadgeIssuanceRuleValueListRecord>,
 ): BadgeIssuanceRuleValueListRecord => {
   return {
-    id: 'brvl_123',
-    tenantId: 'tenant_123',
-    label: 'Core CS sequence',
-    kind: 'course_ids',
-    values: ['course_101', 'course_102', 'course_103'],
-    createdByUserId: 'usr_123',
+    id: "brvl_123",
+    tenantId: "tenant_123",
+    label: "Core CS sequence",
+    kind: "course_ids",
+    values: ["course_101", "course_102", "course_103"],
+    createdByUserId: "usr_123",
     archivedAt: null,
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -342,18 +341,18 @@ const sampleApprovalStep = (
   overrides?: Partial<BadgeIssuanceRuleApprovalStepRecord>,
 ): BadgeIssuanceRuleApprovalStepRecord => {
   return {
-    id: 'bras_123',
-    tenantId: 'tenant_123',
-    versionId: 'brv_123',
+    id: "bras_123",
+    tenantId: "tenant_123",
+    versionId: "brv_123",
     stepNumber: 1,
-    requiredRole: 'admin',
-    label: 'Registrar approval',
-    status: 'pending',
+    requiredRole: "admin",
+    label: "Registrar approval",
+    status: "pending",
     decidedByUserId: null,
     decidedAt: null,
     decisionComment: null,
-    createdAt: '2026-02-17T00:00:00.000Z',
-    updatedAt: '2026-02-17T00:00:00.000Z',
+    createdAt: "2026-02-17T00:00:00.000Z",
+    updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -362,16 +361,16 @@ const sampleApprovalEvent = (
   overrides?: Partial<BadgeIssuanceRuleApprovalEventRecord>,
 ): BadgeIssuanceRuleApprovalEventRecord => {
   return {
-    id: 'brae_123',
-    tenantId: 'tenant_123',
-    versionId: 'brv_123',
+    id: "brae_123",
+    tenantId: "tenant_123",
+    versionId: "brv_123",
     stepNumber: 1,
-    action: 'submitted',
-    actorUserId: 'usr_123',
-    actorRole: 'issuer',
+    action: "submitted",
+    actorUserId: "usr_123",
+    actorRole: "issuer",
     comment: null,
-    occurredAt: '2026-02-17T00:00:00.000Z',
-    createdAt: '2026-02-17T00:00:00.000Z',
+    occurredAt: "2026-02-17T00:00:00.000Z",
+    createdAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -382,17 +381,17 @@ beforeEach(() => {
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
+      if (!cookieHeader.includes("better-auth.session_token=")) {
         return null;
       }
 
       return {
-        userId: 'usr_123',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-02-20T00:00:00.000Z',
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-02-20T00:00:00.000Z",
       };
     },
   );
@@ -402,7 +401,7 @@ beforeEach(() => {
   mockedFindActiveSessionByHash.mockReset();
   mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
   mockedTouchSession.mockReset();
-  mockedTouchSession.mockResolvedValue();
+  mockedTouchSession.mockResolvedValue(undefined);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership());
 
@@ -443,8 +442,8 @@ beforeEach(() => {
   mockedListIssuedBadgeTemplateIdsForRecipient.mockResolvedValue([]);
 });
 
-describe('badge rule routes', () => {
-  it('creates badge issuance rules', async () => {
+describe("badge rule routes", () => {
+  it("creates badge issuance rules", async () => {
     const env = createEnv();
     mockedCreateBadgeIssuanceRule.mockResolvedValue({
       rule: sampleRule(),
@@ -452,22 +451,22 @@ describe('badge rule routes', () => {
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules',
+      "/v1/tenants/tenant_123/badge-rules",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          name: 'CS101 Rule',
-          description: 'Issue badge for CS101 excellence',
-          badgeTemplateId: 'badge_template_cs101',
-          lmsProviderKind: 'canvas',
+          name: "CS101 Rule",
+          description: "Issue badge for CS101 excellence",
+          badgeTemplateId: "badge_template_cs101",
+          lmsProviderKind: "canvas",
           definition: {
             conditions: {
-              type: 'grade_threshold',
-              courseId: 'course_101',
+              type: "grade_threshold",
+              courseId: "course_101",
               minScore: 80,
             },
           },
@@ -481,21 +480,21 @@ describe('badge rule routes', () => {
     expect(mockedCreateAuditLog).toHaveBeenCalledTimes(1);
   });
 
-  it('creates reusable badge-rule value lists', async () => {
+  it("creates reusable badge-rule value lists", async () => {
     const env = createEnv();
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rule-value-lists',
+      "/v1/tenants/tenant_123/badge-rule-value-lists",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          label: 'Core CS sequence',
-          kind: 'course_ids',
-          values: ['course_101', 'course_102', 'course_103'],
+          label: "Core CS sequence",
+          kind: "course_ids",
+          values: ["course_101", "course_102", "course_103"],
         }),
       },
       env,
@@ -508,20 +507,20 @@ describe('badge rule routes', () => {
     }>();
 
     expect(response.status).toBe(201);
-    expect(body.valueList.id).toBe('brvl_123');
-    expect(body.valueList.kind).toBe('course_ids');
+    expect(body.valueList.id).toBe("brvl_123");
+    expect(body.valueList.kind).toBe("course_ids");
     expect(mockedCreateBadgeIssuanceRuleValueList).toHaveBeenCalledTimes(1);
   });
 
-  it('lists reusable badge-rule value lists', async () => {
+  it("lists reusable badge-rule value lists", async () => {
     const env = createEnv();
     mockedListBadgeIssuanceRuleValueLists.mockResolvedValue([sampleValueListRecord()]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rule-value-lists',
+      "/v1/tenants/tenant_123/badge-rule-value-lists",
       {
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -532,22 +531,22 @@ describe('badge rule routes', () => {
 
     expect(response.status).toBe(200);
     expect(body.valueLists).toHaveLength(1);
-    expect(body.valueLists[0]?.label).toBe('Core CS sequence');
+    expect(body.valueLists[0]?.label).toBe("Core CS sequence");
   });
 
-  it('submits draft rule versions for approval', async () => {
+  it("submits draft rule versions for approval", async () => {
     const env = createEnv();
-    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: 'draft' }));
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: "draft" }));
     mockedSubmitBadgeIssuanceRuleVersionForApproval.mockResolvedValue(
-      sampleVersion({ status: 'pending_approval' }),
+      sampleVersion({ status: "pending_approval" }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/submit-approval',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/submit-approval",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -559,40 +558,42 @@ describe('badge rule routes', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.version.status).toBe('pending_approval');
+    expect(body.version.status).toBe("pending_approval");
     expect(mockedSubmitBadgeIssuanceRuleVersionForApproval).toHaveBeenCalledTimes(1);
     expect(mockedSubmitBadgeIssuanceRuleVersionForApproval).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        ruleId: 'brl_123',
-        versionId: 'brv_123',
-        actorUserId: 'usr_123',
-        actorRole: 'admin',
+        tenantId: "tenant_123",
+        ruleId: "brl_123",
+        versionId: "brv_123",
+        actorUserId: "usr_123",
+        actorRole: "admin",
       }),
     );
   });
 
-  it('rejects approval decisions when the current step requires a higher role', async () => {
+  it("rejects approval decisions when the current step requires a higher role", async () => {
     const env = createEnv();
-    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: 'pending_approval' }));
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(
+      sampleVersion({ status: "pending_approval" }),
+    );
     mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([
       sampleApprovalStep({
-        requiredRole: 'owner',
+        requiredRole: "owner",
       }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/decision',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/decision",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          decision: 'approved',
-          comment: 'Looks good',
+          decision: "approved",
+          comment: "Looks good",
         }),
       },
       env,
@@ -600,46 +601,48 @@ describe('badge rule routes', () => {
     const body = await response.json<{ error: string }>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toContain('requires role owner');
+    expect(body.error).toContain("requires role owner");
     expect(mockedDecideBadgeIssuanceRuleVersion).not.toHaveBeenCalled();
   });
 
-  it('returns approval history for a badge rule version', async () => {
+  it("returns approval history for a badge rule version", async () => {
     const env = createEnv();
-    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(sampleVersion({ status: 'pending_approval' }));
+    mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(
+      sampleVersion({ status: "pending_approval" }),
+    );
     mockedListBadgeIssuanceRuleVersionApprovalSteps.mockResolvedValue([
       sampleApprovalStep({
         stepNumber: 1,
-        requiredRole: 'issuer',
-        status: 'approved',
-        decidedByUserId: 'usr_123',
-        decidedAt: '2026-02-17T00:00:00.000Z',
+        requiredRole: "issuer",
+        status: "approved",
+        decidedByUserId: "usr_123",
+        decidedAt: "2026-02-17T00:00:00.000Z",
       }),
       sampleApprovalStep({
-        id: 'bras_456',
+        id: "bras_456",
         stepNumber: 2,
-        requiredRole: 'admin',
-        status: 'pending',
+        requiredRole: "admin",
+        status: "pending",
       }),
     ]);
     mockedListBadgeIssuanceRuleVersionApprovalEvents.mockResolvedValue([
       sampleApprovalEvent({
-        action: 'submitted',
+        action: "submitted",
       }),
       sampleApprovalEvent({
-        id: 'brae_456',
-        action: 'approved',
-        actorRole: 'issuer',
-        comment: 'Department sign-off complete',
+        id: "brae_456",
+        action: "approved",
+        actorRole: "issuer",
+        comment: "Department sign-off complete",
       }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/approval-history',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_123/approval-history",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -660,16 +663,16 @@ describe('badge rule routes', () => {
     expect(body.approval.events).toHaveLength(2);
   });
 
-  it('returns a structured diff between rule versions', async () => {
+  it("returns a structured diff between rule versions", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleVersionById.mockResolvedValue(
       sampleVersion({
-        id: 'brv_124',
+        id: "brv_124",
         versionNumber: 3,
         ruleJson: JSON.stringify({
           conditions: {
-            type: 'grade_threshold',
-            courseId: 'course_101',
+            type: "grade_threshold",
+            courseId: "course_101",
             minScore: 85,
           },
         }),
@@ -677,23 +680,23 @@ describe('badge rule routes', () => {
     );
     mockedListBadgeIssuanceRuleVersions.mockResolvedValue([
       sampleVersion({
-        id: 'brv_124',
+        id: "brv_124",
         versionNumber: 3,
         ruleJson: JSON.stringify({
           conditions: {
-            type: 'grade_threshold',
-            courseId: 'course_101',
+            type: "grade_threshold",
+            courseId: "course_101",
             minScore: 85,
           },
         }),
       }),
       sampleVersion({
-        id: 'brv_123',
+        id: "brv_123",
         versionNumber: 2,
         ruleJson: JSON.stringify({
           conditions: {
-            type: 'grade_threshold',
-            courseId: 'course_101',
+            type: "grade_threshold",
+            courseId: "course_101",
             minScore: 80,
           },
         }),
@@ -701,11 +704,11 @@ describe('badge rule routes', () => {
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_124/diff',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/versions/brv_124/diff",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -722,37 +725,37 @@ describe('badge rule routes', () => {
     expect(body.diff.changeCount).toBeGreaterThan(0);
   });
 
-  it('returns badge-rule scoped audit log entries', async () => {
+  it("returns badge-rule scoped audit log entries", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
     mockedListBadgeIssuanceRuleVersions.mockResolvedValue([
       sampleVersion({
-        id: 'brv_123',
+        id: "brv_123",
       }),
     ]);
     mockedListAuditLogs.mockResolvedValue([
       sampleAuditLogRecord({
-        targetType: 'badge_rule',
-        targetId: 'brl_123',
+        targetType: "badge_rule",
+        targetId: "brl_123",
       }),
       sampleAuditLogRecord({
-        id: 'audit_124',
-        targetType: 'badge_rule_version',
-        targetId: 'brv_123',
+        id: "audit_124",
+        targetType: "badge_rule_version",
+        targetId: "brv_123",
       }),
       sampleAuditLogRecord({
-        id: 'audit_125',
-        targetType: 'badge_template',
-        targetId: 'badge_template_cs101',
+        id: "audit_125",
+        targetType: "badge_template",
+        targetId: "badge_template_cs101",
       }),
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/audit-log?limit=10',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/audit-log?limit=10",
       {
-        method: 'GET',
+        method: "GET",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -763,53 +766,53 @@ describe('badge rule routes', () => {
 
     expect(response.status).toBe(200);
     expect(body.logs).toHaveLength(2);
-    expect(body.logs.every((entry) => entry.targetType !== 'badge_template')).toBe(true);
+    expect(body.logs.every((entry) => entry.targetType !== "badge_template")).toBe(true);
   });
 
-  it('preview-evaluates unsaved rule definitions', async () => {
+  it("preview-evaluates unsaved rule definitions", async () => {
     const env = createEnv();
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/preview-evaluate',
+      "/v1/tenants/tenant_123/badge-rules/preview-evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           definition: {
             conditions: {
               all: [
                 {
-                  type: 'course_completion',
-                  courseId: 'course_101',
+                  type: "course_completion",
+                  courseId: "course_101",
                   requireCompleted: true,
                 },
                 {
-                  type: 'grade_threshold',
-                  courseId: 'course_101',
+                  type: "grade_threshold",
+                  courseId: "course_101",
                   minScore: 80,
                 },
               ],
             },
           },
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
           facts: {
-            nowIso: '2026-02-17T00:00:00.000Z',
+            nowIso: "2026-02-17T00:00:00.000Z",
             completions: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 completed: true,
               },
             ],
             grades: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 finalScore: 92,
               },
             ],
@@ -835,51 +838,51 @@ describe('badge rule routes', () => {
     expect(mockedIssueBadgeForTenant).not.toHaveBeenCalled();
   });
 
-  it('resolves reusable value lists during preview evaluation', async () => {
+  it("resolves reusable value lists during preview evaluation", async () => {
     const env = createEnv();
     mockedListBadgeIssuanceRuleValueLists.mockResolvedValue([sampleValueListRecord()]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/preview-evaluate',
+      "/v1/tenants/tenant_123/badge-rules/preview-evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           definition: {
             conditions: {
               all: [
                 {
-                  type: 'course_completion',
-                  courseListId: 'brvl_123',
+                  type: "course_completion",
+                  courseListId: "brvl_123",
                   requireCompleted: true,
                 },
                 {
-                  type: 'grade_threshold',
-                  courseListId: 'brvl_123',
+                  type: "grade_threshold",
+                  courseListId: "brvl_123",
                   minScore: 80,
                 },
               ],
             },
           },
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
           facts: {
-            nowIso: '2026-02-17T00:00:00.000Z',
+            nowIso: "2026-02-17T00:00:00.000Z",
             completions: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 completed: true,
               },
             ],
             grades: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 finalScore: 92,
               },
             ],
@@ -905,74 +908,74 @@ describe('badge rule routes', () => {
     expect(mockedListBadgeIssuanceRuleValueLists).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the requested LMS provider kind for automated preview evaluation', async () => {
+  it("uses the requested LMS provider kind for automated preview evaluation", async () => {
     const env = createEnv();
     mockedFindTenantCanvasGradebookIntegration.mockResolvedValue(
       sampleCanvasIntegration({
-        apiBaseUrl: 'https://sakai.example.edu',
-        accessToken: 'sakai-token',
+        apiBaseUrl: "https://sakai.example.edu",
+        accessToken: "sakai-token",
         refreshToken: null,
       }),
     );
     mockedCreateGradebookProvider.mockReturnValue({
-      kind: 'sakai',
+      kind: "sakai",
       listCourses: () => Promise.resolve([]),
       listAssignments: () => Promise.resolve([]),
       listEnrollments: () => Promise.resolve([]),
       listSubmissions: () => Promise.resolve([]),
       listGrades: () =>
         Promise.resolve([
-        {
-          courseId: 'course_101',
-          learnerId: 'learner_123',
-          currentScore: 91,
-          finalScore: 91,
-          currentGrade: 'A-',
-          finalGrade: 'A-',
-        },
-      ]),
+          {
+            courseId: "course_101",
+            learnerId: "learner_123",
+            currentScore: 91,
+            finalScore: 91,
+            currentGrade: "A-",
+            finalGrade: "A-",
+          },
+        ]),
       listCompletions: () =>
         Promise.resolve([
-        {
-          courseId: 'course_101',
-          learnerId: 'learner_123',
-          completed: true,
-          completedAt: null,
-          completionPercent: 100,
-          sourceState: 'graded',
-        },
-      ]),
+          {
+            courseId: "course_101",
+            learnerId: "learner_123",
+            completed: true,
+            completedAt: null,
+            completionPercent: 100,
+            sourceState: "graded",
+          },
+        ]),
     });
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/preview-evaluate',
+      "/v1/tenants/tenant_123/badge-rules/preview-evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
           definition: {
             conditions: {
               all: [
                 {
-                  type: 'course_completion',
-                  courseId: 'course_101',
+                  type: "course_completion",
+                  courseId: "course_101",
                   requireCompleted: true,
                 },
                 {
-                  type: 'grade_threshold',
-                  courseId: 'course_101',
+                  type: "grade_threshold",
+                  courseId: "course_101",
                   minScore: 80,
                 },
               ],
             },
           },
-          lmsProviderKind: 'sakai',
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          lmsProviderKind: "sakai",
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
         }),
       },
       env,
@@ -989,38 +992,38 @@ describe('badge rule routes', () => {
     const providerInput: unknown = mockedCreateGradebookProvider.mock.calls[0]?.[0];
     const providerConfig =
       providerInput !== null &&
-      typeof providerInput === 'object' &&
-      'config' in providerInput &&
+      typeof providerInput === "object" &&
+      "config" in providerInput &&
       providerInput.config !== null &&
-      typeof providerInput.config === 'object'
+      typeof providerInput.config === "object"
         ? providerInput.config
         : null;
 
     expect(providerConfig).not.toBeNull();
-    expect(providerConfig && 'kind' in providerConfig ? providerConfig.kind : null).toBe('sakai');
+    expect(providerConfig && "kind" in providerConfig ? providerConfig.kind : null).toBe("sakai");
   });
 
-  it('simulates draft impact against historical evaluations', async () => {
+  it("simulates draft impact against historical evaluations", async () => {
     const env = createEnv();
     mockedListBadgeIssuanceRuleEvaluations.mockResolvedValue([
       sampleEvaluationRecord({
         matched: true,
-        issuanceStatus: 'issued',
+        issuanceStatus: "issued",
         evaluationJson: JSON.stringify({
           facts: {
-            learnerId: 'learner_123',
-            nowIso: '2026-02-17T00:00:00.000Z',
+            learnerId: "learner_123",
+            nowIso: "2026-02-17T00:00:00.000Z",
             grades: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 finalScore: 91,
               },
             ],
             completions: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 completed: true,
                 completionPercent: 100,
               },
@@ -1031,9 +1034,9 @@ describe('badge rule routes', () => {
           evaluation: {
             matched: true,
             tree: {
-              type: 'all',
+              type: "all",
               matched: true,
-              detail: 'All conditions passed',
+              detail: "All conditions passed",
               children: [],
             },
           },
@@ -1042,27 +1045,27 @@ describe('badge rule routes', () => {
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/preview-simulate',
+      "/v1/tenants/tenant_123/badge-rules/preview-simulate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_cs101',
+          badgeTemplateId: "badge_template_cs101",
           sampleLimit: 10,
           definition: {
             conditions: {
               all: [
                 {
-                  type: 'course_completion',
-                  courseId: 'course_101',
+                  type: "course_completion",
+                  courseId: "course_101",
                   requireCompleted: true,
                 },
                 {
-                  type: 'grade_threshold',
-                  courseId: 'course_101',
+                  type: "grade_threshold",
+                  courseId: "course_101",
                   minScore: 80,
                 },
               ],
@@ -1086,35 +1089,35 @@ describe('badge rule routes', () => {
     expect(body.summary.changedCount).toBe(0);
   });
 
-  it('evaluates active rules and issues badges when matched', async () => {
+  it("evaluates active rules and issues badges when matched", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
-    mockedFindActiveBadgeIssuanceRuleVersion.mockResolvedValue(sampleVersion({ status: 'active' }));
+    mockedFindActiveBadgeIssuanceRuleVersion.mockResolvedValue(sampleVersion({ status: "active" }));
     mockedIssueBadgeForTenant.mockResolvedValue({
-      status: 'issued',
-      assertionId: 'tenant_123:assertion_1',
+      status: "issued",
+      assertionId: "tenant_123:assertion_1",
     });
     mockedCreateBadgeIssuanceRuleEvaluation.mockResolvedValue(sampleEvaluationRecord());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/evaluate',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
           dryRun: false,
           facts: {
-            nowIso: '2026-02-17T00:00:00.000Z',
+            nowIso: "2026-02-17T00:00:00.000Z",
             grades: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 finalScore: 95,
               },
             ],
@@ -1135,28 +1138,28 @@ describe('badge rule routes', () => {
 
     expect(response.status).toBe(200);
     expect(body.evaluation.matched).toBe(true);
-    expect(body.issuance.status).toBe('issued');
+    expect(body.issuance.status).toBe("issued");
     expect(mockedIssueBadgeForTenant).toHaveBeenCalledTimes(1);
     expect(mockedCreateBadgeIssuanceRuleEvaluation).toHaveBeenCalledTimes(1);
   });
 
-  it('routes missing-data rule evaluations into the review queue', async () => {
+  it("routes missing-data rule evaluations into the review queue", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
     mockedFindActiveBadgeIssuanceRuleVersion.mockResolvedValue(
       sampleVersion({
-        status: 'active',
+        status: "active",
         ruleJson: JSON.stringify({
           conditions: {
             all: [
               {
-                type: 'course_completion',
-                courseId: 'course_101',
+                type: "course_completion",
+                courseId: "course_101",
                 requireCompleted: true,
               },
               {
-                type: 'grade_threshold',
-                courseId: 'course_101',
+                type: "grade_threshold",
+                courseId: "course_101",
                 minScore: 80,
               },
             ],
@@ -1170,12 +1173,12 @@ describe('badge rule routes', () => {
     mockedCreateBadgeIssuanceRuleEvaluation.mockResolvedValue(
       sampleEvaluationRecord({
         matched: false,
-        issuanceStatus: 'review_required',
-        reviewStatus: 'pending',
+        issuanceStatus: "review_required",
+        reviewStatus: "pending",
         evaluationJson: JSON.stringify({
           facts: {
-            learnerId: 'learner_123',
-            nowIso: '2026-02-17T00:00:00.000Z',
+            learnerId: "learner_123",
+            nowIso: "2026-02-17T00:00:00.000Z",
             grades: [],
             completions: [],
             submissions: [],
@@ -1184,15 +1187,15 @@ describe('badge rule routes', () => {
           evaluation: {
             matched: false,
             tree: {
-              type: 'all',
+              type: "all",
               matched: false,
-              detail: 'Missing facts',
+              detail: "Missing facts",
               children: [
                 {
-                  type: 'grade_threshold',
+                  type: "grade_threshold",
                   matched: false,
-                  resultKind: 'missing_data',
-                  detail: 'No grade facts were found for course_101',
+                  resultKind: "missing_data",
+                  detail: "No grade facts were found for course_101",
                 },
               ],
             },
@@ -1207,20 +1210,20 @@ describe('badge rule routes', () => {
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/evaluate',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
           dryRun: false,
           facts: {
-            nowIso: '2026-02-17T00:00:00.000Z',
+            nowIso: "2026-02-17T00:00:00.000Z",
           },
         }),
       },
@@ -1236,25 +1239,25 @@ describe('badge rule routes', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.outcome).toBe('review_required');
+    expect(body.outcome).toBe("review_required");
     expect(body.issuance).toBeNull();
-    expect(body.evaluationRecord.issuanceStatus).toBe('review_required');
-    expect(body.evaluationRecord.reviewStatus).toBe('pending');
+    expect(body.evaluationRecord.issuanceStatus).toBe("review_required");
+    expect(body.evaluationRecord.reviewStatus).toBe("pending");
     expect(mockedIssueBadgeForTenant).not.toHaveBeenCalled();
   });
 
-  it('lists the rule review queue with evaluation summaries', async () => {
+  it("lists the rule review queue with evaluation summaries", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
     mockedListBadgeIssuanceRuleEvaluations.mockResolvedValue([
       sampleEvaluationRecord({
         matched: false,
-        issuanceStatus: 'review_required',
-        reviewStatus: 'pending',
+        issuanceStatus: "review_required",
+        reviewStatus: "pending",
         evaluationJson: JSON.stringify({
           facts: {
-            learnerId: 'learner_123',
-            nowIso: '2026-02-17T00:00:00.000Z',
+            learnerId: "learner_123",
+            nowIso: "2026-02-17T00:00:00.000Z",
             grades: [],
             completions: [],
             submissions: [],
@@ -1263,15 +1266,15 @@ describe('badge rule routes', () => {
           evaluation: {
             matched: false,
             tree: {
-              type: 'all',
+              type: "all",
               matched: false,
-              detail: 'Missing facts',
+              detail: "Missing facts",
               children: [
                 {
-                  type: 'grade_threshold',
+                  type: "grade_threshold",
                   matched: false,
-                  resultKind: 'missing_data',
-                  detail: 'No grade facts were found for course_101',
+                  resultKind: "missing_data",
+                  detail: "No grade facts were found for course_101",
                 },
               ],
             },
@@ -1281,10 +1284,10 @@ describe('badge rule routes', () => {
     ]);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/review-queue?status=pending',
+      "/v1/tenants/tenant_123/badge-rules/review-queue?status=pending",
       {
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -1300,46 +1303,46 @@ describe('badge rule routes', () => {
 
     expect(response.status).toBe(200);
     expect(body.queue).toHaveLength(1);
-    expect(body.queue[0]?.ruleName).toBe('CS101 Rule');
+    expect(body.queue[0]?.ruleName).toBe("CS101 Rule");
     expect(body.queue[0]?.evaluationSummary?.missingDataCount).toBe(1);
   });
 
-  it('resolves review queue entries by issuing the badge', async () => {
+  it("resolves review queue entries by issuing the badge", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleEvaluationById.mockResolvedValue(
       sampleEvaluationRecord({
         matched: false,
-        issuanceStatus: 'review_required',
-        reviewStatus: 'pending',
+        issuanceStatus: "review_required",
+        reviewStatus: "pending",
       }),
     );
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
     mockedIssueBadgeForTenant.mockResolvedValue({
-      status: 'issued',
-      assertionId: 'tenant_123:assertion_1',
+      status: "issued",
+      assertionId: "tenant_123:assertion_1",
     });
     mockedResolveBadgeIssuanceRuleEvaluationReview.mockResolvedValue(
       sampleEvaluationRecord({
-        issuanceStatus: 'issued',
-        reviewStatus: 'resolved',
-        reviewDecision: 'issue',
-        assertionId: 'tenant_123:assertion_1',
-        reviewedByUserId: 'usr_123',
-        reviewedAt: '2026-02-17T00:05:00.000Z',
+        issuanceStatus: "issued",
+        reviewStatus: "resolved",
+        reviewDecision: "issue",
+        assertionId: "tenant_123:assertion_1",
+        reviewedByUserId: "usr_123",
+        reviewedAt: "2026-02-17T00:05:00.000Z",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/review-queue/bre_123/resolve',
+      "/v1/tenants/tenant_123/badge-rules/review-queue/bre_123/resolve",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          decision: 'issue',
-          comment: 'Registrar review approved issuance.',
+          decision: "issue",
+          comment: "Registrar review approved issuance.",
         }),
       },
       env,
@@ -1355,44 +1358,45 @@ describe('badge rule routes', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.review.issuanceStatus).toBe('issued');
-    expect(body.review.reviewDecision).toBe('issue');
-    expect(body.issuance.status).toBe('issued');
+    expect(body.review.issuanceStatus).toBe("issued");
+    expect(body.review.reviewDecision).toBe("issue");
+    expect(body.issuance.status).toBe("issued");
     expect(mockedResolveBadgeIssuanceRuleEvaluationReview).toHaveBeenCalledTimes(1);
   });
 
-  it('returns lifecycle issuance policy errors from matched rule evaluation', async () => {
+  it("returns lifecycle issuance policy errors from matched rule evaluation", async () => {
     const env = createEnv();
     mockedFindBadgeIssuanceRuleById.mockResolvedValue(sampleRule());
-    mockedFindActiveBadgeIssuanceRuleVersion.mockResolvedValue(sampleVersion({ status: 'active' }));
+    mockedFindActiveBadgeIssuanceRuleVersion.mockResolvedValue(sampleVersion({ status: "active" }));
     mockedIssueBadgeForTenant.mockRejectedValue(
-      Object.assign(new Error('Issuance blocked by lifecycle policy'), {
+      Object.assign(new Error("Issuance blocked by lifecycle policy"), {
         statusCode: 409,
         payload: {
-          error: 'Issuance blocked by lifecycle policy: assertion tenant_123:assertion_1 is revoked.',
+          error:
+            "Issuance blocked by lifecycle policy: assertion tenant_123:assertion_1 is revoked.",
         },
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-rules/brl_123/evaluate',
+      "/v1/tenants/tenant_123/badge-rules/brl_123/evaluate",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
-          'content-type': 'application/json',
+          Cookie: "better-auth.session_token=session-token",
+          "content-type": "application/json",
         },
         body: JSON.stringify({
-          learnerId: 'learner_123',
-          recipientIdentity: 'learner@example.edu',
-          recipientIdentityType: 'email',
+          learnerId: "learner_123",
+          recipientIdentity: "learner@example.edu",
+          recipientIdentityType: "email",
           dryRun: false,
           facts: {
-            nowIso: '2026-02-17T00:00:00.000Z',
+            nowIso: "2026-02-17T00:00:00.000Z",
             grades: [
               {
-                courseId: 'course_101',
-                learnerId: 'learner_123',
+                courseId: "course_101",
+                learnerId: "learner_123",
                 finalScore: 95,
               },
             ],
@@ -1405,7 +1409,7 @@ describe('badge rule routes', () => {
     const body = await response.json<{ error: string }>();
 
     expect(response.status).toBe(409);
-    expect(body.error).toContain('Issuance blocked by lifecycle policy');
+    expect(body.error).toContain("Issuance blocked by lifecycle policy");
     expect(mockedCreateBadgeIssuanceRuleEvaluation).not.toHaveBeenCalled();
   });
 });

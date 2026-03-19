@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedFindTenantById,
@@ -20,8 +20,8 @@ const {
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
@@ -33,9 +33,9 @@ vi.mock('@credtrail/db', async () => {
   };
 });
 
-vi.mock('./better-auth-adapter', async () => {
+vi.mock("./better-auth-adapter", async () => {
   const actual =
-    await vi.importActual<typeof import('./better-auth-adapter')>('./better-auth-adapter');
+    await vi.importActual<typeof import("./better-auth-adapter")>("./better-auth-adapter");
 
   return {
     ...actual,
@@ -43,9 +43,9 @@ vi.mock('./better-auth-adapter', async () => {
   };
 });
 
-vi.mock('./better-auth-runtime', async () => {
+vi.mock("./better-auth-runtime", async () => {
   const actual =
-    await vi.importActual<typeof import('./better-auth-runtime')>('./better-auth-runtime');
+    await vi.importActual<typeof import("./better-auth-runtime")>("./better-auth-runtime");
 
   return {
     ...actual,
@@ -53,8 +53,8 @@ vi.mock('./better-auth-runtime', async () => {
   };
 });
 
-import type { SqlDatabase } from '@credtrail/db';
-import { createBreakGlassPolicyAdapter } from './break-glass-policy';
+import type { SqlDatabase } from "@credtrail/db";
+import { createBreakGlassPolicyAdapter } from "./break-glass-policy";
 
 const fakeDb = {
   prepare: vi.fn(),
@@ -73,10 +73,10 @@ interface FakeContext {
 const createContext = (): FakeContext => {
   return {
     env: {
-      APP_ENV: 'test',
+      APP_ENV: "test",
     },
     req: {
-      url: 'https://credtrail.test/login/local',
+      url: "https://credtrail.test/login/local",
     },
     header: vi.fn(),
   };
@@ -85,39 +85,39 @@ const createContext = (): FakeContext => {
 beforeEach(() => {
   mockedFindTenantById.mockReset();
   mockedFindTenantById.mockResolvedValue({
-    id: 'tenant_123',
-    slug: 'tenant-123',
-    displayName: 'Tenant 123',
-    planTier: 'enterprise',
-    issuerDomain: 'tenant-123.credtrail.test',
-    didWeb: 'did:web:credtrail.test:tenant_123',
+    id: "tenant_123",
+    slug: "tenant-123",
+    displayName: "Tenant 123",
+    planTier: "enterprise",
+    issuerDomain: "tenant-123.credtrail.test",
+    didWeb: "did:web:credtrail.test:tenant_123",
     isActive: true,
-    createdAt: '2026-03-16T12:00:00.000Z',
-    updatedAt: '2026-03-16T12:00:00.000Z',
+    createdAt: "2026-03-16T12:00:00.000Z",
+    updatedAt: "2026-03-16T12:00:00.000Z",
   });
   mockedResolveTenantAuthPolicy.mockReset();
   mockedResolveTenantAuthPolicy.mockResolvedValue({
-    tenantId: 'tenant_123',
-    loginMode: 'sso_required',
+    tenantId: "tenant_123",
+    loginMode: "sso_required",
     breakGlassEnabled: true,
     localMfaRequired: true,
-    defaultProviderId: 'tap_oidc',
-    enforceForRoles: 'all_users',
-    createdAt: '2026-03-16T12:00:00.000Z',
-    updatedAt: '2026-03-16T12:00:00.000Z',
+    defaultProviderId: "tap_oidc",
+    enforceForRoles: "all_users",
+    createdAt: "2026-03-16T12:00:00.000Z",
+    updatedAt: "2026-03-16T12:00:00.000Z",
   });
   mockedFindActiveTenantBreakGlassAccountByEmail.mockReset();
   mockedFindActiveTenantBreakGlassAccountByEmail.mockResolvedValue({
-    tenantId: 'tenant_123',
-    userId: 'usr_break_glass',
-    email: 'admin@example.edu',
-    createdByUserId: 'usr_admin',
+    tenantId: "tenant_123",
+    userId: "usr_break_glass",
+    email: "admin@example.edu",
+    createdByUserId: "usr_admin",
     lastUsedAt: null,
     lastEnrollmentEmailSentAt: null,
     revokedAt: null,
-    createdAt: '2026-03-16T12:00:00.000Z',
-    updatedAt: '2026-03-16T12:00:00.000Z',
-    betterAuthUserId: 'ba_usr_break_glass',
+    createdAt: "2026-03-16T12:00:00.000Z",
+    updatedAt: "2026-03-16T12:00:00.000Z",
+    betterAuthUserId: "ba_usr_break_glass",
     localCredentialEnabled: true,
     twoFactorEnabled: true,
   });
@@ -127,31 +127,31 @@ beforeEach(() => {
   mockedMarkTenantBreakGlassEnrollmentEmailSent.mockResolvedValue(undefined);
   mockedResolveAuthenticatedPrincipalFromSession.mockReset();
   mockedResolveAuthenticatedPrincipalFromSession.mockResolvedValue({
-    userId: 'usr_break_glass',
-    authSessionId: 'ba_session_123',
-    authMethod: 'better_auth',
-    expiresAt: '2026-03-16T13:00:00.000Z',
+    userId: "usr_break_glass",
+    authSessionId: "ba_session_123",
+    authMethod: "better_auth",
+    expiresAt: "2026-03-16T13:00:00.000Z",
   });
   mockedFindBetterAuthSessionByToken.mockReset();
   mockedFindBetterAuthSessionByToken.mockResolvedValue({
-    sessionId: 'ba_session_123',
-    sessionToken: 'token_123',
-    userId: 'ba_usr_break_glass',
-    expiresAt: '2026-03-16T13:00:00.000Z',
-    userEmail: 'admin@example.edu',
+    sessionId: "ba_session_123",
+    sessionToken: "token_123",
+    userId: "ba_usr_break_glass",
+    expiresAt: "2026-03-16T13:00:00.000Z",
+    userEmail: "admin@example.edu",
     userEmailVerified: true,
   });
 });
 
-describe('break-glass policy adapter', () => {
-  it('returns two-factor-required when Better Auth elevates the local sign-in challenge', async () => {
+describe("break-glass policy adapter", () => {
+  it("returns two-factor-required when Better Auth elevates the local sign-in challenge", async () => {
     const rememberRequestedTenant = vi.fn();
     const authHandler = vi.fn(async () => {
       return new Response(JSON.stringify({ twoFactorRedirect: true }), {
         status: 200,
         headers: {
-          'content-type': 'application/json',
-          'set-cookie': 'better-auth.two_factor=challenge; Path=/; HttpOnly',
+          "content-type": "application/json",
+          "set-cookie": "better-auth.two_factor=challenge; Path=/; HttpOnly",
         },
       });
     });
@@ -159,18 +159,18 @@ describe('break-glass policy adapter', () => {
       resolveDatabase: () => fakeDb,
       createBetterAuthRuntime: () => ({
         runtimeConfig: {
-          authSystem: 'better_auth',
-          baseURL: 'https://credtrail.test',
-          trustedOrigins: ['https://credtrail.test'],
-          secret: 'secret',
+          authSystem: "better_auth",
+          baseURL: "https://credtrail.test",
+          trustedOrigins: ["https://credtrail.test"],
+          secret: "secret",
           session: {
-            cookieName: 'better-auth.session_token',
+            cookieName: "better-auth.session_token",
             expiresInSeconds: 604800,
             disableRefresh: true,
           },
           database: {
-            schema: 'auth',
-            searchPath: 'auth,public',
+            schema: "auth",
+            searchPath: "auth,public",
           },
         },
         auth: {
@@ -184,24 +184,24 @@ describe('break-glass policy adapter', () => {
     });
 
     const result = await adapter.signIn(createContext(), {
-      tenantId: 'tenant_123',
-      email: 'admin@example.edu',
-      password: 'password-123',
-      nextPath: '/tenants/tenant_123/admin',
+      tenantId: "tenant_123",
+      email: "admin@example.edu",
+      password: "password-123",
+      nextPath: "/tenants/tenant_123/admin",
     });
 
     expect(result).toEqual({
-      status: 'two_factor_required',
+      status: "two_factor_required",
     });
-    expect(rememberRequestedTenant).toHaveBeenCalledWith(expect.anything(), 'tenant_123');
+    expect(rememberRequestedTenant).toHaveBeenCalledWith(expect.anything(), "tenant_123");
   });
 
-  it('requests password-reset enrollment email only for allowlisted accounts', async () => {
+  it("requests password-reset enrollment email only for allowlisted accounts", async () => {
     const authHandler = vi.fn(async () => {
       return new Response(JSON.stringify({ status: true }), {
         status: 200,
         headers: {
-          'content-type': 'application/json',
+          "content-type": "application/json",
         },
       });
     });
@@ -209,18 +209,18 @@ describe('break-glass policy adapter', () => {
       resolveDatabase: () => fakeDb,
       createBetterAuthRuntime: () => ({
         runtimeConfig: {
-          authSystem: 'better_auth',
-          baseURL: 'https://credtrail.test',
-          trustedOrigins: ['https://credtrail.test'],
-          secret: 'secret',
+          authSystem: "better_auth",
+          baseURL: "https://credtrail.test",
+          trustedOrigins: ["https://credtrail.test"],
+          secret: "secret",
           session: {
-            cookieName: 'better-auth.session_token',
+            cookieName: "better-auth.session_token",
             expiresInSeconds: 604800,
             disableRefresh: true,
           },
           database: {
-            schema: 'auth',
-            searchPath: 'auth,public',
+            schema: "auth",
+            searchPath: "auth,public",
           },
         },
         auth: {
@@ -234,34 +234,34 @@ describe('break-glass policy adapter', () => {
     });
 
     const result = await adapter.requestPasswordReset(createContext(), {
-      tenantId: 'tenant_123',
-      email: 'admin@example.edu',
-      nextPath: '/tenants/tenant_123/admin',
+      tenantId: "tenant_123",
+      email: "admin@example.edu",
+      nextPath: "/tenants/tenant_123/admin",
     });
 
-    expect(result).toBe('sent');
+    expect(result).toBe("sent");
     expect(mockedMarkTenantBreakGlassEnrollmentEmailSent).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      userId: 'usr_break_glass',
+      tenantId: "tenant_123",
+      userId: "usr_break_glass",
       sentAt: expect.any(String),
     });
   });
 
-  it('routes signed-in local users without TOTP into setup flow', async () => {
+  it("routes signed-in local users without TOTP into setup flow", async () => {
     const authHandler = vi.fn(async () => {
       return new Response(
         JSON.stringify({
-          token: 'token_123',
+          token: "token_123",
           user: {
-            email: 'admin@example.edu',
+            email: "admin@example.edu",
             twoFactorEnabled: false,
           },
         }),
         {
           status: 200,
           headers: {
-            'content-type': 'application/json',
-            'set-cookie': 'better-auth.session_token=session; Path=/; HttpOnly',
+            "content-type": "application/json",
+            "set-cookie": "better-auth.session_token=session; Path=/; HttpOnly",
           },
         },
       );
@@ -270,18 +270,18 @@ describe('break-glass policy adapter', () => {
       resolveDatabase: () => fakeDb,
       createBetterAuthRuntime: () => ({
         runtimeConfig: {
-          authSystem: 'better_auth',
-          baseURL: 'https://credtrail.test',
-          trustedOrigins: ['https://credtrail.test'],
-          secret: 'secret',
+          authSystem: "better_auth",
+          baseURL: "https://credtrail.test",
+          trustedOrigins: ["https://credtrail.test"],
+          secret: "secret",
           session: {
-            cookieName: 'better-auth.session_token',
+            cookieName: "better-auth.session_token",
             expiresInSeconds: 604800,
             disableRefresh: true,
           },
           database: {
-            schema: 'auth',
-            searchPath: 'auth,public',
+            schema: "auth",
+            searchPath: "auth,public",
           },
         },
         auth: {
@@ -295,31 +295,31 @@ describe('break-glass policy adapter', () => {
     });
 
     const result = await adapter.signIn(createContext(), {
-      tenantId: 'tenant_123',
-      email: 'admin@example.edu',
-      password: 'password-123',
-      nextPath: '/tenants/tenant_123/admin',
+      tenantId: "tenant_123",
+      email: "admin@example.edu",
+      password: "password-123",
+      nextPath: "/tenants/tenant_123/admin",
     });
 
     expect(result).toEqual({
-      status: 'setup_required',
+      status: "setup_required",
     });
   });
 
-  it('verifies TOTP, resolves the principal, and records break-glass usage', async () => {
+  it("verifies TOTP, resolves the principal, and records break-glass usage", async () => {
     const authHandler = vi.fn(async () => {
       return new Response(
         JSON.stringify({
-          token: 'token_123',
+          token: "token_123",
           user: {
-            email: 'admin@example.edu',
+            email: "admin@example.edu",
           },
         }),
         {
           status: 200,
           headers: {
-            'content-type': 'application/json',
-            'set-cookie': 'better-auth.session_token=session; Path=/; HttpOnly',
+            "content-type": "application/json",
+            "set-cookie": "better-auth.session_token=session; Path=/; HttpOnly",
           },
         },
       );
@@ -328,18 +328,18 @@ describe('break-glass policy adapter', () => {
       resolveDatabase: () => fakeDb,
       createBetterAuthRuntime: () => ({
         runtimeConfig: {
-          authSystem: 'better_auth',
-          baseURL: 'https://credtrail.test',
-          trustedOrigins: ['https://credtrail.test'],
-          secret: 'secret',
+          authSystem: "better_auth",
+          baseURL: "https://credtrail.test",
+          trustedOrigins: ["https://credtrail.test"],
+          secret: "secret",
           session: {
-            cookieName: 'better-auth.session_token',
+            cookieName: "better-auth.session_token",
             expiresInSeconds: 604800,
             disableRefresh: true,
           },
           database: {
-            schema: 'auth',
-            searchPath: 'auth,public',
+            schema: "auth",
+            searchPath: "auth,public",
           },
         },
         auth: {
@@ -353,22 +353,22 @@ describe('break-glass policy adapter', () => {
     });
 
     const result = await adapter.verifyTwoFactor(createContext(), {
-      tenantId: 'tenant_123',
-      code: '123456',
+      tenantId: "tenant_123",
+      code: "123456",
     });
 
     expect(result).toEqual({
-      status: 'authenticated',
+      status: "authenticated",
       principal: {
-        userId: 'usr_break_glass',
-        authSessionId: 'ba_session_123',
-        authMethod: 'better_auth',
-        expiresAt: '2026-03-16T13:00:00.000Z',
+        userId: "usr_break_glass",
+        authSessionId: "ba_session_123",
+        authMethod: "better_auth",
+        expiresAt: "2026-03-16T13:00:00.000Z",
       },
     });
     expect(mockedMarkTenantBreakGlassAccountUsed).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
-      userId: 'usr_break_glass',
+      tenantId: "tenant_123",
+      userId: "usr_break_glass",
       usedAt: expect.any(String),
     });
   });

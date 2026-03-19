@@ -1,26 +1,27 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-export const LTI_CLAIM_MESSAGE_TYPE = 'https://purl.imsglobal.org/spec/lti/claim/message_type';
-export const LTI_CLAIM_VERSION = 'https://purl.imsglobal.org/spec/lti/claim/version';
-export const LTI_CLAIM_DEPLOYMENT_ID = 'https://purl.imsglobal.org/spec/lti/claim/deployment_id';
-export const LTI_CLAIM_TARGET_LINK_URI = 'https://purl.imsglobal.org/spec/lti/claim/target_link_uri';
-export const LTI_CLAIM_ROLES = 'https://purl.imsglobal.org/spec/lti/claim/roles';
-export const LTI_CLAIM_RESOURCE_LINK = 'https://purl.imsglobal.org/spec/lti/claim/resource_link';
-export const LTI_CLAIM_CONTEXT = 'https://purl.imsglobal.org/spec/lti/claim/context';
-export const LTI_CLAIM_LIS = 'https://purl.imsglobal.org/spec/lti/claim/lis';
+export const LTI_CLAIM_MESSAGE_TYPE = "https://purl.imsglobal.org/spec/lti/claim/message_type";
+export const LTI_CLAIM_VERSION = "https://purl.imsglobal.org/spec/lti/claim/version";
+export const LTI_CLAIM_DEPLOYMENT_ID = "https://purl.imsglobal.org/spec/lti/claim/deployment_id";
+export const LTI_CLAIM_TARGET_LINK_URI =
+  "https://purl.imsglobal.org/spec/lti/claim/target_link_uri";
+export const LTI_CLAIM_ROLES = "https://purl.imsglobal.org/spec/lti/claim/roles";
+export const LTI_CLAIM_RESOURCE_LINK = "https://purl.imsglobal.org/spec/lti/claim/resource_link";
+export const LTI_CLAIM_CONTEXT = "https://purl.imsglobal.org/spec/lti/claim/context";
+export const LTI_CLAIM_LIS = "https://purl.imsglobal.org/spec/lti/claim/lis";
 export const LTI_CLAIM_NRPS_NAMES_ROLE_SERVICE =
-  'https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice';
+  "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice";
 export const LTI_CLAIM_DEEP_LINKING_SETTINGS =
-  'https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings';
+  "https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings";
 export const LTI_CLAIM_DEEP_LINKING_CONTENT_ITEMS =
-  'https://purl.imsglobal.org/spec/lti-dl/claim/content_items';
-export const LTI_CLAIM_DEEP_LINKING_DATA = 'https://purl.imsglobal.org/spec/lti-dl/claim/data';
+  "https://purl.imsglobal.org/spec/lti-dl/claim/content_items";
+export const LTI_CLAIM_DEEP_LINKING_DATA = "https://purl.imsglobal.org/spec/lti-dl/claim/data";
 
-export const LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST = 'LtiResourceLinkRequest';
-export const LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST = 'LtiDeepLinkingRequest';
-export const LTI_VERSION_1P3P0 = '1.3.0';
+export const LTI_MESSAGE_TYPE_RESOURCE_LINK_REQUEST = "LtiResourceLinkRequest";
+export const LTI_MESSAGE_TYPE_DEEP_LINKING_REQUEST = "LtiDeepLinkingRequest";
+export const LTI_VERSION_1P3P0 = "1.3.0";
 export const LTI_NRPS_SCOPE_CONTEXT_MEMBERSHIP_READONLY =
-  'https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly';
+  "https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly";
 
 export const ltiOidcLoginInitiationRequestSchema = z.object({
   iss: z.string().url(),
@@ -75,21 +76,21 @@ export const ltiLaunchClaimsSchema = z
   .passthrough();
 
 const INSTRUCTOR_ROLE_URIS = new Set<string>([
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#instructor',
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#teachingassistant',
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#contentdeveloper',
-  'http://purl.imsglobal.org/vocab/lis/v2/institution/person#administrator',
-  'http://purl.imsglobal.org/vocab/lis/v2/institution/person#faculty',
+  "http://purl.imsglobal.org/vocab/lis/v2/membership#instructor",
+  "http://purl.imsglobal.org/vocab/lis/v2/membership#teachingassistant",
+  "http://purl.imsglobal.org/vocab/lis/v2/membership#contentdeveloper",
+  "http://purl.imsglobal.org/vocab/lis/v2/institution/person#administrator",
+  "http://purl.imsglobal.org/vocab/lis/v2/institution/person#faculty",
 ]);
 
 const LEARNER_ROLE_URIS = new Set<string>([
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#learner',
-  'http://purl.imsglobal.org/vocab/lis/v2/membership#student',
+  "http://purl.imsglobal.org/vocab/lis/v2/membership#learner",
+  "http://purl.imsglobal.org/vocab/lis/v2/membership#student",
 ]);
 
 export type LtiOidcLoginInitiationRequest = z.infer<typeof ltiOidcLoginInitiationRequestSchema>;
 export type LtiLaunchClaims = z.infer<typeof ltiLaunchClaimsSchema>;
-export type LtiRoleKind = 'instructor' | 'learner' | 'unknown';
+export type LtiRoleKind = "instructor" | "learner" | "unknown";
 
 export const parseLtiOidcLoginInitiationRequest = (
   input: unknown,
@@ -105,12 +106,12 @@ export const resolveLtiRoleKind = (claims: LtiLaunchClaims): LtiRoleKind => {
   const normalizedRoles = claims[LTI_CLAIM_ROLES].map((role) => role.trim().toLowerCase());
 
   if (normalizedRoles.some((role) => INSTRUCTOR_ROLE_URIS.has(role))) {
-    return 'instructor';
+    return "instructor";
   }
 
   if (normalizedRoles.some((role) => LEARNER_ROLE_URIS.has(role))) {
-    return 'learner';
+    return "learner";
   }
 
-  return 'unknown';
+  return "unknown";
 };

@@ -1,43 +1,46 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
     createAuditLog: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findBadgeTemplateById: vi.fn(),
     findTenantMembership: vi.fn(),
     hasTenantMembershipOrgUnitAccess: vi.fn(),
     hasTenantMembershipOrgUnitScopeAssignments: vi.fn(),
     listBadgeTemplates: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
     updateBadgeTemplate: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -54,25 +57,22 @@ vi.mock('./auth/better-auth-adapter', async () => {
 
 import {
   createAuditLog,
-  findActiveSessionByHash,
   findBadgeTemplateById,
   findTenantMembership,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
   listBadgeTemplates,
-  touchSession,
   updateBadgeTemplate,
   type BadgeTemplateRecord,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
-import { BADGE_TEMPLATE_IMAGE_MAX_BYTES } from './badges/template-image-storage';
-import { app } from './index';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
+import { BADGE_TEMPLATE_IMAGE_MAX_BYTES } from "./badges/template-image-storage";
+import { app } from "./index";
 
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgUnitAccess);
@@ -80,7 +80,6 @@ const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedUpdateBadgeTemplate = vi.mocked(updateBadgeTemplate);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 
@@ -88,30 +87,32 @@ const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
 
-const createEnv = (badgeObjects: R2Bucket): {
+const createEnv = (
+  badgeObjects: R2Bucket,
+): {
   APP_ENV: string;
   DATABASE_URL: string;
   BADGE_OBJECTS: R2Bucket;
   PLATFORM_DOMAIN: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: badgeObjects,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
 const sampleSession = (): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: 'tenant_123',
-    userId: 'usr_admin',
-    sessionTokenHash: 'session_hash',
-    expiresAt: '2026-02-23T23:00:00.000Z',
-    lastSeenAt: '2026-02-23T12:00:00.000Z',
+    id: "ses_123",
+    tenantId: "tenant_123",
+    userId: "usr_admin",
+    sessionTokenHash: "session_hash",
+    expiresAt: "2026-02-23T23:00:00.000Z",
+    lastSeenAt: "2026-02-23T12:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-23T12:00:00.000Z',
+    createdAt: "2026-02-23T12:00:00.000Z",
   };
 };
 
@@ -124,29 +125,29 @@ const sampleSessionForTenant = (tenantId: string): SessionRecord => {
 
 const sampleMembership = (): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_admin',
-    role: 'admin',
-    createdAt: '2026-02-23T12:00:00.000Z',
-    updatedAt: '2026-02-23T12:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_admin",
+    role: "admin",
+    createdAt: "2026-02-23T12:00:00.000Z",
+    updatedAt: "2026-02-23T12:00:00.000Z",
   };
 };
 
 const sampleTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for TypeScript basics.',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for TypeScript basics.",
     criteriaUri: null,
     imageUri: null,
-    createdByUserId: 'usr_admin',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_admin",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: null,
     isArchived: false,
-    createdAt: '2026-02-23T12:00:00.000Z',
-    updatedAt: '2026-02-23T12:00:00.000Z',
+    createdAt: "2026-02-23T12:00:00.000Z",
+    updatedAt: "2026-02-23T12:00:00.000Z",
     ...overrides,
   };
 };
@@ -191,10 +192,10 @@ const createBadgeObjectStore = (): {
       entries.set(key, value);
       return Promise.resolve({
         key,
-        etag: 'etag_123',
-        version: 'v1',
+        etag: "etag_123",
+        version: "v1",
         size: new TextEncoder().encode(value).length,
-        uploaded: new Date('2026-02-23T12:30:00.000Z'),
+        uploaded: new Date("2026-02-23T12:30:00.000Z"),
       });
     },
   };
@@ -221,17 +222,17 @@ beforeEach(() => {
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
+      if (!cookieHeader.includes("better-auth.session_token=")) {
         return null;
       }
 
       return {
-        userId: 'usr_admin',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-02-23T23:00:00.000Z',
+        userId: "usr_admin",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-02-23T23:00:00.000Z",
       };
     },
   );
@@ -240,7 +241,7 @@ beforeEach(() => {
   mockedFindActiveSessionByHash.mockReset();
   mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
   mockedTouchSession.mockReset();
-  mockedTouchSession.mockResolvedValue();
+  mockedTouchSession.mockResolvedValue(undefined);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleMembership());
   mockedFindBadgeTemplateById.mockReset();
@@ -261,30 +262,30 @@ beforeEach(() => {
   });
   mockedCreateAuditLog.mockReset();
   mockedCreateAuditLog.mockResolvedValue({
-    id: 'audit_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_admin',
-    action: 'badge_template.image_uploaded',
-    targetType: 'badge_template',
-    targetId: 'badge_template_001',
+    id: "audit_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_admin",
+    action: "badge_template.image_uploaded",
+    targetType: "badge_template",
+    targetId: "badge_template_001",
     metadataJson: null,
-    occurredAt: '2026-02-23T12:30:00.000Z',
-    createdAt: '2026-02-23T12:30:00.000Z',
+    occurredAt: "2026-02-23T12:30:00.000Z",
+    createdAt: "2026-02-23T12:30:00.000Z",
   });
 });
 
-describe('badge template image upload routes', () => {
-  it('lists badge templates from requested tenant membership even when session tenant differs', async () => {
+describe("badge template image upload routes", () => {
+  it("lists badge templates from requested tenant membership even when session tenant differs", async () => {
     const { store } = createBadgeObjectStore();
     const env = createEnv(store);
 
-    mockedFindActiveSessionByHash.mockResolvedValue(sampleSessionForTenant('tenant_other'));
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSessionForTenant("tenant_other"));
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates',
+      "/v1/tenants/tenant_123/badge-templates",
       {
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
       },
       env,
@@ -297,30 +298,32 @@ describe('badge template image upload routes', () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(body.tenantId).toBe('tenant_123');
+    expect(body.tenantId).toBe("tenant_123");
     expect(body.templates).toHaveLength(1);
-    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, 'tenant_123', 'usr_admin');
+    expect(mockedFindTenantMembership).toHaveBeenCalledWith(fakeDb, "tenant_123", "usr_admin");
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
       includeArchived: false,
     });
   });
 
-  it('uploads a PNG image, stores it in object storage, and serves it publicly', async () => {
+  it("uploads a PNG image, stores it in object storage, and serves it publicly", async () => {
     const { store, entries } = createBadgeObjectStore();
     const env = createEnv(store);
     const formData = new FormData();
     formData.set(
-      'file',
-      new File([bytesToArrayBuffer(samplePngBytes())], 'typescript-badge.png', { type: 'image/png' }),
+      "file",
+      new File([bytesToArrayBuffer(samplePngBytes())], "typescript-badge.png", {
+        type: "image/png",
+      }),
     );
 
     const uploadResponse = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
         body: formData,
       },
@@ -340,11 +343,11 @@ describe('badge template image upload routes', () => {
     }>();
 
     expect(uploadResponse.status).toBe(201);
-    expect(uploadBody.tenantId).toBe('tenant_123');
-    expect(uploadBody.image.mimeType).toBe('image/png');
+    expect(uploadBody.tenantId).toBe("tenant_123");
+    expect(uploadBody.image.mimeType).toBe("image/png");
     expect(uploadBody.image.byteSize).toBe(samplePngBytes().byteLength);
-    expect(uploadBody.image.path).toContain('/badges/assets/tenant_123/badge_template_001/');
-    expect(uploadBody.image.url).toContain('/badges/assets/tenant_123/badge_template_001/');
+    expect(uploadBody.image.path).toContain("/badges/assets/tenant_123/badge_template_001/");
+    expect(uploadBody.image.url).toContain("/badges/assets/tenant_123/badge_template_001/");
     expect(uploadBody.template.imageUri).toBe(uploadBody.image.url);
     expect(entries.size).toBe(1);
     expect(mockedUpdateBadgeTemplate).toHaveBeenCalledTimes(1);
@@ -355,28 +358,28 @@ describe('badge template image upload routes', () => {
     const publicBody = new Uint8Array(await publicResponse.arrayBuffer());
 
     expect(publicResponse.status).toBe(200);
-    expect(publicResponse.headers.get('content-type')).toContain('image/png');
-    expect(publicResponse.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(publicResponse.headers.get("content-type")).toContain("image/png");
+    expect(publicResponse.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(publicBody).toEqual(samplePngBytes());
   });
 
-  it('returns 422 when file type is unsupported', async () => {
+  it("returns 422 when file type is unsupported", async () => {
     const { store } = createBadgeObjectStore();
     const env = createEnv(store);
     const formData = new FormData();
     formData.set(
-      'file',
-      new File([bytesToArrayBuffer(new Uint8Array([0x47, 0x49, 0x46]))], 'badge.gif', {
-        type: 'image/gif',
+      "file",
+      new File([bytesToArrayBuffer(new Uint8Array([0x47, 0x49, 0x46]))], "badge.gif", {
+        type: "image/gif",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
         body: formData,
       },
@@ -385,26 +388,26 @@ describe('badge template image upload routes', () => {
     const body = await response.json<{ error: string }>();
 
     expect(response.status).toBe(422);
-    expect(body.error).toContain('Unsupported image type');
+    expect(body.error).toContain("Unsupported image type");
   });
 
-  it('returns 422 when content bytes do not match declared mime type', async () => {
+  it("returns 422 when content bytes do not match declared mime type", async () => {
     const { store } = createBadgeObjectStore();
     const env = createEnv(store);
     const formData = new FormData();
     formData.set(
-      'file',
-      new File([bytesToArrayBuffer(new Uint8Array([0xff, 0xd8, 0xff, 0x00]))], 'badge.png', {
-        type: 'image/png',
+      "file",
+      new File([bytesToArrayBuffer(new Uint8Array([0xff, 0xd8, 0xff, 0x00]))], "badge.png", {
+        type: "image/png",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
         body: formData,
       },
@@ -413,26 +416,26 @@ describe('badge template image upload routes', () => {
     const body = await response.json<{ error: string }>();
 
     expect(response.status).toBe(422);
-    expect(body.error).toBe('Uploaded file content does not match declared image type');
+    expect(body.error).toBe("Uploaded file content does not match declared image type");
   });
 
-  it('returns 413 when upload exceeds byte limit', async () => {
+  it("returns 413 when upload exceeds byte limit", async () => {
     const { store } = createBadgeObjectStore();
     const env = createEnv(store);
     const oversizedBytes = new Uint8Array(BADGE_TEMPLATE_IMAGE_MAX_BYTES + 1);
     oversizedBytes.set(samplePngBytes(), 0);
     const formData = new FormData();
     formData.set(
-      'file',
-      new File([bytesToArrayBuffer(oversizedBytes)], 'big-image.png', { type: 'image/png' }),
+      "file",
+      new File([bytesToArrayBuffer(oversizedBytes)], "big-image.png", { type: "image/png" }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload',
+      "/v1/tenants/tenant_123/badge-templates/badge_template_001/image-upload",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          Cookie: 'better-auth.session_token=session-token',
+          Cookie: "better-auth.session_token=session-token",
         },
         body: formData,
       },
@@ -441,14 +444,14 @@ describe('badge template image upload routes', () => {
     const body = await response.json<{ error: string }>();
 
     expect(response.status).toBe(413);
-    expect(body.error).toContain('byte limit');
+    expect(body.error).toContain("byte limit");
   });
 
-  it('returns 404 for unknown public image asset path', async () => {
+  it("returns 404 for unknown public image asset path", async () => {
     const { store } = createBadgeObjectStore();
     const env = createEnv(store);
     const response = await app.request(
-      '/badges/assets/tenant_123/badge_template_001/asset_missing',
+      "/badges/assets/tenant_123/badge_template_001/asset_missing",
       undefined,
       env,
     );

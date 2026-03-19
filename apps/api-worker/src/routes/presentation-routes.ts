@@ -3,36 +3,35 @@ import {
   type Ed25519PrivateJwk,
   type ImmutableCredentialStore,
   type JsonObject,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   findAssertionById,
   listLearnerBadgeSummaries,
   type AssertionRecord,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
-import { parsePresentationCreateRequest, parsePresentationVerifyRequest } from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import type { AuthenticatedPrincipal, RequestedTenantContext } from '../auth/auth-context';
+} from "@credtrail/db";
+import type { Hono } from "hono";
+import {
+  parsePresentationCreateRequest,
+  parsePresentationVerifyRequest,
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import type { AuthenticatedPrincipal, RequestedTenantContext } from "../auth/auth-context";
 
 interface PresentationHolderProofSummary {
-  status: 'valid' | 'invalid' | 'unchecked';
+  status: "valid" | "invalid" | "unchecked";
 }
 
 interface PresentationCredentialVerificationResult {
-  status: 'valid' | 'invalid' | 'unchecked';
+  status: "valid" | "invalid" | "unchecked";
 }
 
 interface RegisterPresentationRoutesInput {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
   resolveAuthenticatedPrincipal: (context: AppContext) => Promise<AuthenticatedPrincipal | null>;
-  resolveRequestedTenantContext: (
-    context: AppContext,
-  ) => Promise<RequestedTenantContext | null>;
-  parseTenantScopedCredentialId: (
-    credentialId: string,
-  ) => {
+  resolveRequestedTenantContext: (context: AppContext) => Promise<RequestedTenantContext | null>;
+  parseTenantScopedCredentialId: (credentialId: string) => {
     tenantId: string;
     resourceId: string;
   } | null;
@@ -41,8 +40,8 @@ interface RegisterPresentationRoutesInput {
     assertion: AssertionRecord,
   ) => Promise<JsonObject>;
   ed25519PublicJwkFromDidKey: (did: string) => {
-    kty: 'OKP';
-    crv: 'Ed25519';
+    kty: "OKP";
+    crv: "Ed25519";
     x: string;
     kid?: string | undefined;
   } | null;
@@ -86,13 +85,13 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     VC_DATA_MODEL_CONTEXT_URL,
   } = input;
 
-  app.post('/v1/presentations/create', async (c): Promise<Response> => {
+  app.post("/v1/presentations/create", async (c): Promise<Response> => {
     const principal = await resolveAuthenticatedPrincipal(c);
 
     if (principal === null) {
       return c.json(
         {
-          error: 'Not authenticated',
+          error: "Not authenticated",
         },
         401,
       );
@@ -103,7 +102,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     if (requestedTenant === null) {
       return c.json(
         {
-          error: 'Active tenant context is unavailable for this presentation request',
+          error: "Active tenant context is unavailable for this presentation request",
         },
         403,
       );
@@ -116,16 +115,16 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     } catch {
       return c.json(
         {
-          error: 'Invalid presentation create request payload',
+          error: "Invalid presentation create request payload",
         },
         400,
       );
     }
 
-    if (!request.holderDid.startsWith('did:key:')) {
+    if (!request.holderDid.startsWith("did:key:")) {
       return c.json(
         {
-          error: 'Presentation creation currently supports did:key holder DIDs only',
+          error: "Presentation creation currently supports did:key holder DIDs only",
         },
         422,
       );
@@ -136,7 +135,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     if (expectedHolderPublicJwk === null) {
       return c.json(
         {
-          error: 'holderDid is not a valid did:key identifier',
+          error: "holderDid is not a valid did:key identifier",
         },
         422,
       );
@@ -145,7 +144,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     if (request.holderPrivateJwk.x !== expectedHolderPublicJwk.x) {
       return c.json(
         {
-          error: 'holderPrivateJwk does not match holderDid public key',
+          error: "holderPrivateJwk does not match holderDid public key",
         },
         422,
       );
@@ -173,7 +172,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
         return c.json(
           {
             error:
-              'credentialIds must contain tenant-scoped assertion identifiers for the active tenant context',
+              "credentialIds must contain tenant-scoped assertion identifiers for the active tenant context",
             credentialId,
           },
           422,
@@ -183,7 +182,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       if (!learnerAssertionIds.has(credentialId)) {
         return c.json(
           {
-            error: 'Credential is not accessible for the authenticated learner account',
+            error: "Credential is not accessible for the authenticated learner account",
             credentialId,
           },
           403,
@@ -195,7 +194,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       if (assertion === null) {
         return c.json(
           {
-            error: 'Credential not found',
+            error: "Credential not found",
             credentialId,
           },
           404,
@@ -209,7 +208,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       if (subjectId !== request.holderDid) {
         return c.json(
           {
-            error: 'Credential subject DID does not match requested presentation holder DID',
+            error: "Credential subject DID does not match requested presentation holder DID",
             credentialId,
             subjectId,
           },
@@ -225,7 +224,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     if (verificationMethod === null) {
       return c.json(
         {
-          error: 'Unable to resolve holder verification method from holder DID',
+          error: "Unable to resolve holder verification method from holder DID",
         },
         422,
       );
@@ -233,8 +232,8 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
 
     const presentation = await signCredentialWithEd25519Signature2020({
       credential: {
-        '@context': [VC_DATA_MODEL_CONTEXT_URL],
-        type: ['VerifiablePresentation'],
+        "@context": [VC_DATA_MODEL_CONTEXT_URL],
+        type: ["VerifiablePresentation"],
         holder: request.holderDid,
         verifiableCredential: selectedCredentials,
       },
@@ -242,7 +241,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       verificationMethod,
     });
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     return c.json({
       holderDid: request.holderDid,
@@ -252,7 +251,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     });
   });
 
-  app.post('/v1/presentations/verify', async (c): Promise<Response> => {
+  app.post("/v1/presentations/verify", async (c): Promise<Response> => {
     let request: ReturnType<typeof parsePresentationVerifyRequest>;
 
     try {
@@ -260,7 +259,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     } catch {
       return c.json(
         {
-          error: 'Invalid presentation verification request payload',
+          error: "Invalid presentation verification request payload",
         },
         400,
       );
@@ -270,12 +269,12 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
     const holderDid = asNonEmptyString(presentation.holder);
     const presentationTypes = normalizedStringValues(presentation.type);
     const contextUrls: string[] = [];
-    collectContextUrls(presentation['@context'], contextUrls);
+    collectContextUrls(presentation["@context"], contextUrls);
     const credentials = verifiableCredentialObjectsFromPresentation(presentation);
 
     if (
       holderDid === null ||
-      !presentationTypes.includes('VerifiablePresentation') ||
+      !presentationTypes.includes("VerifiablePresentation") ||
       !contextUrls.includes(VC_DATA_MODEL_CONTEXT_URL) ||
       credentials === null ||
       credentials.length === 0
@@ -283,7 +282,7 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       return c.json(
         {
           error:
-            'Payload must be a VerifiablePresentation with holder DID and at least one verifiableCredential',
+            "Payload must be a VerifiablePresentation with holder DID and at least one verifiableCredential",
         },
         400,
       );
@@ -304,12 +303,12 @@ export const registerPresentationRoutes = (input: RegisterPresentationRoutesInpu
       );
     }
 
-    const status: 'valid' | 'invalid' =
-      holderProof.status === 'valid' && credentialResults.every((entry) => entry.status === 'valid')
-        ? 'valid'
-        : 'invalid';
+    const status: "valid" | "invalid" =
+      holderProof.status === "valid" && credentialResults.every((entry) => entry.status === "valid")
+        ? "valid"
+        : "invalid";
 
-    c.header('Cache-Control', 'no-store');
+    c.header("Cache-Control", "no-store");
 
     return c.json({
       status,

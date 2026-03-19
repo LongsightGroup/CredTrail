@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   parseCreateDedicatedDbProvisioningRequest,
@@ -73,110 +73,110 @@ import {
   parseTenantSigningRegistry,
   parseUpdateBadgeTemplateRequest,
   parseTransferBadgeTemplateOwnershipRequest,
-} from './index';
+} from "./index";
 
-describe('parseQueueJob', () => {
-  it('accepts a valid issue_badge queue payload', () => {
+describe("parseQueueJob", () => {
+  it("accepts a valid issue_badge queue payload", () => {
     const job = parseQueueJob({
-      jobType: 'issue_badge',
-      tenantId: 'tenant_123',
+      jobType: "issue_badge",
+      tenantId: "tenant_123",
       payload: {
-        assertionId: 'assertion_456',
-        badgeTemplateId: 'badge_template_001',
-        recipientIdentity: 'learner@example.edu',
-        recipientIdentityType: 'email',
-        requestedAt: '2026-02-10T15:00:00.000Z',
+        assertionId: "assertion_456",
+        badgeTemplateId: "badge_template_001",
+        recipientIdentity: "learner@example.edu",
+        recipientIdentityType: "email",
+        requestedAt: "2026-02-10T15:00:00.000Z",
       },
-      idempotencyKey: 'idem_abc',
+      idempotencyKey: "idem_abc",
     });
 
-    expect(job.jobType).toBe('issue_badge');
+    expect(job.jobType).toBe("issue_badge");
   });
 
-  it('accepts issue_badge queue payload with recipient identifiers', () => {
+  it("accepts issue_badge queue payload with recipient identifiers", () => {
     const job = parseQueueJob({
-      jobType: 'issue_badge',
-      tenantId: 'tenant_123',
+      jobType: "issue_badge",
+      tenantId: "tenant_123",
       payload: {
-        assertionId: 'assertion_456',
-        badgeTemplateId: 'badge_template_001',
-        recipientIdentity: 'learner@example.edu',
-        recipientIdentityType: 'email',
+        assertionId: "assertion_456",
+        badgeTemplateId: "badge_template_001",
+        recipientIdentity: "learner@example.edu",
+        recipientIdentityType: "email",
         recipientIdentifiers: [
           {
-            identifierType: 'emailAddress',
-            identifier: 'learner@example.edu',
+            identifierType: "emailAddress",
+            identifier: "learner@example.edu",
           },
           {
-            identifierType: 'studentId',
-            identifier: 'student-123',
+            identifierType: "studentId",
+            identifier: "student-123",
           },
         ],
-        requestedAt: '2026-02-10T15:00:00.000Z',
+        requestedAt: "2026-02-10T15:00:00.000Z",
       },
-      idempotencyKey: 'idem_abc',
+      idempotencyKey: "idem_abc",
     });
 
-    expect(job.jobType).toBe('issue_badge');
+    expect(job.jobType).toBe("issue_badge");
 
-    if (job.jobType !== 'issue_badge') {
-      throw new Error('Expected issue_badge queue payload');
+    if (job.jobType !== "issue_badge") {
+      throw new Error("Expected issue_badge queue payload");
     }
 
     expect(job.payload.recipientIdentifiers).toHaveLength(2);
   });
 
-  it('accepts a valid revoke_badge queue payload', () => {
+  it("accepts a valid revoke_badge queue payload", () => {
     const job = parseQueueJob({
-      jobType: 'revoke_badge',
-      tenantId: 'tenant_123',
+      jobType: "revoke_badge",
+      tenantId: "tenant_123",
       payload: {
-        revocationId: 'revocation_456',
-        assertionId: 'assertion_456',
-        reason: 'Issued in error',
-        requestedAt: '2026-02-10T15:00:00.000Z',
+        revocationId: "revocation_456",
+        assertionId: "assertion_456",
+        reason: "Issued in error",
+        requestedAt: "2026-02-10T15:00:00.000Z",
       },
-      idempotencyKey: 'idem_def',
+      idempotencyKey: "idem_def",
     });
 
-    expect(job.jobType).toBe('revoke_badge');
+    expect(job.jobType).toBe("revoke_badge");
   });
 
-  it('rejects malformed queue jobs', () => {
+  it("rejects malformed queue jobs", () => {
     expect(() => {
       parseQueueJob({
-        tenantId: 'tenant_123',
+        tenantId: "tenant_123",
       });
     }).toThrowError();
   });
 });
 
-describe('issue/revoke request parsers', () => {
-  it('accepts a valid issue request', () => {
+describe("issue/revoke request parsers", () => {
+  it("accepts a valid issue request", () => {
     const request = parseIssueBadgeRequest({
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'badge_template_001',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
+      tenantId: "tenant_123",
+      badgeTemplateId: "badge_template_001",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
     });
 
-    expect(request.tenantId).toBe('tenant_123');
+    expect(request.tenantId).toBe("tenant_123");
   });
 
-  it('accepts a valid issue request with recipient identifiers', () => {
+  it("accepts a valid issue request with recipient identifiers", () => {
     const request = parseIssueBadgeRequest({
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'badge_template_001',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
+      tenantId: "tenant_123",
+      badgeTemplateId: "badge_template_001",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
       recipientIdentifiers: [
         {
-          identifierType: 'emailAddress',
-          identifier: 'learner@example.edu',
+          identifierType: "emailAddress",
+          identifier: "learner@example.edu",
         },
         {
-          identifierType: 'sourcedId',
-          identifier: 'canvas-user-44',
+          identifierType: "sourcedId",
+          identifier: "canvas-user-44",
         },
       ],
     });
@@ -184,106 +184,105 @@ describe('issue/revoke request parsers', () => {
     expect(request.recipientIdentifiers).toHaveLength(2);
   });
 
-  it('rejects invalid recipient identifier entries', () => {
+  it("rejects invalid recipient identifier entries", () => {
     expect(() => {
       parseIssueBadgeRequest({
-        tenantId: 'tenant_123',
-        badgeTemplateId: 'badge_template_001',
-        recipientIdentity: 'learner@example.edu',
-        recipientIdentityType: 'email',
+        tenantId: "tenant_123",
+        badgeTemplateId: "badge_template_001",
+        recipientIdentity: "learner@example.edu",
+        recipientIdentityType: "email",
         recipientIdentifiers: [
           {
-            identifierType: 'emailAddress',
-            identifier: '',
+            identifierType: "emailAddress",
+            identifier: "",
           },
         ],
       });
     }).toThrowError();
   });
 
-  it('accepts a valid revoke request', () => {
+  it("accepts a valid revoke request", () => {
     const request = parseRevokeBadgeRequest({
-      tenantId: 'tenant_123',
-      assertionId: 'assertion_456',
-      reason: 'Revoked by issuer',
+      tenantId: "tenant_123",
+      assertionId: "assertion_456",
+      reason: "Revoked by issuer",
     });
 
-    expect(request.assertionId).toBe('assertion_456');
+    expect(request.assertionId).toBe("assertion_456");
   });
 
-  it('rejects revoke requests without a reason', () => {
+  it("rejects revoke requests without a reason", () => {
     expect(() => {
       parseRevokeBadgeRequest({
-        tenantId: 'tenant_123',
-        assertionId: 'assertion_456',
-        reason: '',
+        tenantId: "tenant_123",
+        assertionId: "assertion_456",
+        reason: "",
       });
     }).toThrowError();
   });
 
-  it('accepts a valid manual issue request', () => {
+  it("accepts a valid manual issue request", () => {
     const request = parseManualIssueBadgeRequest({
-      badgeTemplateId: 'badge_template_001',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
+      badgeTemplateId: "badge_template_001",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
     });
 
-    expect(request.badgeTemplateId).toBe('badge_template_001');
+    expect(request.badgeTemplateId).toBe("badge_template_001");
   });
 
-  it('requires idempotencyKey for programmatic issue requests', () => {
+  it("requires idempotencyKey for programmatic issue requests", () => {
     expect(() => {
       parseProgrammaticIssueBadgeRequest({
-        tenantId: 'tenant_123',
-        badgeTemplateId: 'badge_template_001',
-        recipientIdentity: 'learner@example.edu',
-        recipientIdentityType: 'email',
+        tenantId: "tenant_123",
+        badgeTemplateId: "badge_template_001",
+        recipientIdentity: "learner@example.edu",
+        recipientIdentityType: "email",
       });
     }).toThrowError();
   });
 
-  it('accepts a valid programmatic issue request with idempotencyKey', () => {
+  it("accepts a valid programmatic issue request with idempotencyKey", () => {
     const request = parseProgrammaticIssueBadgeRequest({
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'badge_template_001',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
-      idempotencyKey: 'idem_issue_123',
+      tenantId: "tenant_123",
+      badgeTemplateId: "badge_template_001",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
+      idempotencyKey: "idem_issue_123",
     });
 
-    expect(request.idempotencyKey).toBe('idem_issue_123');
+    expect(request.idempotencyKey).toBe("idem_issue_123");
   });
 
-  it('requires idempotencyKey for programmatic revoke requests', () => {
+  it("requires idempotencyKey for programmatic revoke requests", () => {
     expect(() => {
       parseProgrammaticRevokeBadgeRequest({
-        tenantId: 'tenant_123',
-        assertionId: 'assertion_456',
-        reason: 'Revoked by issuer',
+        tenantId: "tenant_123",
+        assertionId: "assertion_456",
+        reason: "Revoked by issuer",
       });
     }).toThrowError();
   });
 
-  it('accepts a valid programmatic revoke request with idempotencyKey', () => {
+  it("accepts a valid programmatic revoke request with idempotencyKey", () => {
     const request = parseProgrammaticRevokeBadgeRequest({
-      tenantId: 'tenant_123',
-      assertionId: 'assertion_456',
-      reason: 'Revoked by issuer',
-      idempotencyKey: 'idem_revoke_123',
+      tenantId: "tenant_123",
+      assertionId: "assertion_456",
+      reason: "Revoked by issuer",
+      idempotencyKey: "idem_revoke_123",
     });
 
-    expect(request.idempotencyKey).toBe('idem_revoke_123');
+    expect(request.idempotencyKey).toBe("idem_revoke_123");
   });
-
 });
 
-describe('process queue request parser', () => {
-  it('accepts an empty payload', () => {
+describe("process queue request parser", () => {
+  it("accepts an empty payload", () => {
     const request = parseProcessQueueRequest({});
     expect(request.limit).toBeUndefined();
   });
 
-  it('accepts bounded queue processor settings', () => {
+  it("accepts bounded queue processor settings", () => {
     const request = parseProcessQueueRequest({
       limit: 25,
       leaseSeconds: 30,
@@ -295,7 +294,7 @@ describe('process queue request parser', () => {
     expect(request.retryDelaySeconds).toBe(120);
   });
 
-  it('rejects invalid queue processor settings', () => {
+  it("rejects invalid queue processor settings", () => {
     expect(() => {
       parseProcessQueueRequest({
         limit: 0,
@@ -304,416 +303,416 @@ describe('process queue request parser', () => {
   });
 });
 
-describe('OB2 import conversion parser', () => {
-  it('accepts OB2 assertion JSON payload', () => {
+describe("OB2 import conversion parser", () => {
+  it("accepts OB2 assertion JSON payload", () => {
     const request = parseOb2ImportConversionRequest({
       ob2Assertion: {
-        '@context': 'https://w3id.org/openbadges/v2',
-        type: 'Assertion',
+        "@context": "https://w3id.org/openbadges/v2",
+        type: "Assertion",
         recipient: {
-          type: 'email',
-          identity: 'learner@example.edu',
+          type: "email",
+          identity: "learner@example.edu",
         },
         badge: {
-          type: 'BadgeClass',
-          name: 'Intro Badge',
+          type: "BadgeClass",
+          name: "Intro Badge",
         },
       },
     });
 
-    expect(request.ob2Assertion?.type).toBe('Assertion');
+    expect(request.ob2Assertion?.type).toBe("Assertion");
   });
 
-  it('accepts bakedBadgeImage payloads without assertion JSON', () => {
+  it("accepts bakedBadgeImage payloads without assertion JSON", () => {
     const request = parseOb2ImportConversionRequest({
-      bakedBadgeImage: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+      bakedBadgeImage: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB",
     });
 
-    expect(request.bakedBadgeImage).toContain('iVBOR');
+    expect(request.bakedBadgeImage).toContain("iVBOR");
   });
 
-  it('rejects payloads without an assertion source', () => {
+  it("rejects payloads without an assertion source", () => {
     expect(() => {
       parseOb2ImportConversionRequest({});
     }).toThrowError();
   });
 });
 
-describe('migration batch upload query parser', () => {
-  it('defaults dryRun to true', () => {
+describe("migration batch upload query parser", () => {
+  it("defaults dryRun to true", () => {
     const query = parseMigrationBatchUploadQuery({});
     expect(query.dryRun).toBe(true);
   });
 
-  it('parses explicit dryRun false', () => {
+  it("parses explicit dryRun false", () => {
     const query = parseMigrationBatchUploadQuery({
-      dryRun: 'false',
+      dryRun: "false",
     });
     expect(query.dryRun).toBe(false);
   });
 
-  it('rejects invalid dryRun values', () => {
+  it("rejects invalid dryRun values", () => {
     expect(() => {
       parseMigrationBatchUploadQuery({
-        dryRun: 'nope',
+        dryRun: "nope",
       });
     }).toThrowError();
   });
 });
 
-describe('migration progress parser', () => {
-  it('defaults progress query values', () => {
+describe("migration progress parser", () => {
+  it("defaults progress query values", () => {
     const query = parseMigrationProgressQuery({});
-    expect(query.source).toBe('all');
+    expect(query.source).toBe("all");
     expect(query.limit).toBe(50);
   });
 
-  it('parses source and limit filters', () => {
+  it("parses source and limit filters", () => {
     const query = parseMigrationProgressQuery({
-      source: 'credly_export',
-      limit: '25',
+      source: "credly_export",
+      limit: "25",
     });
-    expect(query.source).toBe('credly_export');
+    expect(query.source).toBe("credly_export");
     expect(query.limit).toBe(25);
   });
 
-  it('parses parchment export source filters', () => {
+  it("parses parchment export source filters", () => {
     const query = parseMigrationProgressQuery({
-      source: 'parchment_export',
-      limit: '10',
+      source: "parchment_export",
+      limit: "10",
     });
 
-    expect(query.source).toBe('parchment_export');
+    expect(query.source).toBe("parchment_export");
     expect(query.limit).toBe(10);
   });
 
-  it('rejects invalid source filters', () => {
+  it("rejects invalid source filters", () => {
     expect(() => {
       parseMigrationProgressQuery({
-        source: 'legacy_csv',
+        source: "legacy_csv",
       });
     }).toThrowError();
   });
 
-  it('parses migration batch path params', () => {
+  it("parses migration batch path params", () => {
     const params = parseMigrationBatchPathParams({
-      tenantId: 'tenant_123',
-      batchId: 'cc8f1dc6-ff06-4f4f-b915-c0de703ff5e0',
+      tenantId: "tenant_123",
+      batchId: "cc8f1dc6-ff06-4f4f-b915-c0de703ff5e0",
     });
 
-    expect(params.batchId).toContain('cc8f');
+    expect(params.batchId).toContain("cc8f");
   });
 
-  it('parses retry payload row filters', () => {
+  it("parses retry payload row filters", () => {
     const request = parseMigrationBatchRetryRequest({
-      source: 'parchment_export',
+      source: "parchment_export",
       rowNumbers: [1, 2, 3],
     });
 
-    expect(request.source).toBe('parchment_export');
+    expect(request.source).toBe("parchment_export");
     expect(request.rowNumbers).toEqual([1, 2, 3]);
   });
 });
 
-describe('magic link request parsers', () => {
-  it('accepts a valid magic link request', () => {
+describe("magic link request parsers", () => {
+  it("accepts a valid magic link request", () => {
     const request = parseMagicLinkRequest({
-      tenantId: 'tenant_123',
-      email: 'learner@example.edu',
+      tenantId: "tenant_123",
+      email: "learner@example.edu",
     });
 
-    expect(request.email).toBe('learner@example.edu');
+    expect(request.email).toBe("learner@example.edu");
   });
 
-  it('rejects invalid email values', () => {
+  it("rejects invalid email values", () => {
     expect(() => {
       parseMagicLinkRequest({
-        tenantId: 'tenant_123',
-        email: 'not-an-email',
+        tenantId: "tenant_123",
+        email: "not-an-email",
       });
     }).toThrowError();
   });
 
-  it('accepts a valid magic link verify payload', () => {
+  it("accepts a valid magic link verify payload", () => {
     const verify = parseMagicLinkVerifyRequest({
-      token: '0123456789012345678901234567890123456789',
+      token: "0123456789012345678901234567890123456789",
     });
 
     expect(verify.token.length).toBeGreaterThan(20);
   });
 });
 
-describe('learner identity link parsers', () => {
-  it('accepts a valid learner identity link request', () => {
+describe("learner identity link parsers", () => {
+  it("accepts a valid learner identity link request", () => {
     const request = parseLearnerIdentityLinkRequest({
-      email: 'learner@gmail.com',
+      email: "learner@gmail.com",
     });
 
-    expect(request.email).toBe('learner@gmail.com');
+    expect(request.email).toBe("learner@gmail.com");
   });
 
-  it('accepts a valid learner identity link verify payload', () => {
+  it("accepts a valid learner identity link verify payload", () => {
     const request = parseLearnerIdentityLinkVerifyRequest({
-      token: '0123456789012345678901234567890123456789',
+      token: "0123456789012345678901234567890123456789",
     });
 
     expect(request.token.length).toBeGreaterThan(20);
   });
 
-  it('rejects invalid learner identity link email values', () => {
+  it("rejects invalid learner identity link email values", () => {
     expect(() => {
       parseLearnerIdentityLinkRequest({
-        email: 'invalid',
+        email: "invalid",
       });
     }).toThrowError();
   });
 });
 
-describe('learner DID settings parser', () => {
-  it('accepts supported DID methods and empty clear value', () => {
+describe("learner DID settings parser", () => {
+  it("accepts supported DID methods and empty clear value", () => {
     const keyDid = parseLearnerDidSettingsRequest({
-      did: 'did:key:z6MkhY1pD8x7Jk9hN8YvKQxN5f3qU8d9sF4A2B3C4D5E6F7',
+      did: "did:key:z6MkhY1pD8x7Jk9hN8YvKQxN5f3qU8d9sF4A2B3C4D5E6F7",
     });
-    const webDid = parseLearnerDidSettingsRequest({ did: 'did:web:wallet.example.edu:alice' });
-    const ionDid = parseLearnerDidSettingsRequest({ did: 'did:ion:EiAxyz123' });
-    const clearDid = parseLearnerDidSettingsRequest({ did: '' });
+    const webDid = parseLearnerDidSettingsRequest({ did: "did:web:wallet.example.edu:alice" });
+    const ionDid = parseLearnerDidSettingsRequest({ did: "did:ion:EiAxyz123" });
+    const clearDid = parseLearnerDidSettingsRequest({ did: "" });
 
-    expect(keyDid.did).toContain('did:key:');
-    expect(webDid.did).toContain('did:web:');
-    expect(ionDid.did).toContain('did:ion:');
-    expect(clearDid.did).toBe('');
+    expect(keyDid.did).toContain("did:key:");
+    expect(webDid.did).toContain("did:web:");
+    expect(ionDid.did).toContain("did:ion:");
+    expect(clearDid.did).toBe("");
   });
 
-  it('rejects unsupported DID methods', () => {
+  it("rejects unsupported DID methods", () => {
     expect(() => {
       parseLearnerDidSettingsRequest({
-        did: 'did:example:123',
+        did: "did:example:123",
       });
     }).toThrowError();
   });
 });
 
-describe('presentation parser', () => {
-  it('accepts a valid presentation create payload', () => {
+describe("presentation parser", () => {
+  it("accepts a valid presentation create payload", () => {
     const request = parsePresentationCreateRequest({
-      holderDid: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+      holderDid: "did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1",
       holderPrivateJwk: {
-        kty: 'OKP',
-        crv: 'Ed25519',
-        x: '11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0',
-        d: 'nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU',
+        kty: "OKP",
+        crv: "Ed25519",
+        x: "11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0",
+        d: "nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU",
       },
-      credentialIds: ['tenant_123:assertion_456'],
+      credentialIds: ["tenant_123:assertion_456"],
     });
 
-    expect(request.holderDid).toContain('did:key:');
+    expect(request.holderDid).toContain("did:key:");
     expect(request.credentialIds).toHaveLength(1);
   });
 
-  it('rejects duplicate credential identifiers in create payload', () => {
+  it("rejects duplicate credential identifiers in create payload", () => {
     expect(() => {
       parsePresentationCreateRequest({
-        holderDid: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+        holderDid: "did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1",
         holderPrivateJwk: {
-          kty: 'OKP',
-          crv: 'Ed25519',
-          x: '11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0',
-          d: 'nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU',
+          kty: "OKP",
+          crv: "Ed25519",
+          x: "11qYAY7Y8A8kS0P3J-bwFTHlL8E8fQf6c3n2pP7Q9Q0",
+          d: "nWGxne_9Wm7nP8aW8Q6BYfQhRj6iB-8Sn4Xc6D4J3vU",
         },
-        credentialIds: ['tenant_123:assertion_456', 'tenant_123:assertion_456'],
+        credentialIds: ["tenant_123:assertion_456", "tenant_123:assertion_456"],
       });
     }).toThrowError();
   });
 
-  it('accepts a valid presentation verify payload', () => {
+  it("accepts a valid presentation verify payload", () => {
     const request = parsePresentationVerifyRequest({
       presentation: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiablePresentation'],
-        holder: 'did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1',
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiablePresentation"],
+        holder: "did:key:z6MknqT2qWnVYxR2s4cV8nH2uC6wYtQ5jT8kH7aX9mP2zR1",
         verifiableCredential: [],
       },
     });
 
-    expect(request.presentation.type).toEqual(['VerifiablePresentation']);
+    expect(request.presentation.type).toEqual(["VerifiablePresentation"]);
   });
 });
 
-describe('assertion lifecycle parsers', () => {
-  it('accepts valid assertion lifecycle transition payloads', () => {
+describe("assertion lifecycle parsers", () => {
+  it("accepts valid assertion lifecycle transition payloads", () => {
     const payload = parseAssertionLifecycleTransitionRequest({
-      toState: 'suspended',
-      reasonCode: 'administrative_hold',
-      reason: 'Pending registrar review',
-      transitionSource: 'manual',
-      transitionedAt: '2026-02-12T23:00:00.000Z',
+      toState: "suspended",
+      reasonCode: "administrative_hold",
+      reason: "Pending registrar review",
+      transitionSource: "manual",
+      transitionedAt: "2026-02-12T23:00:00.000Z",
     });
 
-    expect(payload.toState).toBe('suspended');
-    expect(payload.reasonCode).toBe('administrative_hold');
-    expect(payload.transitionSource).toBe('manual');
+    expect(payload.toState).toBe("suspended");
+    expect(payload.reasonCode).toBe("administrative_hold");
+    expect(payload.transitionSource).toBe("manual");
   });
 
-  it('defaults transitionSource to manual when omitted', () => {
+  it("defaults transitionSource to manual when omitted", () => {
     const payload = parseAssertionLifecycleTransitionRequest({
-      toState: 'expired',
-      reasonCode: 'credential_expired',
+      toState: "expired",
+      reasonCode: "credential_expired",
     });
 
-    expect(payload.transitionSource).toBe('manual');
+    expect(payload.transitionSource).toBe("manual");
   });
 
-  it('rejects invalid assertion lifecycle state values', () => {
+  it("rejects invalid assertion lifecycle state values", () => {
     expect(() => {
       parseAssertionLifecycleTransitionRequest({
-        toState: 'paused',
-        reasonCode: 'other',
+        toState: "paused",
+        reasonCode: "other",
       });
     }).toThrowError();
   });
 
-  it('parses assertion path params', () => {
+  it("parses assertion path params", () => {
     const pathParams = parseAssertionPathParams({
-      tenantId: 'tenant_123',
-      assertionId: 'tenant_123:assertion_456',
+      tenantId: "tenant_123",
+      assertionId: "tenant_123:assertion_456",
     });
 
-    expect(pathParams.tenantId).toBe('tenant_123');
-    expect(pathParams.assertionId).toBe('tenant_123:assertion_456');
+    expect(pathParams.tenantId).toBe("tenant_123");
+    expect(pathParams.assertionId).toBe("tenant_123:assertion_456");
   });
 });
 
-describe('admin LTI issuer registration parsers', () => {
-  it('accepts a valid upsert payload', () => {
+describe("admin LTI issuer registration parsers", () => {
+  it("accepts a valid upsert payload", () => {
     const request = parseAdminUpsertLtiIssuerRegistrationRequest({
-      issuer: 'https://canvas.example.edu',
-      tenantId: 'tenant_123',
-      authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
-      clientId: 'canvas-client-123',
-      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
-      clientSecret: 'canvas-client-secret',
+      issuer: "https://canvas.example.edu",
+      tenantId: "tenant_123",
+      authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
+      clientId: "canvas-client-123",
+      tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
+      clientSecret: "canvas-client-secret",
       allowUnsignedIdToken: true,
     });
 
-    expect(request.issuer).toBe('https://canvas.example.edu');
-    expect(request.tenantId).toBe('tenant_123');
-    expect(request.tokenEndpoint).toBe('https://canvas.example.edu/login/oauth2/token');
-    expect(request.clientSecret).toBe('canvas-client-secret');
+    expect(request.issuer).toBe("https://canvas.example.edu");
+    expect(request.tenantId).toBe("tenant_123");
+    expect(request.tokenEndpoint).toBe("https://canvas.example.edu/login/oauth2/token");
+    expect(request.clientSecret).toBe("canvas-client-secret");
     expect(request.allowUnsignedIdToken).toBe(true);
   });
 
-  it('accepts a valid delete payload', () => {
+  it("accepts a valid delete payload", () => {
     const request = parseAdminDeleteLtiIssuerRegistrationRequest({
-      issuer: 'https://canvas.example.edu',
+      issuer: "https://canvas.example.edu",
     });
 
-    expect(request.issuer).toBe('https://canvas.example.edu');
+    expect(request.issuer).toBe("https://canvas.example.edu");
   });
 
-  it('rejects invalid issuer URLs', () => {
+  it("rejects invalid issuer URLs", () => {
     expect(() => {
       parseAdminUpsertLtiIssuerRegistrationRequest({
-        issuer: 'not-a-url',
-        tenantId: 'tenant_123',
-        authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
-        clientId: 'canvas-client-123',
+        issuer: "not-a-url",
+        tenantId: "tenant_123",
+        authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
+        clientId: "canvas-client-123",
       });
     }).toThrowError();
   });
 
-  it('rejects invalid token endpoint URLs', () => {
+  it("rejects invalid token endpoint URLs", () => {
     expect(() => {
       parseAdminUpsertLtiIssuerRegistrationRequest({
-        issuer: 'https://canvas.example.edu',
-        tenantId: 'tenant_123',
-        authorizationEndpoint: 'https://canvas.example.edu/api/lti/authorize_redirect',
-        clientId: 'canvas-client-123',
-        tokenEndpoint: 'not-a-url',
+        issuer: "https://canvas.example.edu",
+        tenantId: "tenant_123",
+        authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
+        clientId: "canvas-client-123",
+        tokenEndpoint: "not-a-url",
       });
     }).toThrowError();
   });
 });
 
-describe('canvas gradebook integration parsers', () => {
-  it('accepts valid Canvas integration payloads', () => {
+describe("canvas gradebook integration parsers", () => {
+  it("accepts valid Canvas integration payloads", () => {
     const request = parseUpsertTenantCanvasGradebookIntegrationRequest({
-      apiBaseUrl: 'https://canvas.example.edu',
-      authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
-      tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
-      clientId: 'canvas-client-id',
-      clientSecret: 'canvas-client-secret',
-      scope: 'url:GET|/api/v1/courses',
+      apiBaseUrl: "https://canvas.example.edu",
+      authorizationEndpoint: "https://canvas.example.edu/login/oauth2/auth",
+      tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
+      clientId: "canvas-client-id",
+      clientSecret: "canvas-client-secret",
+      scope: "url:GET|/api/v1/courses",
     });
 
-    expect(request.apiBaseUrl).toBe('https://canvas.example.edu');
-    expect(request.clientId).toBe('canvas-client-id');
+    expect(request.apiBaseUrl).toBe("https://canvas.example.edu");
+    expect(request.clientId).toBe("canvas-client-id");
   });
 
-  it('accepts valid OAuth authorize/exchange payloads and snapshot query', () => {
+  it("accepts valid OAuth authorize/exchange payloads and snapshot query", () => {
     const authorize = parseAdminCanvasOAuthAuthorizeUrlRequest({
-      redirectUri: 'https://credtrail.example.edu/callback',
+      redirectUri: "https://credtrail.example.edu/callback",
     });
     const exchange = parseAdminCanvasOAuthExchangeRequest({
-      code: 'oauth-code-123',
-      state: 'abcdefghijklmnopqrstuvwxyz123456',
-      redirectUri: 'https://credtrail.example.edu/callback',
+      code: "oauth-code-123",
+      state: "abcdefghijklmnopqrstuvwxyz123456",
+      redirectUri: "https://credtrail.example.edu/callback",
     });
     const snapshotQuery = parseTenantCanvasGradebookSnapshotQuery({
-      courseId: 'course_123',
-      learnerId: 'learner_456',
-      assignmentId: 'assignment_789',
+      courseId: "course_123",
+      learnerId: "learner_456",
+      assignmentId: "assignment_789",
     });
 
-    expect(authorize.redirectUri).toBe('https://credtrail.example.edu/callback');
-    expect(exchange.code).toBe('oauth-code-123');
-    expect(snapshotQuery.assignmentId).toBe('assignment_789');
+    expect(authorize.redirectUri).toBe("https://credtrail.example.edu/callback");
+    expect(exchange.code).toBe("oauth-code-123");
+    expect(snapshotQuery.assignmentId).toBe("assignment_789");
   });
 
-  it('rejects invalid Canvas integration URLs', () => {
+  it("rejects invalid Canvas integration URLs", () => {
     expect(() => {
       parseUpsertTenantCanvasGradebookIntegrationRequest({
-        apiBaseUrl: 'not-a-url',
-        authorizationEndpoint: 'https://canvas.example.edu/login/oauth2/auth',
-        tokenEndpoint: 'https://canvas.example.edu/login/oauth2/token',
-        clientId: 'canvas-client-id',
-        clientSecret: 'canvas-client-secret',
+        apiBaseUrl: "not-a-url",
+        authorizationEndpoint: "https://canvas.example.edu/login/oauth2/auth",
+        tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
+        clientId: "canvas-client-id",
+        clientSecret: "canvas-client-secret",
       });
     }).toThrowError();
   });
 });
 
-describe('badge issuance rule parsers', () => {
-  it('accepts valid create/version/evaluate payloads', () => {
+describe("badge issuance rule parsers", () => {
+  it("accepts valid create/version/evaluate payloads", () => {
     const createRequest = parseCreateBadgeIssuanceRuleRequest({
-      name: 'CS101 Excellence Rule',
-      description: 'Award badge for high performers',
-      badgeTemplateId: 'badge_template_cs101',
-      lmsProviderKind: 'canvas',
+      name: "CS101 Excellence Rule",
+      description: "Award badge for high performers",
+      badgeTemplateId: "badge_template_cs101",
+      lmsProviderKind: "canvas",
       definition: {
         conditions: {
           all: [
             {
-              type: 'course_completion',
-              courseId: 'course_101',
+              type: "course_completion",
+              courseId: "course_101",
               requireCompleted: true,
             },
             {
-              type: 'grade_threshold',
-              courseId: 'course_101',
-              scoreField: 'final_score',
+              type: "grade_threshold",
+              courseId: "course_101",
+              scoreField: "final_score",
               minScore: 80,
             },
             {
               any: [
                 {
-                  type: 'assignment_submission',
-                  courseId: 'course_101',
-                  assignmentId: 'assignment_1',
+                  type: "assignment_submission",
+                  courseId: "course_101",
+                  assignmentId: "assignment_1",
                   minScore: 75,
                 },
                 {
-                  type: 'prerequisite_badge',
-                  badgeTemplateId: 'badge_template_foundations',
+                  type: "prerequisite_badge",
+                  badgeTemplateId: "badge_template_foundations",
                 },
               ],
             },
@@ -722,45 +721,45 @@ describe('badge issuance rule parsers', () => {
       },
       approvalChain: [
         {
-          requiredRole: 'issuer',
-          label: 'Department approval',
+          requiredRole: "issuer",
+          label: "Department approval",
         },
         {
-          requiredRole: 'admin',
-          label: 'Registrar approval',
+          requiredRole: "admin",
+          label: "Registrar approval",
         },
       ],
-      changeSummary: 'Initial draft',
+      changeSummary: "Initial draft",
     });
     const versionRequest = parseCreateBadgeIssuanceRuleVersionRequest({
       definition: {
         conditions: {
-          type: 'time_window',
-          notBefore: '2026-01-01T00:00:00.000Z',
+          type: "time_window",
+          notBefore: "2026-01-01T00:00:00.000Z",
         },
       },
       approvalChain: [
         {
-          requiredRole: 'admin',
+          requiredRole: "admin",
         },
       ],
-      changeSummary: 'Limit issuance to spring term',
+      changeSummary: "Limit issuance to spring term",
     });
     const decisionRequest = parseDecideBadgeIssuanceRuleVersionRequest({
-      decision: 'approved',
-      comment: 'Meets institutional governance requirements',
+      decision: "approved",
+      comment: "Meets institutional governance requirements",
     });
     const evaluateRequest = parseEvaluateBadgeIssuanceRuleRequest({
-      learnerId: 'learner_123',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
+      learnerId: "learner_123",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
       dryRun: true,
       facts: {
-        nowIso: '2026-02-17T00:00:00.000Z',
+        nowIso: "2026-02-17T00:00:00.000Z",
         grades: [
           {
-            courseId: 'course_101',
-            learnerId: 'learner_123',
+            courseId: "course_101",
+            learnerId: "learner_123",
             finalScore: 92,
           },
         ],
@@ -771,97 +770,97 @@ describe('badge issuance rule parsers', () => {
         conditions: {
           all: [
             {
-              type: 'course_completion',
-              courseId: 'course_101',
+              type: "course_completion",
+              courseId: "course_101",
             },
             {
-              type: 'grade_threshold',
-              courseId: 'course_101',
+              type: "grade_threshold",
+              courseId: "course_101",
               minScore: 80,
             },
           ],
         },
       },
-      learnerId: 'learner_123',
-      recipientIdentity: 'learner@example.edu',
-      recipientIdentityType: 'email',
+      learnerId: "learner_123",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
       facts: {
         completions: [
           {
-            courseId: 'course_101',
-            learnerId: 'learner_123',
+            courseId: "course_101",
+            learnerId: "learner_123",
             completed: true,
           },
         ],
         grades: [
           {
-            courseId: 'course_101',
-            learnerId: 'learner_123',
+            courseId: "course_101",
+            learnerId: "learner_123",
             finalScore: 88,
           },
         ],
       },
     });
 
-    expect(createRequest.lmsProviderKind).toBe('canvas');
-    expect(createRequest.approvalChain?.[0]?.requiredRole).toBe('issuer');
-    expect(versionRequest.changeSummary).toContain('spring');
+    expect(createRequest.lmsProviderKind).toBe("canvas");
+    expect(createRequest.approvalChain?.[0]?.requiredRole).toBe("issuer");
+    expect(versionRequest.changeSummary).toContain("spring");
     expect(versionRequest.approvalChain).toHaveLength(1);
-    expect(decisionRequest.decision).toBe('approved');
-    expect(decisionRequest.comment).toContain('governance');
+    expect(decisionRequest.decision).toBe("approved");
+    expect(decisionRequest.comment).toContain("governance");
     expect(evaluateRequest.dryRun).toBe(true);
-    expect(previewEvaluateRequest.definition.conditions).toHaveProperty('all');
+    expect(previewEvaluateRequest.definition.conditions).toHaveProperty("all");
   });
 
-  it('parses rule and rule-version path params', () => {
+  it("parses rule and rule-version path params", () => {
     const rulePathParams = parseBadgeIssuanceRulePathParams({
-      tenantId: 'tenant_123',
-      ruleId: 'brl_123',
+      tenantId: "tenant_123",
+      ruleId: "brl_123",
     });
     const versionPathParams = parseBadgeIssuanceRuleVersionPathParams({
-      tenantId: 'tenant_123',
-      ruleId: 'brl_123',
-      versionId: 'brv_123',
+      tenantId: "tenant_123",
+      ruleId: "brl_123",
+      versionId: "brv_123",
     });
 
-    expect(rulePathParams.ruleId).toBe('brl_123');
-    expect(versionPathParams.versionId).toBe('brv_123');
+    expect(rulePathParams.ruleId).toBe("brl_123");
+    expect(versionPathParams.versionId).toBe("brv_123");
   });
 
-  it('parses badge rule diff and audit-log query parameters', () => {
+  it("parses badge rule diff and audit-log query parameters", () => {
     const diffQuery = parseBadgeIssuanceRuleVersionDiffQuery({
-      baseVersionId: 'brv_122',
+      baseVersionId: "brv_122",
     });
     const auditLogQuery = parseBadgeIssuanceRuleAuditLogQuery({
-      limit: '150',
+      limit: "150",
     });
     const reviewQueueQuery = parseBadgeIssuanceRuleReviewQueueQuery({
-      status: 'resolved',
-      limit: '25',
+      status: "resolved",
+      limit: "25",
     });
 
-    expect(diffQuery.baseVersionId).toBe('brv_122');
+    expect(diffQuery.baseVersionId).toBe("brv_122");
     expect(auditLogQuery.limit).toBe(150);
-    expect(reviewQueueQuery.status).toBe('resolved');
+    expect(reviewQueueQuery.status).toBe("resolved");
     expect(reviewQueueQuery.limit).toBe(25);
   });
 
-  it('accepts reusable-list rule conditions and simulation payloads', () => {
+  it("accepts reusable-list rule conditions and simulation payloads", () => {
     const createRequest = parseCreateBadgeIssuanceRuleRequest({
-      name: 'Program path rule',
-      badgeTemplateId: 'badge_template_program',
-      lmsProviderKind: 'canvas',
+      name: "Program path rule",
+      badgeTemplateId: "badge_template_program",
+      lmsProviderKind: "canvas",
       definition: {
         conditions: {
           all: [
             {
-              type: 'program_completion',
-              courseListId: 'brvl_courses',
+              type: "program_completion",
+              courseListId: "brvl_courses",
               minimumCompleted: 3,
             },
             {
-              type: 'prerequisite_badge',
-              badgeTemplateListId: 'brvl_badges',
+              type: "prerequisite_badge",
+              badgeTemplateListId: "brvl_badges",
             },
           ],
         },
@@ -871,65 +870,65 @@ describe('badge issuance rule parsers', () => {
       },
     });
     const valueListRequest = parseCreateBadgeIssuanceRuleValueListRequest({
-      label: 'Core CS sequence',
-      kind: 'course_ids',
-      values: ['course_101', 'course_102', 'course_103'],
+      label: "Core CS sequence",
+      kind: "course_ids",
+      values: ["course_101", "course_102", "course_103"],
     });
     const simulationRequest = parsePreviewSimulateBadgeIssuanceRuleRequest({
-      badgeTemplateId: 'badge_template_program',
+      badgeTemplateId: "badge_template_program",
       sampleLimit: 20,
       definition: createRequest.definition,
     });
     const resolveReviewRequest = parseResolveBadgeIssuanceRuleReviewRequest({
-      decision: 'issue',
-      comment: 'Registrar review approved issuance.',
+      decision: "issue",
+      comment: "Registrar review approved issuance.",
     });
 
     expect(createRequest.definition.options?.reviewOnMissingFacts).toBe(true);
-    expect(valueListRequest.kind).toBe('course_ids');
+    expect(valueListRequest.kind).toBe("course_ids");
     expect(simulationRequest.sampleLimit).toBe(20);
-    expect(resolveReviewRequest.decision).toBe('issue');
+    expect(resolveReviewRequest.decision).toBe("issue");
   });
 
-  it('rejects grade threshold conditions without a score boundary', () => {
+  it("rejects grade threshold conditions without a score boundary", () => {
     expect(() => {
       parseCreateBadgeIssuanceRuleRequest({
-        name: 'Invalid',
-        badgeTemplateId: 'badge_template_cs101',
-        lmsProviderKind: 'canvas',
+        name: "Invalid",
+        badgeTemplateId: "badge_template_cs101",
+        lmsProviderKind: "canvas",
         definition: {
           conditions: {
-            type: 'grade_threshold',
-            courseId: 'course_101',
+            type: "grade_threshold",
+            courseId: "course_101",
           },
         },
       });
     }).toThrowError();
   });
 
-  it('rejects invalid time window condition payloads', () => {
+  it("rejects invalid time window condition payloads", () => {
     expect(() => {
       parseCreateBadgeIssuanceRuleVersionRequest({
         definition: {
           conditions: {
-            type: 'time_window',
+            type: "time_window",
           },
         },
       });
     }).toThrowError();
   });
 
-  it('rejects rule conditions that provide both direct IDs and reusable list IDs', () => {
+  it("rejects rule conditions that provide both direct IDs and reusable list IDs", () => {
     expect(() => {
       parseCreateBadgeIssuanceRuleRequest({
-        name: 'Invalid list combination',
-        badgeTemplateId: 'badge_template_cs101',
-        lmsProviderKind: 'canvas',
+        name: "Invalid list combination",
+        badgeTemplateId: "badge_template_cs101",
+        lmsProviderKind: "canvas",
         definition: {
           conditions: {
-            type: 'course_completion',
-            courseId: 'course_101',
-            courseListId: 'brvl_courses',
+            type: "course_completion",
+            courseId: "course_101",
+            courseListId: "brvl_courses",
           },
         },
       });
@@ -937,86 +936,86 @@ describe('badge issuance rule parsers', () => {
   });
 });
 
-describe('parseSignCredentialRequest', () => {
-  it('accepts a valid did:web signing request', () => {
+describe("parseSignCredentialRequest", () => {
+  it("accepts a valid did:web signing request", () => {
     const payload = parseSignCredentialRequest({
-      did: 'did:web:issuers.credtrail.org:tenant-a',
+      did: "did:web:issuers.credtrail.org:tenant-a",
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiableCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiableCredential"],
       },
     });
 
-    expect(payload.did).toBe('did:web:issuers.credtrail.org:tenant-a');
+    expect(payload.did).toBe("did:web:issuers.credtrail.org:tenant-a");
   });
 
-  it('accepts DataIntegrity signing requests with cryptosuite', () => {
+  it("accepts DataIntegrity signing requests with cryptosuite", () => {
     const payload = parseSignCredentialRequest({
-      did: 'did:web:issuers.credtrail.org:tenant-a',
+      did: "did:web:issuers.credtrail.org:tenant-a",
       credential: {
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiableCredential'],
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiableCredential"],
       },
-      proofType: 'DataIntegrityProof',
-      cryptosuite: 'ecdsa-sd-2023',
+      proofType: "DataIntegrityProof",
+      cryptosuite: "ecdsa-sd-2023",
     });
 
-    expect(payload.proofType).toBe('DataIntegrityProof');
-    expect(payload.cryptosuite).toBe('ecdsa-sd-2023');
+    expect(payload.proofType).toBe("DataIntegrityProof");
+    expect(payload.cryptosuite).toBe("ecdsa-sd-2023");
   });
 
-  it('rejects non did:web identifiers', () => {
+  it("rejects non did:web identifiers", () => {
     expect(() => {
       parseSignCredentialRequest({
-        did: 'did:key:z6Mk...',
+        did: "did:key:z6Mk...",
         credential: {
-          id: 'urn:vc:1',
+          id: "urn:vc:1",
         },
       });
     }).toThrowError();
   });
 
-  it('rejects DataIntegrity signing requests without cryptosuite', () => {
+  it("rejects DataIntegrity signing requests without cryptosuite", () => {
     expect(() => {
       parseSignCredentialRequest({
-        did: 'did:web:issuers.credtrail.org:tenant-a',
+        did: "did:web:issuers.credtrail.org:tenant-a",
         credential: {
-          id: 'urn:vc:1',
+          id: "urn:vc:1",
         },
-        proofType: 'DataIntegrityProof',
+        proofType: "DataIntegrityProof",
       });
     }).toThrowError();
   });
 
-  it('rejects cryptosuite when proofType is not DataIntegrityProof', () => {
+  it("rejects cryptosuite when proofType is not DataIntegrityProof", () => {
     expect(() => {
       parseSignCredentialRequest({
-        did: 'did:web:issuers.credtrail.org:tenant-a',
+        did: "did:web:issuers.credtrail.org:tenant-a",
         credential: {
-          id: 'urn:vc:1',
+          id: "urn:vc:1",
         },
-        cryptosuite: 'eddsa-rdfc-2022',
+        cryptosuite: "eddsa-rdfc-2022",
       });
     }).toThrowError();
   });
 });
 
-describe('parseTenantSigningRegistry', () => {
-  it('accepts tenant registry entries', () => {
+describe("parseTenantSigningRegistry", () => {
+  it("accepts tenant registry entries", () => {
     const registry = parseTenantSigningRegistry({
-      'did:web:issuers.credtrail.org:tenant-a': {
-        tenantId: 'tenant_a',
-        keyId: 'key-1',
+      "did:web:issuers.credtrail.org:tenant-a": {
+        tenantId: "tenant_a",
+        keyId: "key-1",
         publicJwk: {
-          kty: 'OKP',
-          crv: 'Ed25519',
-          x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
+          kty: "OKP",
+          crv: "Ed25519",
+          x: "11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE",
         },
         privateJwk: {
-          kty: 'OKP',
-          crv: 'Ed25519',
-          x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
-          d: 'nWGxne_9WmZ8QfQwJdK2fNn_Ef3FQk7xU4mS1sM3x2U',
+          kty: "OKP",
+          crv: "Ed25519",
+          x: "11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE",
+          d: "nWGxne_9WmZ8QfQwJdK2fNn_Ef3FQk7xU4mS1sM3x2U",
         },
       },
     });
@@ -1024,23 +1023,23 @@ describe('parseTenantSigningRegistry', () => {
     expect(Object.keys(registry)).toHaveLength(1);
   });
 
-  it('accepts P-256 tenant registry entries', () => {
+  it("accepts P-256 tenant registry entries", () => {
     const registry = parseTenantSigningRegistry({
-      'did:web:issuers.credtrail.org:tenant-b': {
-        tenantId: 'tenant_b',
-        keyId: 'key-p256',
+      "did:web:issuers.credtrail.org:tenant-b": {
+        tenantId: "tenant_b",
+        keyId: "key-p256",
         publicJwk: {
-          kty: 'EC',
-          crv: 'P-256',
-          x: 'X'.repeat(43),
-          y: 'Y'.repeat(43),
+          kty: "EC",
+          crv: "P-256",
+          x: "X".repeat(43),
+          y: "Y".repeat(43),
         },
         privateJwk: {
-          kty: 'EC',
-          crv: 'P-256',
-          x: 'X'.repeat(43),
-          y: 'Y'.repeat(43),
-          d: 'D'.repeat(43),
+          kty: "EC",
+          crv: "P-256",
+          x: "X".repeat(43),
+          y: "Y".repeat(43),
+          d: "D".repeat(43),
         },
       },
     });
@@ -1048,23 +1047,23 @@ describe('parseTenantSigningRegistry', () => {
     expect(Object.keys(registry)).toHaveLength(1);
   });
 
-  it('rejects tenant registry entries with mismatched key types', () => {
+  it("rejects tenant registry entries with mismatched key types", () => {
     expect(() => {
       parseTenantSigningRegistry({
-        'did:web:issuers.credtrail.org:tenant-c': {
-          tenantId: 'tenant_c',
-          keyId: 'key-mismatch',
+        "did:web:issuers.credtrail.org:tenant-c": {
+          tenantId: "tenant_c",
+          keyId: "key-mismatch",
           publicJwk: {
-            kty: 'OKP',
-            crv: 'Ed25519',
-            x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
+            kty: "OKP",
+            crv: "Ed25519",
+            x: "11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE",
           },
           privateJwk: {
-            kty: 'EC',
-            crv: 'P-256',
-            x: 'X'.repeat(43),
-            y: 'Y'.repeat(43),
-            d: 'D'.repeat(43),
+            kty: "EC",
+            crv: "P-256",
+            x: "X".repeat(43),
+            y: "Y".repeat(43),
+            d: "D".repeat(43),
           },
         },
       });
@@ -1072,29 +1071,29 @@ describe('parseTenantSigningRegistry', () => {
   });
 });
 
-describe('badge template parsers', () => {
-  it('accepts a valid create request', () => {
+describe("badge template parsers", () => {
+  it("accepts a valid create request", () => {
     const payload = parseCreateBadgeTemplateRequest({
-      slug: 'intro-to-ts',
-      title: 'Intro to TypeScript',
-      description: 'Awarded for completing TypeScript basics.',
-      criteriaUri: 'https://example.edu/badges/intro-to-ts/criteria',
-      imageUri: 'https://cdn.example.edu/badges/intro-to-ts.png',
+      slug: "intro-to-ts",
+      title: "Intro to TypeScript",
+      description: "Awarded for completing TypeScript basics.",
+      criteriaUri: "https://example.edu/badges/intro-to-ts/criteria",
+      imageUri: "https://cdn.example.edu/badges/intro-to-ts.png",
     });
 
-    expect(payload.slug).toBe('intro-to-ts');
+    expect(payload.slug).toBe("intro-to-ts");
   });
 
-  it('rejects invalid slugs', () => {
+  it("rejects invalid slugs", () => {
     expect(() => {
       parseCreateBadgeTemplateRequest({
-        slug: 'Intro To TS',
-        title: 'Intro to TypeScript',
+        slug: "Intro To TS",
+        title: "Intro to TypeScript",
       });
     }).toThrowError();
   });
 
-  it('accepts update requests with nullable optional fields', () => {
+  it("accepts update requests with nullable optional fields", () => {
     const payload = parseUpdateBadgeTemplateRequest({
       description: null,
       imageUri: null,
@@ -1103,118 +1102,118 @@ describe('badge template parsers', () => {
     expect(payload.description).toBeNull();
   });
 
-  it('rejects empty update payloads', () => {
+  it("rejects empty update payloads", () => {
     expect(() => {
       parseUpdateBadgeTemplateRequest({});
     }).toThrowError();
   });
 
-  it('parses path params for badge template routes', () => {
+  it("parses path params for badge template routes", () => {
     const params = parseBadgeTemplatePathParams({
-      tenantId: 'tenant_123',
-      badgeTemplateId: 'tmpl_456',
+      tenantId: "tenant_123",
+      badgeTemplateId: "tmpl_456",
     });
 
-    expect(params.badgeTemplateId).toBe('tmpl_456');
+    expect(params.badgeTemplateId).toBe("tmpl_456");
   });
 
-  it('parses path params for public credential verification route', () => {
+  it("parses path params for public credential verification route", () => {
     const params = parseCredentialPathParams({
-      credentialId: 'tenant_123:assertion_456',
+      credentialId: "tenant_123:assertion_456",
     });
 
-    expect(params.credentialId).toBe('tenant_123:assertion_456');
+    expect(params.credentialId).toBe("tenant_123:assertion_456");
   });
 
-  it('parses tenant/user path params for membership role routes', () => {
+  it("parses tenant/user path params for membership role routes", () => {
     const params = parseTenantUserPathParams({
-      tenantId: 'tenant_123',
-      userId: 'usr_456',
+      tenantId: "tenant_123",
+      userId: "usr_456",
     });
 
-    expect(params.tenantId).toBe('tenant_123');
-    expect(params.userId).toBe('usr_456');
+    expect(params.tenantId).toBe("tenant_123");
+    expect(params.userId).toBe("usr_456");
   });
 
-  it('parses tenant/user/org-unit path params for scoped membership routes', () => {
+  it("parses tenant/user/org-unit path params for scoped membership routes", () => {
     const params = parseTenantUserOrgUnitPathParams({
-      tenantId: 'tenant_123',
-      userId: 'usr_456',
-      orgUnitId: 'tenant_123:org:department-math',
+      tenantId: "tenant_123",
+      userId: "usr_456",
+      orgUnitId: "tenant_123:org:department-math",
     });
 
-    expect(params.tenantId).toBe('tenant_123');
-    expect(params.userId).toBe('usr_456');
-    expect(params.orgUnitId).toBe('tenant_123:org:department-math');
+    expect(params.tenantId).toBe("tenant_123");
+    expect(params.userId).toBe("usr_456");
+    expect(params.orgUnitId).toBe("tenant_123:org:department-math");
   });
 
-  it('defaults includeArchived to false in list query', () => {
+  it("defaults includeArchived to false in list query", () => {
     const query = parseBadgeTemplateListQuery({});
 
     expect(query.includeArchived).toBe(false);
   });
 
-  it('accepts create payloads that include owner org unit', () => {
+  it("accepts create payloads that include owner org unit", () => {
     const payload = parseCreateBadgeTemplateRequest({
-      slug: 'intro-to-ts',
-      title: 'Intro to TypeScript',
-      ownerOrgUnitId: 'tenant_123:org:institution',
+      slug: "intro-to-ts",
+      title: "Intro to TypeScript",
+      ownerOrgUnitId: "tenant_123:org:institution",
     });
 
-    expect(payload.ownerOrgUnitId).toBe('tenant_123:org:institution');
+    expect(payload.ownerOrgUnitId).toBe("tenant_123:org:institution");
   });
 
-  it('parses tenant org unit list query defaults and booleans', () => {
+  it("parses tenant org unit list query defaults and booleans", () => {
     const defaultQuery = parseTenantOrgUnitListQuery({});
-    const explicitQuery = parseTenantOrgUnitListQuery({ includeInactive: 'true' });
+    const explicitQuery = parseTenantOrgUnitListQuery({ includeInactive: "true" });
 
     expect(defaultQuery.includeInactive).toBe(false);
     expect(explicitQuery.includeInactive).toBe(true);
   });
 
-  it('parses create tenant org unit request payload', () => {
+  it("parses create tenant org unit request payload", () => {
     const payload = parseCreateTenantOrgUnitRequest({
-      unitType: 'department',
-      slug: 'school-of-information',
-      displayName: 'School of Information',
-      parentOrgUnitId: 'tenant_123:org:college-engineering',
+      unitType: "department",
+      slug: "school-of-information",
+      displayName: "School of Information",
+      parentOrgUnitId: "tenant_123:org:college-engineering",
     });
 
-    expect(payload.unitType).toBe('department');
-    expect(payload.slug).toBe('school-of-information');
+    expect(payload.unitType).toBe("department");
+    expect(payload.slug).toBe("school-of-information");
   });
 
-  it('parses org-unit scope upsert payloads', () => {
+  it("parses org-unit scope upsert payloads", () => {
     const payload = parseUpsertTenantMembershipOrgUnitScopeRequest({
-      role: 'issuer',
+      role: "issuer",
     });
 
-    expect(payload.role).toBe('issuer');
+    expect(payload.role).toBe("issuer");
 
     expect(() => {
       parseUpsertTenantMembershipOrgUnitScopeRequest({
-        role: 'owner',
+        role: "owner",
       });
     }).toThrowError();
   });
 
-  it('parses tenant/user/grant path params for delegated authority routes', () => {
+  it("parses tenant/user/grant path params for delegated authority routes", () => {
     const params = parseTenantUserDelegatedGrantPathParams({
-      tenantId: 'tenant_123',
-      userId: 'usr_456',
-      grantId: 'dag_789',
+      tenantId: "tenant_123",
+      userId: "usr_456",
+      grantId: "dag_789",
     });
 
-    expect(params.tenantId).toBe('tenant_123');
-    expect(params.userId).toBe('usr_456');
-    expect(params.grantId).toBe('dag_789');
+    expect(params.tenantId).toBe("tenant_123");
+    expect(params.userId).toBe("usr_456");
+    expect(params.grantId).toBe("dag_789");
   });
 
-  it('parses delegated authority grant list query defaults and booleans', () => {
+  it("parses delegated authority grant list query defaults and booleans", () => {
     const defaultQuery = parseDelegatedIssuingAuthorityGrantListQuery({});
     const explicitQuery = parseDelegatedIssuingAuthorityGrantListQuery({
-      includeRevoked: 'true',
-      includeExpired: 'true',
+      includeRevoked: "true",
+      includeExpired: "true",
     });
 
     expect(defaultQuery.includeRevoked).toBe(false);
@@ -1223,301 +1222,300 @@ describe('badge template parsers', () => {
     expect(explicitQuery.includeExpired).toBe(true);
   });
 
-  it('parses delegated authority grant creation payloads', () => {
+  it("parses delegated authority grant creation payloads", () => {
     const payload = parseCreateDelegatedIssuingAuthorityGrantRequest({
-      orgUnitId: 'tenant_123:org:department-math',
-      badgeTemplateIds: ['badge_template_001', 'badge_template_002'],
-      allowedActions: ['issue_badge', 'revoke_badge'],
-      startsAt: '2026-02-13T12:00:00.000Z',
-      endsAt: '2026-03-13T12:00:00.000Z',
-      reason: 'Spring term delegation',
+      orgUnitId: "tenant_123:org:department-math",
+      badgeTemplateIds: ["badge_template_001", "badge_template_002"],
+      allowedActions: ["issue_badge", "revoke_badge"],
+      startsAt: "2026-02-13T12:00:00.000Z",
+      endsAt: "2026-03-13T12:00:00.000Z",
+      reason: "Spring term delegation",
     });
 
-    expect(payload.allowedActions).toEqual(['issue_badge', 'revoke_badge']);
-    expect(payload.badgeTemplateIds).toEqual(['badge_template_001', 'badge_template_002']);
+    expect(payload.allowedActions).toEqual(["issue_badge", "revoke_badge"]);
+    expect(payload.badgeTemplateIds).toEqual(["badge_template_001", "badge_template_002"]);
 
     expect(() => {
       parseCreateDelegatedIssuingAuthorityGrantRequest({
-        orgUnitId: 'tenant_123:org:department-math',
-        allowedActions: ['issue_badge', 'issue_badge'],
-        endsAt: '2026-03-13T12:00:00.000Z',
+        orgUnitId: "tenant_123:org:department-math",
+        allowedActions: ["issue_badge", "issue_badge"],
+        endsAt: "2026-03-13T12:00:00.000Z",
       });
     }).toThrowError();
 
     expect(() => {
       parseCreateDelegatedIssuingAuthorityGrantRequest({
-        orgUnitId: 'tenant_123:org:department-math',
-        allowedActions: ['issue_badge'],
-        startsAt: '2026-03-13T12:00:00.000Z',
-        endsAt: '2026-02-13T12:00:00.000Z',
+        orgUnitId: "tenant_123:org:department-math",
+        allowedActions: ["issue_badge"],
+        startsAt: "2026-03-13T12:00:00.000Z",
+        endsAt: "2026-02-13T12:00:00.000Z",
       });
     }).toThrowError();
   });
 
-  it('parses delegated authority grant revoke payloads', () => {
+  it("parses delegated authority grant revoke payloads", () => {
     const payload = parseRevokeDelegatedIssuingAuthorityGrantRequest({
-      reason: 'Policy update',
-      revokedAt: '2026-02-20T09:30:00.000Z',
+      reason: "Policy update",
+      revokedAt: "2026-02-20T09:30:00.000Z",
     });
 
-    expect(payload.reason).toBe('Policy update');
-    expect(payload.revokedAt).toBe('2026-02-20T09:30:00.000Z');
+    expect(payload.reason).toBe("Policy update");
+    expect(payload.revokedAt).toBe("2026-02-20T09:30:00.000Z");
   });
 
-  it('parses ownership transfer payloads and rejects initial_assignment reason', () => {
+  it("parses ownership transfer payloads and rejects initial_assignment reason", () => {
     const payload = parseTransferBadgeTemplateOwnershipRequest({
-      toOrgUnitId: 'tenant_123:org:department-math',
-      reasonCode: 'administrative_transfer',
-      reason: 'Moved under Math governance',
+      toOrgUnitId: "tenant_123:org:department-math",
+      reasonCode: "administrative_transfer",
+      reason: "Moved under Math governance",
       governanceMetadata: {
-        governancePolicyVersion: '2026-02-13',
+        governancePolicyVersion: "2026-02-13",
       },
     });
 
-    expect(payload.reasonCode).toBe('administrative_transfer');
+    expect(payload.reasonCode).toBe("administrative_transfer");
 
     expect(() => {
       parseTransferBadgeTemplateOwnershipRequest({
-        toOrgUnitId: 'tenant_123:org:department-math',
-        reasonCode: 'initial_assignment',
+        toOrgUnitId: "tenant_123:org:department-math",
+        reasonCode: "initial_assignment",
       });
     }).toThrowError();
   });
 });
 
-describe('admin request parsers', () => {
-  it('accepts P-256 tenant signing registration payloads', () => {
+describe("admin request parsers", () => {
+  it("accepts P-256 tenant signing registration payloads", () => {
     const payload = parseAdminUpsertTenantSigningRegistrationRequest({
-      keyId: 'key-p256',
+      keyId: "key-p256",
       publicJwk: {
-        kty: 'EC',
-        crv: 'P-256',
-        x: 'X'.repeat(43),
-        y: 'Y'.repeat(43),
+        kty: "EC",
+        crv: "P-256",
+        x: "X".repeat(43),
+        y: "Y".repeat(43),
       },
       privateJwk: {
-        kty: 'EC',
-        crv: 'P-256',
-        x: 'X'.repeat(43),
-        y: 'Y'.repeat(43),
-        d: 'D'.repeat(43),
+        kty: "EC",
+        crv: "P-256",
+        x: "X".repeat(43),
+        y: "Y".repeat(43),
+        d: "D".repeat(43),
       },
     });
 
-    expect(payload.keyId).toBe('key-p256');
+    expect(payload.keyId).toBe("key-p256");
   });
 
-  it('rejects signing registration payloads with mismatched key types', () => {
+  it("rejects signing registration payloads with mismatched key types", () => {
     expect(() => {
       parseAdminUpsertTenantSigningRegistrationRequest({
-        keyId: 'key-mismatch',
+        keyId: "key-mismatch",
         publicJwk: {
-          kty: 'OKP',
-          crv: 'Ed25519',
-          x: '11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE',
+          kty: "OKP",
+          crv: "Ed25519",
+          x: "11qYAYLef1f99sL4fY49fN7kP8Yw6s9w8lY9Yd6n8oE",
         },
         privateJwk: {
-          kty: 'EC',
-          crv: 'P-256',
-          x: 'X'.repeat(43),
-          y: 'Y'.repeat(43),
-          d: 'D'.repeat(43),
+          kty: "EC",
+          crv: "P-256",
+          x: "X".repeat(43),
+          y: "Y".repeat(43),
+          d: "D".repeat(43),
         },
       });
     }).toThrowError();
   });
 
-  it('accepts valid membership role updates', () => {
+  it("accepts valid membership role updates", () => {
     const payload = parseAdminUpsertTenantMembershipRoleRequest({
-      role: 'admin',
+      role: "admin",
     });
 
-    expect(payload.role).toBe('admin');
+    expect(payload.role).toBe("admin");
   });
 
-  it('rejects invalid membership roles', () => {
+  it("rejects invalid membership roles", () => {
     expect(() => {
       parseAdminUpsertTenantMembershipRoleRequest({
-        role: 'superadmin',
+        role: "superadmin",
       });
     }).toThrowError();
   });
 
-  it('parses audit log list query with defaults and optional action', () => {
+  it("parses audit log list query with defaults and optional action", () => {
     const withDefaults = parseAdminAuditLogListQuery({
-      tenantId: 'tenant_123',
+      tenantId: "tenant_123",
     });
     const withAction = parseAdminAuditLogListQuery({
-      tenantId: 'tenant_123',
-      action: 'membership.role_changed',
-      limit: '25',
+      tenantId: "tenant_123",
+      action: "membership.role_changed",
+      limit: "25",
     });
 
     expect(withDefaults.limit).toBe(100);
     expect(withDefaults.action).toBeUndefined();
-    expect(withAction.action).toBe('membership.role_changed');
+    expect(withAction.action).toBe("membership.role_changed");
     expect(withAction.limit).toBe(25);
   });
 
-  it('rejects invalid audit log list query values', () => {
+  it("rejects invalid audit log list query values", () => {
     expect(() => {
       parseAdminAuditLogListQuery({
-        tenantId: '',
+        tenantId: "",
       });
     }).toThrowError();
 
     expect(() => {
       parseAdminAuditLogListQuery({
-        tenantId: 'tenant_123',
-        limit: '0',
+        tenantId: "tenant_123",
+        limit: "0",
       });
     }).toThrowError();
   });
 });
 
-describe('enterprise governance request parsers', () => {
-  it('parses tenant API key path params and list query', () => {
+describe("enterprise governance request parsers", () => {
+  it("parses tenant API key path params and list query", () => {
     const pathParams = parseTenantApiKeyPathParams({
-      tenantId: 'tenant_123',
-      apiKeyId: 'tak_123',
+      tenantId: "tenant_123",
+      apiKeyId: "tak_123",
     });
     const defaultQuery = parseTenantApiKeyListQuery({});
     const explicitQuery = parseTenantApiKeyListQuery({
-      includeRevoked: 'true',
+      includeRevoked: "true",
     });
 
-    expect(pathParams.apiKeyId).toBe('tak_123');
+    expect(pathParams.apiKeyId).toBe("tak_123");
     expect(defaultQuery.includeRevoked).toBe(false);
     expect(explicitQuery.includeRevoked).toBe(true);
   });
 
-  it('parses tenant assertion list query filters and bounds', () => {
+  it("parses tenant assertion list query filters and bounds", () => {
     const defaultQuery = parseTenantAssertionListQuery({});
     const filteredQuery = parseTenantAssertionListQuery({
-      badgeTemplateId: 'badge_template_001',
-      recipientQuery: 'csev@umich.edu',
-      state: 'revoked',
-      limit: '125',
+      badgeTemplateId: "badge_template_001",
+      recipientQuery: "csev@umich.edu",
+      state: "revoked",
+      limit: "125",
     });
 
     expect(defaultQuery.badgeTemplateId).toBeUndefined();
     expect(defaultQuery.recipientQuery).toBeUndefined();
     expect(defaultQuery.state).toBeUndefined();
     expect(defaultQuery.limit).toBeUndefined();
-    expect(filteredQuery.badgeTemplateId).toBe('badge_template_001');
-    expect(filteredQuery.recipientQuery).toBe('csev@umich.edu');
-    expect(filteredQuery.state).toBe('revoked');
+    expect(filteredQuery.badgeTemplateId).toBe("badge_template_001");
+    expect(filteredQuery.recipientQuery).toBe("csev@umich.edu");
+    expect(filteredQuery.state).toBe("revoked");
     expect(filteredQuery.limit).toBe(125);
   });
 
-  it('rejects invalid tenant assertion list query values', () => {
+  it("rejects invalid tenant assertion list query values", () => {
     expect(() => {
       parseTenantAssertionListQuery({
-        state: 'paused',
+        state: "paused",
       });
     }).toThrowError();
 
     expect(() => {
       parseTenantAssertionListQuery({
-        limit: '0',
+        limit: "0",
       });
     }).toThrowError();
   });
 
-  it('parses tenant API key create and revoke payloads', () => {
+  it("parses tenant API key create and revoke payloads", () => {
     const createPayload = parseCreateTenantApiKeyRequest({
-      label: 'Integration key',
-      scopes: ['queue.issue', 'queue.revoke'],
-      expiresAt: '2026-03-15T00:00:00.000Z',
+      label: "Integration key",
+      scopes: ["queue.issue", "queue.revoke"],
+      expiresAt: "2026-03-15T00:00:00.000Z",
     });
     const revokePayload = parseRevokeTenantApiKeyRequest({
-      revokedAt: '2026-03-16T00:00:00.000Z',
+      revokedAt: "2026-03-16T00:00:00.000Z",
     });
 
-    expect(createPayload.label).toBe('Integration key');
-    expect(createPayload.scopes).toEqual(['queue.issue', 'queue.revoke']);
-    expect(revokePayload.revokedAt).toBe('2026-03-16T00:00:00.000Z');
+    expect(createPayload.label).toBe("Integration key");
+    expect(createPayload.scopes).toEqual(["queue.issue", "queue.revoke"]);
+    expect(revokePayload.revokedAt).toBe("2026-03-16T00:00:00.000Z");
   });
 
-  it('parses tenant auth policy and provider payloads', () => {
+  it("parses tenant auth policy and provider payloads", () => {
     const providerPathParams = parseTenantAuthProviderPathParams({
-      tenantId: 'tenant_123',
-      providerId: 'tap_oidc',
+      tenantId: "tenant_123",
+      providerId: "tap_oidc",
     });
     const policyPayload = parseUpsertTenantAuthPolicyRequest({
-      loginMode: 'sso_required',
+      loginMode: "sso_required",
       breakGlassEnabled: true,
       localMfaRequired: true,
-      defaultProviderId: 'tap_oidc',
+      defaultProviderId: "tap_oidc",
     });
     const providerPayload = parseUpsertTenantAuthProviderRequest({
-      protocol: 'oidc',
-      label: 'Campus OIDC',
+      protocol: "oidc",
+      label: "Campus OIDC",
       enabled: true,
       isDefault: true,
       configJson:
         '{"issuer":"https://idp.example.edu","clientId":"credtrail","clientSecret":"secret"}',
     });
 
-    expect(providerPathParams.providerId).toBe('tap_oidc');
-    expect(policyPayload.loginMode).toBe('sso_required');
-    expect(policyPayload.enforceForRoles).toBeUndefined();
-    expect(providerPayload.protocol).toBe('oidc');
-    expect(providerPayload.label).toBe('Campus OIDC');
+    expect(providerPathParams.providerId).toBe("tap_oidc");
+    expect(policyPayload.loginMode).toBe("sso_required");
+    expect(providerPayload.protocol).toBe("oidc");
+    expect(providerPayload.label).toBe("Campus OIDC");
   });
 
-  it('rejects malformed tenant auth provider configuration payloads', () => {
+  it("rejects malformed tenant auth provider configuration payloads", () => {
     expect(() => {
       parseUpsertTenantAuthProviderRequest({
-        protocol: 'oidc',
-        label: 'Campus OIDC',
-        configJson: 'not-json',
+        protocol: "oidc",
+        label: "Campus OIDC",
+        configJson: "not-json",
       });
     }).toThrowError();
 
     expect(() => {
       parseUpsertTenantAuthProviderRequest({
-        protocol: 'saml',
-        label: 'Campus SAML',
+        protocol: "saml",
+        label: "Campus SAML",
         configJson: '["array-not-object"]',
       });
     }).toThrowError();
   });
 
-  it('parses tenant SAML SSO configuration payload', () => {
+  it("parses tenant SAML SSO configuration payload", () => {
     const payload = parseUpsertTenantSsoSamlConfigurationRequest({
-      idpEntityId: 'https://idp.example.edu/entity',
-      ssoLoginUrl: 'https://idp.example.edu/sso/login',
-      idpCertificatePem: '-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----',
-      idpMetadataUrl: 'https://idp.example.edu/metadata',
-      spEntityId: 'https://credtrail.example.edu/saml/sp',
-      assertionConsumerServiceUrl: 'https://credtrail.example.edu/saml/acs',
-      nameIdFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      idpEntityId: "https://idp.example.edu/entity",
+      ssoLoginUrl: "https://idp.example.edu/sso/login",
+      idpCertificatePem: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----",
+      idpMetadataUrl: "https://idp.example.edu/metadata",
+      spEntityId: "https://credtrail.example.edu/saml/sp",
+      assertionConsumerServiceUrl: "https://credtrail.example.edu/saml/acs",
+      nameIdFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
       enforced: true,
     });
 
     expect(payload.enforced).toBe(true);
-    expect(payload.spEntityId).toContain('/saml/sp');
+    expect(payload.spEntityId).toContain("/saml/sp");
   });
 
-  it('parses dedicated DB provisioning create/resolve payloads and path params', () => {
+  it("parses dedicated DB provisioning create/resolve payloads and path params", () => {
     const pathParams = parseTenantDedicatedDbProvisioningRequestPathParams({
-      tenantId: 'tenant_123',
-      requestId: 'dpr_123',
+      tenantId: "tenant_123",
+      requestId: "dpr_123",
     });
     const createPayload = parseCreateDedicatedDbProvisioningRequest({
-      targetRegion: 'us-east-1',
-      notes: 'Enterprise migration window approved',
+      targetRegion: "us-east-1",
+      notes: "Enterprise migration window approved",
     });
     const resolvePayload = parseResolveDedicatedDbProvisioningRequest({
-      status: 'provisioned',
-      dedicatedDatabaseUrl: 'postgres://dedicated.example/db',
-      notes: 'Provisioned and smoke tested',
-      resolvedAt: '2026-03-16T00:00:00.000Z',
+      status: "provisioned",
+      dedicatedDatabaseUrl: "postgres://dedicated.example/db",
+      notes: "Provisioned and smoke tested",
+      resolvedAt: "2026-03-16T00:00:00.000Z",
     });
 
-    expect(pathParams.requestId).toBe('dpr_123');
-    expect(createPayload.targetRegion).toBe('us-east-1');
-    expect(resolvePayload.status).toBe('provisioned');
+    expect(pathParams.requestId).toBe("dpr_123");
+    expect(createPayload.targetRegion).toBe("us-east-1");
+    expect(resolvePayload.status).toBe("provisioned");
   });
 });

@@ -1,30 +1,30 @@
-import type { LtiIssuerRegistrationRecord, TenantMembershipRole } from '@credtrail/db';
-import type { LtiRoleKind } from '@credtrail/lti';
-import { renderPageShell } from '@credtrail/ui-components';
-import { renderPageAssetTags } from '../ui/page-assets';
+import type { LtiIssuerRegistrationRecord, TenantMembershipRole } from "@credtrail/db";
+import type { LtiRoleKind } from "@credtrail/lti";
+import { renderPageShell } from "@credtrail/ui-components";
+import { renderPageAssetTags } from "../ui/page-assets";
 
 const escapeHtml = (value: string): string => {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 };
 
 const ltiRoleLabel = (roleKind: LtiRoleKind): string => {
-  if (roleKind === 'instructor') {
-    return 'Instructor';
+  if (roleKind === "instructor") {
+    return "Instructor";
   }
 
-  if (roleKind === 'learner') {
-    return 'Learner';
+  if (roleKind === "learner") {
+    return "Learner";
   }
 
-  return 'Unknown role';
+  return "Unknown role";
 };
 
-const LTI_PAGE_HEAD_TAGS = renderPageAssetTags(['foundationCss', 'ltiPagesCss']);
+const LTI_PAGE_HEAD_TAGS = renderPageAssetTags(["foundationCss", "ltiPagesCss"]);
 
 export interface LtiBulkIssuanceRosterMember {
   userId: string;
@@ -36,7 +36,7 @@ export interface LtiBulkIssuanceRosterMember {
 }
 
 export interface LtiBulkIssuanceView {
-  status: 'ready' | 'unavailable' | 'error';
+  status: "ready" | "unavailable" | "error";
   message: string;
   badgeTemplateId: string | null;
   courseContextTitle: string | null;
@@ -63,7 +63,7 @@ export const ltiLaunchResultPage = (input: {
 }): string => {
   const bulkIssuanceSection =
     input.bulkIssuanceView === null
-      ? ''
+      ? ""
       : (() => {
           const view = input.bulkIssuanceView;
           const rosterRows =
@@ -72,10 +72,11 @@ export const ltiLaunchResultPage = (input: {
               : view.members
                   .map((member) => {
                     const displayName = member.displayName ?? member.userId;
-                    const email = member.email ?? 'Not provided';
-                    const sourcedId = member.sourcedId ?? 'Not provided';
-                    const roles = member.roleSummary.length === 0 ? 'Not provided' : member.roleSummary;
-                    const status = member.status ?? 'Not provided';
+                    const email = member.email ?? "Not provided";
+                    const sourcedId = member.sourcedId ?? "Not provided";
+                    const roles =
+                      member.roleSummary.length === 0 ? "Not provided" : member.roleSummary;
+                    const status = member.status ?? "Not provided";
 
                     return `<tr>
               <td>${escapeHtml(displayName)}</td>
@@ -85,21 +86,26 @@ export const ltiLaunchResultPage = (input: {
               <td>${escapeHtml(status)}</td>
             </tr>`;
                   })
-                  .join('\n');
+                  .join("\n");
           const contextTitle =
-            view.courseContextTitle === null ? 'Not provided' : escapeHtml(view.courseContextTitle);
-          const contextId = view.courseContextId === null ? 'Not provided' : escapeHtml(view.courseContextId);
+            view.courseContextTitle === null ? "Not provided" : escapeHtml(view.courseContextTitle);
+          const contextId =
+            view.courseContextId === null ? "Not provided" : escapeHtml(view.courseContextId);
           const badgeTemplateId =
-            view.badgeTemplateId === null ? 'Not provided in placement URL' : escapeHtml(view.badgeTemplateId);
+            view.badgeTemplateId === null
+              ? "Not provided in placement URL"
+              : escapeHtml(view.badgeTemplateId);
           const contextMembershipsUrl =
-            view.contextMembershipsUrl === null ? 'Not provided' : escapeHtml(view.contextMembershipsUrl);
+            view.contextMembershipsUrl === null
+              ? "Not provided"
+              : escapeHtml(view.contextMembershipsUrl);
 
           return `<article class="lti-launch__card lti-launch__card--stack">
         <h2 class="lti-launch__bulk-title">Bulk issuance view</h2>
         <p class="lti-launch__hint">NRPS roster pull for instructor launch context.</p>
         <p class="lti-launch__bulk-status lti-launch__bulk-status--${escapeHtml(view.status)}">${escapeHtml(
-            view.message,
-          )}</p>
+          view.message,
+        )}</p>
         <dl class="lti-launch__bulk-meta">
           <dt>Badge template</dt>
           <dd>${badgeTemplateId}</dd>
@@ -132,7 +138,7 @@ export const ltiLaunchResultPage = (input: {
         })();
 
   return renderPageShell(
-    'LTI Launch Complete | CredTrail',
+    "LTI Launch Complete | CredTrail",
     `<section class="lti-launch">
       <header class="lti-launch__hero">
         <h1>LTI 1.3 launch complete</h1>
@@ -213,10 +219,10 @@ export const ltiDeepLinkSelectionPage = (input: {
               </form>
             </article>`;
           })
-          .join('\n');
+          .join("\n");
 
   return renderPageShell(
-    'LTI Deep Linking | CredTrail',
+    "LTI Deep Linking | CredTrail",
     `<section class="lti-deep-link">
       <header class="lti-deep-link__hero">
         <h1>Select badge template placement</h1>
@@ -243,7 +249,7 @@ export const ltiDeepLinkSelectionPage = (input: {
       ${
         input.isUnsignedResponseJwt
           ? '<p class="lti-deep-link__notice">This environment is returning unsigned JWT responses (alg=none). Use signed launch/response verification before production LMS rollout.</p>'
-          : ''
+          : ""
       }
       <section class="lti-deep-link__options">
         ${optionRows}
@@ -276,7 +282,7 @@ export const ltiIssuerRegistrationAdminPage = (input: {
           .map((registration) => {
             const tokenEndpointCell =
               registration.tokenEndpoint === null
-                ? 'Not configured'
+                ? "Not configured"
                 : escapeHtml(registration.tokenEndpoint);
 
             return `<tr>
@@ -285,8 +291,8 @@ export const ltiIssuerRegistrationAdminPage = (input: {
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.clientId)}</td>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.authorizationEndpoint)}</td>
       <td class="lti-registration__wrap-anywhere">${tokenEndpointCell}</td>
-      <td>${registration.clientSecret === null ? 'Not set' : 'Configured'}</td>
-      <td>${registration.allowUnsignedIdToken ? 'true' : 'false'}</td>
+      <td>${registration.clientSecret === null ? "Not set" : "Configured"}</td>
+      <td>${registration.allowUnsignedIdToken ? "true" : "false"}</td>
       <td>
         <form method="post" action="/admin/lti/issuer-registrations/delete">
           <input type="hidden" name="token" value="${escapeHtml(input.token)}" />
@@ -296,10 +302,10 @@ export const ltiIssuerRegistrationAdminPage = (input: {
       </td>
     </tr>`;
           })
-          .join('\n');
+          .join("\n");
 
   return renderPageShell(
-    'LTI Issuer Registrations | CredTrail',
+    "LTI Issuer Registrations | CredTrail",
     `<section class="lti-registration">
       <h1 class="lti-registration__title">Manual LTI issuer registration configuration</h1>
       <p class="lti-registration__lede">
@@ -307,7 +313,7 @@ export const ltiIssuerRegistrationAdminPage = (input: {
       </p>
       ${
         input.submissionError === undefined
-          ? ''
+          ? ""
           : `<p class="lti-registration__error">
               ${escapeHtml(input.submissionError)}
             </p>`
@@ -316,23 +322,23 @@ export const ltiIssuerRegistrationAdminPage = (input: {
         <input type="hidden" name="token" value="${escapeHtml(input.token)}" />
         <label class="lti-registration__field">
           <span>Issuer URL</span>
-          <input name="issuer" type="url" required value="${escapeHtml(input.formState?.issuer ?? '')}" />
+          <input name="issuer" type="url" required value="${escapeHtml(input.formState?.issuer ?? "")}" />
         </label>
         <label class="lti-registration__field">
           <span>Tenant ID</span>
-          <input name="tenantId" type="text" required value="${escapeHtml(input.formState?.tenantId ?? '')}" />
+          <input name="tenantId" type="text" required value="${escapeHtml(input.formState?.tenantId ?? "")}" />
         </label>
         <label class="lti-registration__field">
           <span>Client ID</span>
-          <input name="clientId" type="text" required value="${escapeHtml(input.formState?.clientId ?? '')}" />
+          <input name="clientId" type="text" required value="${escapeHtml(input.formState?.clientId ?? "")}" />
         </label>
         <label class="lti-registration__field">
           <span>Authorization endpoint</span>
-          <input name="authorizationEndpoint" type="url" required value="${escapeHtml(input.formState?.authorizationEndpoint ?? '')}" />
+          <input name="authorizationEndpoint" type="url" required value="${escapeHtml(input.formState?.authorizationEndpoint ?? "")}" />
         </label>
         <label class="lti-registration__field">
           <span>Token endpoint (required for NRPS roster pull)</span>
-          <input name="tokenEndpoint" type="url" value="${escapeHtml(input.formState?.tokenEndpoint ?? '')}" />
+          <input name="tokenEndpoint" type="url" value="${escapeHtml(input.formState?.tokenEndpoint ?? "")}" />
         </label>
         <label class="lti-registration__field">
           <span>Client secret (required for NRPS roster pull)</span>
@@ -340,7 +346,7 @@ export const ltiIssuerRegistrationAdminPage = (input: {
         </label>
         <label class="lti-registration__checkbox">
           <input name="allowUnsignedIdToken" type="checkbox" ${
-            input.formState?.allowUnsignedIdToken === true ? 'checked' : ''
+            input.formState?.allowUnsignedIdToken === true ? "checked" : ""
           } />
           <span>Allow unsigned id_token (test-mode only)</span>
         </label>

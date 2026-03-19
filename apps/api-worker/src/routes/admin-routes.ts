@@ -1,4 +1,4 @@
-import { createDidWeb } from '@credtrail/core-domain';
+import { createDidWeb } from "@credtrail/core-domain";
 import {
   createDedicatedDbProvisioningRequest,
   createAuditLog,
@@ -17,8 +17,8 @@ import {
   upsertTenantSigningRegistration,
   type AuditLogRecord,
   type SqlDatabase,
-} from '@credtrail/db';
-import type { Hono } from 'hono';
+} from "@credtrail/db";
+import type { Hono } from "hono";
 import {
   type AdminAuditLogListQuery,
   parseAdminCanvasOAuthAuthorizeUrlRequest,
@@ -38,22 +38,19 @@ import {
   parseTenantCanvasGradebookSnapshotQuery,
   parseTenantPathParams,
   parseTenantUserPathParams,
-} from '@credtrail/validation';
-import type { AppBindings, AppContext, AppEnv } from '../app';
-import { auditLogAdminPage, type AuditLogAdminPageFilterState } from '../admin/pages';
-import { createGradebookProvider } from '../lms/gradebook-provider';
+} from "@credtrail/validation";
+import type { AppBindings, AppContext, AppEnv } from "../app";
+import { auditLogAdminPage, type AuditLogAdminPageFilterState } from "../admin/pages";
+import { createGradebookProvider } from "../lms/gradebook-provider";
 import {
   canvasOAuthStateSigningSecret,
   exchangeCanvasAuthorizationCode,
   refreshCanvasAccessToken,
   signCanvasOAuthStatePayload,
   validateCanvasOAuthStateToken,
-} from '../lms/canvas-oauth';
-import { normalizeLtiIssuer } from '../lti/lti-helpers';
-import {
-  ltiIssuerRegistrationAdminPage,
-  type LtiIssuerRegistrationFormState,
-} from '../lti/pages';
+} from "../lms/canvas-oauth";
+import { normalizeLtiIssuer } from "../lti/lti-helpers";
+import { ltiIssuerRegistrationAdminPage, type LtiIssuerRegistrationFormState } from "../lti/pages";
 
 interface RegisterAdminRoutesInput {
   app: Hono<AppEnv>;
@@ -114,7 +111,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     const fromMs = Date.parse(fromIso);
 
     if (!Number.isFinite(fromMs)) {
-      throw new Error('Invalid timestamp');
+      throw new Error("Invalid timestamp");
     }
 
     return new Date(fromMs + seconds * 1000).toISOString();
@@ -123,13 +120,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
   const generateNonce = (): string => {
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
-    let raw = '';
+    let raw = "";
 
     for (const byte of bytes) {
       raw += String.fromCharCode(byte);
     }
 
-    return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+    return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   };
 
   const canvasIntegrationApiResponse = (
@@ -173,7 +170,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     };
   };
 
-  app.put('/v1/admin/tenants/:tenantId', async (c) => {
+  app.put("/v1/admin/tenants/:tenantId", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -194,7 +191,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         id: pathParams.tenantId,
         slug: request.slug,
         displayName: request.displayName,
-        planTier: request.planTier ?? 'team',
+        planTier: request.planTier ?? "team",
         issuerDomain,
         didWeb,
         isActive: request.isActive,
@@ -202,8 +199,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
-        action: 'tenant.upserted',
-        targetType: 'tenant',
+        action: "tenant.upserted",
+        targetType: "tenant",
         targetId: pathParams.tenantId,
         metadata: {
           slug: tenant.slug,
@@ -225,7 +222,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       if (isUniqueConstraintError(error)) {
         return c.json(
           {
-            error: 'Tenant slug or issuer domain is already in use',
+            error: "Tenant slug or issuer domain is already in use",
           },
           409,
         );
@@ -235,7 +232,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     }
   });
 
-  app.put('/v1/admin/tenants/:tenantId/signing-registration', async (c) => {
+  app.put("/v1/admin/tenants/:tenantId/signing-registration", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -265,8 +262,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
-        action: 'tenant.signing_registration_upserted',
-        targetType: 'tenant_signing_registration',
+        action: "tenant.signing_registration_upserted",
+        targetType: "tenant_signing_registration",
         targetId: pathParams.tenantId,
         metadata: {
           did: registration.did,
@@ -288,7 +285,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       if (isUniqueConstraintError(error)) {
         return c.json(
           {
-            error: 'Signing registration conflicts with another tenant DID',
+            error: "Signing registration conflicts with another tenant DID",
           },
           409,
         );
@@ -298,7 +295,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     }
   });
 
-  app.put('/v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId', async (c) => {
+  app.put("/v1/admin/tenants/:tenantId/badge-templates/:badgeTemplateId", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -323,8 +320,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
-        action: 'badge_template.upserted',
-        targetType: 'badge_template',
+        action: "badge_template.upserted",
+        targetType: "badge_template",
         targetId: pathParams.badgeTemplateId,
         metadata: {
           slug: template.slug,
@@ -347,7 +344,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       if (isUniqueConstraintError(error)) {
         return c.json(
           {
-            error: 'Badge template slug already exists for tenant',
+            error: "Badge template slug already exists for tenant",
           },
           409,
         );
@@ -355,8 +352,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
       if (
         error instanceof Error &&
-        ((error.message.includes('Org unit') && error.message.includes('not found for tenant')) ||
-          error.message.includes('ownership changes must use transferBadgeTemplateOwnership'))
+        ((error.message.includes("Org unit") && error.message.includes("not found for tenant")) ||
+          error.message.includes("ownership changes must use transferBadgeTemplateOwnership"))
       ) {
         return c.json(
           {
@@ -370,7 +367,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     }
   });
 
-  app.put('/v1/admin/tenants/:tenantId/users/:userId/role', async (c) => {
+  app.put("/v1/admin/tenants/:tenantId/users/:userId/role", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -390,11 +387,11 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: pathParams.tenantId,
       action:
         roleResult.previousRole === null
-          ? 'membership.role_assigned'
+          ? "membership.role_assigned"
           : roleResult.previousRole === roleResult.membership.role
-            ? 'membership.role_reasserted'
-            : 'membership.role_changed',
-      targetType: 'membership',
+            ? "membership.role_reasserted"
+            : "membership.role_changed",
+      targetType: "membership",
       targetId: `${pathParams.tenantId}:${pathParams.userId}`,
       metadata: {
         userId: pathParams.userId,
@@ -416,7 +413,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     );
   });
 
-  app.get('/v1/admin/tenants/:tenantId/lms/canvas/config', async (c) => {
+  app.get("/v1/admin/tenants/:tenantId/lms/canvas/config", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -432,7 +429,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (integration === null) {
       return c.json(
         {
-          error: 'Canvas gradebook integration not found',
+          error: "Canvas gradebook integration not found",
         },
         404,
       );
@@ -444,7 +441,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.put('/v1/admin/tenants/:tenantId/lms/canvas/config', async (c) => {
+  app.put("/v1/admin/tenants/:tenantId/lms/canvas/config", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -459,7 +456,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid Canvas integration payload',
+          error: error instanceof Error ? error.message : "Invalid Canvas integration payload",
         },
         400,
       );
@@ -474,13 +471,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       clientSecret: request.clientSecret,
       scope:
         request.scope ??
-        'url:GET|/api/v1/courses url:GET|/api/v1/courses/:course_id/enrollments url:GET|/api/v1/courses/:course_id/assignments',
+        "url:GET|/api/v1/courses url:GET|/api/v1/courses/:course_id/enrollments url:GET|/api/v1/courses/:course_id/assignments",
     });
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      action: 'tenant.canvas_gradebook_integration_upserted',
-      targetType: 'tenant_canvas_gradebook_integration',
+      action: "tenant.canvas_gradebook_integration_upserted",
+      targetType: "tenant_canvas_gradebook_integration",
       targetId: pathParams.tenantId,
       metadata: {
         apiBaseUrl: integration.apiBaseUrl,
@@ -502,7 +499,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     );
   });
 
-  app.post('/v1/admin/tenants/:tenantId/lms/canvas/oauth/authorize-url', async (c) => {
+  app.post("/v1/admin/tenants/:tenantId/lms/canvas/oauth/authorize-url", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -518,7 +515,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (integration === null) {
       return c.json(
         {
-          error: 'Canvas gradebook integration not found',
+          error: "Canvas gradebook integration not found",
         },
         404,
       );
@@ -532,7 +529,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid OAuth authorize payload',
+          error: error instanceof Error ? error.message : "Invalid OAuth authorize payload",
         },
         400,
       );
@@ -556,11 +553,11 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     );
 
     const authorizationUrl = new URL(integration.authorizationEndpoint);
-    authorizationUrl.searchParams.set('response_type', 'code');
-    authorizationUrl.searchParams.set('client_id', integration.clientId);
-    authorizationUrl.searchParams.set('redirect_uri', redirectUri);
-    authorizationUrl.searchParams.set('scope', integration.scope);
-    authorizationUrl.searchParams.set('state', stateToken);
+    authorizationUrl.searchParams.set("response_type", "code");
+    authorizationUrl.searchParams.set("client_id", integration.clientId);
+    authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+    authorizationUrl.searchParams.set("scope", integration.scope);
+    authorizationUrl.searchParams.set("state", stateToken);
 
     return c.json({
       tenantId: pathParams.tenantId,
@@ -571,7 +568,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.post('/v1/admin/tenants/:tenantId/lms/canvas/oauth/exchange', async (c) => {
+  app.post("/v1/admin/tenants/:tenantId/lms/canvas/oauth/exchange", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -586,7 +583,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid OAuth exchange payload',
+          error: error instanceof Error ? error.message : "Invalid OAuth exchange payload",
         },
         400,
       );
@@ -600,7 +597,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (integration === null) {
       return c.json(
         {
-          error: 'Canvas gradebook integration not found',
+          error: "Canvas gradebook integration not found",
         },
         404,
       );
@@ -613,12 +610,15 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       nowIso,
     );
 
-    if (stateValidation.status !== 'ok' || stateValidation.payload.tenantId !== pathParams.tenantId) {
+    if (
+      stateValidation.status !== "ok" ||
+      stateValidation.payload.tenantId !== pathParams.tenantId
+    ) {
       return c.json(
         {
           error:
-            stateValidation.status === 'ok'
-              ? 'OAuth state token does not match tenant'
+            stateValidation.status === "ok"
+              ? "OAuth state token does not match tenant"
               : stateValidation.reason,
         },
         400,
@@ -644,7 +644,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Canvas OAuth token exchange failed',
+          error: error instanceof Error ? error.message : "Canvas OAuth token exchange failed",
         },
         502,
       );
@@ -672,7 +672,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (updatedIntegration === null) {
       return c.json(
         {
-          error: 'Canvas gradebook integration not found',
+          error: "Canvas gradebook integration not found",
         },
         404,
       );
@@ -680,8 +680,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      action: 'tenant.canvas_gradebook_oauth_connected',
-      targetType: 'tenant_canvas_gradebook_integration',
+      action: "tenant.canvas_gradebook_oauth_connected",
+      targetType: "tenant_canvas_gradebook_integration",
       targetId: pathParams.tenantId,
       metadata: {
         scope: tokenResponse.scope ?? updatedIntegration.scope,
@@ -693,12 +693,12 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     return c.json({
       tenantId: pathParams.tenantId,
-      status: 'connected',
+      status: "connected",
       integration: canvasIntegrationApiResponse(updatedIntegration),
     });
   });
 
-  app.get('/v1/admin/tenants/:tenantId/lms/canvas/gradebook/snapshot', async (c) => {
+  app.get("/v1/admin/tenants/:tenantId/lms/canvas/gradebook/snapshot", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -710,14 +710,14 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     try {
       query = parseTenantCanvasGradebookSnapshotQuery({
-        courseId: c.req.query('courseId'),
-        learnerId: c.req.query('learnerId'),
-        assignmentId: c.req.query('assignmentId'),
+        courseId: c.req.query("courseId"),
+        learnerId: c.req.query("learnerId"),
+        assignmentId: c.req.query("assignmentId"),
       });
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid gradebook snapshot query',
+          error: error instanceof Error ? error.message : "Invalid gradebook snapshot query",
         },
         400,
       );
@@ -726,7 +726,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (query.assignmentId !== undefined && query.courseId === undefined) {
       return c.json(
         {
-          error: 'assignmentId requires courseId',
+          error: "assignmentId requires courseId",
         },
         400,
       );
@@ -738,7 +738,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (integration === null) {
       return c.json(
         {
-          error: 'Canvas gradebook integration not found',
+          error: "Canvas gradebook integration not found",
         },
         404,
       );
@@ -776,7 +776,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         if (updatedIntegration === null) {
           return c.json(
             {
-              error: 'Canvas gradebook integration not found',
+              error: "Canvas gradebook integration not found",
             },
             404,
           );
@@ -786,7 +786,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       } catch (error) {
         return c.json(
           {
-            error: error instanceof Error ? error.message : 'Canvas access token refresh failed',
+            error: error instanceof Error ? error.message : "Canvas access token refresh failed",
           },
           502,
         );
@@ -796,7 +796,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (accessToken === null) {
       return c.json(
         {
-          error: 'Canvas integration is not connected. Complete OAuth exchange first.',
+          error: "Canvas integration is not connected. Complete OAuth exchange first.",
         },
         409,
       );
@@ -804,7 +804,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     const gradebookProvider = createGradebookProvider({
       config: {
-        kind: 'canvas',
+        kind: "canvas",
         apiBaseUrl: integration.apiBaseUrl,
         accessToken,
       },
@@ -814,7 +814,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (query.courseId === undefined) {
       return c.json({
         tenantId: pathParams.tenantId,
-        provider: 'canvas',
+        provider: "canvas",
         generatedAt: nowIso,
         courses,
       });
@@ -824,7 +824,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       courseId: query.courseId,
     });
     const learnerFilter = query.learnerId === undefined ? {} : { learnerId: query.learnerId };
-    const assignmentFilter = query.assignmentId === undefined ? {} : { assignmentId: query.assignmentId };
+    const assignmentFilter =
+      query.assignmentId === undefined ? {} : { assignmentId: query.assignmentId };
 
     const enrollments = await gradebookProvider.listEnrollments({
       courseId: query.courseId,
@@ -846,7 +847,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     return c.json({
       tenantId: pathParams.tenantId,
-      provider: 'canvas',
+      provider: "canvas",
       generatedAt: nowIso,
       courses,
       assignments,
@@ -883,7 +884,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.get('/v1/admin/lti/issuer-registrations', async (c) => {
+  app.get("/v1/admin/lti/issuer-registrations", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -893,11 +894,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     const registrations = await listLtiIssuerRegistrations(resolveDatabase(c.env));
 
     return c.json({
-      registrations: registrations.map((registration) => ltiIssuerRegistrationApiResponse(registration)),
+      registrations: registrations.map((registration) =>
+        ltiIssuerRegistrationApiResponse(registration),
+      ),
     });
   });
 
-  app.get('/v1/admin/audit-logs', async (c) => {
+  app.get("/v1/admin/audit-logs", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -908,14 +911,14 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     try {
       query = parseAdminAuditLogListQuery({
-        tenantId: c.req.query('tenantId'),
-        action: c.req.query('action'),
-        limit: c.req.query('limit'),
+        tenantId: c.req.query("tenantId"),
+        action: c.req.query("action"),
+        limit: c.req.query("limit"),
       });
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid audit log query parameters',
+          error: error instanceof Error ? error.message : "Invalid audit log query parameters",
         },
         400,
       );
@@ -931,7 +934,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.get('/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests', async (c) => {
+  app.get("/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -939,19 +942,19 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     }
 
     const pathParams = parseTenantPathParams(c.req.param());
-    const statusCandidate = c.req.query('status');
+    const statusCandidate = c.req.query("status");
     const status =
-      statusCandidate === 'pending' ||
-      statusCandidate === 'provisioned' ||
-      statusCandidate === 'failed' ||
-      statusCandidate === 'canceled'
+      statusCandidate === "pending" ||
+      statusCandidate === "provisioned" ||
+      statusCandidate === "failed" ||
+      statusCandidate === "canceled"
         ? statusCandidate
         : undefined;
 
     if (statusCandidate !== undefined && status === undefined) {
       return c.json(
         {
-          error: 'status must be one of pending, provisioned, failed, canceled',
+          error: "status must be one of pending, provisioned, failed, canceled",
         },
         400,
       );
@@ -968,7 +971,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.post('/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests', async (c) => {
+  app.post("/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -983,7 +986,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : 'Invalid provisioning request payload',
+          error: error instanceof Error ? error.message : "Invalid provisioning request payload",
         },
         400,
       );
@@ -997,8 +1000,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: pathParams.tenantId,
-      action: 'tenant.dedicated_db_provisioning_requested',
-      targetType: 'tenant_dedicated_db_provisioning_request',
+      action: "tenant.dedicated_db_provisioning_requested",
+      targetType: "tenant_dedicated_db_provisioning_request",
       targetId: provisioningRequest.id,
       metadata: {
         targetRegion: provisioningRequest.targetRegion,
@@ -1016,7 +1019,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
   });
 
   app.post(
-    '/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests/:requestId/resolve',
+    "/v1/admin/tenants/:tenantId/dedicated-db/provisioning-requests/:requestId/resolve",
     async (c) => {
       const unauthorizedResponse = requireBootstrapAdmin(c);
 
@@ -1032,7 +1035,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       } catch (error) {
         return c.json(
           {
-            error: error instanceof Error ? error.message : 'Invalid provisioning resolve payload',
+            error: error instanceof Error ? error.message : "Invalid provisioning resolve payload",
           },
           400,
         );
@@ -1050,7 +1053,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       if (resolved === null) {
         return c.json(
           {
-            error: 'Provisioning request not found',
+            error: "Provisioning request not found",
           },
           404,
         );
@@ -1058,8 +1061,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: pathParams.tenantId,
-        action: 'tenant.dedicated_db_provisioning_resolved',
-        targetType: 'tenant_dedicated_db_provisioning_request',
+        action: "tenant.dedicated_db_provisioning_resolved",
+        targetType: "tenant_dedicated_db_provisioning_request",
         targetId: resolved.id,
         metadata: {
           status: resolved.status,
@@ -1077,8 +1080,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     },
   );
 
-  app.get('/admin/audit-logs', async (c) => {
-    const token = c.req.query('token') ?? null;
+  app.get("/admin/audit-logs", async (c) => {
+    const token = c.req.query("token") ?? null;
     const unauthorizedResponse = requireBootstrapAdminUiToken(c, token);
 
     if (unauthorizedResponse !== null) {
@@ -1088,20 +1091,20 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (token === null) {
       return c.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
     }
 
-    const tenantId = c.req.query('tenantId');
-    const action = c.req.query('action');
-    const limitRaw = c.req.query('limit');
+    const tenantId = c.req.query("tenantId");
+    const action = c.req.query("action");
+    const limitRaw = c.req.query("limit");
     const limitParsed = limitRaw === undefined ? undefined : Number(limitRaw);
     const filterState: AuditLogAdminPageFilterState = {
       ...(tenantId === undefined ? {} : { tenantId }),
       ...(action === undefined ? {} : { action }),
-      ...(typeof limitParsed === 'number' && Number.isFinite(limitParsed)
+      ...(typeof limitParsed === "number" && Number.isFinite(limitParsed)
         ? {
             limit: Math.trunc(limitParsed),
           }
@@ -1131,7 +1134,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         filterState,
         logs: [],
         status: 400,
-        submissionError: error instanceof Error ? error.message : 'Invalid audit log filters',
+        submissionError: error instanceof Error ? error.message : "Invalid audit log filters",
       });
     }
 
@@ -1144,7 +1147,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.put('/v1/admin/lti/issuer-registrations', async (c) => {
+  app.put("/v1/admin/lti/issuer-registrations", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -1165,8 +1168,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: registration.tenantId,
-      action: 'lti.issuer_registration_upserted',
-      targetType: 'lti_issuer_registration',
+      action: "lti.issuer_registration_upserted",
+      targetType: "lti_issuer_registration",
       targetId: registration.issuer,
       metadata: {
         issuer: registration.issuer,
@@ -1187,7 +1190,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     );
   });
 
-  app.delete('/v1/admin/lti/issuer-registrations', async (c) => {
+  app.delete("/v1/admin/lti/issuer-registrations", async (c) => {
     const unauthorizedResponse = requireBootstrapAdmin(c);
 
     if (unauthorizedResponse !== null) {
@@ -1202,13 +1205,16 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       registrations.find(
         (registration) => normalizeLtiIssuer(registration.issuer) === normalizedIssuer,
       ) ?? null;
-    const deleted = await deleteLtiIssuerRegistrationByIssuer(resolveDatabase(c.env), request.issuer);
+    const deleted = await deleteLtiIssuerRegistrationByIssuer(
+      resolveDatabase(c.env),
+      request.issuer,
+    );
 
     if (deleted && existingRegistration !== null) {
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: existingRegistration.tenantId,
-        action: 'lti.issuer_registration_deleted',
-        targetType: 'lti_issuer_registration',
+        action: "lti.issuer_registration_deleted",
+        targetType: "lti_issuer_registration",
         targetId: normalizedIssuer,
         metadata: {
           issuer: normalizedIssuer,
@@ -1218,13 +1224,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     }
 
     return c.json({
-      status: deleted ? 'deleted' : 'not_found',
+      status: deleted ? "deleted" : "not_found",
       issuer: normalizedIssuer,
     });
   });
 
-  app.get('/admin/lti/issuer-registrations', async (c) => {
-    const token = c.req.query('token') ?? null;
+  app.get("/admin/lti/issuer-registrations", async (c) => {
+    const token = c.req.query("token") ?? null;
     const unauthorizedResponse = requireBootstrapAdminUiToken(c, token);
 
     if (unauthorizedResponse !== null) {
@@ -1234,7 +1240,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (token === null) {
       return c.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
@@ -1245,13 +1251,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     });
   });
 
-  app.post('/admin/lti/issuer-registrations', async (c) => {
-    const contentType = c.req.header('content-type') ?? '';
+  app.post("/admin/lti/issuer-registrations", async (c) => {
+    const contentType = c.req.header("content-type") ?? "";
 
-    if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
       return c.json(
         {
-          error: 'Content-Type must be application/x-www-form-urlencoded',
+          error: "Content-Type must be application/x-www-form-urlencoded",
         },
         400,
       );
@@ -1259,7 +1265,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     const rawBody = await c.req.text();
     const formData = new URLSearchParams(rawBody);
-    const token = formData.get('token');
+    const token = formData.get("token");
     const unauthorizedResponse = requireBootstrapAdminUiToken(c, token);
 
     if (unauthorizedResponse !== null) {
@@ -1269,23 +1275,23 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (token === null) {
       return c.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
     }
 
     const formState: LtiIssuerRegistrationFormState = {
-      issuer: formData.get('issuer') ?? '',
-      tenantId: formData.get('tenantId') ?? '',
-      authorizationEndpoint: formData.get('authorizationEndpoint') ?? '',
-      clientId: formData.get('clientId') ?? '',
-      tokenEndpoint: formData.get('tokenEndpoint') ?? '',
-      clientSecret: formData.get('clientSecret') ?? '',
-      allowUnsignedIdToken: formData.get('allowUnsignedIdToken') !== null,
+      issuer: formData.get("issuer") ?? "",
+      tenantId: formData.get("tenantId") ?? "",
+      authorizationEndpoint: formData.get("authorizationEndpoint") ?? "",
+      clientId: formData.get("clientId") ?? "",
+      tokenEndpoint: formData.get("tokenEndpoint") ?? "",
+      clientSecret: formData.get("clientSecret") ?? "",
+      allowUnsignedIdToken: formData.get("allowUnsignedIdToken") !== null,
     };
-    const parsedTokenEndpoint = formState.tokenEndpoint?.trim() ?? '';
-    const parsedClientSecret = formState.clientSecret?.trim() ?? '';
+    const parsedTokenEndpoint = formState.tokenEndpoint?.trim() ?? "";
+    const parsedClientSecret = formState.clientSecret?.trim() ?? "";
 
     let request;
 
@@ -1303,7 +1309,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       return ltiIssuerRegistrationAdminPageResponse(c, {
         token,
         status: 400,
-        submissionError: error instanceof Error ? error.message : 'Invalid LTI registration payload',
+        submissionError:
+          error instanceof Error ? error.message : "Invalid LTI registration payload",
         formState,
       });
     }
@@ -1320,8 +1327,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     await createAuditLog(resolveDatabase(c.env), {
       tenantId: registration.tenantId,
-      action: 'lti.issuer_registration_upserted',
-      targetType: 'lti_issuer_registration',
+      action: "lti.issuer_registration_upserted",
+      targetType: "lti_issuer_registration",
       targetId: registration.issuer,
       metadata: {
         issuer: registration.issuer,
@@ -1337,13 +1344,13 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     return c.redirect(`/admin/lti/issuer-registrations?token=${encodeURIComponent(token)}`, 303);
   });
 
-  app.post('/admin/lti/issuer-registrations/delete', async (c) => {
-    const contentType = c.req.header('content-type') ?? '';
+  app.post("/admin/lti/issuer-registrations/delete", async (c) => {
+    const contentType = c.req.header("content-type") ?? "";
 
-    if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
+    if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
       return c.json(
         {
-          error: 'Content-Type must be application/x-www-form-urlencoded',
+          error: "Content-Type must be application/x-www-form-urlencoded",
         },
         400,
       );
@@ -1351,7 +1358,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
 
     const rawBody = await c.req.text();
     const formData = new URLSearchParams(rawBody);
-    const token = formData.get('token');
+    const token = formData.get("token");
     const unauthorizedResponse = requireBootstrapAdminUiToken(c, token);
 
     if (unauthorizedResponse !== null) {
@@ -1361,19 +1368,19 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
     if (token === null) {
       return c.json(
         {
-          error: 'Unauthorized',
+          error: "Unauthorized",
         },
         401,
       );
     }
 
-    const issuerCandidate = formData.get('issuer');
+    const issuerCandidate = formData.get("issuer");
 
     if (issuerCandidate === null) {
       return ltiIssuerRegistrationAdminPageResponse(c, {
         token,
         status: 400,
-        submissionError: 'issuer is required',
+        submissionError: "issuer is required",
       });
     }
 
@@ -1387,7 +1394,7 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       return ltiIssuerRegistrationAdminPageResponse(c, {
         token,
         status: 400,
-        submissionError: error instanceof Error ? error.message : 'Invalid issuer value',
+        submissionError: error instanceof Error ? error.message : "Invalid issuer value",
       });
     }
 
@@ -1397,13 +1404,16 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       registrations.find(
         (registration) => normalizeLtiIssuer(registration.issuer) === normalizedIssuer,
       ) ?? null;
-    const deleted = await deleteLtiIssuerRegistrationByIssuer(resolveDatabase(c.env), request.issuer);
+    const deleted = await deleteLtiIssuerRegistrationByIssuer(
+      resolveDatabase(c.env),
+      request.issuer,
+    );
 
     if (deleted && existingRegistration !== null) {
       await createAuditLog(resolveDatabase(c.env), {
         tenantId: existingRegistration.tenantId,
-        action: 'lti.issuer_registration_deleted',
-        targetType: 'lti_issuer_registration',
+        action: "lti.issuer_registration_deleted",
+        targetType: "lti_issuer_registration",
         targetId: normalizedIssuer,
         metadata: {
           issuer: normalizedIssuer,

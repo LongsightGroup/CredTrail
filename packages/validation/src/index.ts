@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -8,10 +8,10 @@ export interface JsonObject {
 }
 
 export const queueJobTypeSchema = z.enum([
-  'issue_badge',
-  'revoke_badge',
-  'rebuild_verification_cache',
-  'import_migration_batch',
+  "issue_badge",
+  "revoke_badge",
+  "rebuild_verification_cache",
+  "import_migration_batch",
 ]);
 
 export const idempotencyKeySchema = z.string().min(1).max(128);
@@ -29,11 +29,11 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 
 export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(jsonValueSchema);
 
-export const didWebSchema = z.string().startsWith('did:web:');
+export const didWebSchema = z.string().startsWith("did:web:");
 
 export const ed25519PublicJwkSchema = z.object({
-  kty: z.literal('OKP'),
-  crv: z.literal('Ed25519'),
+  kty: z.literal("OKP"),
+  crv: z.literal("Ed25519"),
   x: z.string().min(1),
   kid: z.string().min(1).optional(),
 });
@@ -43,8 +43,8 @@ export const ed25519PrivateJwkSchema = ed25519PublicJwkSchema.extend({
 });
 
 export const p256PublicJwkSchema = z.object({
-  kty: z.literal('EC'),
-  crv: z.literal('P-256'),
+  kty: z.literal("EC"),
+  crv: z.literal("P-256"),
   x: z.string().min(1),
   y: z.string().min(1),
   kid: z.string().min(1).optional(),
@@ -87,23 +87,23 @@ export const signCredentialRequestSchema = z
   .object({
     did: didWebSchema,
     credential: jsonObjectSchema,
-    proofType: z.enum(['Ed25519Signature2020', 'DataIntegrityProof']).optional(),
-    cryptosuite: z.enum(['eddsa-rdfc-2022', 'ecdsa-sd-2023']).optional(),
+    proofType: z.enum(["Ed25519Signature2020", "DataIntegrityProof"]).optional(),
+    cryptosuite: z.enum(["eddsa-rdfc-2022", "ecdsa-sd-2023"]).optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.proofType === 'DataIntegrityProof' && value.cryptosuite === undefined) {
+    if (value.proofType === "DataIntegrityProof" && value.cryptosuite === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['cryptosuite'],
-        message: 'cryptosuite is required when proofType is DataIntegrityProof',
+        path: ["cryptosuite"],
+        message: "cryptosuite is required when proofType is DataIntegrityProof",
       });
     }
 
-    if (value.proofType !== 'DataIntegrityProof' && value.cryptosuite !== undefined) {
+    if (value.proofType !== "DataIntegrityProof" && value.cryptosuite !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['cryptosuite'],
-        message: 'cryptosuite is only allowed when proofType is DataIntegrityProof',
+        path: ["cryptosuite"],
+        message: "cryptosuite is only allowed when proofType is DataIntegrityProof",
       });
     }
   });
@@ -112,18 +112,18 @@ export const tenantIdSchema = z.string().min(1);
 export const resourceIdSchema = z.string().min(1);
 export const userIdSchema = z.string().min(1);
 export const isoTimestampSchema = z.string().datetime();
-export const tenantPlanTierSchema = z.enum(['free', 'team', 'institution', 'enterprise']);
-export const tenantMembershipRoleSchema = z.enum(['owner', 'admin', 'issuer', 'viewer']);
-export const tenantLoginModeSchema = z.enum(['local', 'hybrid', 'sso_required']);
-export const tenantAuthPolicyEnforceForRolesSchema = z.enum(['all_users', 'admins_only']);
-export const tenantAuthProviderProtocolSchema = z.enum(['oidc', 'saml']);
-export const recipientIdentityTypeSchema = z.enum(['email', 'email_sha256', 'did', 'url']);
+export const tenantPlanTierSchema = z.enum(["free", "team", "institution", "enterprise"]);
+export const tenantMembershipRoleSchema = z.enum(["owner", "admin", "issuer", "viewer"]);
+export const tenantLoginModeSchema = z.enum(["local", "hybrid", "sso_required"]);
+export const tenantAuthPolicyEnforceForRolesSchema = z.enum(["all_users", "admins_only"]);
+export const tenantAuthProviderProtocolSchema = z.enum(["oidc", "saml"]);
+export const recipientIdentityTypeSchema = z.enum(["email", "email_sha256", "did", "url"]);
 export const recipientIdentifierTypeSchema = z.enum([
-  'emailAddress',
-  'sourcedId',
-  'did',
-  'nationalIdentityNumber',
-  'studentId',
+  "emailAddress",
+  "sourcedId",
+  "did",
+  "nationalIdentityNumber",
+  "studentId",
 ]);
 export const recipientIdentifierSchema = z.object({
   identifierType: recipientIdentifierTypeSchema,
@@ -138,12 +138,12 @@ export const badgeTemplateSlugSchema = z
 export const badgeTemplateTitleSchema = z.string().trim().min(1).max(200);
 export const badgeTemplateDescriptionSchema = z.string().trim().min(1).max(2000);
 export const badgeTemplateUriSchema = z.string().url().max(2048);
-export const orgUnitTypeSchema = z.enum(['institution', 'college', 'department', 'program']);
-export const tenantMembershipOrgUnitScopeRoleSchema = z.enum(['admin', 'issuer', 'viewer']);
+export const orgUnitTypeSchema = z.enum(["institution", "college", "department", "program"]);
+export const tenantMembershipOrgUnitScopeRoleSchema = z.enum(["admin", "issuer", "viewer"]);
 export const delegatedIssuingAuthorityActionSchema = z.enum([
-  'issue_badge',
-  'revoke_badge',
-  'manage_lifecycle',
+  "issue_badge",
+  "revoke_badge",
+  "manage_lifecycle",
 ]);
 export const orgUnitSlugSchema = z
   .string()
@@ -153,17 +153,17 @@ export const orgUnitSlugSchema = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 export const orgUnitDisplayNameSchema = z.string().trim().min(1).max(200);
 export const badgeTemplateOwnershipReasonCodeSchema = z.enum([
-  'initial_assignment',
-  'administrative_transfer',
-  'reorganization',
-  'governance_policy_update',
-  'other',
+  "initial_assignment",
+  "administrative_transfer",
+  "reorganization",
+  "governance_policy_update",
+  "other",
 ]);
 export const badgeTemplateOwnershipTransferReasonCodeSchema = z.enum([
-  'administrative_transfer',
-  'reorganization',
-  'governance_policy_update',
-  'other',
+  "administrative_transfer",
+  "reorganization",
+  "governance_policy_update",
+  "other",
 ]);
 
 export const tenantPathParamsSchema = z.object({
@@ -206,18 +206,18 @@ export const credentialPathParamsSchema = z.object({
   credentialId: resourceIdSchema,
 });
 
-export const assertionLifecycleStateSchema = z.enum(['active', 'suspended', 'revoked', 'expired']);
+export const assertionLifecycleStateSchema = z.enum(["active", "suspended", "revoked", "expired"]);
 
-export const assertionLifecycleTransitionSourceSchema = z.enum(['manual', 'automation']);
+export const assertionLifecycleTransitionSourceSchema = z.enum(["manual", "automation"]);
 
 export const assertionLifecycleReasonCodeSchema = z.enum([
-  'administrative_hold',
-  'policy_violation',
-  'appeal_pending',
-  'appeal_resolved',
-  'credential_expired',
-  'issuer_requested',
-  'other',
+  "administrative_hold",
+  "policy_violation",
+  "appeal_pending",
+  "appeal_resolved",
+  "credential_expired",
+  "issuer_requested",
+  "other",
 ]);
 
 export const assertionPathParamsSchema = tenantPathParamsSchema.extend({
@@ -230,11 +230,11 @@ export const badgeTemplateListQuerySchema = z.object({
       return false;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -248,11 +248,11 @@ export const tenantOrgUnitListQuerySchema = z.object({
       return false;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -266,11 +266,11 @@ export const delegatedIssuingAuthorityGrantListQuerySchema = z.object({
       return false;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -281,11 +281,11 @@ export const delegatedIssuingAuthorityGrantListQuerySchema = z.object({
       return false;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -299,11 +299,11 @@ export const tenantApiKeyListQuerySchema = z.object({
       return false;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -316,7 +316,7 @@ export const tenantAssertionListQuerySchema = z.object({
   recipientQuery: z.string().trim().min(1).max(320).optional(),
   state: assertionLifecycleStateSchema.optional(),
   limit: z.preprocess((input) => {
-    if (input === undefined || input === '') {
+    if (input === undefined || input === "") {
       return undefined;
     }
 
@@ -349,7 +349,7 @@ export const updateBadgeTemplateRequestSchema = z
       payload.criteriaUri !== undefined ||
       payload.imageUri !== undefined,
     {
-      message: 'At least one badge template field must be provided',
+      message: "At least one badge template field must be provided",
     },
   );
 
@@ -379,8 +379,8 @@ export const createDelegatedIssuingAuthorityGrantRequestSchema = z
     if (uniqueActions.size !== value.allowedActions.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['allowedActions'],
-        message: 'allowedActions must not contain duplicates',
+        path: ["allowedActions"],
+        message: "allowedActions must not contain duplicates",
       });
     }
 
@@ -390,8 +390,8 @@ export const createDelegatedIssuingAuthorityGrantRequestSchema = z
       if (uniqueTemplateIds.size !== value.badgeTemplateIds.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['badgeTemplateIds'],
-          message: 'badgeTemplateIds must not contain duplicates',
+          path: ["badgeTemplateIds"],
+          message: "badgeTemplateIds must not contain duplicates",
         });
       }
     }
@@ -403,8 +403,8 @@ export const createDelegatedIssuingAuthorityGrantRequestSchema = z
       if (Number.isFinite(startsAtMs) && Number.isFinite(endsAtMs) && endsAtMs <= startsAtMs) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['endsAt'],
-          message: 'endsAt must be after startsAt',
+          path: ["endsAt"],
+          message: "endsAt must be after startsAt",
         });
       }
     }
@@ -452,18 +452,18 @@ export const upsertTenantAuthProviderRequestSchema = z
     try {
       const parsed = JSON.parse(value.configJson) as unknown;
 
-      if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
+      if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['configJson'],
-          message: 'configJson must encode a JSON object',
+          path: ["configJson"],
+          message: "configJson must encode a JSON object",
         });
       }
     } catch {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['configJson'],
-        message: 'configJson must be valid JSON',
+        path: ["configJson"],
+        message: "configJson must be valid JSON",
       });
     }
   });
@@ -510,14 +510,14 @@ export const tenantCanvasGradebookSnapshotQuerySchema = z.object({
 });
 
 export const badgeIssuanceRuleLmsProviderKindSchema = z.enum([
-  'canvas',
-  'moodle',
-  'blackboard_ultra',
-  'd2l_brightspace',
-  'sakai',
+  "canvas",
+  "moodle",
+  "blackboard_ultra",
+  "d2l_brightspace",
+  "sakai",
 ]);
 
-export const badgeIssuanceRuleValueListKindSchema = z.enum(['course_ids', 'badge_template_ids']);
+export const badgeIssuanceRuleValueListKindSchema = z.enum(["course_ids", "badge_template_ids"]);
 
 const badgeIssuanceRuleCourseReferenceRefinement = (
   value: {
@@ -529,7 +529,7 @@ const badgeIssuanceRuleCourseReferenceRefinement = (
   if (value.courseId === undefined && value.courseListId === undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Specify courseId or courseListId',
+      message: "Specify courseId or courseListId",
     });
     return;
   }
@@ -537,7 +537,7 @@ const badgeIssuanceRuleCourseReferenceRefinement = (
   if (value.courseId !== undefined && value.courseListId !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Specify courseId or courseListId, not both',
+      message: "Specify courseId or courseListId, not both",
     });
   }
 };
@@ -552,7 +552,7 @@ const badgeIssuanceRuleBadgeTemplateReferenceRefinement = (
   if (value.badgeTemplateId === undefined && value.badgeTemplateListId === undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Specify badgeTemplateId or badgeTemplateListId',
+      message: "Specify badgeTemplateId or badgeTemplateListId",
     });
     return;
   }
@@ -560,17 +560,17 @@ const badgeIssuanceRuleBadgeTemplateReferenceRefinement = (
   if (value.badgeTemplateId !== undefined && value.badgeTemplateListId !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Specify badgeTemplateId or badgeTemplateListId, not both',
+      message: "Specify badgeTemplateId or badgeTemplateListId, not both",
     });
   }
 };
 
 const badgeIssuanceRuleGradeThresholdConditionSchema = z
   .object({
-    type: z.literal('grade_threshold'),
+    type: z.literal("grade_threshold"),
     courseId: z.string().trim().min(1).max(255).optional(),
     courseListId: resourceIdSchema.optional(),
-    scoreField: z.enum(['final_score', 'current_score']).optional(),
+    scoreField: z.enum(["final_score", "current_score"]).optional(),
     minScore: z.number().finite().min(0).max(100).optional(),
     maxScore: z.number().finite().min(0).max(100).optional(),
   })
@@ -580,14 +580,14 @@ const badgeIssuanceRuleGradeThresholdConditionSchema = z
     if (value.minScore === undefined && value.maxScore === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'grade_threshold must include minScore or maxScore',
+        message: "grade_threshold must include minScore or maxScore",
       });
     }
   });
 
 const badgeIssuanceRuleCourseCompletionConditionSchema = z
   .object({
-    type: z.literal('course_completion'),
+    type: z.literal("course_completion"),
     courseId: z.string().trim().min(1).max(255).optional(),
     courseListId: resourceIdSchema.optional(),
     requireCompleted: z.boolean().optional(),
@@ -599,7 +599,7 @@ const badgeIssuanceRuleCourseCompletionConditionSchema = z
 
 const badgeIssuanceRuleProgramCompletionConditionSchema = z
   .object({
-    type: z.literal('program_completion'),
+    type: z.literal("program_completion"),
     courseIds: z.array(z.string().trim().min(1).max(255)).min(1).max(200).optional(),
     courseListId: resourceIdSchema.optional(),
     minimumCompleted: z.number().int().min(1).max(200).optional(),
@@ -608,7 +608,7 @@ const badgeIssuanceRuleProgramCompletionConditionSchema = z
     if (value.courseIds === undefined && value.courseListId === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'program_completion must include courseIds or courseListId',
+        message: "program_completion must include courseIds or courseListId",
       });
       return;
     }
@@ -616,7 +616,7 @@ const badgeIssuanceRuleProgramCompletionConditionSchema = z
     if (value.courseIds !== undefined && value.courseListId !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'program_completion must include courseIds or courseListId, not both',
+        message: "program_completion must include courseIds or courseListId, not both",
       });
       return;
     }
@@ -628,13 +628,13 @@ const badgeIssuanceRuleProgramCompletionConditionSchema = z
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'minimumCompleted must be less than or equal to the number of courseIds',
+        message: "minimumCompleted must be less than or equal to the number of courseIds",
       });
     }
   });
 
 const badgeIssuanceRuleAssignmentSubmissionConditionSchema = z.object({
-  type: z.literal('assignment_submission'),
+  type: z.literal("assignment_submission"),
   courseId: z.string().trim().min(1).max(255),
   assignmentId: z.string().trim().min(1).max(255),
   minScore: z.number().finite().min(0).max(100).optional(),
@@ -644,7 +644,7 @@ const badgeIssuanceRuleAssignmentSubmissionConditionSchema = z.object({
 
 const badgeIssuanceRuleTimeWindowConditionSchema = z
   .object({
-    type: z.literal('time_window'),
+    type: z.literal("time_window"),
     notBefore: isoTimestampSchema.optional(),
     notAfter: isoTimestampSchema.optional(),
   })
@@ -652,14 +652,14 @@ const badgeIssuanceRuleTimeWindowConditionSchema = z
     if (value.notBefore === undefined && value.notAfter === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'time_window must include notBefore or notAfter',
+        message: "time_window must include notBefore or notAfter",
       });
     }
   });
 
 const badgeIssuanceRulePrerequisiteBadgeConditionSchema = z
   .object({
-    type: z.literal('prerequisite_badge'),
+    type: z.literal("prerequisite_badge"),
     badgeTemplateId: resourceIdSchema.optional(),
     badgeTemplateListId: resourceIdSchema.optional(),
   })
@@ -705,7 +705,7 @@ export const badgeIssuanceRuleConditionSchema: z.ZodType<BadgeIssuanceRuleCondit
 );
 
 export const badgeIssuanceRuleDefinitionOptionsSchema = z.object({
-  issuanceTiming: z.enum(['immediate', 'manual', 'end_of_term']).optional(),
+  issuanceTiming: z.enum(["immediate", "manual", "end_of_term"]).optional(),
   reviewOnMissingFacts: z.boolean().optional(),
 });
 
@@ -757,7 +757,7 @@ export const createBadgeIssuanceRuleVersionRequestSchema = z.object({
 });
 
 export const decideBadgeIssuanceRuleVersionRequestSchema = z.object({
-  decision: z.enum(['approved', 'rejected']),
+  decision: z.enum(["approved", "rejected"]),
   comment: z.string().trim().min(1).max(2000).optional(),
 });
 
@@ -803,7 +803,7 @@ export const evaluateBadgeIssuanceRuleRequestSchema = z.object({
 
 export const previewEvaluateBadgeIssuanceRuleRequestSchema = z.object({
   definition: badgeIssuanceRuleDefinitionSchema,
-  lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema.default('canvas'),
+  lmsProviderKind: badgeIssuanceRuleLmsProviderKindSchema.default("canvas"),
   learnerId: z.string().trim().min(1).max(255),
   recipientIdentity: z.string().trim().min(1).max(512),
   recipientIdentityType: recipientIdentityTypeSchema,
@@ -822,8 +822,8 @@ export const createBadgeIssuanceRuleValueListRequestSchema = z
     if (normalizedValues.size !== value.values.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['values'],
-        message: 'values must not contain duplicates',
+        path: ["values"],
+        message: "values must not contain duplicates",
       });
     }
   });
@@ -847,12 +847,12 @@ export const previewSimulateBadgeIssuanceRuleRequestSchema = z.object({
 });
 
 export const badgeIssuanceRuleReviewQueueQuerySchema = z.object({
-  status: z.enum(['pending', 'resolved']).optional(),
+  status: z.enum(["pending", "resolved"]).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
 
 export const resolveBadgeIssuanceRuleReviewRequestSchema = z.object({
-  decision: z.enum(['issue', 'dismiss']),
+  decision: z.enum(["issue", "dismiss"]),
   comment: z.string().trim().min(1).max(2000).optional(),
 });
 
@@ -867,7 +867,7 @@ export const createDedicatedDbProvisioningRequestSchema = z.object({
 });
 
 export const resolveDedicatedDbProvisioningRequestSchema = z.object({
-  status: z.enum(['provisioned', 'failed', 'canceled']),
+  status: z.enum(["provisioned", "failed", "canceled"]),
   dedicatedDatabaseUrl: z.string().url().max(4096).optional(),
   notes: z.string().trim().min(1).max(2000).optional(),
   resolvedAt: isoTimestampSchema.optional(),
@@ -927,7 +927,7 @@ export const adminAuditLogListQuerySchema = z.object({
   tenantId: tenantIdSchema,
   action: z
     .preprocess((input) => {
-      if (typeof input !== 'string') {
+      if (typeof input !== "string") {
         return input;
       }
 
@@ -940,7 +940,7 @@ export const adminAuditLogListQuerySchema = z.object({
       return undefined;
     }
 
-    if (typeof input === 'string') {
+    if (typeof input === "string") {
       const trimmed = input.trim();
 
       if (trimmed.length === 0) {
@@ -974,7 +974,7 @@ export const learnerIdentityLinkVerifyRequestSchema = z.object({
 
 const isSupportedLearnerDidMethod = (value: string): boolean => {
   return (
-    value.startsWith('did:key:') || value.startsWith('did:web:') || value.startsWith('did:ion:')
+    value.startsWith("did:key:") || value.startsWith("did:web:") || value.startsWith("did:ion:")
   );
 };
 
@@ -987,14 +987,14 @@ export const learnerDidSettingsRequestSchema = z.object({
     .refine(
       (value) => value === undefined || value.length === 0 || isSupportedLearnerDidMethod(value),
       {
-        message: 'did must use did:key, did:web, or did:ion',
+        message: "did must use did:key, did:web, or did:ion",
       },
     ),
 });
 
 export const presentationCreateRequestSchema = z
   .object({
-    holderDid: z.string().trim().min(1).max(2048).startsWith('did:'),
+    holderDid: z.string().trim().min(1).max(2048).startsWith("did:"),
     holderPrivateJwk: ed25519PrivateJwkSchema,
     credentialIds: z.array(resourceIdSchema).min(1).max(25),
   })
@@ -1004,8 +1004,8 @@ export const presentationCreateRequestSchema = z
     if (uniqueIds.size !== value.credentialIds.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['credentialIds'],
-        message: 'credentialIds must not contain duplicates',
+        path: ["credentialIds"],
+        message: "credentialIds must not contain duplicates",
       });
     }
   });
@@ -1018,7 +1018,7 @@ export const assertionLifecycleTransitionRequestSchema = z.object({
   toState: assertionLifecycleStateSchema,
   reasonCode: assertionLifecycleReasonCodeSchema,
   reason: z.string().trim().min(1).max(512).optional(),
-  transitionSource: assertionLifecycleTransitionSourceSchema.default('manual'),
+  transitionSource: assertionLifecycleTransitionSourceSchema.default("manual"),
   transitionedAt: isoTimestampSchema.optional(),
 });
 
@@ -1080,11 +1080,11 @@ export const migrationBatchUploadQuerySchema = z.object({
       return true;
     }
 
-    if (input === 'true') {
+    if (input === "true") {
       return true;
     }
 
-    if (input === 'false') {
+    if (input === "false") {
       return false;
     }
 
@@ -1093,19 +1093,22 @@ export const migrationBatchUploadQuerySchema = z.object({
 });
 
 export const migrationProgressQuerySchema = z.object({
-  source: z.preprocess((input) => {
-    if (input === undefined) {
-      return 'all';
-    }
+  source: z.preprocess(
+    (input) => {
+      if (input === undefined) {
+        return "all";
+      }
 
-    return input;
-  }, z.enum(['all', 'file_upload', 'credly_export', 'parchment_export'])),
+      return input;
+    },
+    z.enum(["all", "file_upload", "credly_export", "parchment_export"]),
+  ),
   limit: z.preprocess((input) => {
     if (input === undefined) {
       return 50;
     }
 
-    if (typeof input === 'string') {
+    if (typeof input === "string") {
       const parsed = Number.parseInt(input, 10);
 
       return Number.isFinite(parsed) ? parsed : input;
@@ -1116,7 +1119,7 @@ export const migrationProgressQuerySchema = z.object({
 });
 
 export const migrationBatchRetryRequestSchema = z.object({
-  source: z.enum(['file_upload', 'credly_export', 'parchment_export']).optional(),
+  source: z.enum(["file_upload", "credly_export", "parchment_export"]).optional(),
   rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
 });
 
@@ -1131,8 +1134,8 @@ export const ob2ImportConversionRequestSchema = z
     if (value.ob2Assertion === undefined && value.bakedBadgeImage === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['ob2Assertion'],
-        message: 'Either ob2Assertion or bakedBadgeImage is required',
+        path: ["ob2Assertion"],
+        message: "Either ob2Assertion or bakedBadgeImage is required",
       });
     }
   });
@@ -1156,34 +1159,34 @@ export const revokeBadgeJobPayloadSchema = z.object({
 });
 
 export const issueBadgeQueueJobSchema = z.object({
-  jobType: z.literal('issue_badge'),
+  jobType: z.literal("issue_badge"),
   tenantId: tenantIdSchema,
   payload: issueBadgeJobPayloadSchema,
   idempotencyKey: idempotencyKeySchema,
 });
 
 export const revokeBadgeQueueJobSchema = z.object({
-  jobType: z.literal('revoke_badge'),
+  jobType: z.literal("revoke_badge"),
   tenantId: tenantIdSchema,
   payload: revokeBadgeJobPayloadSchema,
   idempotencyKey: idempotencyKeySchema,
 });
 
 export const rebuildVerificationCacheQueueJobSchema = z.object({
-  jobType: z.literal('rebuild_verification_cache'),
+  jobType: z.literal("rebuild_verification_cache"),
   tenantId: tenantIdSchema,
   payload: z.record(z.string(), z.unknown()),
   idempotencyKey: idempotencyKeySchema,
 });
 
 export const importMigrationBatchQueueJobSchema = z.object({
-  jobType: z.literal('import_migration_batch'),
+  jobType: z.literal("import_migration_batch"),
   tenantId: tenantIdSchema,
   payload: z.record(z.string(), z.unknown()),
   idempotencyKey: idempotencyKeySchema,
 });
 
-export const queueJobSchema = z.discriminatedUnion('jobType', [
+export const queueJobSchema = z.discriminatedUnion("jobType", [
   issueBadgeQueueJobSchema,
   revokeBadgeQueueJobSchema,
   rebuildVerificationCacheQueueJobSchema,
@@ -1287,9 +1290,7 @@ export type TransferBadgeTemplateOwnershipRequest = z.infer<
 export type CreateTenantApiKeyRequest = z.infer<typeof createTenantApiKeyRequestSchema>;
 export type RevokeTenantApiKeyRequest = z.infer<typeof revokeTenantApiKeyRequestSchema>;
 export type UpsertTenantAuthPolicyRequest = z.infer<typeof upsertTenantAuthPolicyRequestSchema>;
-export type UpsertTenantAuthProviderRequest = z.infer<
-  typeof upsertTenantAuthProviderRequestSchema
->;
+export type UpsertTenantAuthProviderRequest = z.infer<typeof upsertTenantAuthProviderRequestSchema>;
 export type CreateTenantBreakGlassAccountRequest = z.infer<
   typeof createTenantBreakGlassAccountRequestSchema
 >;
@@ -1306,7 +1307,9 @@ export type AdminCanvasOAuthExchangeRequest = z.infer<typeof adminCanvasOAuthExc
 export type TenantCanvasGradebookSnapshotQuery = z.infer<
   typeof tenantCanvasGradebookSnapshotQuerySchema
 >;
-export type BadgeIssuanceRuleLmsProviderKind = z.infer<typeof badgeIssuanceRuleLmsProviderKindSchema>;
+export type BadgeIssuanceRuleLmsProviderKind = z.infer<
+  typeof badgeIssuanceRuleLmsProviderKindSchema
+>;
 export type BadgeIssuanceRuleValueListKind = z.infer<typeof badgeIssuanceRuleValueListKindSchema>;
 export type BadgeIssuanceRuleDefinition = z.infer<typeof badgeIssuanceRuleDefinitionSchema>;
 export type CreateBadgeIssuanceRuleRequest = z.infer<typeof createBadgeIssuanceRuleRequestSchema>;
@@ -1320,7 +1323,9 @@ export type DecideBadgeIssuanceRuleVersionRequest = z.infer<
   typeof decideBadgeIssuanceRuleVersionRequestSchema
 >;
 export type BadgeIssuanceRuleFacts = z.infer<typeof badgeIssuanceRuleFactsSchema>;
-export type EvaluateBadgeIssuanceRuleRequest = z.infer<typeof evaluateBadgeIssuanceRuleRequestSchema>;
+export type EvaluateBadgeIssuanceRuleRequest = z.infer<
+  typeof evaluateBadgeIssuanceRuleRequestSchema
+>;
 export type PreviewEvaluateBadgeIssuanceRuleRequest = z.infer<
   typeof previewEvaluateBadgeIssuanceRuleRequestSchema
 >;
@@ -1648,7 +1653,9 @@ export const parseBadgeIssuanceRuleVersionDiffQuery = (
   return badgeIssuanceRuleVersionDiffQuerySchema.parse(input);
 };
 
-export const parseBadgeIssuanceRuleAuditLogQuery = (input: unknown): BadgeIssuanceRuleAuditLogQuery => {
+export const parseBadgeIssuanceRuleAuditLogQuery = (
+  input: unknown,
+): BadgeIssuanceRuleAuditLogQuery => {
   return badgeIssuanceRuleAuditLogQuerySchema.parse(input);
 };
 

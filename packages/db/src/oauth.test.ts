@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
 import {
   consumeOAuthAuthorizationCode,
@@ -6,7 +6,7 @@ import {
   type SqlPreparedStatement,
   type SqlQueryResult,
   type SqlRunResult,
-} from './index';
+} from "./index";
 
 class FakeConsumeStatement implements SqlPreparedStatement {
   private boundParams: unknown[] = [];
@@ -28,11 +28,11 @@ class FakeConsumeStatement implements SqlPreparedStatement {
   }
 
   all<T>(): Promise<SqlQueryResult<T>> {
-    throw new Error('all() is not implemented in FakeConsumeStatement');
+    throw new Error("all() is not implemented in FakeConsumeStatement");
   }
 
   run(): Promise<SqlRunResult> {
-    throw new Error('run() is not implemented in FakeConsumeStatement');
+    throw new Error("run() is not implemented in FakeConsumeStatement");
   }
 }
 
@@ -57,30 +57,30 @@ class FakeOAuthConsumeDatabase implements SqlDatabase {
   }
 
   prepare(sql: string): SqlPreparedStatement {
-    this.observedSql.push(sql.replace(/\s+/g, ' ').trim());
+    this.observedSql.push(sql.replace(/\s+/g, " ").trim());
     return new FakeConsumeStatement(this, sql);
   }
 
   consumeOnce(sql: string, params: unknown[]): Record<string, unknown> | null {
-    const normalizedSql = sql.replace(/\s+/g, ' ').trim();
+    const normalizedSql = sql.replace(/\s+/g, " ").trim();
 
     if (
-      !normalizedSql.includes('UPDATE oauth_authorization_codes') ||
-      !normalizedSql.includes('RETURNING')
+      !normalizedSql.includes("UPDATE oauth_authorization_codes") ||
+      !normalizedSql.includes("RETURNING")
     ) {
-      throw new Error('Expected an atomic UPDATE ... RETURNING statement');
+      throw new Error("Expected an atomic UPDATE ... RETURNING statement");
     }
 
     const [usedAt, clientId, codeHash, redirectUri, nowIso] = params;
 
     if (
-      typeof usedAt !== 'string' ||
-      typeof clientId !== 'string' ||
-      typeof codeHash !== 'string' ||
-      typeof redirectUri !== 'string' ||
-      typeof nowIso !== 'string'
+      typeof usedAt !== "string" ||
+      typeof clientId !== "string" ||
+      typeof codeHash !== "string" ||
+      typeof redirectUri !== "string" ||
+      typeof nowIso !== "string"
     ) {
-      throw new Error('Invalid bind parameters for OAuth authorization code consumption');
+      throw new Error("Invalid bind parameters for OAuth authorization code consumption");
     }
 
     if (
@@ -97,35 +97,35 @@ class FakeOAuthConsumeDatabase implements SqlDatabase {
     this.consumed = true;
 
     return {
-      id: 'oac_123',
+      id: "oac_123",
       clientId: this.expectedClientId,
-      userId: 'usr_123',
-      tenantId: 'tenant_123',
+      userId: "usr_123",
+      tenantId: "tenant_123",
       codeHash: this.expectedCodeHash,
       redirectUri: this.expectedRedirectUri,
-      scope: 'https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly',
-      codeChallenge: 'abcdefghijabcdefghijabcdefghijabcdefghijabc',
-      codeChallengeMethod: 'S256',
+      scope: "https://purl.imsglobal.org/spec/ob/v3p0/scope/credential.readonly",
+      codeChallenge: "abcdefghijabcdefghijabcdefghijabcdefghijabc",
+      codeChallengeMethod: "S256",
       expiresAt: this.expiresAt,
       usedAt,
-      createdAt: '2026-02-11T20:00:00.000Z',
+      createdAt: "2026-02-11T20:00:00.000Z",
     };
   }
 }
 
-describe('consumeOAuthAuthorizationCode', () => {
-  it('consumes an authorization code once using a single atomic statement', async () => {
+describe("consumeOAuthAuthorizationCode", () => {
+  it("consumes an authorization code once using a single atomic statement", async () => {
     const input = {
-      clientId: 'oc_client_123',
-      codeHash: 'code-hash-123',
-      redirectUri: 'https://client.example/callback',
-      nowIso: '2026-02-11T20:01:00.000Z',
+      clientId: "oc_client_123",
+      codeHash: "code-hash-123",
+      redirectUri: "https://client.example/callback",
+      nowIso: "2026-02-11T20:01:00.000Z",
     };
     const db = new FakeOAuthConsumeDatabase({
       clientId: input.clientId,
       codeHash: input.codeHash,
       redirectUri: input.redirectUri,
-      expiresAt: '2026-02-11T20:05:00.000Z',
+      expiresAt: "2026-02-11T20:05:00.000Z",
     });
 
     const firstConsume = await consumeOAuthAuthorizationCode(db, input);
@@ -134,7 +134,9 @@ describe('consumeOAuthAuthorizationCode', () => {
     expect(firstConsume).not.toBeNull();
     expect(firstConsume?.usedAt).toBe(input.nowIso);
     expect(secondConsume).toBeNull();
-    expect(db.observedSql.some((sql) => sql.includes('UPDATE oauth_authorization_codes'))).toBe(true);
-    expect(db.observedSql.some((sql) => sql.includes('RETURNING'))).toBe(true);
+    expect(db.observedSql.some((sql) => sql.includes("UPDATE oauth_authorization_codes"))).toBe(
+      true,
+    );
+    expect(db.observedSql.some((sql) => sql.includes("RETURNING"))).toBe(true);
   });
 });

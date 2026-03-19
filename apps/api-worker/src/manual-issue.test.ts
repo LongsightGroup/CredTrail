@@ -1,24 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
+  mockedFindActiveSessionByHash,
+  mockedTouchSession,
 } = vi.hoisted(() => {
   return {
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
+    mockedFindActiveSessionByHash: vi.fn(),
+    mockedTouchSession: vi.fn(),
   };
 });
 
-vi.mock('@credtrail/db', async () => {
-  const actual = await vi.importActual<typeof import('@credtrail/db')>('@credtrail/db');
+vi.mock("@credtrail/db", async () => {
+  const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
   return {
     ...actual,
     createAssertion: vi.fn(),
     createAuditLog: vi.fn(),
     findActiveDelegatedIssuingAuthorityGrantForAction: vi.fn(),
-    findActiveSessionByHash: vi.fn(),
+    findActiveSessionByHash: mockedFindActiveSessionByHash,
     findAssertionByIdempotencyKey: vi.fn(),
     findBadgeTemplateById: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -30,21 +34,20 @@ vi.mock('@credtrail/db', async () => {
     nextAssertionStatusListIndex: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
-    touchSession: vi.fn(),
+    touchSession: mockedTouchSession,
   };
 });
 
-vi.mock('@credtrail/db/postgres', () => {
+vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
   };
 });
 
-vi.mock('./auth/better-auth-adapter', async () => {
-  const actual =
-    await vi.importActual<typeof import('./auth/better-auth-adapter')>(
-      './auth/better-auth-adapter',
-    );
+vi.mock("./auth/better-auth-adapter", async () => {
+  const actual = await vi.importActual<typeof import("./auth/better-auth-adapter")>(
+    "./auth/better-auth-adapter",
+  );
 
   return {
     ...actual,
@@ -63,12 +66,11 @@ import {
   type JsonObject,
   generateTenantDidSigningMaterial,
   signCredentialWithEd25519Signature2020,
-} from '@credtrail/core-domain';
+} from "@credtrail/core-domain";
 import {
   createAssertion,
   createAuditLog,
   findActiveDelegatedIssuingAuthorityGrantForAction,
-  findActiveSessionByHash,
   findAssertionByIdempotencyKey,
   findBadgeTemplateById,
   findTenantMembership,
@@ -80,7 +82,6 @@ import {
   nextAssertionStatusListIndex,
   resolveAssertionLifecycleState,
   resolveLearnerProfileForIdentity,
-  touchSession,
   type AssertionRecord,
   type AuditLogRecord,
   type BadgeTemplateRecord,
@@ -90,17 +91,17 @@ import {
   type SqlDatabase,
   type TenantMembershipRecord,
   type ResolveAssertionLifecycleStateResult,
-} from '@credtrail/db';
-import { createPostgresDatabase } from '@credtrail/db/postgres';
+} from "@credtrail/db";
+import { createPostgresDatabase } from "@credtrail/db/postgres";
 
-import { app } from './index';
+import { app } from "./index";
 
 interface ErrorResponse {
   error: string;
 }
 
 interface ManualIssueResponse {
-  status: 'issued' | 'already_issued';
+  status: "issued" | "already_issued";
   assertionId: string;
   tenantId: string;
   credential: JsonObject;
@@ -113,7 +114,6 @@ const mockedFindActiveDelegatedIssuingAuthorityGrantForAction = vi.mocked(
 );
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantSigningRegistrationByDid = vi.mocked(findTenantSigningRegistrationByDid);
-const mockedFindActiveSessionByHash = vi.mocked(findActiveSessionByHash);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgUnitAccess);
 const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
@@ -123,7 +123,6 @@ const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileFo
 const mockedCreateAssertion = vi.mocked(createAssertion);
 const mockedNextAssertionStatusListIndex = vi.mocked(nextAssertionStatusListIndex);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
-const mockedTouchSession = vi.mocked(touchSession);
 const mockedListLearnerIdentitiesByProfile = vi.mocked(listLearnerIdentitiesByProfile);
 const mockedCreateAuditLog = vi.mocked(createAuditLog);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -144,10 +143,10 @@ const createEnv = (): {
   LTI_STATE_SIGNING_SECRET?: string;
 } => {
   return {
-    APP_ENV: 'test',
-    DATABASE_URL: 'postgres://credtrail-test.local/db',
+    APP_ENV: "test",
+    DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
-    PLATFORM_DOMAIN: 'credtrail.test',
+    PLATFORM_DOMAIN: "credtrail.test",
   };
 };
 
@@ -157,17 +156,17 @@ beforeEach(() => {
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     async (context: { req: { header(name: string): string | undefined } }) => {
-      const cookieHeader = context.req.header('cookie') ?? '';
+      const cookieHeader = context.req.header("cookie") ?? "";
 
-      if (!cookieHeader.includes('better-auth.session_token=')) {
+      if (!cookieHeader.includes("better-auth.session_token=")) {
         return null;
       }
 
       return {
-        userId: 'usr_123',
-        authSessionId: 'ba_ses_123',
-        authMethod: 'better_auth' as const,
-        expiresAt: '2026-02-11T22:00:00.000Z',
+        userId: "usr_123",
+        authSessionId: "ba_ses_123",
+        authMethod: "better_auth" as const,
+        expiresAt: "2026-02-11T22:00:00.000Z",
       };
     },
   );
@@ -179,8 +178,8 @@ beforeEach(() => {
   mockedFindTenantSigningRegistrationByDid.mockResolvedValue(null);
   mockedFindUserById.mockReset();
   mockedFindUserById.mockResolvedValue({
-    id: 'usr_123',
-    email: 'learner@example.edu',
+    id: "usr_123",
+    email: "learner@example.edu",
   });
   mockedHasTenantMembershipOrgUnitAccess.mockReset();
   mockedHasTenantMembershipOrgUnitAccess.mockResolvedValue(false);
@@ -209,21 +208,21 @@ const sampleAssertion = (overrides?: {
   statusListIndex?: number | null;
 }): AssertionRecord => {
   return {
-    id: 'tenant_123:assertion_456',
-    tenantId: 'tenant_123',
-    publicId: '40a6dc92-85ec-4cb0-8a50-afb2ae700e22',
-    learnerProfileId: 'lpr_123',
-    badgeTemplateId: 'badge_template_001',
-    recipientIdentity: 'learner@example.edu',
-    recipientIdentityType: 'email',
-    vcR2Key: 'tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld',
+    id: "tenant_123:assertion_456",
+    tenantId: "tenant_123",
+    publicId: "40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+    learnerProfileId: "lpr_123",
+    badgeTemplateId: "badge_template_001",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
+    vcR2Key: "tenants/tenant_123/assertions/tenant_123%3Aassertion_456.jsonld",
     statusListIndex: overrides?.statusListIndex === undefined ? 0 : overrides.statusListIndex,
-    idempotencyKey: 'idem_abc',
-    issuedAt: '2026-02-10T22:00:00.000Z',
-    issuedByUserId: 'usr_123',
+    idempotencyKey: "idem_abc",
+    issuedAt: "2026-02-10T22:00:00.000Z",
+    issuedByUserId: "usr_123",
     revokedAt: overrides?.revokedAt ?? null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
@@ -231,8 +230,8 @@ const sampleLifecycle = (
   overrides?: Partial<ResolveAssertionLifecycleStateResult>,
 ): ResolveAssertionLifecycleStateResult => {
   return {
-    state: 'active',
-    source: 'default_active',
+    state: "active",
+    source: "default_active",
     reasonCode: null,
     reason: null,
     transitionedAt: null,
@@ -242,7 +241,7 @@ const sampleLifecycle = (
 };
 
 const asJsonObject = (value: unknown): JsonObject | null => {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
 
@@ -250,11 +249,11 @@ const asJsonObject = (value: unknown): JsonObject | null => {
 };
 
 const asString = (value: unknown): string | null => {
-  return typeof value === 'string' ? value : null;
+  return typeof value === "string" ? value : null;
 };
 
 const jsonObjectFromRequestInitBody = (init: RequestInit | undefined): JsonObject => {
-  if (typeof init?.body !== 'string') {
+  if (typeof init?.body !== "string") {
     return {};
   }
 
@@ -268,32 +267,32 @@ const jsonObjectFromRequestInitBody = (init: RequestInit | undefined): JsonObjec
 
 const sampleSession = (overrides?: { tenantId?: string; userId?: string }): SessionRecord => {
   return {
-    id: 'ses_123',
-    tenantId: overrides?.tenantId ?? 'tenant_123',
-    userId: overrides?.userId ?? 'usr_123',
-    sessionTokenHash: 'session-hash',
-    expiresAt: '2026-02-11T22:00:00.000Z',
-    lastSeenAt: '2026-02-10T22:00:00.000Z',
+    id: "ses_123",
+    tenantId: overrides?.tenantId ?? "tenant_123",
+    userId: overrides?.userId ?? "usr_123",
+    sessionTokenHash: "session-hash",
+    expiresAt: "2026-02-11T22:00:00.000Z",
+    lastSeenAt: "2026-02-10T22:00:00.000Z",
     revokedAt: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
   };
 };
 
 const sampleBadgeTemplate = (overrides?: Partial<BadgeTemplateRecord>): BadgeTemplateRecord => {
   return {
-    id: 'badge_template_001',
-    tenantId: 'tenant_123',
-    slug: 'typescript-foundations',
-    title: 'TypeScript Foundations',
-    description: 'Awarded for completing TS basics.',
+    id: "badge_template_001",
+    tenantId: "tenant_123",
+    slug: "typescript-foundations",
+    title: "TypeScript Foundations",
+    description: "Awarded for completing TS basics.",
     criteriaUri: null,
     imageUri: null,
-    createdByUserId: 'usr_issuer',
-    ownerOrgUnitId: 'tenant_123:org:institution',
+    createdByUserId: "usr_issuer",
+    ownerOrgUnitId: "tenant_123:org:institution",
     governanceMetadataJson: '{"stability":"institution_registry"}',
     isArchived: false,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -302,21 +301,21 @@ const sampleDelegatedIssuingAuthorityGrant = (
   overrides?: Partial<DelegatedIssuingAuthorityGrantRecord>,
 ): DelegatedIssuingAuthorityGrantRecord => {
   return {
-    id: 'dag_123',
-    tenantId: 'tenant_123',
-    delegateUserId: 'usr_delegate',
-    delegatedByUserId: 'usr_admin',
-    orgUnitId: 'tenant_123:org:department-math',
-    allowedActions: ['issue_badge'],
-    badgeTemplateIds: ['badge_template_001'],
-    startsAt: '2026-02-13T00:00:00.000Z',
-    endsAt: '2026-03-13T00:00:00.000Z',
+    id: "dag_123",
+    tenantId: "tenant_123",
+    delegateUserId: "usr_delegate",
+    delegatedByUserId: "usr_admin",
+    orgUnitId: "tenant_123:org:department-math",
+    allowedActions: ["issue_badge"],
+    badgeTemplateIds: ["badge_template_001"],
+    startsAt: "2026-02-13T00:00:00.000Z",
+    endsAt: "2026-03-13T00:00:00.000Z",
     revokedAt: null,
     revokedByUserId: null,
     revokedReason: null,
-    status: 'active',
-    createdAt: '2026-02-13T00:00:00.000Z',
-    updatedAt: '2026-02-13T00:00:00.000Z',
+    status: "active",
+    createdAt: "2026-02-13T00:00:00.000Z",
+    updatedAt: "2026-02-13T00:00:00.000Z",
     ...overrides,
   };
 };
@@ -325,38 +324,38 @@ const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
   return {
-    tenantId: 'tenant_123',
-    userId: 'usr_123',
-    role: 'issuer',
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    tenantId: "tenant_123",
+    userId: "usr_123",
+    role: "issuer",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogRecord => {
   return {
-    id: 'aud_123',
-    tenantId: 'tenant_123',
-    actorUserId: 'usr_123',
-    action: 'assertion.issued',
-    targetType: 'assertion',
-    targetId: 'tenant_123:assertion_456',
+    id: "aud_123",
+    tenantId: "tenant_123",
+    actorUserId: "usr_123",
+    action: "assertion.issued",
+    targetType: "assertion",
+    targetId: "tenant_123:assertion_456",
     metadataJson: null,
-    occurredAt: '2026-02-10T22:00:00.000Z',
-    createdAt: '2026-02-10T22:00:00.000Z',
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
 
 const sampleLearnerProfile = (overrides?: Partial<LearnerProfileRecord>): LearnerProfileRecord => {
   return {
-    id: 'lpr_123',
-    tenantId: 'tenant_123',
-    subjectId: 'urn:credtrail:learner:tenant_123:lpr_123',
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
     displayName: null,
-    createdAt: '2026-02-10T22:00:00.000Z',
-    updatedAt: '2026-02-10T22:00:00.000Z',
+    createdAt: "2026-02-10T22:00:00.000Z",
+    updatedAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -384,15 +383,15 @@ const createInMemoryBadgeObjects = (): R2Bucket => {
       });
     }),
     put: vi.fn((key: string, value: unknown) => {
-      if (typeof value !== 'string') {
-        throw new Error('Expected string value for R2 put in test bucket');
+      if (typeof value !== "string") {
+        throw new Error("Expected string value for R2 put in test bucket");
       }
 
       objects.set(key, value);
       return Promise.resolve({
         key,
-        etag: 'etag-test',
-        version: 'version-test',
+        etag: "etag-test",
+        version: "version-test",
         size: value.length,
         uploaded: new Date(),
       });
@@ -400,7 +399,7 @@ const createInMemoryBadgeObjects = (): R2Bucket => {
   } as unknown as R2Bucket;
 };
 
-describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
+describe("POST /v1/tenants/:tenantId/assertions/manual-issue", () => {
   beforeEach(() => {
     mockedFindActiveSessionByHash.mockReset();
     mockedFindTenantMembership.mockReset();
@@ -416,20 +415,20 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     mockedCreateAuditLog.mockResolvedValue(sampleAuditLogRecord());
   });
 
-  it('returns already_issued when idempotency key matches an active assertion', async () => {
+  it("returns already_issued when idempotency key matches an active assertion", async () => {
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
+      did: "did:web:credtrail.test:tenant_123",
     });
     const badgeObjects = createInMemoryBadgeObjects();
     const existingAssertion = sampleAssertion();
     await badgeObjects.put(
       existingAssertion.vcR2Key,
       JSON.stringify({
-        '@context': ['https://www.w3.org/ns/credentials/v2'],
-        type: ['VerifiableCredential', 'OpenBadgeCredential'],
-        id: 'urn:credtrail:assertion:tenant_123%3Aassertion_456',
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiableCredential", "OpenBadgeCredential"],
+        id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
         credentialSubject: {
-          id: 'urn:credtrail:learner:tenant_123:lpr_123',
+          id: "urn:credtrail:learner:tenant_123:lpr_123",
         },
       }),
     );
@@ -437,8 +436,8 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
       ...createEnv(),
       BADGE_OBJECTS: badgeObjects,
       TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          tenantId: 'tenant_123',
+        "did:web:credtrail.test:tenant_123": {
+          tenantId: "tenant_123",
           keyId: signingMaterial.keyId,
           publicJwk: signingMaterial.publicJwk,
           privateJwk: signingMaterial.privateJwk,
@@ -447,24 +446,24 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     };
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(existingAssertion);
     mockedResolveAssertionLifecycleState.mockResolvedValue(sampleLifecycle());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem_abc',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem_abc",
         }),
       },
       env,
@@ -472,45 +471,45 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const body = await response.json<ManualIssueResponse>();
 
     expect(response.status).toBe(200);
-    expect(body.status).toBe('already_issued');
+    expect(body.status).toBe("already_issued");
     expect(mockedResolveAssertionLifecycleState).toHaveBeenCalledWith(
       fakeDb,
-      'tenant_123',
+      "tenant_123",
       existingAssertion.id,
     );
     expect(mockedCreateAssertion).not.toHaveBeenCalled();
   });
 
-  it('returns 409 when idempotency key resolves to a suspended assertion', async () => {
+  it("returns 409 when idempotency key resolves to a suspended assertion", async () => {
     const existingAssertion = sampleAssertion();
     const env = createEnv();
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(existingAssertion);
     mockedResolveAssertionLifecycleState.mockResolvedValue(
       sampleLifecycle({
-        state: 'suspended',
-        source: 'lifecycle_event',
-        reasonCode: 'appeal_pending',
-        reason: 'Credential is suspended pending review.',
-        transitionedAt: '2026-02-18T00:00:00.000Z',
+        state: "suspended",
+        source: "lifecycle_event",
+        reasonCode: "appeal_pending",
+        reason: "Credential is suspended pending review.",
+        transitionedAt: "2026-02-18T00:00:00.000Z",
       }),
     );
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem_abc',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem_abc",
         }),
       },
       env,
@@ -518,21 +517,21 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(409);
-    expect(body.error).toContain('Issuance blocked by lifecycle policy');
-    expect(body.error).toContain('suspended');
+    expect(body.error).toContain("Issuance blocked by lifecycle policy");
+    expect(body.error).toContain("suspended");
     expect(mockedCreateAssertion).not.toHaveBeenCalled();
   });
 
-  it('uses stable learner subject identifiers across old and new recipient emails', async () => {
+  it("uses stable learner subject identifiers across old and new recipient emails", async () => {
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
+      did: "did:web:credtrail.test:tenant_123",
     });
     const env = {
       ...createEnv(),
       BADGE_OBJECTS: createInMemoryBadgeObjects(),
       TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          tenantId: 'tenant_123',
+        "did:web:credtrail.test:tenant_123": {
+          tenantId: "tenant_123",
           keyId: signingMaterial.keyId,
           publicJwk: signingMaterial.publicJwk,
           privateJwk: signingMaterial.privateJwk,
@@ -541,7 +540,7 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     };
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(null);
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
@@ -549,18 +548,18 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     mockedCreateAssertion.mockResolvedValue(sampleAssertion());
 
     const firstIssueResponse = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-1',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-1",
         }),
       },
       env,
@@ -568,18 +567,18 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const firstBody = await firstIssueResponse.json<ManualIssueResponse>();
 
     const secondIssueResponse = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@gmail.com',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-2',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@gmail.com",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-2",
         }),
       },
       env,
@@ -589,71 +588,71 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const firstSubjectId = asString(asJsonObject(firstBody.credential.credentialSubject)?.id);
     const secondSubjectId = asString(asJsonObject(secondBody.credential.credentialSubject)?.id);
     const firstIdentifierEntries = asJsonObject(firstBody.credential.credentialSubject)?.identifier;
-    const firstCredentialContexts = firstBody.credential['@context'];
+    const firstCredentialContexts = firstBody.credential["@context"];
     const firstIssuer = asJsonObject(firstBody.credential.issuer);
     const firstCredentialSubjectType = asJsonObject(firstBody.credential.credentialSubject)?.type;
 
     expect(firstIssueResponse.status).toBe(201);
     expect(secondIssueResponse.status).toBe(201);
-    expect(firstSubjectId).toBe('urn:credtrail:learner:tenant_123:lpr_123');
-    expect(secondSubjectId).toBe('urn:credtrail:learner:tenant_123:lpr_123');
+    expect(firstSubjectId).toBe("urn:credtrail:learner:tenant_123:lpr_123");
+    expect(secondSubjectId).toBe("urn:credtrail:learner:tenant_123:lpr_123");
     expect(Array.isArray(firstCredentialContexts)).toBe(true);
     expect(firstCredentialContexts).toEqual(
       expect.arrayContaining([
-        'https://www.w3.org/ns/credentials/v2',
-        'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
-        'https://www.w3.org/ns/credentials/status/v1',
-        'https://w3id.org/security/suites/ed25519-2020/v1',
+        "https://www.w3.org/ns/credentials/v2",
+        "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json",
+        "https://www.w3.org/ns/credentials/status/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1",
       ]),
     );
     expect(firstIssuer).toEqual(
       expect.objectContaining({
-        id: 'did:web:credtrail.test:tenant_123',
-        type: 'Profile',
+        id: "did:web:credtrail.test:tenant_123",
+        type: "Profile",
       }),
     );
     expect(Array.isArray(firstCredentialSubjectType)).toBe(true);
-    expect(firstCredentialSubjectType).toEqual(expect.arrayContaining(['AchievementSubject']));
+    expect(firstCredentialSubjectType).toEqual(expect.arrayContaining(["AchievementSubject"]));
     expect(Array.isArray(firstIdentifierEntries)).toBe(true);
     expect(firstIdentifierEntries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'IdentityObject',
-          identityType: 'ext:studentId',
-          identityHash: 'lpr_123',
+          type: "IdentityObject",
+          identityType: "ext:studentId",
+          identityHash: "lpr_123",
           hashed: false,
         }),
         expect.objectContaining({
-          type: 'IdentityObject',
-          identityType: 'emailAddress',
-          identityHash: 'student@umich.edu',
+          type: "IdentityObject",
+          identityType: "emailAddress",
+          identityHash: "student@umich.edu",
           hashed: false,
         }),
       ]),
     );
     expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(1, fakeDb, {
-      tenantId: 'tenant_123',
-      identityType: 'email',
-      identityValue: 'student@umich.edu',
+      tenantId: "tenant_123",
+      identityType: "email",
+      identityValue: "student@umich.edu",
     });
     expect(mockedResolveLearnerProfileForIdentity).toHaveBeenNthCalledWith(2, fakeDb, {
-      tenantId: 'tenant_123',
-      identityType: 'email',
-      identityValue: 'student@gmail.com',
+      tenantId: "tenant_123",
+      identityType: "email",
+      identityValue: "student@gmail.com",
     });
     expect(mockedCreateAssertion).toHaveBeenNthCalledWith(
       1,
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        learnerProfileId: 'lpr_123',
-        recipientIdentity: 'student@umich.edu',
+        tenantId: "tenant_123",
+        learnerProfileId: "lpr_123",
+        recipientIdentity: "student@umich.edu",
       }),
     );
     const firstCreateAssertionCall = mockedCreateAssertion.mock.calls.at(0);
 
     if (firstCreateAssertionCall === undefined) {
-      throw new Error('Expected first createAssertion call');
+      throw new Error("Expected first createAssertion call");
     }
 
     const firstCreateAssertionInput = firstCreateAssertionCall[1] as {
@@ -664,12 +663,12 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     expect(firstCreateAssertionInput.recipientIdentifiers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          identifierType: 'studentId',
-          identifierValue: 'lpr_123',
+          identifierType: "studentId",
+          identifierValue: "lpr_123",
         }),
         expect.objectContaining({
-          identifierType: 'emailAddress',
-          identifierValue: 'student@umich.edu',
+          identifierType: "emailAddress",
+          identifierValue: "student@umich.edu",
         }),
       ]),
     );
@@ -677,31 +676,31 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
       2,
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        learnerProfileId: 'lpr_123',
-        recipientIdentity: 'student@gmail.com',
+        tenantId: "tenant_123",
+        learnerProfileId: "lpr_123",
+        recipientIdentity: "student@gmail.com",
       }),
     );
     expect(mockedCreateAuditLog).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        action: 'assertion.issued',
-        targetType: 'assertion',
+        tenantId: "tenant_123",
+        action: "assertion.issued",
+        targetType: "assertion",
       }),
     );
   });
 
-  it('uses learner DID alias as credentialSubject.id when configured', async () => {
+  it("uses learner DID alias as credentialSubject.id when configured", async () => {
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
+      did: "did:web:credtrail.test:tenant_123",
     });
     const env = {
       ...createEnv(),
       BADGE_OBJECTS: createInMemoryBadgeObjects(),
       TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          tenantId: 'tenant_123',
+        "did:web:credtrail.test:tenant_123": {
+          tenantId: "tenant_123",
           keyId: signingMaterial.keyId,
           publicJwk: signingMaterial.publicJwk,
           privateJwk: signingMaterial.privateJwk,
@@ -710,39 +709,39 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     };
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(null);
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedListLearnerIdentitiesByProfile.mockResolvedValue([
       {
-        id: 'lid_did_subject_123',
-        tenantId: 'tenant_123',
-        learnerProfileId: 'lpr_123',
-        identityType: 'did',
-        identityValue: 'did:key:z6MkhLearnerSubjectDid',
+        id: "lid_did_subject_123",
+        tenantId: "tenant_123",
+        learnerProfileId: "lpr_123",
+        identityType: "did",
+        identityValue: "did:key:z6MkhLearnerSubjectDid",
         isPrimary: false,
         isVerified: true,
-        createdAt: '2026-02-10T22:00:00.000Z',
-        updatedAt: '2026-02-10T22:00:00.000Z',
+        createdAt: "2026-02-10T22:00:00.000Z",
+        updatedAt: "2026-02-10T22:00:00.000Z",
       },
     ]);
     mockedNextAssertionStatusListIndex.mockResolvedValue(0);
     mockedCreateAssertion.mockResolvedValue(sampleAssertion());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-did-subject',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-did-subject",
         }),
       },
       env,
@@ -751,15 +750,15 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const subjectId = asString(asJsonObject(body.credential.credentialSubject)?.id);
 
     expect(response.status).toBe(201);
-    expect(subjectId).toBe('did:key:z6MkhLearnerSubjectDid');
+    expect(subjectId).toBe("did:key:z6MkhLearnerSubjectDid");
   });
 
-  it('issues badges with remote signer custody when tenant private keys are not present in runtime', async () => {
+  it("issues badges with remote signer custody when tenant private keys are not present in runtime", async () => {
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
-      keyId: 'key-remote',
+      did: "did:web:credtrail.test:tenant_123",
+      keyId: "key-remote",
     });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const request = jsonObjectFromRequestInitBody(init);
       const unsignedCredential = asJsonObject(request.credential);
       const verificationMethod = asString(request.verificationMethod);
@@ -768,12 +767,12 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
       if (unsignedCredential === null || verificationMethod === null) {
         return new Response(
           JSON.stringify({
-            error: 'invalid signer request',
+            error: "invalid signer request",
           }),
           {
             status: 400,
             headers: {
-              'content-type': 'application/json',
+              "content-type": "application/json",
             },
           },
         );
@@ -793,7 +792,7 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
         {
           status: 200,
           headers: {
-            'content-type': 'application/json',
+            "content-type": "application/json",
           },
         },
       );
@@ -802,21 +801,21 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
       ...createEnv(),
       BADGE_OBJECTS: createInMemoryBadgeObjects(),
       TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          tenantId: 'tenant_123',
+        "did:web:credtrail.test:tenant_123": {
+          tenantId: "tenant_123",
           keyId: signingMaterial.keyId,
           publicJwk: signingMaterial.publicJwk,
         },
       }),
       TENANT_REMOTE_SIGNER_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          url: 'https://kms.credtrail.test/sign',
+        "did:web:credtrail.test:tenant_123": {
+          url: "https://kms.credtrail.test/sign",
         },
       }),
     };
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(null);
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
@@ -824,18 +823,18 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     mockedCreateAssertion.mockResolvedValue(sampleAssertion());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-remote-signer',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-remote-signer",
         }),
       },
       env,
@@ -845,21 +844,21 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     expect(response.status).toBe(201);
     expect(asJsonObject(body.credential.proof)).not.toBeNull();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://kms.credtrail.test/sign');
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://kms.credtrail.test/sign");
 
     fetchSpy.mockRestore();
   });
 
-  it('allows viewer role manual issuance when delegated authority grant is active', async () => {
+  it("allows viewer role manual issuance when delegated authority grant is active", async () => {
     const signingMaterial = await generateTenantDidSigningMaterial({
-      did: 'did:web:credtrail.test:tenant_123',
+      did: "did:web:credtrail.test:tenant_123",
     });
     const env = {
       ...createEnv(),
       BADGE_OBJECTS: createInMemoryBadgeObjects(),
       TENANT_SIGNING_REGISTRY_JSON: JSON.stringify({
-        'did:web:credtrail.test:tenant_123': {
-          tenantId: 'tenant_123',
+        "did:web:credtrail.test:tenant_123": {
+          tenantId: "tenant_123",
           keyId: signingMaterial.keyId,
           publicJwk: signingMaterial.publicJwk,
           privateJwk: signingMaterial.privateJwk,
@@ -870,16 +869,16 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
     mockedFindTenantMembership.mockResolvedValue(
       sampleTenantMembership({
-        role: 'viewer',
+        role: "viewer",
       }),
     );
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
     mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockResolvedValue(
       sampleDelegatedIssuingAuthorityGrant({
-        delegateUserId: 'usr_123',
-        allowedActions: ['issue_badge'],
-        badgeTemplateIds: ['badge_template_001'],
+        delegateUserId: "usr_123",
+        allowedActions: ["issue_badge"],
+        badgeTemplateIds: ["badge_template_001"],
       }),
     );
     mockedFindAssertionByIdempotencyKey.mockResolvedValue(null);
@@ -888,18 +887,18 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     mockedCreateAssertion.mockResolvedValue(sampleAssertion());
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-viewer-grant',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-viewer-grant",
         }),
       },
       env,
@@ -909,39 +908,39 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     expect(mockedFindActiveDelegatedIssuingAuthorityGrantForAction).toHaveBeenCalledWith(
       fakeDb,
       expect.objectContaining({
-        tenantId: 'tenant_123',
-        userId: 'usr_123',
-        requiredAction: 'issue_badge',
-        badgeTemplateId: 'badge_template_001',
+        tenantId: "tenant_123",
+        userId: "usr_123",
+        requiredAction: "issue_badge",
+        badgeTemplateId: "badge_template_001",
       }),
     );
     expect(mockedCreateAssertion).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 403 when role is viewer for manual issuance', async () => {
+  it("returns 403 when role is viewer for manual issuance", async () => {
     const env = createEnv();
 
     mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
     mockedFindTenantMembership.mockResolvedValue(
       sampleTenantMembership({
-        role: 'viewer',
+        role: "viewer",
       }),
     );
-    mockedTouchSession.mockResolvedValue();
+    mockedTouchSession.mockResolvedValue(undefined);
 
     const response = await app.request(
-      '/v1/tenants/tenant_123/assertions/manual-issue',
+      "/v1/tenants/tenant_123/assertions/manual-issue",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Cookie: 'better-auth.session_token=session-token',
+          "Content-Type": "application/json",
+          Cookie: "better-auth.session_token=session-token",
         },
         body: JSON.stringify({
-          badgeTemplateId: 'badge_template_001',
-          recipientIdentity: 'student@umich.edu',
-          recipientIdentityType: 'email',
-          idempotencyKey: 'idem-viewer',
+          badgeTemplateId: "badge_template_001",
+          recipientIdentity: "student@umich.edu",
+          recipientIdentityType: "email",
+          idempotencyKey: "idem-viewer",
         }),
       },
       env,
@@ -949,7 +948,7 @@ describe('POST /v1/tenants/:tenantId/assertions/manual-issue', () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe('Insufficient role for requested action');
+    expect(body.error).toBe("Insufficient role for requested action");
     expect(mockedCreateAssertion).not.toHaveBeenCalled();
   });
 });

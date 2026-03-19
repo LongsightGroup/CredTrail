@@ -1,9 +1,14 @@
-import { captureSentryException, logError, logInfo, type ObservabilityContext } from '@credtrail/core-domain';
-import type { Hono } from 'hono';
-import type { AppBindings, AppEnv } from '../app';
-import { createR2ImmutableCredentialStore } from '../storage/r2-immutable-credential-store';
+import {
+  captureSentryException,
+  logError,
+  logInfo,
+  type ObservabilityContext,
+} from "@credtrail/core-domain";
+import type { Hono } from "hono";
+import type { AppBindings, AppEnv } from "../app";
+import { createR2ImmutableCredentialStore } from "../storage/r2-immutable-credential-store";
 
-export interface WorkerRuntimeBindings extends Omit<AppBindings, 'BADGE_OBJECTS'> {
+export interface WorkerRuntimeBindings extends Omit<AppBindings, "BADGE_OBJECTS"> {
   BADGE_OBJECTS: R2Bucket;
 }
 
@@ -13,7 +18,9 @@ interface CreateApiWorkerInput {
   observabilityContext: (bindings: AppBindings) => ObservabilityContext;
 }
 
-export const createApiWorker = (input: CreateApiWorkerInput): ExportedHandler<WorkerRuntimeBindings> => {
+export const createApiWorker = (
+  input: CreateApiWorkerInput,
+): ExportedHandler<WorkerRuntimeBindings> => {
   const { app, queueProcessorRequestFromSchedule, observabilityContext } = input;
   const appBindingsFromRuntime = (env: WorkerRuntimeBindings): AppBindings => {
     return {
@@ -37,8 +44,8 @@ export const createApiWorker = (input: CreateApiWorkerInput): ExportedHandler<Wo
         await captureSentryException({
           context: observabilityContext(appBindings),
           dsn: appBindings.SENTRY_DSN,
-          error: new Error('Scheduled queue processing failed'),
-          message: 'Scheduled queue processing failed',
+          error: new Error("Scheduled queue processing failed"),
+          message: "Scheduled queue processing failed",
           extra: {
             cron: event.cron,
             status: response.status,
@@ -46,7 +53,7 @@ export const createApiWorker = (input: CreateApiWorkerInput): ExportedHandler<Wo
           },
         });
 
-        logError(observabilityContext(appBindings), 'scheduled_queue_processing_failed', {
+        logError(observabilityContext(appBindings), "scheduled_queue_processing_failed", {
           cron: event.cron,
           status: response.status,
           responseBody,
@@ -54,7 +61,7 @@ export const createApiWorker = (input: CreateApiWorkerInput): ExportedHandler<Wo
         return;
       }
 
-      logInfo(observabilityContext(appBindings), 'scheduled_queue_processing_succeeded', {
+      logInfo(observabilityContext(appBindings), "scheduled_queue_processing_succeeded", {
         cron: event.cron,
         status: response.status,
         responseBody,

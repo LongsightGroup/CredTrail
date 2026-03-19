@@ -6,16 +6,16 @@ const copySetCookieHeaders = (source: Headers, target: Headers): void => {
 
   if (Array.isArray(setCookies) && setCookies.length > 0) {
     for (const cookie of setCookies) {
-      target.append('set-cookie', cookie);
+      target.append("set-cookie", cookie);
     }
 
     return;
   }
 
-  const singleCookieHeader = source.get('set-cookie');
+  const singleCookieHeader = source.get("set-cookie");
 
   if (singleCookieHeader !== null) {
-    target.append('set-cookie', singleCookieHeader);
+    target.append("set-cookie", singleCookieHeader);
   }
 };
 
@@ -34,7 +34,7 @@ const appendSetCookieHeaders = <
 
   if (Array.isArray(setCookies) && setCookies.length > 0) {
     for (const cookie of setCookies) {
-      context.header('set-cookie', cookie, {
+      context.header("set-cookie", cookie, {
         append: true,
       });
     }
@@ -42,10 +42,10 @@ const appendSetCookieHeaders = <
     return;
   }
 
-  const singleCookieHeader = source.get('set-cookie');
+  const singleCookieHeader = source.get("set-cookie");
 
   if (singleCookieHeader !== null) {
-    context.header('set-cookie', singleCookieHeader, {
+    context.header("set-cookie", singleCookieHeader, {
       append: true,
     });
   }
@@ -61,11 +61,11 @@ export const mergeBetterAuthHeaders = (
   for (const [key, value] of sourceHeaders.entries()) {
     const normalizedKey = key.toLowerCase();
 
-    if (normalizedKey === 'set-cookie' || normalizedKey === 'content-length') {
+    if (normalizedKey === "set-cookie" || normalizedKey === "content-length") {
       continue;
     }
 
-    if (!options?.preserveContentType && normalizedKey === 'content-type') {
+    if (!options?.preserveContentType && normalizedKey === "content-type") {
       continue;
     }
 
@@ -88,8 +88,8 @@ export const buildBetterAuthRouteResponse = (
   const headers = mergeBetterAuthHeaders(new Headers(init.headers), betterAuthResponse.headers);
   const status = init.status ?? betterAuthResponse.status;
 
-  if (Object.prototype.hasOwnProperty.call(init, 'json')) {
-    headers.set('content-type', 'application/json; charset=utf-8');
+  if (Object.prototype.hasOwnProperty.call(init, "json")) {
+    headers.set("content-type", "application/json; charset=utf-8");
 
     return new Response(JSON.stringify(init.json), {
       status,
@@ -117,11 +117,11 @@ export const applyBetterAuthResponseHeaders = <
   for (const [key, value] of betterAuthResponse.headers.entries()) {
     const normalizedKey = key.toLowerCase();
 
-    if (normalizedKey === 'set-cookie' || normalizedKey === 'content-length') {
+    if (normalizedKey === "set-cookie" || normalizedKey === "content-length") {
       continue;
     }
 
-    if (!options?.preserveContentType && normalizedKey === 'content-type') {
+    if (!options?.preserveContentType && normalizedKey === "content-type") {
       continue;
     }
 

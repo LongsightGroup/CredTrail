@@ -1,4 +1,4 @@
-import type { JsonObject } from './index';
+import type { JsonObject } from "./index";
 
 export interface ImmutableCredentialObjectIds {
   tenantId: string;
@@ -49,14 +49,14 @@ export interface ImmutableCredentialStore {
   delete(key: string): Promise<void>;
 }
 
-const VC_OBJECT_CONTENT_TYPE = 'application/ld+json';
-const VC_OBJECT_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const VC_OBJECT_CONTENT_TYPE = "application/ld+json";
+const VC_OBJECT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 const encodePathSegment = (value: string): string => {
   const trimmed = value.trim();
 
   if (trimmed.length === 0) {
-    throw new Error('Object storage path segments must not be empty');
+    throw new Error("Object storage path segments must not be empty");
   }
 
   return encodeURIComponent(trimmed);
@@ -65,8 +65,8 @@ const encodePathSegment = (value: string): string => {
 const parseJsonObject = (serialized: string): JsonObject => {
   const parsed = JSON.parse(serialized) as unknown;
 
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Stored credential object is not a JSON object');
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Stored credential object is not a JSON object");
   }
 
   return parsed as JsonObject;
@@ -95,8 +95,8 @@ export const storeImmutableCredentialObject = async (
     customMetadata: {
       tenantId: input.tenantId,
       assertionId: input.assertionId,
-      artifactType: 'open-badges-3-vc',
-      storagePolicy: 'immutable',
+      artifactType: "open-badges-3-vc",
+      storagePolicy: "immutable",
     },
   });
 

@@ -1,4 +1,4 @@
-import { asJsonObject, asNonEmptyString, asString } from '../utils/value-parsers';
+import { asJsonObject, asNonEmptyString, asString } from "../utils/value-parsers";
 import type {
   GradebookAssignmentRecord,
   GradebookCompletionRecord,
@@ -8,7 +8,7 @@ import type {
   GradebookProvider,
   GradebookSubmissionRecord,
   SakaiGradebookProviderConfig,
-} from './gradebook-types';
+} from "./gradebook-types";
 
 interface CreateSakaiGradebookProviderInput {
   config: SakaiGradebookProviderConfig;
@@ -53,12 +53,12 @@ interface SakaiGradebookMatrixStudent {
 }
 
 const asIdentifier = (value: unknown): string | null => {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length === 0 ? null : trimmed;
   }
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value.toString();
   }
 
@@ -66,11 +66,11 @@ const asIdentifier = (value: unknown): string | null => {
 };
 
 const asNumber = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -79,7 +79,7 @@ const asNumber = (value: unknown): number | null => {
 };
 
 const asBoolean = (value: unknown): boolean | null => {
-  return typeof value === 'boolean' ? value : null;
+  return typeof value === "boolean" ? value : null;
 };
 
 const asJsonArray = (value: unknown): readonly unknown[] | null => {
@@ -102,14 +102,14 @@ const ensureHttpBaseUrl = (candidate: string): URL => {
   try {
     parsed = new URL(candidate);
   } catch {
-    throw new Error('Gradebook provider apiBaseUrl must be a valid absolute URL');
+    throw new Error("Gradebook provider apiBaseUrl must be a valid absolute URL");
   }
 
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('Gradebook provider apiBaseUrl must use http or https');
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Gradebook provider apiBaseUrl must use http or https");
   }
 
-  if (!parsed.pathname.endsWith('/')) {
+  if (!parsed.pathname.endsWith("/")) {
     parsed.pathname = `${parsed.pathname}/`;
   }
 
@@ -196,7 +196,13 @@ const parseMatrixStudentGrade = (candidate: unknown): SakaiGradebookMatrixStuden
   return {
     grade: parsedGrade,
     workflowState:
-      excused === true ? 'excused' : gradeReleased === false ? 'hidden' : parsedGrade === null ? null : 'graded',
+      excused === true
+        ? "excused"
+        : gradeReleased === false
+          ? "hidden"
+          : parsedGrade === null
+            ? null
+            : "graded",
     recordedAt,
     excused,
   };
@@ -210,7 +216,9 @@ const parseMatrixStudent = (candidate: unknown): SakaiGradebookMatrixStudent | n
   }
 
   const learnerId =
-    asIdentifier(student.userId) ?? asIdentifier(student.userEid) ?? asIdentifier(student.userDisplayId);
+    asIdentifier(student.userId) ??
+    asIdentifier(student.userEid) ??
+    asIdentifier(student.userDisplayId);
 
   if (learnerId === null) {
     return null;
@@ -241,7 +249,7 @@ const parseSakaiGradebookMatrix = (courseId: string, candidate: unknown): SakaiG
   const root = asJsonObject(candidate);
 
   if (root === null) {
-    throw new Error('Sakai gradebook API response must be a JSON object');
+    throw new Error("Sakai gradebook API response must be a JSON object");
   }
 
   const siteId = asIdentifier(root.siteId) ?? courseId;
@@ -301,11 +309,11 @@ export const createSakaiGradebookProvider = (
     }
 
     const response = await fetchImpl(requestUrl.toString(), {
-      method: 'GET',
+      method: "GET",
       headers: {
         authorization: `Bearer ${config.accessToken}`,
         cookie: `JSESSIONID=${config.accessToken}`,
-        accept: 'application/json',
+        accept: "application/json",
       },
     });
 
@@ -325,17 +333,17 @@ export const createSakaiGradebookProvider = (
       return cached;
     }
 
-    const request = requestJson(`/api/sites/${encodeURIComponent(courseId)}/grading/full-gradebook`).then(
-      (body) => parseSakaiGradebookMatrix(courseId, body),
-    );
+    const request = requestJson(
+      `/api/sites/${encodeURIComponent(courseId)}/grading/full-gradebook`,
+    ).then((body) => parseSakaiGradebookMatrix(courseId, body));
     matrixRequestCache.set(courseId, request);
     return request;
   };
 
   return {
-    kind: 'sakai',
+    kind: "sakai",
     listCourses: async (): Promise<readonly GradebookCourseRecord[]> => {
-      const payload = await requestJson('/api/users/me/sites');
+      const payload = await requestJson("/api/users/me/sites");
       const parsedPayload = asJsonObject(payload);
       const candidates = asJsonArray(parsedPayload?.sites ?? payload) ?? [];
       const courses = candidates
@@ -349,7 +357,7 @@ export const createSakaiGradebookProvider = (
         assignmentId: column.id,
         courseId: matrix.siteId,
         title: column.name,
-        workflowState: column.released === false ? 'unpublished' : 'published',
+        workflowState: column.released === false ? "unpublished" : "published",
         pointsPossible: column.points,
         dueAt: column.dueDate,
       }));
@@ -362,8 +370,8 @@ export const createSakaiGradebookProvider = (
         .map((student) => ({
           courseId: matrix.siteId,
           learnerId: student.learnerId,
-          enrollmentState: 'active',
-          role: 'StudentEnrollment',
+          enrollmentState: "active",
+          role: "StudentEnrollment",
           startedAt: null,
           lastActivityAt: null,
         }));
@@ -410,8 +418,10 @@ export const createSakaiGradebookProvider = (
             learnerId: student.learnerId,
             currentScore: percentScore,
             finalScore: percentScore,
-            currentGrade: student.courseGrade?.mappedGrade ?? student.courseGrade?.displayGrade ?? null,
-            finalGrade: student.courseGrade?.mappedGrade ?? student.courseGrade?.displayGrade ?? null,
+            currentGrade:
+              student.courseGrade?.mappedGrade ?? student.courseGrade?.displayGrade ?? null,
+            finalGrade:
+              student.courseGrade?.mappedGrade ?? student.courseGrade?.displayGrade ?? null,
           };
         });
     },
@@ -429,7 +439,7 @@ export const createSakaiGradebookProvider = (
             completed,
             completedAt: completed ? null : null,
             completionPercent: percentScore,
-            sourceState: completed ? 'graded' : null,
+            sourceState: completed ? "graded" : null,
           };
         });
     },
