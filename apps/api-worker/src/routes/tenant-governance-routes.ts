@@ -35,7 +35,6 @@ import {
   updateTenantAuthProvider,
   upsertTenantBreakGlassAccount,
   upsertTenantAuthPolicy,
-  upsertTenantSsoSamlConfiguration,
   upsertTenantMembershipOrgUnitScope,
   upsertUserByEmail,
   type SessionRecord,
@@ -68,8 +67,13 @@ import { renderPageShell } from '@credtrail/ui-components';
 import type { AppBindings, AppContext, AppEnv } from '../app';
 import {
   institutionAdminAccessPage,
+  institutionAdminApiKeysPage,
+  institutionAdminBadgeStatusPage,
   institutionAdminDashboardPage,
+  institutionAdminIssuedBadgesPage,
+  institutionAdminOperationsReviewQueuePage,
   institutionAdminOperationsPage,
+  institutionAdminOrgUnitsPage,
   institutionAdminRulesPage,
 } from '../admin/institution-admin-page';
 import { institutionAdminRuleBuilderPage } from '../admin/institution-admin-rule-builder-page';
@@ -310,24 +314,24 @@ export const registerTenantGovernanceRoutes = (
     };
   };
 
-  app.get('/tenants/:tenantId/admin', async (c) => {
-    const pathParams = parseTenantPathParams(c.req.param());
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+  const renderInstitutionAdminWorkspace = async (
+    c: AppContext,
+    tenantId: string,
+    nextPath: string,
+    renderPage: (pageData: Parameters<typeof institutionAdminDashboardPage>[0]) => string,
+  ): Promise<Response> => {
+    const roleCheck = await requireTenantRole(c, tenantId, ADMIN_ROLES);
 
     if (roleCheck instanceof Response) {
       if (roleCheck.status === 401) {
-        return redirectToTenantLogin(
-          c,
-          pathParams.tenantId,
-          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
-        );
+        return redirectToTenantLogin(c, tenantId, nextPath);
       }
 
       if (roleCheck.status === 423) {
         return c.redirect(
           buildLocalTwoFactorPath({
-            tenantId: pathParams.tenantId,
-            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
+            tenantId,
+            nextPath,
             setup: true,
             reason: 'break_glass_mfa_setup_pending',
           }),
@@ -337,19 +341,14 @@ export const registerTenantGovernanceRoutes = (
 
       if (roleCheck.status === 403) {
         c.header('Cache-Control', 'no-store');
-        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+        return c.html(adminRoleRequiredPage(tenantId), 403);
       }
 
       return roleCheck;
     }
 
     const { session, membershipRole } = roleCheck;
-    const pageData = await loadInstitutionAdminPageData(
-      c,
-      pathParams.tenantId,
-      session.userId,
-      membershipRole,
-    );
+    const pageData = await loadInstitutionAdminPageData(c, tenantId, session.userId, membershipRole);
 
     if (pageData instanceof Response) {
       return pageData;
@@ -357,157 +356,97 @@ export const registerTenantGovernanceRoutes = (
 
     c.header('Cache-Control', 'no-store');
 
-    return c.html(institutionAdminDashboardPage(pageData));
+    return c.html(renderPage(pageData));
+  };
+
+  app.get('/tenants/:tenantId/admin', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin`,
+      institutionAdminDashboardPage,
+    );
   });
 
   app.get('/tenants/:tenantId/admin/operations', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
-
-    if (roleCheck instanceof Response) {
-      if (roleCheck.status === 401) {
-        return redirectToTenantLogin(
-          c,
-          pathParams.tenantId,
-          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations`,
-        );
-      }
-
-      if (roleCheck.status === 423) {
-        return c.redirect(
-          buildLocalTwoFactorPath({
-            tenantId: pathParams.tenantId,
-            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations`,
-            setup: true,
-            reason: 'break_glass_mfa_setup_pending',
-          }),
-          302,
-        );
-      }
-
-      if (roleCheck.status === 403) {
-        c.header('Cache-Control', 'no-store');
-        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
-      }
-
-      return roleCheck;
-    }
-
-    const { session, membershipRole } = roleCheck;
-    const pageData = await loadInstitutionAdminPageData(
+    return renderInstitutionAdminWorkspace(
       c,
       pathParams.tenantId,
-      session.userId,
-      membershipRole,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations`,
+      institutionAdminOperationsPage,
     );
+  });
 
-    if (pageData instanceof Response) {
-      return pageData;
-    }
+  app.get('/tenants/:tenantId/admin/operations/review-queue', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/review-queue`,
+      institutionAdminOperationsReviewQueuePage,
+    );
+  });
 
-    c.header('Cache-Control', 'no-store');
+  app.get('/tenants/:tenantId/admin/operations/issued-badges', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/issued-badges`,
+      institutionAdminIssuedBadgesPage,
+    );
+  });
 
-    return c.html(institutionAdminOperationsPage(pageData));
+  app.get('/tenants/:tenantId/admin/operations/badge-status', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/badge-status`,
+      institutionAdminBadgeStatusPage,
+    );
   });
 
   app.get('/tenants/:tenantId/admin/rules', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
-
-    if (roleCheck instanceof Response) {
-      if (roleCheck.status === 401) {
-        return redirectToTenantLogin(
-          c,
-          pathParams.tenantId,
-          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/rules`,
-        );
-      }
-
-      if (roleCheck.status === 423) {
-        return c.redirect(
-          buildLocalTwoFactorPath({
-            tenantId: pathParams.tenantId,
-            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/rules`,
-            setup: true,
-            reason: 'break_glass_mfa_setup_pending',
-          }),
-          302,
-        );
-      }
-
-      if (roleCheck.status === 403) {
-        c.header('Cache-Control', 'no-store');
-        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
-      }
-
-      return roleCheck;
-    }
-
-    const { session, membershipRole } = roleCheck;
-    const pageData = await loadInstitutionAdminPageData(
+    return renderInstitutionAdminWorkspace(
       c,
       pathParams.tenantId,
-      session.userId,
-      membershipRole,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/rules`,
+      institutionAdminRulesPage,
     );
-
-    if (pageData instanceof Response) {
-      return pageData;
-    }
-
-    c.header('Cache-Control', 'no-store');
-
-    return c.html(institutionAdminRulesPage(pageData));
   });
 
   app.get('/tenants/:tenantId/admin/access', async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
-    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
-
-    if (roleCheck instanceof Response) {
-      if (roleCheck.status === 401) {
-        return redirectToTenantLogin(
-          c,
-          pathParams.tenantId,
-          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access`,
-        );
-      }
-
-      if (roleCheck.status === 423) {
-        return c.redirect(
-          buildLocalTwoFactorPath({
-            tenantId: pathParams.tenantId,
-            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access`,
-            setup: true,
-            reason: 'break_glass_mfa_setup_pending',
-          }),
-          302,
-        );
-      }
-
-      if (roleCheck.status === 403) {
-        c.header('Cache-Control', 'no-store');
-        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
-      }
-
-      return roleCheck;
-    }
-
-    const { session, membershipRole } = roleCheck;
-    const pageData = await loadInstitutionAdminPageData(
+    return renderInstitutionAdminWorkspace(
       c,
       pathParams.tenantId,
-      session.userId,
-      membershipRole,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access`,
+      institutionAdminAccessPage,
     );
+  });
 
-    if (pageData instanceof Response) {
-      return pageData;
-    }
+  app.get('/tenants/:tenantId/admin/access/api-keys', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access/api-keys`,
+      institutionAdminApiKeysPage,
+    );
+  });
 
-    c.header('Cache-Control', 'no-store');
-
-    return c.html(institutionAdminAccessPage(pageData));
+  app.get('/tenants/:tenantId/admin/access/org-units', async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    return renderInstitutionAdminWorkspace(
+      c,
+      pathParams.tenantId,
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/access/org-units`,
+      institutionAdminOrgUnitsPage,
+    );
   });
 
   app.get('/tenants/:tenantId/admin/rules/new', async (c) => {

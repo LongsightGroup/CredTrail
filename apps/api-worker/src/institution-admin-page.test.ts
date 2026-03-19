@@ -529,14 +529,91 @@ describe('GET /tenants/:tenantId/admin/operations', () => {
     expect(body).toContain('>Operations<');
     expect(body).toContain('Manual Issue Badge');
     expect(body).toContain('id="manual-issue-form"');
-    expect(body).toContain('Credential Lifecycle');
-    expect(body).toContain('id="assertion-lifecycle-view-form"');
     expect(body).toContain('Rule Review Queue');
-    expect(body).toContain('id="rule-review-queue-refresh"');
-    expect(body).toContain('Issued Badges Ledger');
-    expect(body).toContain('id="issued-badges-filter-form"');
+    expect(body).toContain('Issued Badges');
+    expect(body).toContain('Badge Status');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations/review-queue"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations/issued-badges"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations/badge-status"');
+    expect(body).not.toContain('id="assertion-lifecycle-view-form"');
+    expect(body).not.toContain('id="rule-review-queue-refresh"');
+    expect(body).not.toContain('id="issued-badges-filter-form"');
     expect(body).not.toContain('Create Tenant API Key');
     expect(body).not.toContain('Rule Value Lists');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/operations/review-queue', () => {
+  it('renders the rule review queue on its own page', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/operations/review-queue',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('>Operations<');
+    expect(body).toContain('Rule Review Queue');
+    expect(body).toContain('id="rule-review-queue-refresh"');
+    expect(body).not.toContain('id="manual-issue-form"');
+    expect(body).not.toContain('id="issued-badges-filter-form"');
+    expect(body).not.toContain('id="assertion-lifecycle-view-form"');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/operations/issued-badges', () => {
+  it('renders the issued badges ledger on its own page', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/operations/issued-badges',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Issued Badges');
+    expect(body).toContain('id="issued-badges-filter-form"');
+    expect(body).not.toContain('id="manual-issue-form"');
+    expect(body).not.toContain('id="rule-review-queue-refresh"');
+    expect(body).not.toContain('id="assertion-lifecycle-view-form"');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/operations/badge-status', () => {
+  it('renders badge status on its own page', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/operations/badge-status',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Badge Status');
+    expect(body).toContain('id="assertion-lifecycle-view-form"');
+    expect(body).not.toContain('Credential Lifecycle');
+    expect(body).not.toContain('id="manual-issue-form"');
+    expect(body).not.toContain('id="rule-review-queue-refresh"');
+    expect(body).not.toContain('id="issued-badges-filter-form"');
   });
 });
 
@@ -592,14 +669,14 @@ describe('GET /tenants/:tenantId/admin/access', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(body).toContain('>Access<');
-    expect(body).toContain('Create Tenant API Key');
-    expect(body).toContain('id="api-key-form"');
-    expect(body).toContain('Create Org Unit');
-    expect(body).toContain('id="org-unit-form"');
     expect(body).toContain('Governance Delegation');
     expect(body).toContain('id="membership-scope-form"');
-    expect(body).toContain('Active API Keys (1)');
-    expect(body).toContain('Org Units (1)');
+    expect(body).toContain('Open API keys');
+    expect(body).toContain('Open org units');
+    expect(body).toContain('href="/tenants/tenant_123/admin/access/api-keys"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/access/org-units"');
+    expect(body).not.toContain('id="api-key-form"');
+    expect(body).not.toContain('id="org-unit-form"');
     expect(body).not.toContain('Manual Issue Badge');
     expect(body).not.toContain('Rule Value Lists');
   });
@@ -635,6 +712,8 @@ describe('GET /tenants/:tenantId/admin/access', () => {
     expect(body).toContain('Campus OIDC');
     expect(body).toContain('Hosted enterprise sign-in supports OIDC providers.');
     expect(body).toContain('Legacy SAML compatibility');
+    expect(body).toContain('Open API keys');
+    expect(body).toContain('Open org units');
     expect(body).not.toContain('OIDC or SAML connection metadata');
     expect(body).not.toContain('name="enforceForRoles"');
     expect(body).not.toContain('<option value="saml">');
@@ -645,6 +724,54 @@ describe('GET /tenants/:tenantId/admin/access', () => {
     expect(body).toContain('/v1/tenants/tenant_123/break-glass-accounts');
     expect(body).toContain('/v1/tenants/tenant_123/auth-policy');
     expect(body).toContain('/v1/tenants/tenant_123/auth-providers');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/access/api-keys', () => {
+  it('renders API keys on a dedicated page', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/access/api-keys',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('API Keys');
+    expect(body).toContain('id="api-key-form"');
+    expect(body).toContain('Active API Keys (1)');
+    expect(body).not.toContain('id="org-unit-form"');
+    expect(body).not.toContain('id="membership-scope-form"');
+  });
+});
+
+describe('GET /tenants/:tenantId/admin/access/org-units', () => {
+  it('renders org units on a dedicated page', async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      '/tenants/tenant_123/admin/access/org-units',
+      {
+        headers: {
+          Cookie: 'better-auth.session_token=session-token',
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('Org Units');
+    expect(body).toContain('id="org-unit-form"');
+    expect(body).toContain('Org Units (1)');
+    expect(body).not.toContain('id="api-key-form"');
+    expect(body).not.toContain('id="membership-scope-form"');
   });
 });
 

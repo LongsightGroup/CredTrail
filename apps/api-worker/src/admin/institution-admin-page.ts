@@ -48,7 +48,16 @@ const formatJsonTextareaValue = (value: string): string => {
   }
 };
 
-type InstitutionAdminView = 'home' | 'operations' | 'rules' | 'access';
+type InstitutionAdminView =
+  | 'home'
+  | 'operations'
+  | 'operationsReviewQueue'
+  | 'operationsIssuedBadges'
+  | 'operationsBadgeStatus'
+  | 'rules'
+  | 'access'
+  | 'accessApiKeys'
+  | 'accessOrgUnits';
 
 interface InstitutionAdminPageInput {
   tenant: TenantRecord;
@@ -75,8 +84,13 @@ const renderInstitutionAdminPage = (
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
   const tenantAdminPath = `/tenants/${encodeURIComponent(input.tenant.id)}/admin`;
   const operationsPath = `${tenantAdminPath}/operations`;
+  const operationsReviewQueuePath = `${operationsPath}/review-queue`;
+  const operationsIssuedBadgesPath = `${operationsPath}/issued-badges`;
+  const operationsBadgeStatusPath = `${operationsPath}/badge-status`;
   const rulesWorkspacePath = `${tenantAdminPath}/rules`;
   const accessPath = `${tenantAdminPath}/access`;
+  const accessApiKeysPath = `${accessPath}/api-keys`;
+  const accessOrgUnitsPath = `${accessPath}/org-units`;
   const ruleBuilderPath = `${tenantAdminPath}/rules/new`;
 
   for (const version of input.badgeRuleVersions) {
@@ -646,11 +660,18 @@ const renderInstitutionAdminPage = (
         : '',
   });
   const renderAdminNav = (): string => {
+    const operationsCurrent =
+      view === 'operations' ||
+      view === 'operationsReviewQueue' ||
+      view === 'operationsIssuedBadges' ||
+      view === 'operationsBadgeStatus';
+    const accessCurrent =
+      view === 'access' || view === 'accessApiKeys' || view === 'accessOrgUnits';
     const links = [
       { href: tenantAdminPath, label: 'Home', isCurrent: view === 'home' },
-      { href: operationsPath, label: 'Operations', isCurrent: view === 'operations' },
+      { href: operationsPath, label: 'Operations', isCurrent: operationsCurrent },
       { href: rulesWorkspacePath, label: 'Rules', isCurrent: view === 'rules' },
-      { href: accessPath, label: 'Access', isCurrent: view === 'access' },
+      { href: accessPath, label: 'Access', isCurrent: accessCurrent },
       { href: adminAuditLogPath, label: 'Audit logs', isCurrent: false },
       {
         href: showcasePath,
@@ -721,7 +742,7 @@ const renderInstitutionAdminPage = (
     <article class="ct-admin__workspace-card ct-stack">
       <p class="ct-admin__eyebrow">Daily work</p>
       <h2>Operations</h2>
-      <p>Issue badges, review pending queue items, inspect the ledger, and apply lifecycle changes.</p>
+      <p>Issue badges, route manual review, inspect issued badges, and update badge status across focused pages.</p>
       <div class="ct-admin__workspace-stats ct-cluster">
         <span class="ct-admin__status-pill">${badgeTemplateCount} templates</span>
         <span class="ct-admin__status-pill">${ruleCount} rules</span>
@@ -752,13 +773,65 @@ const renderInstitutionAdminPage = (
     <article class="ct-admin__workspace-card ct-stack">
       <p class="ct-admin__eyebrow">Setup</p>
       <h2>Access</h2>
-      <p>Manage keys, org structure, delegation, and enterprise authentication without crowding daily work.</p>
+      <p>Manage permissions and enterprise auth here, with separate pages for API keys and org structure.</p>
       <div class="ct-admin__workspace-stats ct-cluster">
         <span class="ct-admin__status-pill">${activeApiKeyCount} active keys</span>
         <span class="ct-admin__status-pill">${orgUnitCount} org units</span>
       </div>
       <div class="ct-admin__workspace-actions ct-cluster">
         <a class="ct-admin__cta-link" href="${escapeHtml(accessPath)}">Open access</a>
+      </div>
+    </article>
+  </section>`;
+
+  const operationsWorkspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Operations pages">
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Manual review</p>
+      <h2>Rule Review Queue</h2>
+      <p>Process badges that need a human decision before they are issued.</p>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(operationsReviewQueuePath)}">Open review queue</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Audit trail</p>
+      <h2>Issued Badges</h2>
+      <p>Search tenant-issued badges and take revocation or audit actions from one page.</p>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(operationsIssuedBadgesPath)}">Open issued badges</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Status changes</p>
+      <h2>Badge Status</h2>
+      <p>Look up a badge, inspect its current state, and suspend, revoke, or expire it with a reason.</p>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(operationsBadgeStatusPath)}">Open badge status</a>
+      </div>
+    </article>
+  </section>`;
+
+  const accessWorkspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Access pages">
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Integrations</p>
+      <h2>API Keys</h2>
+      <p>Create, review, and revoke scoped tenant API keys without mixing the workflow with org setup.</p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${activeApiKeyCount} active keys</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(accessApiKeysPath)}">Open API keys</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Structure</p>
+      <h2>Org Units</h2>
+      <p>Create and review tenant org structure without crowding key management.</p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">${orgUnitCount} org units</span>
+      </div>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(accessOrgUnitsPath)}">Open org units</a>
       </div>
     </article>
   </section>`;
@@ -1057,9 +1130,9 @@ const renderInstitutionAdminPage = (
     <p id="rule-evaluate-status" class="ct-admin__status"></p>
   </article>`;
 
-  const lifecyclePanelMarkup = `<article id="lifecycle-panel" class="ct-admin__panel ct-stack">
-    <h2>Credential Lifecycle</h2>
-    <p>Lookup lifecycle state and apply transitions with institutional reason codes.</p>
+  const badgeStatusPanelMarkup = `<article id="lifecycle-panel" class="ct-admin__panel ct-stack">
+    <h2>Badge Status</h2>
+    <p>Look up a badge, review its current status, and apply state changes with institutional reason codes.</p>
     <form id="assertion-lifecycle-view-form" class="ct-admin__form ct-stack">
       <label>
         Assertion ID
@@ -1306,9 +1379,19 @@ const renderInstitutionAdminPage = (
       ? `Institution Admin · ${input.tenant.displayName}`
       : view === 'operations'
         ? `Operations · Institution Admin · ${input.tenant.displayName}`
-        : view === 'rules'
-          ? `Rules · Institution Admin · ${input.tenant.displayName}`
-          : `Access · Institution Admin · ${input.tenant.displayName}`;
+        : view === 'operationsReviewQueue'
+          ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
+          : view === 'operationsIssuedBadges'
+            ? `Issued Badges · Institution Admin · ${input.tenant.displayName}`
+            : view === 'operationsBadgeStatus'
+              ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
+              : view === 'rules'
+                ? `Rules · Institution Admin · ${input.tenant.displayName}`
+                : view === 'access'
+                  ? `Access · Institution Admin · ${input.tenant.displayName}`
+                  : view === 'accessApiKeys'
+                    ? `API Keys · Institution Admin · ${input.tenant.displayName}`
+                    : `Org Units · Institution Admin · ${input.tenant.displayName}`;
 
   const pageMarkup =
     view === 'home'
@@ -1329,20 +1412,42 @@ const renderInstitutionAdminPage = (
         ? `<section class="ct-admin ct-stack">
             ${renderHero(
               'Operations',
-              'Issue badges, review pending work, inspect the ledger, and manage lifecycle state.',
+              'Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.',
             )}
-            <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-              <div class="ct-admin__grid ct-stack">
-                ${manualIssuePanelMarkup}
-                ${lifecyclePanelMarkup}
-              </div>
-              <div class="ct-admin__grid ct-stack">
-                ${ruleReviewQueuePanelMarkup}
-                ${issuedBadgesPanelMarkup}
-              </div>
-            </section>
+            ${operationsWorkspaceCardsMarkup}
+            ${manualIssuePanelMarkup}
             <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
           </section>`
+        : view === 'operationsReviewQueue'
+          ? `<section class="ct-admin ct-stack">
+              ${renderHero(
+                'Rule Review Queue',
+                'Review pending badge decisions without mixing them into the rest of operations.',
+              )}
+              ${operationsWorkspaceCardsMarkup}
+              ${ruleReviewQueuePanelMarkup}
+              <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+            </section>`
+          : view === 'operationsIssuedBadges'
+            ? `<section class="ct-admin ct-stack">
+                ${renderHero(
+                  'Issued Badges',
+                  'Search issued badges and take audit or revocation actions from one page.',
+                )}
+                ${operationsWorkspaceCardsMarkup}
+                ${issuedBadgesPanelMarkup}
+                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+              </section>`
+            : view === 'operationsBadgeStatus'
+              ? `<section class="ct-admin ct-stack">
+                  ${renderHero(
+                    'Badge Status',
+                    'Look up a badge, inspect its current state, and apply status changes with a reason.',
+                  )}
+                  ${operationsWorkspaceCardsMarkup}
+                  ${badgeStatusPanelMarkup}
+                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+                </section>`
         : view === 'rules'
           ? `<section class="ct-admin ct-stack">
               ${renderHero(
@@ -1364,25 +1469,54 @@ const renderInstitutionAdminPage = (
               </section>
               <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
             </section>`
-          : `<section class="ct-admin ct-stack">
-              ${renderHero(
-                'Access',
-                'Manage tenant setup, org structure, integrations, delegation, and enterprise authentication.',
-              )}
-              <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-                <div class="ct-admin__grid ct-stack">
-                  ${apiKeyPanelMarkup}
-                  ${orgUnitPanelMarkup}
-                  ${governancePanelMarkup}
-                  ${enterpriseAuthPanelMarkup}
-                </div>
-                <div class="ct-admin__grid ct-stack">
-                  ${apiKeysTableMarkup}
-                  ${orgUnitsTableMarkup}
-                </div>
-              </section>
-              <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-            </section>`;
+          : view === 'access'
+            ? `<section class="ct-admin ct-stack">
+                ${renderHero(
+                  'Access',
+                  'Manage permissions and enterprise auth here. API keys and org units each have their own page.',
+                )}
+                ${accessWorkspaceCardsMarkup}
+                <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                  <div class="ct-admin__grid ct-stack">
+                    ${governancePanelMarkup}
+                    ${enterpriseAuthPanelMarkup}
+                  </div>
+                </section>
+                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+              </section>`
+            : view === 'accessApiKeys'
+              ? `<section class="ct-admin ct-stack">
+                  ${renderHero(
+                    'API Keys',
+                    'Create, review, and revoke tenant API keys without mixing them into org structure work.',
+                  )}
+                  ${accessWorkspaceCardsMarkup}
+                  <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                    <div class="ct-admin__grid ct-stack">
+                      ${apiKeyPanelMarkup}
+                    </div>
+                    <div class="ct-admin__grid ct-stack">
+                      ${apiKeysTableMarkup}
+                    </div>
+                  </section>
+                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+                </section>`
+              : `<section class="ct-admin ct-stack">
+                  ${renderHero(
+                    'Org Units',
+                    'Create and review org structure without mixing it into API key management.',
+                  )}
+                  ${accessWorkspaceCardsMarkup}
+                  <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                    <div class="ct-admin__grid ct-stack">
+                      ${orgUnitPanelMarkup}
+                    </div>
+                    <div class="ct-admin__grid ct-stack">
+                      ${orgUnitsTableMarkup}
+                    </div>
+                  </section>
+                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+                </section>`;
 
   return renderPageShell(
     pageTitle,
@@ -1399,10 +1533,32 @@ export const institutionAdminOperationsPage = (input: InstitutionAdminPageInput)
   return renderInstitutionAdminPage(input, 'operations');
 };
 
+export const institutionAdminOperationsReviewQueuePage = (
+  input: InstitutionAdminPageInput,
+): string => {
+  return renderInstitutionAdminPage(input, 'operationsReviewQueue');
+};
+
+export const institutionAdminIssuedBadgesPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, 'operationsIssuedBadges');
+};
+
+export const institutionAdminBadgeStatusPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, 'operationsBadgeStatus');
+};
+
 export const institutionAdminRulesPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, 'rules');
 };
 
 export const institutionAdminAccessPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, 'access');
+};
+
+export const institutionAdminApiKeysPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, 'accessApiKeys');
+};
+
+export const institutionAdminOrgUnitsPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, 'accessOrgUnits');
 };
