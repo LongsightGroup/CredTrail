@@ -1484,54 +1484,100 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__hero {
-          border: none;
-          border-left: 4px solid var(--ct-brand-lake-700);
-          border-radius: 0;
-          padding: 1rem 1.25rem;
-          background: var(--ct-theme-surface-soft);
+          position: relative;
+          overflow: hidden;
+          display: grid;
+          gap: 0.85rem;
+          padding: clamp(1.2rem, 3vw, 1.7rem);
+          border: 1px solid var(--ct-theme-border-soft);
+          border-radius: 1.45rem;
+          background: linear-gradient(
+            165deg,
+            var(--ct-theme-surface-card-strong),
+            var(--ct-theme-surface-soft)
+          );
           color: var(--ct-theme-text-title);
           box-shadow: var(--ct-theme-shadow-soft);
         }
 
+        .badge-wall__hero::after {
+          content: '';
+          position: absolute;
+          inset: auto -12% -72% auto;
+          width: 14rem;
+          height: 14rem;
+          background: radial-gradient(circle, var(--ct-theme-accent-glow-1), transparent 70%);
+          pointer-events: none;
+        }
+
         .badge-wall__hero h1 {
+          position: relative;
+          z-index: 1;
+          margin: 0;
           color: var(--ct-theme-text-title);
+          font-size: clamp(1.65rem, 3.7vw, 2.45rem);
+          line-height: 1.15;
         }
 
         .badge-wall__lead {
+          position: relative;
+          z-index: 1;
           margin: 0;
+          max-width: 52rem;
           color: var(--ct-theme-text-muted);
+          font-size: clamp(1rem, 2vw, 1.08rem);
+          line-height: 1.6;
         }
 
         .badge-wall__count {
+          position: relative;
+          z-index: 1;
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
           margin: 0;
-          font-weight: 600;
-          color: var(--ct-brand-lake-700);
+          padding: 0.35rem 0.78rem;
+          border: 1px solid var(--ct-theme-border-soft);
+          border-radius: 999px;
+          background: color-mix(
+            in srgb,
+            var(--ct-theme-surface-card-strong) 90%,
+            var(--ct-theme-surface-soft)
+          );
+          color: var(--ct-theme-link);
+          font-size: 0.92rem;
+          font-weight: 700;
+          letter-spacing: 0.01em;
         }
 
         .badge-wall__hero-link {
+          position: relative;
+          z-index: 1;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           width: fit-content;
-          border: 1px solid var(--ct-theme-border-default);
-          border-radius: 0.65rem;
           min-height: 2.75rem;
-          padding: 0.5rem 0.9rem;
-          color: var(--ct-brand-lake-700);
+          padding: 0.6rem 0.95rem;
+          border: 1px solid transparent;
+          border-radius: 0.7rem;
+          color: var(--ct-theme-text-on-brand);
           text-decoration: none;
           font-weight: 700;
-          background: var(--ct-theme-surface-card-strong);
+          background: var(--ct-theme-gradient-action);
+          box-shadow: 0 10px 22px rgba(13, 60, 116, 0.14);
           transition:
-            background-color var(--ct-duration-fast) var(--ct-ease-standard),
-            border-color var(--ct-duration-fast) var(--ct-ease-standard),
-            color var(--ct-duration-fast) var(--ct-ease-standard);
+            transform var(--ct-duration-fast) var(--ct-ease-standard),
+            box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
+            background var(--ct-duration-fast) var(--ct-ease-standard);
         }
 
         .badge-wall__hero-link:hover,
         .badge-wall__hero-link:focus-visible {
-          color: var(--ct-theme-link-hover);
-          background: var(--ct-theme-surface-soft);
-          border-color: var(--ct-theme-border-strong);
+          color: var(--ct-theme-text-on-brand);
+          background: var(--ct-theme-gradient-action-hover);
+          transform: translateY(-1px);
+          box-shadow: var(--ct-theme-shadow-soft);
         }
   
         .badge-wall__list {
