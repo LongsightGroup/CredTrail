@@ -29,6 +29,7 @@ vi.mock("@credtrail/db", async () => {
     hasTenantMembershipOrgUnitAccess: vi.fn(),
     hasTenantMembershipOrgUnitScopeAssignments: vi.fn(),
     listTenantAssertions: vi.fn(),
+    listTenantAssertionLedgerExportRows: vi.fn(),
     listAssertionLifecycleEvents: vi.fn(),
     recordAssertionLifecycleTransition: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
@@ -69,6 +70,7 @@ import {
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
   listTenantAssertions,
+  listTenantAssertionLedgerExportRows,
   listAssertionLifecycleEvents,
   recordAssertionLifecycleTransition,
   resolveAssertionLifecycleState,
@@ -78,6 +80,7 @@ import {
   type DelegatedIssuingAuthorityGrantRecord,
   type SessionRecord,
   type SqlDatabase,
+  type TenantAssertionLedgerExportRowRecord,
   type TenantMembershipRecord,
 } from "@credtrail/db";
 import { createPostgresDatabase } from "@credtrail/db/postgres";
@@ -96,6 +99,7 @@ const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
 const mockedListTenantAssertions = vi.mocked(listTenantAssertions);
+const mockedListTenantAssertionLedgerExportRows = vi.mocked(listTenantAssertionLedgerExportRows);
 const mockedListAssertionLifecycleEvents = vi.mocked(listAssertionLifecycleEvents);
 const mockedRecordAssertionLifecycleTransition = vi.mocked(recordAssertionLifecycleTransition);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
@@ -224,6 +228,36 @@ const sampleAuditLogRecord = (overrides?: Partial<AuditLogRecord>): AuditLogReco
   };
 };
 
+const sampleLedgerExportRow = (
+  overrides?: Partial<TenantAssertionLedgerExportRowRecord>,
+): TenantAssertionLedgerExportRowRecord => {
+  return {
+    assertionId: "tenant_123:assertion_456",
+    tenantId: "tenant_123",
+    publicId: "public_456",
+    badgeTemplateId: "badge_template_001",
+    badgeTitle: "TypeScript Foundations",
+    recipientIdentity: "=cmd|' /C calc'!A0",
+    recipientIdentityType: "email",
+    issuedAt: "2026-02-10T22:00:00.000Z",
+    issuedByUserId: "usr_issuer",
+    revokedAt: null,
+    state: "active",
+    source: "default_active",
+    reasonCode: null,
+    reason: null,
+    transitionedAt: null,
+    orgUnitId: "tenant_123:org:institution",
+    orgUnitDisplayName: "Tenant 123 Institution",
+    attributionSource: "issuance_time_owner",
+    currentInstitutionName: "Tenant 123 Institution",
+    currentCollegeName: null,
+    currentDepartmentName: null,
+    currentProgramName: null,
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -264,6 +298,12 @@ describe("assertion lifecycle endpoints", () => {
     mockedHasTenantMembershipOrgUnitAccess.mockResolvedValue(false);
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockReset();
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockResolvedValue(null);
+    mockedListTenantAssertionLedgerExportRows.mockReset();
+    mockedListTenantAssertionLedgerExportRows.mockResolvedValue({
+      status: "ok",
+      rowLimit: 5000,
+      rows: [sampleLedgerExportRow()],
+    });
     mockedResolveAssertionLifecycleState.mockReset();
     mockedListTenantAssertions.mockReset();
     mockedListTenantAssertions.mockResolvedValue([]);
@@ -604,5 +644,113 @@ describe("assertion lifecycle endpoints", () => {
     expect(response.status).toBe(409);
     expect(body.error).toBe("Lifecycle transition not allowed");
     expect(mockedCreateAuditLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/tenants/:tenantId/assertions/ledger-export.csv", () => {
+  it("allows owner and admin users to download the issued-badge ledger CSV", async () => {
+    const env = createEnv();
+
+    for (const role of ["owner", "admin"] as const) {
+      mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+      mockedTouchSession.mockResolvedValue(undefined);
+      mockedFindTenantMembership.mockResolvedValue(
+        sampleTenantMembership({
+          role,
+        }),
+      );
+
+      const response = await app.request(
+        "/v1/tenants/tenant_123/assertions/ledger-export.csv?issuedFrom=2026-02-01&issuedTo=2026-02-29&recipientQuery=learner",
+        {
+          method: "GET",
+          headers: {
+            Cookie: "better-auth.session_token=session-token",
+          },
+        },
+        env,
+      );
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+      expect(response.headers.get("content-disposition")).toContain(
+        'attachment; filename="issued-badge-ledger-',
+      );
+      expect(body.charCodeAt(0)).toBe(0xfeff);
+      expect(body).toContain("'=cmd|' /C calc'!A0");
+    }
+
+    expect(mockedListTenantAssertionLedgerExportRows).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      issuedFrom: "2026-02-01",
+      issuedTo: "2026-02-29",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      recipientQuery: "learner",
+      state: undefined,
+    });
+  });
+
+  it("denies issuer-role users access to the recipient-level ledger export", async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue(undefined);
+    mockedFindTenantMembership.mockResolvedValue(
+      sampleTenantMembership({
+        role: "issuer",
+      }),
+    );
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/assertions/ledger-export.csv",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockedListTenantAssertionLedgerExportRows).not.toHaveBeenCalled();
+  });
+
+  it("returns a clear over-cap error when more than 5000 ledger rows match", async () => {
+    const env = createEnv();
+
+    mockedFindActiveSessionByHash.mockResolvedValue(sampleSession());
+    mockedTouchSession.mockResolvedValue(undefined);
+    mockedFindTenantMembership.mockResolvedValue(
+      sampleTenantMembership({
+        role: "admin",
+      }),
+    );
+    mockedListTenantAssertionLedgerExportRows.mockResolvedValue({
+      status: "too_large",
+      rowLimit: 5000,
+    });
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/assertions/ledger-export.csv",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(413);
+    expect(body).toEqual({
+      error: "export_too_large",
+      rowLimit: 5000,
+      message: "Synchronous export is limited to 5000 rows. Narrow your filters and try again.",
+    });
   });
 });

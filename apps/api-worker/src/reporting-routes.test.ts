@@ -96,6 +96,10 @@ const createEnv = () => {
   };
 };
 
+const stripBom = (value: string): string => {
+  return value.replace(/^\uFEFF/, "");
+};
+
 const sampleReportingOrgUnits = (): TenantOrgUnitRecord[] => {
   return [
     {
@@ -739,5 +743,143 @@ describe("GET /v1/tenants/:tenantId/reporting/comparisons", () => {
 
     expect(outOfScopeResponse.status).toBe(403);
     expect(outOfScopeBody.error).toBe("Requested org unit is outside reporting scope");
+  });
+});
+
+describe("GET /v1/tenants/:tenantId/reporting/*.csv", () => {
+  it("returns CSV attachments for scoped overview exports and preserves reporting scope checks", async () => {
+    mockedFindTenantMembership.mockResolvedValue({
+      tenantId: "tenant_123",
+      userId: "usr_admin",
+      role: "issuer",
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([sampleScopedReportingScope()]);
+
+    const inScopeResponse = await app.request(
+      "/v1/tenants/tenant_123/reporting/overview/export.csv?issuedFrom=2026-03-01&issuedTo=2026-03-31&orgUnitId=tenant_123:org:department-cs",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const inScopeBody = await inScopeResponse.text();
+
+    expect(inScopeResponse.status).toBe(200);
+    expect(inScopeResponse.headers.get("cache-control")).toBe("no-store");
+    expect(inScopeResponse.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(inScopeResponse.headers.get("content-disposition")).toContain('attachment; filename="');
+    expect(inScopeBody.charCodeAt(0)).toBe(0xfeff);
+    expect(stripBom(inScopeBody)).toContain("Issued");
+    expect(mockedGetTenantReportingOverview).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      issuedFrom: "2026-03-01",
+      issuedTo: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: "tenant_123:org:department-cs",
+      state: undefined,
+    });
+
+    const outOfScopeResponse = await app.request(
+      "/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123:org:department-history",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const outOfScopeBody = await outOfScopeResponse.json<{ error: string }>();
+
+    expect(outOfScopeResponse.status).toBe(403);
+    expect(outOfScopeBody.error).toBe("Requested org unit is outside reporting scope");
+  });
+
+  it("preserves exact-match orgUnitId filters for comparison exports", async () => {
+    const response = await app.request(
+      "/v1/tenants/tenant_123/reporting/comparisons/export.csv?issuedFrom=2026-03-01&issuedTo=2026-03-31&groupBy=badgeTemplate&orgUnitId=tenant_123:org:department-cs",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(stripBom(body)).toContain("Group ID");
+    expect(mockedGetTenantReportingComparisonsDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: "tenant_123:org:department-cs",
+      groupBy: "badgeTemplate",
+    });
+  });
+
+  it("preserves explicit focusOrgUnitId and level hierarchy drilldown semantics for exports", async () => {
+    mockedGetTenantReportingComparisonsDb.mockImplementation(
+      async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+        if (input.groupBy !== "orgUnit") {
+          return [];
+        }
+
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:program-cs",
+            issuedCount: 8,
+            publicBadgeViewCount: 24,
+            verificationViewCount: 9,
+            shareClickCount: 5,
+            learnerClaimCount: 4,
+            walletAcceptCount: 2,
+            claimRate: 50,
+            shareRate: 37.5,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 6,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      },
+    );
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/reporting/hierarchy/export.csv?issuedFrom=2026-03-01&issuedTo=2026-03-31&focusOrgUnitId=tenant_123:org:college-eng&level=department",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const body = stripBom(await response.text());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(mockedGetTenantReportingComparisonsDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      groupBy: "orgUnit",
+    });
+    expect(body).toContain("Computer Science");
+    expect(body).not.toContain("History");
   });
 });
