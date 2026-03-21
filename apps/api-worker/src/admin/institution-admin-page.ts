@@ -1076,7 +1076,7 @@ const renderInstitutionAdminPage = (
         </article>`;
   const reportingPerformerLevel =
     REPORTING_HIERARCHY_LEVELS.filter(
-      (level) => (reportingHierarchyRowsByLevel.get(level)?.length ?? 0) > 0,
+      (level) => (reportingHierarchyRowsByLevel.get(level)?.length ?? 0) > 1,
     )
       .sort((left, right) => {
         const countDifference =
@@ -1222,6 +1222,9 @@ const renderInstitutionAdminPage = (
             )}</span>
           </div>
           <p>These rankings keep issued volume separate from claim and share rates.</p>
+          <p class="ct-admin__hint">Panels compare ${escapeHtml(
+            formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase(),
+          )} rows in the current visible hierarchy.</p>
           <p class="ct-admin__hint">Minimum sample for rate panels: ${escapeHtml(
             formatReportingCount(REPORTING_RATE_MIN_ISSUED),
           )} issued badges.</p>
