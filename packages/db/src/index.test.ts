@@ -26,6 +26,8 @@ import {
   resolveTenantAuthPolicy,
   resolveLearnerProfileForIdentity,
   resolveLearnerProfileFromSaml,
+  resolveAssertionReportingAttribution,
+  summarizeTenantReportingOverviewRows,
   updateTenantAuthProvider,
   upsertTenantBreakGlassAccount,
   upsertTenantAuthPolicy,
@@ -36,6 +38,7 @@ import {
   type SqlQueryResult,
   type SqlRunResult,
 } from "./index";
+import { REPORTING_METRIC_DEFINITIONS } from "../../../apps/api-worker/src/reporting/metric-definitions";
 
 interface FakeLearnerProfileRow {
   id: string;
@@ -2108,6 +2111,105 @@ describe("tenant auth policy and provider helpers", () => {
         membershipRole: "viewer",
       },
     ]);
+  });
+});
+
+describe("reporting foundation", () => {
+  it("adds a reporting attribution migration with tenant and org indexes", () => {
+    const sql = readFileSync(
+      new URL("../migrations/0033_reporting_foundation.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS assertion_reporting_attributions");
+    expect(sql).toContain("attribution_source");
+    expect(sql).toContain("historical_backfill");
+    expect(sql).toContain("idx_assertion_reporting_attributions_tenant_org");
+    expect(sql).toContain("idx_assertion_reporting_attributions_tenant_template");
+  });
+
+  it("keeps historical reporting attribution stable when template ownership changes later", () => {
+    const attribution = resolveAssertionReportingAttribution({
+      issuedAt: "2026-03-05T15:00:00.000Z",
+      currentOwnerOrgUnitId: "org_program",
+      ownershipEvents: [
+        {
+          toOrgUnitId: "org_department",
+          transferredAt: "2026-03-01T12:00:00.000Z",
+        },
+        {
+          toOrgUnitId: "org_program",
+          transferredAt: "2026-03-10T12:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(attribution).toEqual({
+      orgUnitId: "org_department",
+      attributionSource: "historical_backfill",
+      attributedAt: "2026-03-05T15:00:00.000Z",
+    });
+  });
+
+  it("summarizes product-backed overview counts and keeps unsupported engagement metrics deferred", () => {
+    const rows = [
+      {
+        assertionId: "assertion_active",
+        issuedAt: "2026-03-01T00:00:00.000Z",
+        badgeTemplateId: "bt_1",
+        orgUnitId: "org_1",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
+      },
+      {
+        assertionId: "assertion_suspended_review",
+        issuedAt: "2026-03-02T00:00:00.000Z",
+        badgeTemplateId: "bt_1",
+        orgUnitId: "org_1",
+        revokedAt: null,
+        latestToState: "suspended" as const,
+        latestReasonCode: "appeal_pending" as const,
+      },
+      {
+        assertionId: "assertion_revoked",
+        issuedAt: "2026-03-03T00:00:00.000Z",
+        badgeTemplateId: "bt_2",
+        orgUnitId: "org_2",
+        revokedAt: "2026-03-04T00:00:00.000Z",
+        latestToState: "revoked" as const,
+        latestReasonCode: "issuer_requested" as const,
+      },
+    ];
+
+    expect(summarizeTenantReportingOverviewRows(rows)).toEqual({
+      issued: 3,
+      active: 1,
+      suspended: 1,
+      revoked: 1,
+      pendingReview: 1,
+    });
+
+    expect(summarizeTenantReportingOverviewRows(rows, "pending_review")).toEqual({
+      issued: 1,
+      active: 0,
+      suspended: 1,
+      revoked: 0,
+      pendingReview: 1,
+    });
+
+    expect(REPORTING_METRIC_DEFINITIONS).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "claimRate",
+          available: false,
+        }),
+        expect.objectContaining({
+          key: "shareRate",
+          available: false,
+        }),
+      ]),
+    );
   });
 });
 

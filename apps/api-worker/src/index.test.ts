@@ -289,6 +289,21 @@ describe("GET /", () => {
       error: "Not authenticated",
     });
   });
+
+  it("registers the reporting overview route in the composition root", async () => {
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders({
+      betterAuthPrincipal: null,
+      betterAuthRequestedTenant: null,
+    });
+
+    const response = await isolatedApp.request(
+      "/v1/tenants/tenant_123/reporting/overview",
+      undefined,
+      createEnv(),
+    );
+
+    expect(response.status).toBe(401);
+  });
 });
 
 describe("PUT /v1/admin/tenants/:tenantId", () => {

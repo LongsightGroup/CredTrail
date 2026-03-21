@@ -135,6 +135,22 @@ export const INSTITUTION_ADMIN_CSS = `
   min-height: 2.75rem;
   border-radius: var(--ct-radius-pill);
 }
+.ct-admin__metric-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+.ct-admin__metric-card {
+  padding: 1rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid var(--ct-border-soft);
+  background: var(--ct-theme-surface-card);
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__metric-value {
+  font-size: 2rem;
+  line-height: 1;
+}
 .ct-admin__layout {
   --ct-grid-gap: var(--ct-space-4);
   --ct-sidebar-width: 360px;
@@ -154,6 +170,10 @@ export const INSTITUTION_ADMIN_CSS = `
   border-radius: var(--ct-radius-lg);
   padding: var(--ct-space-4);
   min-width: 0;
+}
+.ct-admin__panel--nested {
+  padding: 0.75rem;
+  background: var(--ct-theme-surface-soft);
 }
 .ct-admin__panel h2 {
   margin: 0;

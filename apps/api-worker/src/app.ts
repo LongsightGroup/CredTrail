@@ -133,6 +133,7 @@ import { registerOb3Routes } from "./routes/ob3-routes";
 import { registerPresentationRoutes } from "./routes/presentation-routes";
 import { registerPublicBadgeRoutes } from "./routes/public-badge-routes";
 import { registerQueueRoutes } from "./routes/queue-routes";
+import { registerReportingRoutes } from "./routes/reporting-routes";
 import { registerSigningRoutes } from "./routes/signing-routes";
 import { registerTenantGovernanceRoutes } from "./routes/tenant-governance-routes";
 import { registerOid4vciRoutes } from "./routes/oid4vci-routes";
@@ -1159,6 +1160,13 @@ registerAuthRoutes({
   },
   enterpriseSso: enterpriseSsoAdapter,
   breakGlassPolicy: breakGlassPolicyAdapter,
+});
+
+registerReportingRoutes({
+  app,
+  resolveDatabase,
+  requireTenantRole,
+  ADMIN_ROLES,
 });
 
 registerTenantGovernanceRoutes({

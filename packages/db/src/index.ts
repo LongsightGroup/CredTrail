@@ -1551,6 +1551,57 @@ export interface ListTenantAssertionsInput {
   limit?: number | undefined;
 }
 
+export type AssertionReportingAttributionSource =
+  | "issuance_snapshot"
+  | "historical_backfill"
+  | "current_owner_fallback";
+
+export interface AssertionReportingAttributionRecord {
+  assertionId: string;
+  tenantId: string;
+  badgeTemplateId: string;
+  orgUnitId: string;
+  attributionSource: AssertionReportingAttributionSource;
+  attributedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TenantReportingLifecycleFilter = AssertionLifecycleState | "pending_review";
+
+export interface TenantReportingOverviewFilters {
+  issuedFrom?: string | undefined;
+  issuedTo?: string | undefined;
+  badgeTemplateId?: string | undefined;
+  orgUnitId?: string | undefined;
+  state?: TenantReportingLifecycleFilter | undefined;
+}
+
+export interface GetTenantReportingOverviewInput extends TenantReportingOverviewFilters {
+  tenantId: string;
+}
+
+export interface TenantReportingOverviewCounts {
+  issued: number;
+  active: number;
+  suspended: number;
+  revoked: number;
+  pendingReview: number;
+}
+
+export interface TenantReportingOverviewRecord {
+  tenantId: string;
+  filters: {
+    issuedFrom: string | null;
+    issuedTo: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    state: TenantReportingLifecycleFilter | null;
+  };
+  counts: TenantReportingOverviewCounts;
+  generatedAt: string;
+}
+
 export interface TenantAssertionSummaryRecord {
   assertionId: string;
   tenantId: string;
@@ -2199,6 +2250,19 @@ const isMissingAssertionLifecycleEventsTableError = (error: unknown): boolean =>
       error.message.includes("relation") ||
       error.message.includes("does not exist")) &&
     error.message.includes("assertion_lifecycle_events")
+  );
+};
+
+const isMissingAssertionReportingAttributionsTableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    (error.message.includes("no such table") ||
+      error.message.includes("relation") ||
+      error.message.includes("does not exist")) &&
+    error.message.includes("assertion_reporting_attributions")
   );
 };
 
@@ -3005,6 +3069,50 @@ const ensureAssertionLifecycleEventsTable = async (db: SqlDatabase): Promise<voi
     .run();
 };
 
+const ensureAssertionReportingAttributionsTable = async (db: SqlDatabase): Promise<void> => {
+  await db
+    .prepare(
+      `
+      CREATE TABLE IF NOT EXISTS assertion_reporting_attributions (
+        assertion_id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        badge_template_id TEXT NOT NULL,
+        org_unit_id TEXT NOT NULL,
+        attribution_source TEXT NOT NULL CHECK (
+          attribution_source IN ('issuance_snapshot', 'historical_backfill', 'current_owner_fallback')
+        ),
+        attributed_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (tenant_id, assertion_id),
+        FOREIGN KEY (assertion_id) REFERENCES assertions (id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id, badge_template_id) REFERENCES badge_templates (tenant_id, id) ON DELETE CASCADE,
+        FOREIGN KEY (tenant_id, org_unit_id) REFERENCES tenant_org_units (tenant_id, id) ON DELETE RESTRICT
+      )
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_assertion_reporting_attributions_tenant_org
+        ON assertion_reporting_attributions (tenant_id, org_unit_id, attributed_at DESC)
+    `,
+    )
+    .run();
+
+  await db
+    .prepare(
+      `
+      CREATE INDEX IF NOT EXISTS idx_assertion_reporting_attributions_tenant_template
+        ON assertion_reporting_attributions (tenant_id, badge_template_id, attributed_at DESC)
+    `,
+    )
+    .run();
+};
+
 const ensureTenantOrgUnitsTable = async (db: SqlDatabase): Promise<void> => {
   await db
     .prepare(
@@ -3507,6 +3615,27 @@ interface AssertionRow {
   updatedAt: string;
 }
 
+interface AssertionReportingAttributionRow {
+  assertionId: string;
+  tenantId: string;
+  badgeTemplateId: string;
+  orgUnitId: string;
+  attributionSource: AssertionReportingAttributionSource;
+  attributedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface TenantReportingOverviewRow {
+  assertionId: string;
+  issuedAt: string;
+  badgeTemplateId: string;
+  orgUnitId: string;
+  revokedAt: string | null;
+  latestToState: AssertionLifecycleState | null;
+  latestReasonCode: AssertionLifecycleReasonCode | null;
+}
+
 interface AssertionLifecycleEventRow {
   id: string;
   tenantId: string;
@@ -3879,6 +4008,102 @@ const assertionLifecycleStateFromRecords = (input: {
     transitionedAt: null,
     revokedAt: null,
   };
+};
+
+const tenantReportingCountsZero = (): TenantReportingOverviewCounts => {
+  return {
+    issued: 0,
+    active: 0,
+    suspended: 0,
+    revoked: 0,
+    pendingReview: 0,
+  };
+};
+
+const tenantReportingLifecycleFromRow = (
+  row: Pick<TenantReportingOverviewRow, "revokedAt" | "latestToState">,
+): AssertionLifecycleState => {
+  if (row.revokedAt !== null) {
+    return "revoked";
+  }
+
+  return row.latestToState ?? "active";
+};
+
+export const resolveAssertionReportingAttribution = (input: {
+  issuedAt: string;
+  currentOwnerOrgUnitId: string;
+  ownershipEvents: readonly Pick<BadgeTemplateOwnershipEventRecord, "toOrgUnitId" | "transferredAt">[];
+}): {
+  orgUnitId: string;
+  attributionSource: AssertionReportingAttributionSource;
+  attributedAt: string;
+} => {
+  const issuedAtMs = Date.parse(input.issuedAt);
+
+  if (!Number.isFinite(issuedAtMs)) {
+    throw new Error("issuedAt must be a valid ISO timestamp");
+  }
+
+  const matchedEvent = [...input.ownershipEvents]
+    .filter((event) => {
+      const transferredAtMs = Date.parse(event.transferredAt);
+      return Number.isFinite(transferredAtMs) && transferredAtMs <= issuedAtMs;
+    })
+    .sort((left, right) => right.transferredAt.localeCompare(left.transferredAt))[0];
+
+  if (matchedEvent !== undefined) {
+    return {
+      orgUnitId: matchedEvent.toOrgUnitId,
+      attributionSource: "historical_backfill",
+      attributedAt: input.issuedAt,
+    };
+  }
+
+  return {
+    orgUnitId: input.currentOwnerOrgUnitId,
+    attributionSource: "current_owner_fallback",
+    attributedAt: input.issuedAt,
+  };
+};
+
+export const summarizeTenantReportingOverviewRows = (
+  rows: readonly TenantReportingOverviewRow[],
+  stateFilter?: TenantReportingLifecycleFilter | undefined,
+): TenantReportingOverviewCounts => {
+  const filteredRows =
+    stateFilter === undefined
+      ? rows
+      : rows.filter((row) => {
+          const lifecycleState = tenantReportingLifecycleFromRow(row);
+
+          if (stateFilter === "pending_review") {
+            return lifecycleState === "suspended" && row.latestReasonCode === "appeal_pending";
+          }
+
+          return lifecycleState === stateFilter;
+        });
+
+  const counts = tenantReportingCountsZero();
+  counts.issued = filteredRows.length;
+
+  for (const row of filteredRows) {
+    const lifecycleState = tenantReportingLifecycleFromRow(row);
+
+    if (lifecycleState === "active") {
+      counts.active += 1;
+    } else if (lifecycleState === "suspended") {
+      counts.suspended += 1;
+    } else if (lifecycleState === "revoked") {
+      counts.revoked += 1;
+    }
+
+    if (lifecycleState === "suspended" && row.latestReasonCode === "appeal_pending") {
+      counts.pendingReview += 1;
+    }
+  }
+
+  return counts;
 };
 
 export const normalizeEmail = (email: string): string => {
@@ -6756,6 +6981,21 @@ const mapAssertionRow = (row: AssertionRow): AssertionRecord => {
     issuedAt: row.issuedAt,
     issuedByUserId: row.issuedByUserId,
     revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapAssertionReportingAttributionRow = (
+  row: AssertionReportingAttributionRow,
+): AssertionReportingAttributionRecord => {
+  return {
+    assertionId: row.assertionId,
+    tenantId: row.tenantId,
+    badgeTemplateId: row.badgeTemplateId,
+    orgUnitId: row.orgUnitId,
+    attributionSource: row.attributionSource,
+    attributedAt: row.attributedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -12769,6 +13009,310 @@ export const listTenantAssertions = async (
   return result.results.map((row) => mapTenantAssertionSummaryRow(row));
 };
 
+const normalizeReportingDateBoundary = (
+  value: string,
+  boundary: "start" | "end",
+): string => {
+  const trimmed = value.trim();
+  const date = trimmed.includes("T")
+    ? new Date(trimmed)
+    : new Date(`${trimmed}${boundary === "start" ? "T00:00:00.000Z" : "T23:59:59.999Z"}`);
+
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(`Invalid reporting date boundary: ${value}`);
+  }
+
+  return date.toISOString();
+};
+
+export const findAssertionReportingAttributionByAssertionId = async (
+  db: SqlDatabase,
+  assertionId: string,
+): Promise<AssertionReportingAttributionRecord | null> => {
+  const lookupStatement = (): Promise<AssertionReportingAttributionRow | null> =>
+    db
+      .prepare(
+        `
+        SELECT
+          assertion_id AS assertionId,
+          tenant_id AS tenantId,
+          badge_template_id AS badgeTemplateId,
+          org_unit_id AS orgUnitId,
+          attribution_source AS attributionSource,
+          attributed_at AS attributedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM assertion_reporting_attributions
+        WHERE assertion_id = ?
+        LIMIT 1
+      `,
+      )
+      .bind(assertionId)
+      .first<AssertionReportingAttributionRow>();
+
+  let row: AssertionReportingAttributionRow | null;
+
+  try {
+    row = await lookupStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionReportingAttributionsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionReportingAttributionsTable(db);
+    row = await lookupStatement();
+  }
+
+  return row === null ? null : mapAssertionReportingAttributionRow(row);
+};
+
+const upsertAssertionReportingAttribution = async (
+  db: SqlDatabase,
+  input: {
+    assertionId: string;
+    tenantId: string;
+    badgeTemplateId: string;
+    orgUnitId: string;
+    attributionSource: AssertionReportingAttributionSource;
+    attributedAt: string;
+  },
+): Promise<AssertionReportingAttributionRecord> => {
+  const nowIso = new Date().toISOString();
+  const upsertStatement = (): Promise<SqlRunResult> =>
+    db
+      .prepare(
+        `
+        INSERT INTO assertion_reporting_attributions (
+          assertion_id,
+          tenant_id,
+          badge_template_id,
+          org_unit_id,
+          attribution_source,
+          attributed_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (assertion_id)
+        DO UPDATE SET
+          tenant_id = excluded.tenant_id,
+          badge_template_id = excluded.badge_template_id,
+          org_unit_id = excluded.org_unit_id,
+          attribution_source = excluded.attribution_source,
+          attributed_at = excluded.attributed_at,
+          updated_at = excluded.updated_at
+      `,
+      )
+      .bind(
+        input.assertionId,
+        input.tenantId,
+        input.badgeTemplateId,
+        input.orgUnitId,
+        input.attributionSource,
+        input.attributedAt,
+        nowIso,
+        nowIso,
+      )
+      .run();
+
+  try {
+    await upsertStatement();
+  } catch (error: unknown) {
+    if (!isMissingAssertionReportingAttributionsTableError(error)) {
+      throw error;
+    }
+
+    await ensureAssertionReportingAttributionsTable(db);
+    await upsertStatement();
+  }
+
+  const attribution = await findAssertionReportingAttributionByAssertionId(db, input.assertionId);
+
+  if (attribution === null) {
+    throw new Error(`Unable to load reporting attribution for assertion "${input.assertionId}"`);
+  }
+
+  return attribution;
+};
+
+const backfillAssertionReportingAttributionsForTenant = async (
+  db: SqlDatabase,
+  tenantId: string,
+): Promise<number> => {
+  type MissingAttributionRow = {
+    assertionId: string;
+    badgeTemplateId: string;
+    currentOwnerOrgUnitId: string;
+    issuedAt: string;
+  };
+
+  const missingStatement = (): Promise<SqlQueryResult<MissingAttributionRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          assertions.id AS assertionId,
+          assertions.badge_template_id AS badgeTemplateId,
+          badge_templates.owner_org_unit_id AS currentOwnerOrgUnitId,
+          assertions.issued_at AS issuedAt
+        FROM assertions
+        INNER JOIN badge_templates
+          ON badge_templates.tenant_id = assertions.tenant_id
+          AND badge_templates.id = assertions.badge_template_id
+        LEFT JOIN assertion_reporting_attributions attribution
+          ON attribution.assertion_id = assertions.id
+        WHERE assertions.tenant_id = ?
+          AND attribution.assertion_id IS NULL
+        ORDER BY assertions.issued_at ASC, assertions.id ASC
+      `,
+      )
+      .bind(tenantId)
+      .all<MissingAttributionRow>();
+
+  let missingRows: MissingAttributionRow[];
+
+  try {
+    missingRows = (await missingStatement()).results;
+  } catch (error: unknown) {
+    if (isMissingAssertionReportingAttributionsTableError(error)) {
+      await ensureAssertionReportingAttributionsTable(db);
+      missingRows = (await missingStatement()).results;
+    } else if (isMissingTenantOrgUnitsTableError(error)) {
+      await ensureTenantOrgUnitsTable(db);
+      missingRows = (await missingStatement()).results;
+    } else {
+      throw error;
+    }
+  }
+
+  if (missingRows.length === 0) {
+    return 0;
+  }
+
+  const ownershipEventsByTemplateId = new Map<string, BadgeTemplateOwnershipEventRecord[]>();
+
+  for (const badgeTemplateId of new Set(missingRows.map((row) => row.badgeTemplateId))) {
+    ownershipEventsByTemplateId.set(
+      badgeTemplateId,
+      await listBadgeTemplateOwnershipEvents(db, {
+        tenantId,
+        badgeTemplateId,
+        limit: 5000,
+      }),
+    );
+  }
+
+  for (const row of missingRows) {
+    const attribution = resolveAssertionReportingAttribution({
+      issuedAt: row.issuedAt,
+      currentOwnerOrgUnitId: row.currentOwnerOrgUnitId,
+      ownershipEvents: ownershipEventsByTemplateId.get(row.badgeTemplateId) ?? [],
+    });
+
+    await upsertAssertionReportingAttribution(db, {
+      assertionId: row.assertionId,
+      tenantId,
+      badgeTemplateId: row.badgeTemplateId,
+      orgUnitId: attribution.orgUnitId,
+      attributionSource: attribution.attributionSource,
+      attributedAt: attribution.attributedAt,
+    });
+  }
+
+  return missingRows.length;
+};
+
+export const getTenantReportingOverview = async (
+  db: SqlDatabase,
+  input: GetTenantReportingOverviewInput,
+): Promise<TenantReportingOverviewRecord> => {
+  await backfillAssertionReportingAttributionsForTenant(db, input.tenantId);
+
+  const whereClauses = ["assertions.tenant_id = ?"];
+  const params: unknown[] = [input.tenantId];
+
+  if (input.issuedFrom !== undefined) {
+    whereClauses.push("assertions.issued_at >= ?");
+    params.push(normalizeReportingDateBoundary(input.issuedFrom, "start"));
+  }
+
+  if (input.issuedTo !== undefined) {
+    whereClauses.push("assertions.issued_at <= ?");
+    params.push(normalizeReportingDateBoundary(input.issuedTo, "end"));
+  }
+
+  if (input.badgeTemplateId !== undefined) {
+    whereClauses.push("assertions.badge_template_id = ?");
+    params.push(input.badgeTemplateId);
+  }
+
+  if (input.orgUnitId !== undefined) {
+    whereClauses.push("attribution.org_unit_id = ?");
+    params.push(input.orgUnitId);
+  }
+
+  const overviewStatement = (): Promise<SqlQueryResult<TenantReportingOverviewRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          assertions.id AS assertionId,
+          assertions.issued_at AS issuedAt,
+          assertions.badge_template_id AS badgeTemplateId,
+          attribution.org_unit_id AS orgUnitId,
+          assertions.revoked_at AS revokedAt,
+          lifecycle.to_state AS latestToState,
+          lifecycle.reason_code AS latestReasonCode
+        FROM assertions
+        INNER JOIN assertion_reporting_attributions attribution
+          ON attribution.assertion_id = assertions.id
+        LEFT JOIN assertion_lifecycle_events lifecycle
+          ON lifecycle.id = (
+            SELECT ale.id
+            FROM assertion_lifecycle_events ale
+            WHERE ale.tenant_id = assertions.tenant_id
+              AND ale.assertion_id = assertions.id
+            ORDER BY ale.transitioned_at DESC, ale.created_at DESC, ale.id DESC
+            LIMIT 1
+          )
+        WHERE ${whereClauses.join("\n          AND ")}
+        ORDER BY assertions.issued_at DESC, assertions.id DESC
+      `,
+      )
+      .bind(...params)
+      .all<TenantReportingOverviewRow>();
+
+  let rows: TenantReportingOverviewRow[];
+
+  try {
+    rows = (await overviewStatement()).results;
+  } catch (error: unknown) {
+    if (isMissingAssertionReportingAttributionsTableError(error)) {
+      await ensureAssertionReportingAttributionsTable(db);
+      await backfillAssertionReportingAttributionsForTenant(db, input.tenantId);
+      rows = (await overviewStatement()).results;
+    } else if (isMissingAssertionLifecycleEventsTableError(error)) {
+      await ensureAssertionLifecycleEventsTable(db);
+      rows = (await overviewStatement()).results;
+    } else {
+      throw error;
+    }
+  }
+
+  return {
+    tenantId: input.tenantId,
+    filters: {
+      issuedFrom: input.issuedFrom ?? null,
+      issuedTo: input.issuedTo ?? null,
+      badgeTemplateId: input.badgeTemplateId ?? null,
+      orgUnitId: input.orgUnitId ?? null,
+      state: input.state ?? null,
+    },
+    counts: summarizeTenantReportingOverviewRows(rows, input.state),
+    generatedAt: new Date().toISOString(),
+  };
+};
+
 export const listPublicBadgeWallEntries = async (
   db: SqlDatabase,
   input: ListPublicBadgeWallEntriesInput,
@@ -13007,6 +13551,22 @@ export const createAssertion = async (
     .run();
 
   await insertAssertionRecipientIdentifiers(db, input.id, recipientIdentifiers);
+  const badgeTemplate = await findBadgeTemplateById(db, input.tenantId, input.badgeTemplateId);
+
+  if (badgeTemplate === null) {
+    throw new Error(
+      `Badge template ${input.badgeTemplateId} not found for tenant ${input.tenantId}`,
+    );
+  }
+
+  await upsertAssertionReportingAttribution(db, {
+    assertionId: input.id,
+    tenantId: input.tenantId,
+    badgeTemplateId: input.badgeTemplateId,
+    orgUnitId: badgeTemplate.ownerOrgUnitId,
+    attributionSource: "issuance_snapshot",
+    attributedAt: input.issuedAt,
+  });
 
   return {
     id: input.id,

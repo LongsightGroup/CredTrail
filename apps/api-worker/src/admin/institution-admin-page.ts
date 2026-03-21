@@ -10,9 +10,11 @@ import type {
   TenantMembershipOrgUnitScopeRecord,
   TenantMembershipRole,
   TenantOrgUnitRecord,
+  TenantReportingOverviewRecord,
   TenantRecord,
 } from "@credtrail/db";
 import { renderPageShell } from "@credtrail/ui-components";
+import type { ReportingMetricEntry } from "../reporting/metric-definitions";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
@@ -69,6 +71,7 @@ type InstitutionAdminView =
   | "operationsReviewQueue"
   | "operationsIssuedBadges"
   | "operationsBadgeStatus"
+  | "reporting"
   | "rules"
   | "access"
   | "accessGovernance"
@@ -88,6 +91,8 @@ interface InstitutionAdminPageInput {
   revokedApiKeyCount: number;
   badgeRules: readonly BadgeIssuanceRuleRecord[];
   badgeRuleVersions: readonly BadgeIssuanceRuleVersionRecord[];
+  reportingOverview?: TenantReportingOverviewRecord | null;
+  reportingMetrics?: readonly ReportingMetricEntry[];
   enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
   breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
@@ -106,6 +111,7 @@ const renderInstitutionAdminPage = (
   const operationsReviewQueuePath = `${operationsPath}/review-queue`;
   const operationsIssuedBadgesPath = `${operationsPath}/issued-badges`;
   const operationsBadgeStatusPath = `${operationsPath}/badge-status`;
+  const reportingPath = `${tenantAdminPath}/reporting`;
   const rulesWorkspacePath = `${tenantAdminPath}/rules`;
   const accessPath = `${tenantAdminPath}/access`;
   const accessGovernancePath = `${accessPath}/governance`;
@@ -125,6 +131,8 @@ const renderInstitutionAdminPage = (
   );
   const userLabel = input.userEmail ?? input.userId;
   const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
+  const reportingOverview = input.reportingOverview ?? null;
+  const reportingMetrics = input.reportingMetrics ?? [];
   const renderOrgUnitSummary = (orgUnitId: string): string => {
     const orgUnit = orgUnitById.get(orgUnitId);
 
@@ -483,6 +491,65 @@ const renderInstitutionAdminPage = (
       : '<option value="">No active org units available</option>';
   const ruleSelectOptions =
     ruleOptions.length > 0 ? ruleOptions : '<option value="">No rules available</option>';
+  const reportingState = reportingOverview?.filters.state ?? null;
+  const reportingIssuedFromValue = reportingOverview?.filters.issuedFrom ?? "";
+  const reportingIssuedToValue = reportingOverview?.filters.issuedTo ?? "";
+  const reportingBadgeTemplateIdValue = reportingOverview?.filters.badgeTemplateId ?? "";
+  const reportingOrgUnitIdValue = reportingOverview?.filters.orgUnitId ?? "";
+  const reportingTemplateFilterOptions = input.badgeTemplates
+    .map((template) => {
+      return `<option value="${escapeHtml(template.id)}"${
+        reportingBadgeTemplateIdValue === template.id ? " selected" : ""
+      }>${escapeHtml(template.title)}</option>`;
+    })
+    .join("\n");
+  const reportingOrgUnitOptions = input.orgUnits
+    .filter((orgUnit) => orgUnit.isActive)
+    .map((orgUnit) => {
+      return `<option value="${escapeHtml(orgUnit.id)}"${
+        reportingOrgUnitIdValue === orgUnit.id ? " selected" : ""
+      }>${escapeHtml(`${orgUnit.displayName} (${orgUnit.unitType})`)}</option>`;
+    })
+    .join("\n");
+  const reportingMetricCardsMarkup =
+    reportingMetrics.filter((metric) => metric.available).length === 0
+      ? '<p class="ct-admin__empty">No reporting metrics are available yet.</p>'
+      : reportingMetrics
+          .filter((metric) => metric.available)
+          .map((metric) => {
+            return `<article class="ct-admin__metric-card ct-stack">
+              <p class="ct-admin__eyebrow">${escapeHtml(metric.label)}</p>
+              <strong class="ct-admin__metric-value">${String(metric.value ?? 0)}</strong>
+              <p class="ct-admin__hint">${escapeHtml(metric.description)}</p>
+            </article>`;
+          })
+          .join("\n");
+  const reportingDeferredMetricsMarkup = reportingMetrics
+    .filter((metric) => !metric.available)
+    .map((metric) => {
+      return `<article class="ct-admin__panel ct-admin__panel--nested ct-stack">
+        <div class="ct-cluster">
+          <strong>${escapeHtml(metric.label)}</strong>
+          <span class="ct-admin__status-pill">Deferred</span>
+        </div>
+        <p>${escapeHtml(metric.description)}</p>
+        <p class="ct-admin__hint">${escapeHtml(metric.availabilityNote ?? "Not available yet.")}</p>
+      </article>`;
+    })
+    .join("\n");
+  const reportingDefinitionRows =
+    reportingMetrics.length === 0
+      ? '<tr><td colspan="4" class="ct-admin__empty">No reporting definitions loaded yet.</td></tr>'
+      : reportingMetrics
+          .map((metric) => {
+            return `<tr>
+              <td><strong>${escapeHtml(metric.label)}</strong></td>
+              <td>${escapeHtml(metric.source)}</td>
+              <td>${metric.available ? "Available" : "Deferred"}</td>
+              <td>${escapeHtml(metric.availabilityNote ?? metric.description)}</td>
+            </tr>`;
+          })
+          .join("\n");
   const authPolicyApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-policy`;
   const authProvidersApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-providers`;
   const enterpriseAuthPolicy = input.enterpriseAuthPolicy ?? {
@@ -798,6 +865,8 @@ const renderInstitutionAdminPage = (
     badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
+    reportingPagePath: reportingPath,
+    reportingOverviewApiPath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/overview`,
     authPolicyApiPath: input.tenant.planTier === "enterprise" ? authPolicyApiPath : "",
     authProvidersApiPath: input.tenant.planTier === "enterprise" ? authProvidersApiPath : "",
     breakGlassAccountsApiPath:
@@ -811,6 +880,7 @@ const renderInstitutionAdminPage = (
       view === "operationsReviewQueue" ||
       view === "operationsIssuedBadges" ||
       view === "operationsBadgeStatus";
+    const reportingCurrent = view === "reporting";
     const accessCurrent =
       view === "access" ||
       view === "accessGovernance" ||
@@ -819,6 +889,7 @@ const renderInstitutionAdminPage = (
     const links = [
       { href: tenantAdminPath, label: "Home", isCurrent: view === "home" },
       { href: operationsPath, label: "Operations", isCurrent: operationsCurrent },
+      { href: reportingPath, label: "Reporting", isCurrent: reportingCurrent },
       { href: rulesWorkspacePath, label: "Rules", isCurrent: view === "rules" },
       { href: accessPath, label: "Access", isCurrent: accessCurrent },
       { href: adminAuditLogPath, label: "Audit logs", isCurrent: false },
@@ -894,6 +965,14 @@ const renderInstitutionAdminPage = (
       </div>
       <div class="ct-admin__workspace-actions ct-cluster">
         <a class="ct-admin__cta-link" href="${escapeHtml(operationsPath)}">Open operations</a>
+      </div>
+    </article>
+    <article class="ct-admin__workspace-card ct-stack">
+      <p class="ct-admin__eyebrow">Analytics</p>
+      <h2>Reporting</h2>
+      <p>Track issuance volume and badge status with filters, definitions, and clear source notes.</p>
+      <div class="ct-admin__workspace-actions ct-cluster">
+        <a class="ct-admin__cta-link" href="${escapeHtml(reportingPath)}">Open reporting</a>
       </div>
     </article>
     <article class="ct-admin__workspace-card ct-stack">
@@ -1493,6 +1572,81 @@ const renderInstitutionAdminPage = (
     <p id="issued-badges-action-status" class="ct-admin__status"></p>
   </article>`;
 
+  const reportingOverviewPanelMarkup = `<article id="reporting-overview-panel" class="ct-admin__panel ct-stack">
+    <h2>Reporting Overview</h2>
+    <p>Filter by issue date, template, org unit, or current badge state. Counts reflect product-owned data only.</p>
+    <form method="get" action="${escapeHtml(reportingPath)}" class="ct-admin__form ct-admin__form--inline ct-grid">
+      <label>
+        Issued from
+        <input name="issuedFrom" type="date" value="${escapeHtml(reportingIssuedFromValue)}" />
+      </label>
+      <label>
+        Issued to
+        <input name="issuedTo" type="date" value="${escapeHtml(reportingIssuedToValue)}" />
+      </label>
+      <label>
+        Badge template
+        <select name="badgeTemplateId">
+          <option value="">All templates</option>
+          ${reportingTemplateFilterOptions}
+        </select>
+      </label>
+      <label>
+        Org unit
+        <select name="orgUnitId">
+          <option value="">All org units</option>
+          ${reportingOrgUnitOptions}
+        </select>
+      </label>
+      <label>
+        Lifecycle state
+        <select name="state">
+          <option value="">All current states</option>
+          <option value="active"${reportingState === "active" ? " selected" : ""}>active</option>
+          <option value="suspended"${reportingState === "suspended" ? " selected" : ""}>suspended</option>
+          <option value="revoked"${reportingState === "revoked" ? " selected" : ""}>revoked</option>
+          <option value="expired"${reportingState === "expired" ? " selected" : ""}>expired</option>
+          <option value="pending_review"${reportingState === "pending_review" ? " selected" : ""}>pending review</option>
+        </select>
+      </label>
+      <div class="ct-cluster">
+        <button type="submit">Apply filters</button>
+        <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingPath)}">Reset</a>
+      </div>
+    </form>
+    <div class="ct-admin__metric-grid">
+      ${reportingMetricCardsMarkup}
+    </div>
+    <p class="ct-admin__hint">Generated ${escapeHtml(
+      reportingOverview === null ? "just now" : formatIsoTimestamp(reportingOverview.generatedAt),
+    )}</p>
+  </article>`;
+
+  const reportingDefinitionsPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Metric Definitions</h2>
+    <p>Every number in this page lists its source. Deferred metrics stay visible here, not as empty cards.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reportingDefinitionRows}
+        </tbody>
+      </table>
+    </div>
+  </article>`;
+
+  const reportingDeferredPanelMarkup =
+    reportingDeferredMetricsMarkup.length === 0
+      ? ""
+      : `<section class="ct-admin__grid ct-stack">${reportingDeferredMetricsMarkup}</section>`;
+
   const badgeRulesTableMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Badge Rules (${ruleCount})</h2>
     <p>Lifecycle actions operate on each rule’s latest version.</p>
@@ -1590,6 +1744,8 @@ const renderInstitutionAdminPage = (
             ? `Issued Badges · Institution Admin · ${input.tenant.displayName}`
             : view === "operationsBadgeStatus"
               ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
+              : view === "reporting"
+                ? `Reporting · Institution Admin · ${input.tenant.displayName}`
               : view === "rules"
                 ? `Rules · Institution Admin · ${input.tenant.displayName}`
                 : view === "access"
@@ -1655,6 +1811,21 @@ const renderInstitutionAdminPage = (
                   ${badgeStatusPanelMarkup}
                   <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
                 </section>`
+              : view === "reporting"
+                ? `<section class="ct-admin ct-stack">
+                    ${renderHero(
+                      "Reporting",
+                      "Track badge counts with stable attribution and clear metric definitions.",
+                      `<aside class="ct-admin__hero-note ct-stack">
+                        <h2>Phase 9 Scope</h2>
+                        <p>Claim rate and share rate stay deferred until product-owned engagement capture is in place.</p>
+                      </aside>`,
+                    )}
+                    ${reportingOverviewPanelMarkup}
+                    ${reportingDefinitionsPanelMarkup}
+                    ${reportingDeferredPanelMarkup}
+                    <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+                  </section>`
               : view === "rules"
                 ? `<section class="ct-admin ct-stack">
               ${renderHero(
@@ -1766,6 +1937,10 @@ export const institutionAdminIssuedBadgesPage = (input: InstitutionAdminPageInpu
 
 export const institutionAdminBadgeStatusPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, "operationsBadgeStatus");
+};
+
+export const institutionAdminReportingPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, "reporting");
 };
 
 export const institutionAdminRulesPage = (input: InstitutionAdminPageInput): string => {

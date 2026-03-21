@@ -4,6 +4,7 @@ const {
   mockedFindTenantAuthPolicy,
   mockedListTenantAuthProviders,
   mockedListTenantBreakGlassAccounts,
+  mockedGetTenantReportingOverview,
   mockedListAccessibleTenantContextsForUser,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
@@ -12,6 +13,7 @@ const {
     mockedFindTenantAuthPolicy: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedListTenantBreakGlassAccounts: vi.fn(),
+    mockedGetTenantReportingOverview: vi.fn(),
     mockedListAccessibleTenantContextsForUser: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("@credtrail/db", async () => {
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    getTenantReportingOverview: mockedGetTenantReportingOverview,
     listDelegatedIssuingAuthorityGrants: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
     listBadgeIssuanceRules: vi.fn(),
@@ -68,6 +71,7 @@ import {
   findTenantById,
   findTenantMembership,
   findUserById,
+  getTenantReportingOverview,
   listDelegatedIssuingAuthorityGrants,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
@@ -92,6 +96,7 @@ const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
 const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
+const mockedGetTenantReportingOverviewDb = vi.mocked(getTenantReportingOverview);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -329,6 +334,25 @@ beforeEach(() => {
       twoFactorEnabled: true,
     },
   ]);
+  mockedGetTenantReportingOverviewDb.mockReset();
+  mockedGetTenantReportingOverviewDb.mockResolvedValue({
+    tenantId: "tenant_123",
+    filters: {
+      issuedFrom: null,
+      issuedTo: null,
+      badgeTemplateId: null,
+      orgUnitId: null,
+      state: null,
+    },
+    counts: {
+      issued: 14,
+      active: 12,
+      suspended: 1,
+      revoked: 1,
+      pendingReview: 1,
+    },
+    generatedAt: "2026-03-21T12:00:00.000Z",
+  });
   mockedListAccessibleTenantContextsForUser.mockReset();
   mockedListAccessibleTenantContextsForUser.mockResolvedValue([
     {
@@ -435,9 +459,11 @@ describe("GET /tenants/:tenantId/admin", () => {
     expect(body).toContain("Choose a workspace instead of forcing every task onto one page.");
     expect(body).toContain("Institution admin workspaces");
     expect(body).toContain("Operations");
+    expect(body).toContain("Reporting");
     expect(body).toContain("Rules");
     expect(body).toContain("Access");
     expect(body).toContain("Open operations");
+    expect(body).toContain("Open reporting");
     expect(body).toContain("Open rules");
     expect(body).toContain("Open access");
     expect(body).not.toContain("Enterprise Auth");
@@ -445,6 +471,7 @@ describe("GET /tenants/:tenantId/admin", () => {
     expect(body).not.toContain("Create Tenant API Key");
     expect(body).not.toContain("Issued Badges Ledger");
     expect(body).toContain('href="/tenants/tenant_123/admin/operations"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/reporting"');
     expect(body).toContain('href="/tenants/tenant_123/admin/rules"');
     expect(body).toContain('href="/tenants/tenant_123/admin/access"');
     expect(body).toContain('href="/admin/audit-logs?tenantId=tenant_123"');
@@ -651,6 +678,40 @@ describe("GET /tenants/:tenantId/admin/operations/badge-status", () => {
     expect(body).not.toContain('id="manual-issue-form"');
     expect(body).not.toContain('id="rule-review-queue-refresh"');
     expect(body).not.toContain('id="issued-badges-filter-form"');
+  });
+});
+
+describe("GET /tenants/:tenantId/admin/reporting", () => {
+  it("renders the reporting workspace on its own route", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Reporting");
+    expect(body).toContain("Reporting Overview");
+    expect(body).toContain("Metric Definitions");
+    expect(body).toContain("Claim rate");
+    expect(body).toContain("Deferred");
+    expect(body).toContain('href="/tenants/tenant_123/admin/reporting"');
+    expect(body).toContain("14");
+    expect(mockedGetTenantReportingOverviewDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      issuedFrom: "2026-03-01",
+      issuedTo: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      state: undefined,
+    });
   });
 });
 

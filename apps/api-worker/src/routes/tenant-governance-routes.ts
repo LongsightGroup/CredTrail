@@ -12,6 +12,7 @@ import {
   findTenantAuthPolicy,
   findTenantAuthProviderById,
   findTenantById,
+  getTenantReportingOverview,
   findUserById,
   listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
@@ -58,6 +59,7 @@ import {
   parseUpsertTenantSsoSamlConfigurationRequest,
   parseTenantOrgUnitListQuery,
   parseTenantPathParams,
+  parseTenantReportingOverviewQuery,
   parseTenantUserDelegatedGrantPathParams,
   parseTenantUserOrgUnitPathParams,
   parseTenantUserPathParams,
@@ -75,10 +77,12 @@ import {
   institutionAdminOperationsReviewQueuePage,
   institutionAdminOperationsPage,
   institutionAdminOrgUnitsPage,
+  institutionAdminReportingPage,
   institutionAdminRulesPage,
 } from "../admin/institution-admin-page";
 import { institutionAdminRuleBuilderPage } from "../admin/institution-admin-rule-builder-page";
 import { buildLocalTwoFactorPath } from "../auth/break-glass-policy";
+import { buildReportingMetricEntries } from "../reporting/metric-definitions";
 import { buildOrganizationsPath } from "../auth/tenant-context-selection";
 
 interface RegisterTenantGovernanceRoutesInput {
@@ -422,6 +426,85 @@ export const registerTenantGovernanceRoutes = (
       pathParams.tenantId,
       `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/badge-status`,
       institutionAdminBadgeStatusPage,
+    );
+  });
+
+  app.get("/tenants/:tenantId/admin/reporting", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/reporting`,
+        );
+      }
+
+      if (roleCheck.status === 423) {
+        return c.redirect(
+          buildLocalTwoFactorPath({
+            tenantId: pathParams.tenantId,
+            nextPath: `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/reporting`,
+            setup: true,
+            reason: "break_glass_mfa_setup_pending",
+          }),
+          302,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    let reportingQuery;
+
+    try {
+      reportingQuery = parseTenantReportingOverviewQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting overview query",
+        },
+        400,
+      );
+    }
+
+    const { session, membershipRole } = roleCheck;
+    const db = resolveDatabase(c.env);
+    const pageData = await loadInstitutionAdminPageData(
+      c,
+      pathParams.tenantId,
+      session.userId,
+      membershipRole,
+    );
+
+    if (pageData instanceof Response) {
+      return pageData;
+    }
+
+    const reportingOverview = await getTenantReportingOverview(db, {
+      tenantId: pathParams.tenantId,
+      issuedFrom: reportingQuery.issuedFrom,
+      issuedTo: reportingQuery.issuedTo,
+      badgeTemplateId: reportingQuery.badgeTemplateId,
+      orgUnitId: reportingQuery.orgUnitId,
+      state: reportingQuery.state,
+    });
+
+    c.header("Cache-Control", "no-store");
+
+    return c.html(
+      institutionAdminReportingPage({
+        ...pageData,
+        reportingOverview,
+        reportingMetrics: buildReportingMetricEntries(reportingOverview.counts),
+      }),
     );
   });
 
