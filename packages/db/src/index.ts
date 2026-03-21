@@ -1777,6 +1777,54 @@ export interface TenantAssertionSummaryRecord {
   transitionedAt: string | null;
 }
 
+export const SYNCHRONOUS_EXPORT_ROW_LIMIT = 5000;
+
+export interface ListTenantAssertionLedgerExportRowsInput {
+  tenantId: string;
+  issuedFrom?: string | undefined;
+  issuedTo?: string | undefined;
+  badgeTemplateId?: string | undefined;
+  orgUnitId?: string | undefined;
+  state?: AssertionLifecycleState | undefined;
+  recipientQuery?: string | undefined;
+}
+
+export interface TenantAssertionLedgerExportRowRecord {
+  assertionId: string;
+  tenantId: string;
+  publicId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  recipientIdentity: string;
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  state: AssertionLifecycleState;
+  source: ResolveAssertionLifecycleStateResult["source"];
+  reasonCode: AssertionLifecycleReasonCode | null;
+  reason: string | null;
+  transitionedAt: string | null;
+  orgUnitId: string;
+  orgUnitDisplayName: string;
+  attributionSource: AssertionReportingAttributionSource;
+  currentInstitutionName: string | null;
+  currentCollegeName: string | null;
+  currentDepartmentName: string | null;
+  currentProgramName: string | null;
+}
+
+export type TenantAssertionLedgerExportResult =
+  | {
+      status: "ok";
+      rowLimit: number;
+      rows: TenantAssertionLedgerExportRowRecord[];
+    }
+  | {
+      status: "too_large";
+      rowLimit: number;
+    };
+
 export interface ListPublicBadgeWallEntriesInput {
   tenantId: string;
   badgeTemplateId?: string | undefined;
@@ -3933,6 +3981,26 @@ interface TenantAssertionSummaryRow {
   latestReasonCode: AssertionLifecycleReasonCode | null;
   latestReason: string | null;
   latestTransitionedAt: string | null;
+}
+
+interface TenantAssertionLedgerExportRow {
+  assertionId: string;
+  tenantId: string;
+  publicId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  recipientIdentity: string;
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  latestToState: AssertionLifecycleState | null;
+  latestReasonCode: AssertionLifecycleReasonCode | null;
+  latestReason: string | null;
+  latestTransitionedAt: string | null;
+  orgUnitId: string;
+  orgUnitDisplayName: string;
+  attributionSource: AssertionReportingAttributionSource;
 }
 
 interface PublicBadgeWallEntryRow {
@@ -7726,6 +7794,104 @@ const mapTenantOrgUnitRow = (row: TenantOrgUnitRow): TenantOrgUnitRecord => {
   };
 };
 
+const resolveAssertionLifecycleProjection = (input: {
+  revokedAt: string | null;
+  latestToState: AssertionLifecycleState | null;
+  latestReasonCode: AssertionLifecycleReasonCode | null;
+  latestReason: string | null;
+  latestTransitionedAt: string | null;
+}): Pick<
+  TenantAssertionSummaryRecord,
+  "state" | "source" | "reasonCode" | "reason" | "transitionedAt"
+> => {
+  let state: AssertionLifecycleState = "active";
+  let source: ResolveAssertionLifecycleStateResult["source"] = "default_active";
+  let reasonCode: AssertionLifecycleReasonCode | null = null;
+  let reason: string | null = null;
+  let transitionedAt: string | null = null;
+
+  if (input.revokedAt !== null && input.latestToState === "revoked") {
+    state = "revoked";
+    source = "lifecycle_event";
+    reasonCode = input.latestReasonCode;
+    reason = input.latestReason ?? "credential has been revoked by issuer";
+    transitionedAt = input.latestTransitionedAt ?? input.revokedAt;
+  } else if (input.revokedAt !== null) {
+    state = "revoked";
+    source = "assertion_revocation";
+    reason = "credential has been revoked by issuer";
+    transitionedAt = input.revokedAt;
+  } else if (input.latestToState !== null) {
+    state = input.latestToState;
+    source = "lifecycle_event";
+    reasonCode = input.latestReasonCode;
+    reason = input.latestReason;
+    transitionedAt = input.latestTransitionedAt;
+  }
+
+  return {
+    state,
+    source,
+    reasonCode,
+    reason,
+    transitionedAt,
+  };
+};
+
+const buildCurrentOrgUnitLineageNames = (
+  orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>,
+  orgUnitId: string,
+): Pick<
+  TenantAssertionLedgerExportRowRecord,
+  | "currentInstitutionName"
+  | "currentCollegeName"
+  | "currentDepartmentName"
+  | "currentProgramName"
+> => {
+  const lineageNames: Pick<
+    TenantAssertionLedgerExportRowRecord,
+    | "currentInstitutionName"
+    | "currentCollegeName"
+    | "currentDepartmentName"
+    | "currentProgramName"
+  > = {
+    currentInstitutionName: null,
+    currentCollegeName: null,
+    currentDepartmentName: null,
+    currentProgramName: null,
+  };
+
+  const visited = new Set<string>();
+  let currentOrgUnitId: string | null = orgUnitId;
+
+  while (currentOrgUnitId !== null) {
+    if (visited.has(currentOrgUnitId)) {
+      throw new Error(`Detected an org-unit cycle while resolving export lineage for ${orgUnitId}`);
+    }
+
+    visited.add(currentOrgUnitId);
+    const orgUnit = orgUnitsById.get(currentOrgUnitId);
+
+    if (orgUnit === undefined) {
+      return lineageNames;
+    }
+
+    if (orgUnit.unitType === "institution") {
+      lineageNames.currentInstitutionName = orgUnit.displayName;
+    } else if (orgUnit.unitType === "college") {
+      lineageNames.currentCollegeName = orgUnit.displayName;
+    } else if (orgUnit.unitType === "department") {
+      lineageNames.currentDepartmentName = orgUnit.displayName;
+    } else if (orgUnit.unitType === "program") {
+      lineageNames.currentProgramName = orgUnit.displayName;
+    }
+
+    currentOrgUnitId = orgUnit.parentOrgUnitId;
+  }
+
+  return lineageNames;
+};
+
 const mapBadgeTemplateOwnershipEventRow = (
   row: BadgeTemplateOwnershipEventRow,
 ): BadgeTemplateOwnershipEventRecord => {
@@ -7862,30 +8028,13 @@ const mapLearnerBadgeSummaryRow = (row: LearnerBadgeSummaryRow): LearnerBadgeSum
 const mapTenantAssertionSummaryRow = (
   row: TenantAssertionSummaryRow,
 ): TenantAssertionSummaryRecord => {
-  let state: AssertionLifecycleState = "active";
-  let source: ResolveAssertionLifecycleStateResult["source"] = "default_active";
-  let reasonCode: AssertionLifecycleReasonCode | null = null;
-  let reason: string | null = null;
-  let transitionedAt: string | null = null;
-
-  if (row.revokedAt !== null && row.latestToState === "revoked") {
-    state = "revoked";
-    source = "lifecycle_event";
-    reasonCode = row.latestReasonCode;
-    reason = row.latestReason ?? "credential has been revoked by issuer";
-    transitionedAt = row.latestTransitionedAt ?? row.revokedAt;
-  } else if (row.revokedAt !== null) {
-    state = "revoked";
-    source = "assertion_revocation";
-    reason = "credential has been revoked by issuer";
-    transitionedAt = row.revokedAt;
-  } else if (row.latestToState !== null) {
-    state = row.latestToState;
-    source = "lifecycle_event";
-    reasonCode = row.latestReasonCode;
-    reason = row.latestReason;
-    transitionedAt = row.latestTransitionedAt;
-  }
+  const lifecycle = resolveAssertionLifecycleProjection({
+    revokedAt: row.revokedAt,
+    latestToState: row.latestToState,
+    latestReasonCode: row.latestReasonCode,
+    latestReason: row.latestReason,
+    latestTransitionedAt: row.latestTransitionedAt,
+  });
 
   return {
     assertionId: row.assertionId,
@@ -7899,11 +8048,38 @@ const mapTenantAssertionSummaryRow = (
     issuedAt: row.issuedAt,
     issuedByUserId: row.issuedByUserId,
     revokedAt: row.revokedAt,
-    state,
-    source,
-    reasonCode,
-    reason,
-    transitionedAt,
+    ...lifecycle,
+  };
+};
+
+const mapTenantAssertionLedgerExportRow = (
+  row: TenantAssertionLedgerExportRow,
+  orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>,
+): TenantAssertionLedgerExportRowRecord => {
+  const lifecycle = resolveAssertionLifecycleProjection({
+    revokedAt: row.revokedAt,
+    latestToState: row.latestToState,
+    latestReasonCode: row.latestReasonCode,
+    latestReason: row.latestReason,
+    latestTransitionedAt: row.latestTransitionedAt,
+  });
+
+  return {
+    assertionId: row.assertionId,
+    tenantId: row.tenantId,
+    publicId: row.publicId,
+    badgeTemplateId: row.badgeTemplateId,
+    badgeTitle: row.badgeTitle,
+    recipientIdentity: row.recipientIdentity,
+    recipientIdentityType: row.recipientIdentityType,
+    issuedAt: row.issuedAt,
+    issuedByUserId: row.issuedByUserId,
+    revokedAt: row.revokedAt,
+    orgUnitId: row.orgUnitId,
+    orgUnitDisplayName: row.orgUnitDisplayName,
+    attributionSource: row.attributionSource,
+    ...lifecycle,
+    ...buildCurrentOrgUnitLineageNames(orgUnitsById, row.orgUnitId),
   };
 };
 
@@ -13825,6 +14001,155 @@ export const listTenantAssertions = async (
   }
 
   return result.results.map((row) => mapTenantAssertionSummaryRow(row));
+};
+
+export const listTenantAssertionLedgerExportRows = async (
+  db: SqlDatabase,
+  input: ListTenantAssertionLedgerExportRowsInput,
+): Promise<TenantAssertionLedgerExportResult> => {
+  await backfillAssertionReportingAttributionsForTenant(db, input.tenantId);
+
+  const whereClauses = ["assertions.tenant_id = ?"];
+  const params: unknown[] = [input.tenantId];
+
+  if (input.issuedFrom !== undefined) {
+    whereClauses.push("assertions.issued_at >= ?");
+    params.push(normalizeReportingDateBoundary(input.issuedFrom, "start"));
+  }
+
+  if (input.issuedTo !== undefined) {
+    whereClauses.push("assertions.issued_at <= ?");
+    params.push(normalizeReportingDateBoundary(input.issuedTo, "end"));
+  }
+
+  if (input.badgeTemplateId !== undefined) {
+    whereClauses.push("assertions.badge_template_id = ?");
+    params.push(input.badgeTemplateId);
+  }
+
+  if (input.orgUnitId !== undefined) {
+    whereClauses.push("attribution.org_unit_id = ?");
+    params.push(input.orgUnitId);
+  }
+
+  if (input.recipientQuery !== undefined) {
+    const normalizedQuery = `%${input.recipientQuery.trim().toLowerCase()}%`;
+    whereClauses.push(
+      `(
+        LOWER(assertions.recipient_identity) LIKE ?
+        OR LOWER(assertions.id) LIKE ?
+        OR LOWER(COALESCE(assertions.public_id, '')) LIKE ?
+      )`,
+    );
+    params.push(normalizedQuery, normalizedQuery, normalizedQuery);
+  }
+
+  if (input.state !== undefined) {
+    whereClauses.push(
+      `(
+        CASE
+          WHEN assertions.revoked_at IS NOT NULL THEN 'revoked'
+          WHEN lifecycle.to_state IS NOT NULL THEN lifecycle.to_state
+          ELSE 'active'
+        END
+      ) = ?`,
+    );
+    params.push(input.state);
+  }
+
+  const rowLimit = SYNCHRONOUS_EXPORT_ROW_LIMIT;
+  const listStatement = (): Promise<SqlQueryResult<TenantAssertionLedgerExportRow>> =>
+    db
+      .prepare(
+        `
+        SELECT
+          assertions.id AS assertionId,
+          assertions.tenant_id AS tenantId,
+          assertions.public_id AS publicId,
+          assertions.badge_template_id AS badgeTemplateId,
+          badge_templates.title AS badgeTitle,
+          assertions.recipient_identity AS recipientIdentity,
+          assertions.recipient_identity_type AS recipientIdentityType,
+          assertions.issued_at AS issuedAt,
+          assertions.issued_by_user_id AS issuedByUserId,
+          assertions.revoked_at AS revokedAt,
+          lifecycle.to_state AS latestToState,
+          lifecycle.reason_code AS latestReasonCode,
+          lifecycle.reason AS latestReason,
+          lifecycle.transitioned_at AS latestTransitionedAt,
+          attribution.org_unit_id AS orgUnitId,
+          COALESCE(org_units.display_name, attribution.org_unit_id) AS orgUnitDisplayName,
+          attribution.attribution_source AS attributionSource
+        FROM assertions
+        INNER JOIN badge_templates
+          ON badge_templates.tenant_id = assertions.tenant_id
+          AND badge_templates.id = assertions.badge_template_id
+        INNER JOIN assertion_reporting_attributions attribution
+          ON attribution.assertion_id = assertions.id
+        LEFT JOIN tenant_org_units org_units
+          ON org_units.tenant_id = assertions.tenant_id
+          AND org_units.id = attribution.org_unit_id
+        LEFT JOIN assertion_lifecycle_events lifecycle
+          ON lifecycle.id = (
+            SELECT ale.id
+            FROM assertion_lifecycle_events ale
+            WHERE ale.tenant_id = assertions.tenant_id
+              AND ale.assertion_id = assertions.id
+            ORDER BY ale.transitioned_at DESC, ale.created_at DESC, ale.id DESC
+            LIMIT 1
+          )
+        WHERE ${whereClauses.join("\n          AND ")}
+        ORDER BY assertions.issued_at DESC, assertions.id DESC
+        LIMIT ?
+      `,
+      )
+      .bind(...params, rowLimit + 1)
+      .all<TenantAssertionLedgerExportRow>();
+
+  let rows: TenantAssertionLedgerExportRow[];
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      rows = (await listStatement()).results;
+      const orgUnits = await listTenantOrgUnits(db, {
+        tenantId: input.tenantId,
+      });
+      const orgUnitsById = new Map(orgUnits.map((orgUnit) => [orgUnit.id, orgUnit] as const));
+
+      if (rows.length > rowLimit) {
+        return {
+          status: "too_large",
+          rowLimit,
+        };
+      }
+
+      return {
+        status: "ok",
+        rowLimit,
+        rows: rows.map((row) => mapTenantAssertionLedgerExportRow(row, orgUnitsById)),
+      };
+    } catch (error: unknown) {
+      if (isMissingAssertionReportingAttributionsTableError(error)) {
+        await ensureAssertionReportingAttributionsTable(db);
+        await backfillAssertionReportingAttributionsForTenant(db, input.tenantId);
+        continue;
+      }
+
+      if (isMissingAssertionLifecycleEventsTableError(error)) {
+        await ensureAssertionLifecycleEventsTable(db);
+        continue;
+      }
+
+      if (isMissingTenantOrgUnitsTableError(error)) {
+        await ensureTenantOrgUnitsTable(db);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error("Unable to load tenant assertion ledger export rows after retrying setup");
 };
 
 const normalizeReportingDateBoundary = (

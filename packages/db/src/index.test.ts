@@ -2868,6 +2868,26 @@ describe("ledger export foundation", () => {
 
       if (
         normalizedSql.includes("FROM assertions") &&
+        normalizedSql.includes("LEFT JOIN assertion_reporting_attributions attribution") &&
+        normalizedSql.includes("attribution.assertion_id IS NULL")
+      ) {
+        return Promise.resolve({
+          success: true,
+          meta: {} as SqlExecutionMeta,
+          results: [] as T[],
+        });
+      }
+
+      if (normalizedSql.includes("FROM badge_template_ownership_events")) {
+        return Promise.resolve({
+          success: true,
+          meta: {} as SqlExecutionMeta,
+          results: [] as T[],
+        });
+      }
+
+      if (
+        normalizedSql.includes("FROM assertions") &&
         normalizedSql.includes("assertion_reporting_attributions")
       ) {
         return Promise.resolve({

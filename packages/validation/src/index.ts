@@ -329,6 +329,29 @@ const reportingDateSchema = z
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/);
 
+export const tenantAssertionLedgerExportQuerySchema = z
+  .object({
+    issuedFrom: reportingDateSchema.optional(),
+    issuedTo: reportingDateSchema.optional(),
+    badgeTemplateId: resourceIdSchema.optional(),
+    orgUnitId: resourceIdSchema.optional(),
+    state: assertionLifecycleStateSchema.optional(),
+    recipientQuery: z.string().trim().min(1).max(320).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.issuedFrom === undefined || value.issuedTo === undefined) {
+      return;
+    }
+
+    if (value.issuedFrom > value.issuedTo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["issuedTo"],
+        message: "issuedTo must be on or after issuedFrom",
+      });
+    }
+  });
+
 export const tenantReportingOverviewQuerySchema = z
   .object({
     issuedFrom: reportingDateSchema.optional(),
@@ -1340,6 +1363,9 @@ export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
 >;
 export type TenantApiKeyListQuery = z.infer<typeof tenantApiKeyListQuerySchema>;
 export type TenantAssertionListQuery = z.infer<typeof tenantAssertionListQuerySchema>;
+export type TenantAssertionLedgerExportQuery = z.infer<
+  typeof tenantAssertionLedgerExportQuerySchema
+>;
 export type TenantReportingOverviewQuery = z.infer<typeof tenantReportingOverviewQuerySchema>;
 export type TenantReportingTrendQuery = z.infer<typeof tenantReportingTrendQuerySchema>;
 export type TenantReportingComparisonQuery = z.infer<typeof tenantReportingComparisonQuerySchema>;
@@ -1623,6 +1649,12 @@ export const parseTenantApiKeyListQuery = (input: unknown): TenantApiKeyListQuer
 
 export const parseTenantAssertionListQuery = (input: unknown): TenantAssertionListQuery => {
   return tenantAssertionListQuerySchema.parse(input);
+};
+
+export const parseTenantAssertionLedgerExportQuery = (
+  input: unknown,
+): TenantAssertionLedgerExportQuery => {
+  return tenantAssertionLedgerExportQuerySchema.parse(input);
 };
 
 export const parseTenantReportingOverviewQuery = (
