@@ -12,7 +12,9 @@ import {
   findTenantAuthPolicy,
   findTenantAuthProviderById,
   findTenantById,
+  getTenantReportingEngagementCounts,
   getTenantReportingOverview,
+  getTenantReportingTrends,
   findUserById,
   listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
@@ -21,6 +23,7 @@ import {
   listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
   listTenantApiKeys,
+  listTenantReportingComparisons,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
   listTenantBreakGlassAccounts,
@@ -488,22 +491,54 @@ export const registerTenantGovernanceRoutes = (
       return pageData;
     }
 
-    const reportingOverview = await getTenantReportingOverview(db, {
+    const engagementFilters = {
       tenantId: pathParams.tenantId,
-      issuedFrom: reportingQuery.issuedFrom,
-      issuedTo: reportingQuery.issuedTo,
+      from: reportingQuery.issuedFrom,
+      to: reportingQuery.issuedTo,
       badgeTemplateId: reportingQuery.badgeTemplateId,
       orgUnitId: reportingQuery.orgUnitId,
-      state: reportingQuery.state,
-    });
+    };
+    const [
+      reportingOverview,
+      reportingEngagementCounts,
+      reportingTrends,
+      reportingTemplateComparisons,
+      reportingOrgUnitComparisons,
+    ] = await Promise.all([
+      getTenantReportingOverview(db, {
+        tenantId: pathParams.tenantId,
+        issuedFrom: reportingQuery.issuedFrom,
+        issuedTo: reportingQuery.issuedTo,
+        badgeTemplateId: reportingQuery.badgeTemplateId,
+        orgUnitId: reportingQuery.orgUnitId,
+        state: reportingQuery.state,
+      }),
+      getTenantReportingEngagementCounts(db, engagementFilters),
+      getTenantReportingTrends(db, {
+        ...engagementFilters,
+        bucket: "day",
+      }),
+      listTenantReportingComparisons(db, {
+        ...engagementFilters,
+        groupBy: "badgeTemplate",
+      }),
+      listTenantReportingComparisons(db, {
+        ...engagementFilters,
+        groupBy: "orgUnit",
+      }),
+    ]);
 
     c.header("Cache-Control", "no-store");
 
     return c.html(
       institutionAdminReportingPage({
         ...pageData,
+        reportingEngagementCounts,
         reportingOverview,
         reportingMetrics: buildReportingMetricEntries(reportingOverview.counts),
+        reportingOrgUnitComparisons,
+        reportingTemplateComparisons,
+        reportingTrends,
       }),
     );
   });

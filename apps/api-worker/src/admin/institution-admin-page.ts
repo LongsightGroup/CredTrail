@@ -10,7 +10,10 @@ import type {
   TenantMembershipOrgUnitScopeRecord,
   TenantMembershipRole,
   TenantOrgUnitRecord,
+  TenantReportingComparisonRowRecord,
+  TenantReportingEngagementCounts,
   TenantReportingOverviewRecord,
+  TenantReportingTrendRecord,
   TenantRecord,
 } from "@credtrail/db";
 import { renderPageShell } from "@credtrail/ui-components";
@@ -65,6 +68,29 @@ const formatDelegatedIssuingActionLabel = (action: string): string => {
   }
 };
 
+const formatReportingCount = (value: number): string => {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatReportingRate = (value: number): string => {
+  return `${value.toFixed(1)}%`;
+};
+
+const formatReportingDateLabel = (value: string): string => {
+  const date = value.includes("T") ? new Date(value) : new Date(`${value}T00:00:00.000Z`);
+
+  if (!Number.isFinite(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
+
 type InstitutionAdminView =
   | "home"
   | "operations"
@@ -91,8 +117,12 @@ interface InstitutionAdminPageInput {
   revokedApiKeyCount: number;
   badgeRules: readonly BadgeIssuanceRuleRecord[];
   badgeRuleVersions: readonly BadgeIssuanceRuleVersionRecord[];
+  reportingEngagementCounts?: TenantReportingEngagementCounts | null;
   reportingOverview?: TenantReportingOverviewRecord | null;
   reportingMetrics?: readonly ReportingMetricEntry[];
+  reportingOrgUnitComparisons?: readonly TenantReportingComparisonRowRecord[];
+  reportingTemplateComparisons?: readonly TenantReportingComparisonRowRecord[];
+  reportingTrends?: TenantReportingTrendRecord | null;
   enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
   breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
@@ -124,15 +154,14 @@ const renderInstitutionAdminPage = (
   const revokedApiKeyCount = String(input.revokedApiKeyCount);
   const ruleCount = String(input.badgeRules.length);
   const scopedRoleCount = String(input.membershipOrgUnitScopes.length);
-  const activeDelegationCount = String(
-    input.delegatedIssuingAuthorityGrants.filter(
-      (grant) => grant.status === "active" || grant.status === "scheduled",
-    ).length,
-  );
   const userLabel = input.userEmail ?? input.userId;
   const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
+  const reportingEngagementCounts = input.reportingEngagementCounts ?? null;
   const reportingOverview = input.reportingOverview ?? null;
   const reportingMetrics = input.reportingMetrics ?? [];
+  const reportingOrgUnitComparisons = input.reportingOrgUnitComparisons ?? [];
+  const reportingTemplateComparisons = input.reportingTemplateComparisons ?? [];
+  const reportingTrends = input.reportingTrends ?? null;
   const renderOrgUnitSummary = (orgUnitId: string): string => {
     const orgUnit = orgUnitById.get(orgUnitId);
 
@@ -152,6 +181,31 @@ const renderInstitutionAdminPage = (
     return badgeTemplateIds
       .map((badgeTemplateId) => templateById.get(badgeTemplateId)?.title ?? badgeTemplateId)
       .join(", ");
+  };
+  const renderReportingComparisonGroupLabel = (
+    row: TenantReportingComparisonRowRecord,
+  ): string => {
+    if (row.groupBy === "badgeTemplate") {
+      const template = templateById.get(row.groupId);
+
+      if (template === undefined) {
+        return `<strong>${escapeHtml(row.groupId)}</strong>`;
+      }
+
+      return `<strong>${escapeHtml(template.title)}</strong><div class="ct-admin__meta">${escapeHtml(
+        template.id,
+      )}</div>`;
+    }
+
+    return renderOrgUnitSummary(row.groupId);
+  };
+  const renderReportingCountCell = (value: number): string => {
+    return `<div class="ct-admin__reporting-bar-value" data-reporting-bar-value="${String(value)}">
+      <span class="ct-admin__reporting-bar-number">${escapeHtml(formatReportingCount(value))}</span>
+      <span class="ct-admin__reporting-bar-track" aria-hidden="true">
+        <span class="ct-admin__reporting-bar-fill"></span>
+      </span>
+    </div>`;
   };
 
   for (const version of input.badgeRuleVersions) {
@@ -298,7 +352,9 @@ const renderInstitutionAdminPage = (
               <td>${renderOrgUnitSummary(grant.orgUnitId)}</td>
               <td>
                 ${escapeHtml(
-                  grant.allowedActions.map((action) => formatDelegatedIssuingActionLabel(action)).join(", "),
+                  grant.allowedActions
+                    .map((action) => formatDelegatedIssuingActionLabel(action))
+                    .join(", "),
                 )}
                 <div class="ct-admin__meta">${escapeHtml(
                   renderBadgeTemplateScopeSummary(grant.badgeTemplateIds),
@@ -517,9 +573,14 @@ const renderInstitutionAdminPage = (
       : reportingMetrics
           .filter((metric) => metric.available)
           .map((metric) => {
+            const metricValue =
+              metric.key === "claimRate" || metric.key === "shareRate"
+                ? formatReportingRate(metric.value ?? 0)
+                : formatReportingCount(metric.value ?? 0);
+
             return `<article class="ct-admin__metric-card ct-stack">
               <p class="ct-admin__eyebrow">${escapeHtml(metric.label)}</p>
-              <strong class="ct-admin__metric-value">${String(metric.value ?? 0)}</strong>
+              <strong class="ct-admin__metric-value">${escapeHtml(metricValue)}</strong>
               <p class="ct-admin__hint">${escapeHtml(metric.description)}</p>
             </article>`;
           })
@@ -550,6 +611,119 @@ const renderInstitutionAdminPage = (
             </tr>`;
           })
           .join("\n");
+  const reportingEngagementCardsMarkup =
+    reportingEngagementCounts === null
+      ? '<p class="ct-admin__empty">Engagement counts are not available yet.</p>'
+      : [
+          {
+            label: "Public badge views",
+            description: "Successful public badge page loads captured on CredTrail-owned routes.",
+            value: reportingEngagementCounts.publicBadgeViewCount,
+          },
+          {
+            label: "Verification views",
+            description: "Successful credential verification responses served by CredTrail.",
+            value: reportingEngagementCounts.verificationViewCount,
+          },
+          {
+            label: "Share clicks",
+            description: "Outbound share actions routed through CredTrail before handoff.",
+            value: reportingEngagementCounts.shareClickCount,
+          },
+          {
+            label: "Claim actions",
+            description: "Explicit learner claim actions captured in the dashboard.",
+            value: reportingEngagementCounts.learnerClaimCount,
+          },
+          {
+            label: "Wallet accepts",
+            description: "Successful OID4VCI credential retrievals recorded as acceptance.",
+            value: reportingEngagementCounts.walletAcceptCount,
+          },
+        ]
+          .map((metric) => {
+            return `<article class="ct-admin__metric-card ct-stack">
+              <p class="ct-admin__eyebrow">${escapeHtml(metric.label)}</p>
+              <strong class="ct-admin__metric-value">${escapeHtml(
+                formatReportingCount(metric.value),
+              )}</strong>
+              <p class="ct-admin__hint">${escapeHtml(metric.description)}</p>
+            </article>`;
+          })
+          .join("\n");
+  const reportingRateCardsMarkup =
+    reportingEngagementCounts === null
+      ? ""
+      : [
+          {
+            label: "Claim rate",
+            description: "Distinct claimed or accepted assertions over issued badges in the same window.",
+            value: reportingEngagementCounts.claimRate,
+          },
+          {
+            label: "Share rate",
+            description: "Distinct shared assertions over issued badges, not raw repeat clicks.",
+            value: reportingEngagementCounts.shareRate,
+          },
+        ]
+          .map((metric) => {
+            return `<article class="ct-admin__metric-card ct-stack ct-admin__metric-card--rate">
+              <p class="ct-admin__eyebrow">${escapeHtml(metric.label)}</p>
+              <strong class="ct-admin__metric-value">${escapeHtml(
+                formatReportingRate(metric.value),
+              )}</strong>
+              <p class="ct-admin__hint">${escapeHtml(metric.description)}</p>
+            </article>`;
+          })
+          .join("\n");
+  const reportingTrendRowsMarkup =
+    reportingTrends === null || reportingTrends.series.length === 0
+      ? '<tr><td colspan="7" class="ct-admin__empty">No trend data available for the selected filters.</td></tr>'
+      : reportingTrends.series
+          .map((row) => {
+            return `<tr>
+              <td><strong>${escapeHtml(formatReportingDateLabel(row.bucketStart))}</strong></td>
+              <td>${renderReportingCountCell(row.issuedCount)}</td>
+              <td>${renderReportingCountCell(row.publicBadgeViewCount)}</td>
+              <td>${renderReportingCountCell(row.verificationViewCount)}</td>
+              <td>${renderReportingCountCell(row.shareClickCount)}</td>
+              <td>${renderReportingCountCell(row.learnerClaimCount)}</td>
+              <td>${renderReportingCountCell(row.walletAcceptCount)}</td>
+            </tr>`;
+          })
+          .join("\n");
+  const renderReportingComparisonRows = (
+    rows: readonly TenantReportingComparisonRowRecord[],
+    emptyLabel: string,
+  ): string => {
+    if (rows.length === 0) {
+      return `<tr><td colspan="9" class="ct-admin__empty">${escapeHtml(emptyLabel)}</td></tr>`;
+    }
+
+    return rows
+      .map((row) => {
+        return `<tr>
+          <td>${renderReportingComparisonGroupLabel(row)}</td>
+          <td>${renderReportingCountCell(row.issuedCount)}</td>
+          <td>${renderReportingCountCell(row.publicBadgeViewCount)}</td>
+          <td>${renderReportingCountCell(row.verificationViewCount)}</td>
+          <td>${renderReportingCountCell(row.shareClickCount)}</td>
+          <td>${renderReportingCountCell(row.learnerClaimCount)}</td>
+          <td>${renderReportingCountCell(row.walletAcceptCount)}</td>
+          <td>${escapeHtml(formatReportingRate(row.claimRate))}</td>
+          <td>${escapeHtml(formatReportingRate(row.shareRate))}</td>
+        </tr>`;
+      })
+      .join("\n");
+  };
+  const reportingTemplateComparisonRowsMarkup = renderReportingComparisonRows(
+    reportingTemplateComparisons,
+    "No badge-template comparisons available for the selected filters.",
+  );
+  const reportingOrgUnitComparisonRowsMarkup = renderReportingComparisonRows(
+    reportingOrgUnitComparisons,
+    "No org-unit comparisons available for the selected filters.",
+  );
   const authPolicyApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-policy`;
   const authProvidersApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-providers`;
   const enterpriseAuthPolicy = input.enterpriseAuthPolicy ?? {
@@ -865,8 +1039,11 @@ const renderInstitutionAdminPage = (
     badgeRuleReviewQueueApiPath,
     assertionsApiPathPrefix,
     tenantUsersApiPathPrefix,
+    reportingComparisonsApiPath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/comparisons`,
+    reportingEngagementApiPath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/engagement`,
     reportingPagePath: reportingPath,
     reportingOverviewApiPath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/overview`,
+    reportingTrendsApiPath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/trends`,
     authPolicyApiPath: input.tenant.planTier === "enterprise" ? authPolicyApiPath : "",
     authProvidersApiPath: input.tenant.planTier === "enterprise" ? authProvidersApiPath : "",
     breakGlassAccountsApiPath:
@@ -874,84 +1051,61 @@ const renderInstitutionAdminPage = (
         ? `/v1/tenants/${encodeURIComponent(input.tenant.id)}/break-glass-accounts`
         : "",
   });
-  const renderAdminNav = (): string => {
-    const operationsCurrent =
-      view === "operations" ||
-      view === "operationsReviewQueue" ||
-      view === "operationsIssuedBadges" ||
-      view === "operationsBadgeStatus";
-    const reportingCurrent = view === "reporting";
-    const accessCurrent =
-      view === "access" ||
-      view === "accessGovernance" ||
-      view === "accessApiKeys" ||
-      view === "accessOrgUnits";
-    const links = [
-      { href: tenantAdminPath, label: "Home", isCurrent: view === "home" },
-      { href: operationsPath, label: "Operations", isCurrent: operationsCurrent },
-      { href: reportingPath, label: "Reporting", isCurrent: reportingCurrent },
-      { href: rulesWorkspacePath, label: "Rules", isCurrent: view === "rules" },
-      { href: accessPath, label: "Access", isCurrent: accessCurrent },
-      { href: adminAuditLogPath, label: "Audit logs", isCurrent: false },
-      {
-        href: showcasePath,
-        label: "Public showcase",
-        isCurrent: false,
-        target: "_blank",
-        rel: "noopener noreferrer",
-      },
-    ];
-
-    if (switchOrganizationPath.length > 0) {
-      links.push({
-        href: switchOrganizationPath,
-        label: "Switch organization",
-        isCurrent: false,
-      });
-    }
-
-    return `<nav class="ct-admin__quick-links ct-cluster" aria-label="Institution admin navigation">
-      ${links
-        .map((link) => {
-          const attributes = [
-            `href="${escapeHtml(link.href)}"`,
-            link.isCurrent ? 'aria-current="page"' : "",
-            link.target === undefined ? "" : `target="${escapeHtml(link.target)}"`,
-            link.rel === undefined ? "" : `rel="${escapeHtml(link.rel)}"`,
-          ]
-            .filter((value) => value.length > 0)
-            .join(" ");
-
-          return `<a ${attributes}>${escapeHtml(link.label)}</a>`;
-        })
-        .join("\n")}
-    </nav>`;
+  const sidebarLink = (href: string, label: string, isCurrent: boolean, extra = ""): string => {
+    const cls = extra.length > 0 ? `ct-admin-sidebar__link ${extra}` : "ct-admin-sidebar__link";
+    return `<a class="${cls}" href="${escapeHtml(href)}"${isCurrent ? ' aria-current="page"' : ""}>${escapeHtml(label)}</a>`;
   };
 
-  const renderHero = (title: string, description: string, noteMarkup = ""): string => {
-    const heroContent = `<div class="ct-stack">
-        <p class="ct-admin__eyebrow">Institution Admin</p>
-        <h1>${escapeHtml(title)}</h1>
-        <p>${escapeHtml(description)}</p>
-        <div class="ct-admin__meta-grid ct-cluster">
-          <span class="ct-admin__pill">Tenant: ${escapeHtml(input.tenant.id)}</span>
-          <span class="ct-admin__pill">Plan: ${escapeHtml(input.tenant.planTier)}</span>
-          <span class="ct-admin__pill">Role: ${escapeHtml(input.membershipRole)}</span>
-          <span class="ct-admin__pill" title="User ID: ${escapeHtml(input.userId)}">User: ${escapeHtml(
-            userLabel,
-          )}</span>
-        </div>
-        ${renderAdminNav()}
-      </div>`;
+  const renderSidebar = (): string => {
+    return `<aside class="ct-admin-sidebar">
+      <a class="ct-admin-sidebar__brand" href="${escapeHtml(tenantAdminPath)}">CredTrail</a>
+      <nav class="ct-admin-sidebar__nav" aria-label="Admin navigation">
+        ${sidebarLink(tenantAdminPath, "Home", view === "home")}
 
-    return noteMarkup.length === 0
-      ? `<header class="ct-admin__hero ct-stack">${heroContent}</header>`
-      : `<header class="ct-admin__hero ct-stack">
-          <div class="ct-admin__hero-layout ct-grid">
-            ${heroContent}
-            ${noteMarkup}
-          </div>
-        </header>`;
+        <p class="ct-admin-sidebar__section-label">Operations</p>
+        ${sidebarLink(operationsPath, "Overview", view === "operations")}
+        ${sidebarLink(operationsReviewQueuePath, "Review Queue", view === "operationsReviewQueue", "ct-admin-sidebar__link--sub")}
+        ${sidebarLink(operationsIssuedBadgesPath, "Issued Badges", view === "operationsIssuedBadges", "ct-admin-sidebar__link--sub")}
+        ${sidebarLink(operationsBadgeStatusPath, "Badge Status", view === "operationsBadgeStatus", "ct-admin-sidebar__link--sub")}
+
+        <p class="ct-admin-sidebar__section-label">Reporting</p>
+        ${sidebarLink(reportingPath, "Overview", view === "reporting")}
+
+        <p class="ct-admin-sidebar__section-label">Configuration</p>
+        ${sidebarLink(rulesWorkspacePath, "Rules", view === "rules")}
+
+        <p class="ct-admin-sidebar__section-label">Access</p>
+        ${sidebarLink(accessPath, "Overview", view === "access")}
+        ${sidebarLink(accessGovernancePath, "Governance", view === "accessGovernance", "ct-admin-sidebar__link--sub")}
+        ${sidebarLink(accessApiKeysPath, "API Keys", view === "accessApiKeys", "ct-admin-sidebar__link--sub")}
+        ${sidebarLink(accessOrgUnitsPath, "Org Units", view === "accessOrgUnits", "ct-admin-sidebar__link--sub")}
+      </nav>
+      <div class="ct-admin-sidebar__footer">
+        <a class="ct-admin-sidebar__footer-link ct-admin-sidebar__link--external" href="${escapeHtml(adminAuditLogPath)}">Audit logs</a>
+        <a class="ct-admin-sidebar__footer-link ct-admin-sidebar__link--external" href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
+        ${switchOrganizationPath.length > 0 ? `<a class="ct-admin-sidebar__footer-link" href="${escapeHtml(switchOrganizationPath)}">Switch organization</a>` : ""}
+      </div>
+    </aside>`;
+  };
+
+  const renderTopbar = (): string => {
+    return `<header class="ct-admin-topbar">
+      <button type="button" class="ct-admin-topbar__toggle" aria-label="Toggle navigation" data-sidebar-toggle>☰</button>
+      <p class="ct-admin-topbar__title">${escapeHtml(input.tenant.displayName)}</p>
+      <div class="ct-admin-topbar__user">
+        <span class="ct-admin-topbar__chip">${escapeHtml(input.membershipRole)}</span>
+        <span class="ct-admin-topbar__chip">${escapeHtml(input.tenant.planTier)}</span>
+        <span title="User ID: ${escapeHtml(input.userId)}">${escapeHtml(userLabel)}</span>
+      </div>
+    </header>`;
+  };
+
+  const renderPageHeader = (title: string, description: string, noteMarkup = ""): string => {
+    return `<div class="ct-admin-page-header">
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(description)}</p>
+      ${noteMarkup}
+    </div>`;
   };
 
   const workspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Institution admin workspaces">
@@ -971,6 +1125,10 @@ const renderInstitutionAdminPage = (
       <p class="ct-admin__eyebrow">Analytics</p>
       <h2>Reporting</h2>
       <p>Track issuance volume and badge status with filters, definitions, and clear source notes.</p>
+      <div class="ct-admin__workspace-stats ct-cluster">
+        <span class="ct-admin__status-pill">Issued ${reportingOverview?.counts.issued ?? 0}</span>
+        <span class="ct-admin__status-pill">Pending review ${reportingOverview?.counts.pendingReview ?? 0}</span>
+      </div>
       <div class="ct-admin__workspace-actions ct-cluster">
         <a class="ct-admin__cta-link" href="${escapeHtml(reportingPath)}">Open reporting</a>
       </div>
@@ -1004,70 +1162,6 @@ const renderInstitutionAdminPage = (
       </div>
       <div class="ct-admin__workspace-actions ct-cluster">
         <a class="ct-admin__cta-link" href="${escapeHtml(accessPath)}">Open access</a>
-      </div>
-    </article>
-  </section>`;
-
-  const operationsWorkspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Operations pages">
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Manual review</p>
-      <h2>Rule Review Queue</h2>
-      <p>Process badges that need a human decision before they are issued.</p>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(operationsReviewQueuePath)}">Open review queue</a>
-      </div>
-    </article>
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Audit trail</p>
-      <h2>Issued Badges</h2>
-      <p>Search tenant-issued badges and take revocation or audit actions from one page.</p>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(operationsIssuedBadgesPath)}">Open issued badges</a>
-      </div>
-    </article>
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Status changes</p>
-      <h2>Badge Status</h2>
-      <p>Look up a badge, inspect its current state, and suspend, revoke, or expire it with a reason.</p>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(operationsBadgeStatusPath)}">Open badge status</a>
-      </div>
-    </article>
-  </section>`;
-
-  const accessWorkspaceCardsMarkup = `<section class="ct-admin__workspace-grid ct-grid" aria-label="Access pages">
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Delegation</p>
-      <h2>Governance</h2>
-      <p>Assign org-unit roles and time-boxed badge authority from one dedicated page with current assignments visible.</p>
-      <div class="ct-admin__workspace-stats ct-cluster">
-        <span class="ct-admin__status-pill">${scopedRoleCount} scoped roles</span>
-        <span class="ct-admin__status-pill">${activeDelegationCount} active delegations</span>
-      </div>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(accessGovernancePath)}">Open governance</a>
-      </div>
-    </article>
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Integrations</p>
-      <h2>API Keys</h2>
-      <p>Create, review, and revoke scoped tenant API keys without mixing the workflow with org setup.</p>
-      <div class="ct-admin__workspace-stats ct-cluster">
-        <span class="ct-admin__status-pill">${activeApiKeyCount} active keys</span>
-      </div>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(accessApiKeysPath)}">Open API keys</a>
-      </div>
-    </article>
-    <article class="ct-admin__workspace-card ct-stack">
-      <p class="ct-admin__eyebrow">Structure</p>
-      <h2>Org Units</h2>
-      <p>Create and review tenant org structure without crowding key management.</p>
-      <div class="ct-admin__workspace-stats ct-cluster">
-        <span class="ct-admin__status-pill">${orgUnitCount} org units</span>
-      </div>
-      <div class="ct-admin__workspace-actions ct-cluster">
-        <a class="ct-admin__cta-link" href="${escapeHtml(accessOrgUnitsPath)}">Open org units</a>
       </div>
     </article>
   </section>`;
@@ -1574,7 +1668,7 @@ const renderInstitutionAdminPage = (
 
   const reportingOverviewPanelMarkup = `<article id="reporting-overview-panel" class="ct-admin__panel ct-stack">
     <h2>Reporting Overview</h2>
-    <p>Filter by issue date, template, org unit, or current badge state. Counts reflect product-owned data only.</p>
+    <p>Filter by issue date, template, org unit, or current badge state. Counts reflect product-owned data only, and analytics stay in this reporting workspace.</p>
     <form method="get" action="${escapeHtml(reportingPath)}" class="ct-admin__form ct-admin__form--inline ct-grid">
       <label>
         Issued from
@@ -1622,9 +1716,100 @@ const renderInstitutionAdminPage = (
     )}</p>
   </article>`;
 
+  const reportingEngagementPanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <div class="ct-cluster">
+      <h2>Engagement Counts</h2>
+      <span class="ct-admin__status-pill">Phase 10 product data</span>
+    </div>
+    <p>Raw counts show event totals. Rates use distinct engaged assertions over issued badges, so comparison tables do not inflate because of repeat clicks from one assertion.</p>
+    <div class="ct-admin__metric-grid">
+      ${reportingEngagementCardsMarkup}
+    </div>
+    ${
+      reportingRateCardsMarkup.length === 0
+        ? ""
+        : `<div class="ct-admin__metric-grid ct-admin__metric-grid--rates">
+            ${reportingRateCardsMarkup}
+          </div>`
+    }
+  </article>`;
+
+  const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Trend lines</h2>
+    <p>Trend lines combine issuance and supported engagement counts over time for the same reporting filters. Claim actions and wallet accepts remain separate events here.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Issued</th>
+            <th>Public badge views</th>
+            <th>Verification views</th>
+            <th>Share clicks</th>
+            <th>Claim actions</th>
+            <th>Wallet accepts</th>
+          </tr>
+        </thead>
+        <tbody data-reporting-bar-group="trends">
+          ${reportingTrendRowsMarkup}
+        </tbody>
+      </table>
+    </div>
+  </article>`;
+
+  const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Compare by badge template</h2>
+    <p>Use this table to compare issuance volume, supported engagement counts, and rate metrics across badge templates without leaving reporting.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Badge template</th>
+            <th>Issued</th>
+            <th>Public badge views</th>
+            <th>Verification views</th>
+            <th>Share clicks</th>
+            <th>Claim actions</th>
+            <th>Wallet accepts</th>
+            <th>Claim rate</th>
+            <th>Share rate</th>
+          </tr>
+        </thead>
+        <tbody data-reporting-bar-group="template-comparisons">
+          ${reportingTemplateComparisonRowsMarkup}
+        </tbody>
+      </table>
+    </div>
+  </article>`;
+
+  const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+    <h2>Compare by org unit</h2>
+    <p>These comparisons stay at the Phase 10 reporting level. Hierarchy drilldowns remain deferred to the next phase.</p>
+    <div class="ct-admin__table-wrap">
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Org unit</th>
+            <th>Issued</th>
+            <th>Public badge views</th>
+            <th>Verification views</th>
+            <th>Share clicks</th>
+            <th>Claim actions</th>
+            <th>Wallet accepts</th>
+            <th>Claim rate</th>
+            <th>Share rate</th>
+          </tr>
+        </thead>
+        <tbody data-reporting-bar-group="org-comparisons">
+          ${reportingOrgUnitComparisonRowsMarkup}
+        </tbody>
+      </table>
+    </div>
+  </article>`;
+
   const reportingDefinitionsPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Metric Definitions</h2>
-    <p>Every number in this page lists its source. Deferred metrics stay visible here, not as empty cards.</p>
+    <p>Every number in this page lists its source so institution admins can tell the difference between event totals and rate-style comparisons.</p>
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
         <thead>
@@ -1742,178 +1927,170 @@ const renderInstitutionAdminPage = (
           ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
           : view === "operationsIssuedBadges"
             ? `Issued Badges · Institution Admin · ${input.tenant.displayName}`
-            : view === "operationsBadgeStatus"
-              ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
-              : view === "reporting"
-                ? `Reporting · Institution Admin · ${input.tenant.displayName}`
-              : view === "rules"
-                ? `Rules · Institution Admin · ${input.tenant.displayName}`
-                : view === "access"
+        : view === "operationsBadgeStatus"
+          ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
+          : view === "reporting"
+            ? `Reporting · Institution Admin · ${input.tenant.displayName}`
+          : view === "rules"
+            ? `Rules · Institution Admin · ${input.tenant.displayName}`
+            : view === "access"
                   ? `Access · Institution Admin · ${input.tenant.displayName}`
                   : view === "accessGovernance"
                     ? `Governance Delegation · Institution Admin · ${input.tenant.displayName}`
                     : view === "accessApiKeys"
-                    ? `API Keys · Institution Admin · ${input.tenant.displayName}`
-                    : `Org Units · Institution Admin · ${input.tenant.displayName}`;
+                      ? `API Keys · Institution Admin · ${input.tenant.displayName}`
+                      : `Org Units · Institution Admin · ${input.tenant.displayName}`;
 
-  const pageMarkup =
+  const viewContent =
     view === "home"
-      ? `<section class="ct-admin ct-stack">
-          ${renderHero(
-            "Institution Admin",
-            "Choose a workspace instead of forcing every task onto one page.",
-            `<aside class="ct-admin__hero-note ct-stack">
-              <h2>Start Here</h2>
-              <p>Operations is the primary daily workspace. Use the Rules and Access pages to configure policy and permissions.</p>
-              <p><a class="ct-admin__cta-link" href="${escapeHtml(operationsPath)}">Open operations</a></p>
-            </aside>`,
-          )}
+      ? `${renderPageHeader(
+          "Institution Admin",
+          "Choose a workspace instead of forcing every task onto one page.",
+          `<aside class="ct-admin-page-header__note">
+            <h2>Start Here</h2>
+            <p>Operations is the primary daily workspace. Use the Rules and Access pages to configure policy and permissions.</p>
+          </aside>`,
+        )}
+        <section class="ct-admin ct-stack">
           ${workspaceCardsMarkup}
-          <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
         </section>`
       : view === "operations"
-        ? `<section class="ct-admin ct-stack">
-            ${renderHero(
-              "Operations",
-              "Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.",
-            )}
-            ${operationsWorkspaceCardsMarkup}
+        ? `${renderPageHeader(
+            "Operations",
+            "Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.",
+          )}
+          <section class="ct-admin ct-stack">
             ${manualIssuePanelMarkup}
-            <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
           </section>`
         : view === "operationsReviewQueue"
-          ? `<section class="ct-admin ct-stack">
-              ${renderHero(
-                "Rule Review Queue",
-                "Review pending badge decisions without mixing them into the rest of operations.",
-              )}
-              ${operationsWorkspaceCardsMarkup}
+          ? `${renderPageHeader(
+              "Rule Review Queue",
+              "Review pending badge decisions without mixing them into the rest of operations.",
+            )}
+            <section class="ct-admin ct-stack">
               ${ruleReviewQueuePanelMarkup}
-              <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
             </section>`
           : view === "operationsIssuedBadges"
-            ? `<section class="ct-admin ct-stack">
-                ${renderHero(
-                  "Issued Badges",
-                  "Search issued badges and take audit or revocation actions from one page.",
-                )}
-                ${operationsWorkspaceCardsMarkup}
+            ? `${renderPageHeader(
+                "Issued Badges",
+                "Search issued badges and take audit or revocation actions from one page.",
+              )}
+              <section class="ct-admin ct-stack">
                 ${issuedBadgesPanelMarkup}
-                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
               </section>`
             : view === "operationsBadgeStatus"
-              ? `<section class="ct-admin ct-stack">
-                  ${renderHero(
-                    "Badge Status",
-                    "Look up a badge, inspect its current state, and apply status changes with a reason.",
-                  )}
-                  ${operationsWorkspaceCardsMarkup}
+              ? `${renderPageHeader(
+                  "Badge Status",
+                  "Look up a badge, inspect its current state, and apply status changes with a reason.",
+                )}
+                <section class="ct-admin ct-stack">
                   ${badgeStatusPanelMarkup}
-                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
                 </section>`
               : view === "reporting"
-                ? `<section class="ct-admin ct-stack">
-                    ${renderHero(
-                      "Reporting",
-                      "Track badge counts with stable attribution and clear metric definitions.",
-                      `<aside class="ct-admin__hero-note ct-stack">
-                        <h2>Phase 9 Scope</h2>
-                        <p>Claim rate and share rate stay deferred until product-owned engagement capture is in place.</p>
-                      </aside>`,
-                    )}
+                ? `${renderPageHeader(
+                    "Reporting",
+                    "Track issuance, engagement, and comparison metrics with product-owned data that stays inside CredTrail.",
+                    `<aside class="ct-admin-page-header__note">
+                      <h2>Phase 10 Scope</h2>
+                      <p>Trend lines and comparison tables live in the reporting workspace. Hierarchy drilldowns and exports remain deferred.</p>
+                    </aside>`,
+                  )}
+                  <section class="ct-admin ct-stack">
                     ${reportingOverviewPanelMarkup}
+                    ${reportingEngagementPanelMarkup}
+                    ${reportingTrendPanelMarkup}
+                    ${reportingTemplateComparisonPanelMarkup}
+                    ${reportingOrgUnitComparisonPanelMarkup}
                     ${reportingDefinitionsPanelMarkup}
                     ${reportingDeferredPanelMarkup}
-                    <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
                   </section>`
               : view === "rules"
-                ? `<section class="ct-admin ct-stack">
-              ${renderHero(
-                "Rules",
-                "Keep authoring, template maintenance, and governance context together in one focused workspace.",
-              )}
-              <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-                <div class="ct-admin__grid ct-stack">
-                  ${ruleBuilderPanelMarkup}
-                  ${templateImagePanelMarkup}
-                  ${ruleValueListsPanelMarkup}
-                  ${evaluateRulePanelMarkup}
-                  ${ruleGovernancePanelMarkup}
-                </div>
-                <div class="ct-admin__grid ct-stack">
-                  ${badgeRulesTableMarkup}
-                  ${badgeTemplatesTableMarkup}
-                </div>
-              </section>
-              <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-            </section>`
+                ? `${renderPageHeader(
+                    "Rules",
+                    "Keep authoring, template maintenance, and governance context together in one focused workspace.",
+                  )}
+                  <section class="ct-admin ct-stack">
+                    <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                      <div class="ct-admin__grid ct-stack">
+                        ${ruleBuilderPanelMarkup}
+                        ${templateImagePanelMarkup}
+                        ${ruleValueListsPanelMarkup}
+                        ${evaluateRulePanelMarkup}
+                        ${ruleGovernancePanelMarkup}
+                      </div>
+                      <div class="ct-admin__grid ct-stack">
+                        ${badgeRulesTableMarkup}
+                        ${badgeTemplatesTableMarkup}
+                      </div>
+                    </section>
+                  </section>`
                 : view === "access"
-                  ? `<section class="ct-admin ct-stack">
-                ${renderHero(
-                  "Access",
-                  "Choose the access workspace you need. Governance, API keys, and org units now live on focused pages.",
-                )}
-                ${accessWorkspaceCardsMarkup}
-                ${enterpriseAuthPanelMarkup}
-                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-              </section>`
+                  ? `${renderPageHeader(
+                      "Access",
+                      "Governance, API keys, and org units are accessible from the sidebar.",
+                    )}
+                    <section class="ct-admin ct-stack">
+                      ${enterpriseAuthPanelMarkup}
+                    </section>`
                   : view === "accessGovernance"
-                    ? `<section class="ct-admin ct-stack">
-                ${renderHero(
-                  "Governance Delegation",
-                  "Grant org-unit access and time-boxed badge authority with clearer guidance and direct removal from the current assignments list.",
-                  `<aside class="ct-admin__hero-note ct-stack">
-                    <h2>Choose The Smallest Access</h2>
-                    <p>Use scoped roles for standing access. Use delegated authority when someone only needs temporary badge operations.</p>
-                    <p class="ct-admin__hint">Every user ID on this page is the person receiving access, and they must already belong to this tenant.</p>
-                  </aside>`,
-                )}
-                ${accessWorkspaceCardsMarkup}
-                ${governanceGuidePanelMarkup}
-                ${membershipScopePanelMarkup}
-                ${membershipScopeTableMarkup}
-                ${delegatedGrantPanelMarkup}
-                ${delegatedGrantTableMarkup}
-                <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-              </section>`
-                  : view === "accessApiKeys"
-                    ? `<section class="ct-admin ct-stack">
-                  ${renderHero(
-                    "API Keys",
-                    "Create, review, and revoke tenant API keys without mixing them into org structure work.",
-                  )}
-                  ${accessWorkspaceCardsMarkup}
-                  <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-                    <div class="ct-admin__grid ct-stack">
-                      ${apiKeyPanelMarkup}
-                    </div>
-                    <div class="ct-admin__grid ct-stack">
-                      ${apiKeysTableMarkup}
-                    </div>
-                  </section>
-                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-                </section>`
-                    : `<section class="ct-admin ct-stack">
-                  ${renderHero(
-                    "Org Units",
-                    "Create and review org structure without mixing it into API key management.",
-                  )}
-                  ${accessWorkspaceCardsMarkup}
-                  <section class="ct-admin__layout ct-grid ct-grid--sidebar">
-                    <div class="ct-admin__grid ct-stack">
-                      ${orgUnitPanelMarkup}
-                    </div>
-                    <div class="ct-admin__grid ct-stack">
-                      ${orgUnitsTableMarkup}
-                    </div>
-                  </section>
-                  <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-                </section>`;
+                    ? `${renderPageHeader(
+                        "Governance Delegation",
+                        "Grant org-unit access and time-boxed badge authority with direct removal from the current assignments list.",
+                        `<aside class="ct-admin-page-header__note">
+                          <h2>Choose The Smallest Access</h2>
+                          <p>Use scoped roles for standing access. Use delegated authority when someone only needs temporary badge operations.</p>
+                        </aside>`,
+                      )}
+                      <section class="ct-admin ct-stack">
+                        ${governanceGuidePanelMarkup}
+                        ${membershipScopePanelMarkup}
+                        ${membershipScopeTableMarkup}
+                        ${delegatedGrantPanelMarkup}
+                        ${delegatedGrantTableMarkup}
+                      </section>`
+                    : view === "accessApiKeys"
+                      ? `${renderPageHeader(
+                          "API Keys",
+                          "Create, review, and revoke tenant API keys.",
+                        )}
+                        <section class="ct-admin ct-stack">
+                          <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                            <div class="ct-admin__grid ct-stack">
+                              ${apiKeyPanelMarkup}
+                            </div>
+                            <div class="ct-admin__grid ct-stack">
+                              ${apiKeysTableMarkup}
+                            </div>
+                          </section>
+                        </section>`
+                      : `${renderPageHeader("Org Units", "Create and review org structure.")}
+                        <section class="ct-admin ct-stack">
+                          <section class="ct-admin__layout ct-grid ct-grid--sidebar">
+                            <div class="ct-admin__grid ct-stack">
+                              ${orgUnitPanelMarkup}
+                            </div>
+                            <div class="ct-admin__grid ct-stack">
+                              ${orgUnitsTableMarkup}
+                            </div>
+                          </section>
+                        </section>`;
+
+  const pageMarkup = `<div class="ct-admin-shell">
+    ${renderSidebar()}
+    <div class="ct-admin-main">
+      ${renderTopbar()}
+      <div class="ct-admin-content">
+        ${viewContent}
+        <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
+      </div>
+    </div>
+  </div>`;
 
   return renderPageShell(
     pageTitle,
     pageMarkup,
     renderPageAssetTags(["foundationCss", "institutionAdminCss", "institutionAdminJs"]),
+    "admin",
   );
 };
 

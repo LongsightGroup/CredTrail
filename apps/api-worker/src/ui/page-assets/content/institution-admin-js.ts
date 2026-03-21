@@ -4894,6 +4894,53 @@ export const INSTITUTION_ADMIN_JS = `
         });
       });
   }
+
+  const reportingBarGroups = Array.from(document.querySelectorAll('[data-reporting-bar-group]')).filter(
+    (candidate) => candidate instanceof HTMLElement,
+  );
+
+  for (const group of reportingBarGroups) {
+    const barValues = Array.from(group.querySelectorAll('[data-reporting-bar-value]')).filter(
+      (candidate) => candidate instanceof HTMLElement,
+    );
+
+    if (barValues.length === 0) {
+      continue;
+    }
+
+    const numericValues = barValues
+      .map((candidate) => Number(candidate.getAttribute('data-reporting-bar-value') ?? '0'))
+      .filter((value) => Number.isFinite(value) && value >= 0);
+    const maxValue =
+      numericValues.length === 0 ? 0 : numericValues.reduce((max, value) => Math.max(max, value), 0);
+
+    for (const barValue of barValues) {
+      const numericValue = Number(barValue.getAttribute('data-reporting-bar-value') ?? '0');
+      const ratio = maxValue > 0 && Number.isFinite(numericValue) ? numericValue / maxValue : 0;
+
+      barValue.style.setProperty('--ct-reporting-bar-ratio', ratio.toFixed(4));
+    }
+  }
+
+  /* ── Mobile sidebar toggle ── */
+  const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+  const sidebar = document.querySelector('.ct-admin-sidebar');
+
+  if (sidebarToggle instanceof HTMLElement && sidebar instanceof HTMLElement) {
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('ct-admin-sidebar--open');
+    });
+
+    document.addEventListener('click', (event) => {
+      if (
+        sidebar.classList.contains('ct-admin-sidebar--open') &&
+        !sidebar.contains(event.target) &&
+        event.target !== sidebarToggle
+      ) {
+        sidebar.classList.remove('ct-admin-sidebar--open');
+      }
+    });
+  }
 })();
 
 `;
