@@ -957,6 +957,14 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain("Highest claim rate");
     expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
     expect(html).toContain("TypeScript Foundations");
+    expect(html).toContain(
+      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(html).toContain(
+      'href="/v1/tenants/tenant_123/reporting/comparisons/export.csv?orgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;groupBy=badgeTemplate"',
+    );
+    expect(html).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
+    expect(html).not.toContain('id="issued-badges-export-form"');
     expect(html).not.toContain("Chemistry Lab");
     expect(html).not.toContain("College of Arts");
     expect(html).not.toContain("History");

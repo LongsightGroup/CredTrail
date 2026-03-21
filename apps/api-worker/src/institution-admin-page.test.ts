@@ -884,6 +884,35 @@ describe("GET /tenants/:tenantId/admin/operations/issued-badges", () => {
     expect(body).not.toContain('id="rule-review-queue-refresh"');
     expect(body).not.toContain('id="assertion-lifecycle-view-form"');
   });
+
+  it("renders a separate admin ledger export form with audit filters", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/issued-badges",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('id="issued-badges-export-form"');
+    expect(body).toContain('action="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
+    expect(body).toContain('method="get"');
+    expect(body).toContain('name="issuedFrom" type="date"');
+    expect(body).toContain('name="issuedTo" type="date"');
+    expect(body).toContain('name="badgeTemplateId"');
+    expect(body).toContain('name="orgUnitId"');
+    expect(body).toContain('name="state"');
+    expect(body).toContain('name="recipientQuery" type="text"');
+    expect(body).toContain("Synchronous CSV export is capped at 5000 rows");
+    expect(body).toContain("Ancestor lineage columns reflect the current org tree only");
+    expect(body).toContain("stable leaf attribution remains the historical contract");
+  });
 });
 
 describe("GET /tenants/:tenantId/admin/operations/badge-status", () => {
@@ -983,11 +1012,45 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     });
   });
 
+  it("renders aggregate export links that preserve the current reporting filters", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31&badgeTemplateId=badge_template_001&orgUnitId=tenant_123%3Aorg%3Adepartment-cs&state=active",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Export CSV");
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;badgeTemplateId=badge_template_001&amp;orgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;state=active"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/engagement/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;badgeTemplateId=badge_template_001&amp;orgUnitId=tenant_123%3Aorg%3Adepartment-cs"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/trends/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;badgeTemplateId=badge_template_001&amp;orgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;bucket=day"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/comparisons/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;badgeTemplateId=badge_template_001&amp;orgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;groupBy=badgeTemplate"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/comparisons/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;badgeTemplateId=badge_template_001&amp;orgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;groupBy=orgUnit"',
+    );
+    expect(body).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
+  });
+
   it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {
     const env = createEnv();
 
     const response = await app.request(
-      "/tenants/tenant_123/admin/reporting",
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
       {
         headers: {
           Cookie: "better-auth.session_token=session-token",
@@ -1011,6 +1074,9 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     );
     expect(body).toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Adepartment-cs"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/hierarchy/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;level=department"',
     );
     expect(body).not.toContain('href="/tenants/tenant_123/admin/access/org-units" data-reporting-drill-link');
   });
