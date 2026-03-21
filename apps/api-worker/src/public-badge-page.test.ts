@@ -20,6 +20,7 @@ vi.mock("@credtrail/db", async () => {
     findLearnerProfileById: vi.fn(),
     findUserById: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
+    recordAssertionEngagementEvent: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
   };
 });
@@ -51,7 +52,9 @@ import {
   findBadgeTemplateById,
   findLearnerProfileById,
   listLtiIssuerRegistrations,
+  recordAssertionEngagementEvent,
   resolveAssertionLifecycleState,
+  type AssertionEngagementEventRecord,
   type AssertionRecord,
   type BadgeTemplateRecord,
   type LearnerProfileRecord,
@@ -71,6 +74,7 @@ const mockedCreateOid4vciAccessToken = vi.mocked(createOid4vciAccessToken);
 const mockedFindActiveOid4vciAccessTokenByHash = vi.mocked(findActiveOid4vciAccessTokenByHash);
 const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindLearnerProfileById = vi.mocked(findLearnerProfileById);
+const mockedRecordAssertionEngagementEvent = vi.mocked(recordAssertionEngagementEvent);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
@@ -178,6 +182,22 @@ const sampleOid4vciAccessTokenRecord = (
   };
 };
 
+const sampleAssertionEngagementEvent = (
+  overrides?: Partial<AssertionEngagementEventRecord>,
+): AssertionEngagementEventRecord => {
+  return {
+    id: "aee_123",
+    tenantId: "tenant_123",
+    assertionId: "tenant_123:assertion_456",
+    eventType: "public_badge_view",
+    actorType: "anonymous",
+    channel: null,
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    ...overrides,
+  };
+};
+
 const createAnimoOid4vciClient = (): Oid4vciClient =>
   new Oid4vciClient({
     callbacks: {
@@ -224,6 +244,11 @@ beforeEach(() => {
   mockedFindBadgeTemplateById.mockReset();
   mockedFindBadgeTemplateById.mockResolvedValue(null);
   mockedFindLearnerProfileById.mockReset();
+  mockedRecordAssertionEngagementEvent.mockReset();
+  mockedRecordAssertionEngagementEvent.mockResolvedValue({
+    status: "recorded",
+    event: sampleAssertionEngagementEvent(),
+  });
   mockedResolveAssertionLifecycleState.mockReset();
   mockedResolveAssertionLifecycleState.mockResolvedValue({
     state: "active",
@@ -380,6 +405,16 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(body).toContain('<meta name="twitter:card" content="summary_large_image"');
     expect(body).toContain(
       '<meta name="twitter:image" content="https://cdn.example.edu/badges/typescript-foundations/template.png"',
+    );
+    expect(mockedRecordAssertionEngagementEvent).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        eventType: "public_badge_view",
+        actorType: "anonymous",
+        occurredAt: expect.stringMatching(/^20/),
+      }),
     );
   });
 
@@ -557,6 +592,63 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.verification.status).toBe("active");
+  });
+
+  it("routes supported share actions through CredTrail before redirecting outward", async () => {
+    const env = createEnv();
+    const credential: JsonObject = {
+      id: "urn:credtrail:assertion:tenant_123%3Aassertion_456",
+      issuer: {
+        name: "Example University",
+      },
+      credentialSubject: {
+        achievement: {
+          name: "TypeScript Foundations",
+        },
+      },
+    };
+
+    mockedFindAssertionByPublicId.mockResolvedValue(sampleAssertion());
+    mockedGetImmutableCredentialObject.mockResolvedValue(credential);
+
+    const pageResponse = await app.request(
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+      undefined,
+      env,
+    );
+    const pageBody = await pageResponse.text();
+
+    expect(pageResponse.status).toBe(200);
+    expect(pageBody).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-feed");
+    expect(pageBody).toContain(
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-profile",
+    );
+    expect(pageBody).not.toContain('href="https://www.linkedin.com/sharing/share-offsite/');
+    expect(pageBody).not.toContain('href="https://www.linkedin.com/profile/add');
+
+    mockedRecordAssertionEngagementEvent.mockClear();
+
+    const shareResponse = await app.request(
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-feed",
+      undefined,
+      env,
+    );
+
+    expect(shareResponse.status).toBe(302);
+    expect(shareResponse.headers.get("location")).toContain(
+      "https://www.linkedin.com/sharing/share-offsite/",
+    );
+    expect(mockedRecordAssertionEngagementEvent).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        eventType: "share_click",
+        actorType: "anonymous",
+        channel: "linkedin_feed",
+        occurredAt: expect.stringMatching(/^20/),
+      }),
+    );
   });
 
   it("returns JSON-LD and PDF downloads through canonical public alias routes", async () => {
@@ -1186,6 +1278,7 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(body).toContain("Badge not found");
     expect(body).toContain('<meta name="robots" content="noindex, nofollow"');
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
+    expect(mockedRecordAssertionEngagementEvent).not.toHaveBeenCalled();
   });
 
   it("returns not found page for unknown public badge identifiers", async () => {
@@ -1198,6 +1291,7 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(response.status).toBe(404);
     expect(body).toContain("Badge not found");
     expect(mockedFindAssertionById).not.toHaveBeenCalled();
+    expect(mockedRecordAssertionEngagementEvent).not.toHaveBeenCalled();
   });
 
   it("returns not found page when public_url alias is empty", async () => {

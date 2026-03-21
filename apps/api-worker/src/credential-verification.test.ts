@@ -6,6 +6,7 @@ vi.mock("@credtrail/db", async () => {
   return {
     ...actual,
     findAssertionById: vi.fn(),
+    recordAssertionEngagementEvent: vi.fn(),
     resolveAssertionLifecycleState: vi.fn(),
     findTenantSigningRegistrationByDid: vi.fn(),
     listAssertionStatusListEntries: vi.fn(),
@@ -38,10 +39,12 @@ import {
   signCredentialWithEd25519Signature2020,
 } from "@credtrail/core-domain";
 import {
+  recordAssertionEngagementEvent,
   findAssertionById,
   resolveAssertionLifecycleState,
   findTenantSigningRegistrationByDid,
   listAssertionStatusListEntries,
+  type AssertionEngagementEventRecord,
   type AssertionRecord,
   type SqlDatabase,
   type TenantSigningRegistrationRecord,
@@ -120,6 +123,7 @@ interface ErrorResponse {
 }
 
 const mockedFindAssertionById = vi.mocked(findAssertionById);
+const mockedRecordAssertionEngagementEvent = vi.mocked(recordAssertionEngagementEvent);
 const mockedResolveAssertionLifecycleState = vi.mocked(resolveAssertionLifecycleState);
 const mockedFindTenantSigningRegistrationByDid = vi.mocked(findTenantSigningRegistrationByDid);
 const mockedGetImmutableCredentialObject = vi.mocked(getImmutableCredentialObject);
@@ -147,6 +151,11 @@ const createEnv = (): {
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
+  mockedRecordAssertionEngagementEvent.mockReset();
+  mockedRecordAssertionEngagementEvent.mockResolvedValue({
+    status: "recorded",
+    event: sampleAssertionEngagementEvent(),
+  });
   mockedResolveAssertionLifecycleState.mockReset();
   mockedResolveAssertionLifecycleState.mockResolvedValue({
     state: "active",
@@ -210,6 +219,22 @@ const sampleTenantSigningRegistration = (
     }),
     createdAt: "2026-02-10T22:00:00.000Z",
     updatedAt: "2026-02-10T22:00:00.000Z",
+    ...overrides,
+  };
+};
+
+const sampleAssertionEngagementEvent = (
+  overrides?: Partial<AssertionEngagementEventRecord>,
+): AssertionEngagementEventRecord => {
+  return {
+    id: "aee_456",
+    tenantId: "tenant_123",
+    assertionId: "tenant_123:assertion_456",
+    eventType: "verification_view",
+    actorType: "anonymous",
+    channel: null,
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
     ...overrides,
   };
 };
@@ -336,6 +361,16 @@ describe("GET /credentials/v1/:credentialId", () => {
       fakeDb,
       "tenant_123",
       "tenant_123:assertion_456",
+    );
+    expect(mockedRecordAssertionEngagementEvent).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        eventType: "verification_view",
+        actorType: "anonymous",
+        occurredAt: expect.stringMatching(/^20/),
+      }),
     );
     expect(mockedGetImmutableCredentialObject).toHaveBeenCalledWith(env.BADGE_OBJECTS, {
       tenantId: "tenant_123",
@@ -1366,6 +1401,7 @@ describe("GET /credentials/v1/:credentialId", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("Invalid credential identifier");
     expect(mockedFindAssertionById).not.toHaveBeenCalled();
+    expect(mockedRecordAssertionEngagementEvent).not.toHaveBeenCalled();
   });
 
   it("returns 404 when credential metadata is not found", async () => {
@@ -1383,5 +1419,6 @@ describe("GET /credentials/v1/:credentialId", () => {
     expect(response.status).toBe(404);
     expect(body.error).toBe("Credential not found");
     expect(mockedGetImmutableCredentialObject).not.toHaveBeenCalled();
+    expect(mockedRecordAssertionEngagementEvent).not.toHaveBeenCalled();
   });
 });
