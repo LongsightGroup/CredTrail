@@ -19,6 +19,12 @@ import {
 import type { Hono } from "hono";
 import type { AppBindings, AppContext, AppEnv } from "../app";
 import { ISSUER_ROLES, resolveTenantReportingAccess } from "../auth/tenant-access";
+import {
+  buildCsvAttachmentHeaders,
+  buildCsvFilename,
+  serializeCsv,
+  type CsvColumn,
+} from "../reporting/csv-export";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
 
 interface RegisterReportingRoutesInput {
@@ -43,6 +49,86 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
   type ReportingComparisonRow = Awaited<ReturnType<typeof listTenantReportingComparisons>>[number];
   type ReportingAccess = NonNullable<Awaited<ReturnType<typeof resolveTenantReportingAccess>>>;
+  type OverviewExportRow = {
+    tenantId: string;
+    issuedFrom: string | null;
+    issuedTo: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    state: string | null;
+    generatedAt: string;
+    issued: number;
+    active: number;
+    suspended: number;
+    revoked: number;
+    pendingReview: number;
+  };
+  type EngagementExportRow = {
+    tenantId: string;
+    from: string | null;
+    to: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    generatedAt: string;
+    issuedCount: number;
+    publicBadgeViewCount: number;
+    verificationViewCount: number;
+    shareClickCount: number;
+    learnerClaimCount: number;
+    walletAcceptCount: number;
+    claimRate: number;
+    shareRate: number;
+  };
+  type TrendExportRow = {
+    tenantId: string;
+    from: string | null;
+    to: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    bucket: string;
+    bucketStart: string;
+    issuedCount: number;
+    publicBadgeViewCount: number;
+    verificationViewCount: number;
+    shareClickCount: number;
+    learnerClaimCount: number;
+    walletAcceptCount: number;
+  };
+  type ComparisonExportRow = {
+    tenantId: string;
+    from: string | null;
+    to: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    groupBy: string;
+    groupId: string;
+    issuedCount: number;
+    publicBadgeViewCount: number;
+    verificationViewCount: number;
+    shareClickCount: number;
+    learnerClaimCount: number;
+    walletAcceptCount: number;
+    claimRate: number;
+    shareRate: number;
+  };
+  type HierarchyExportRow = {
+    tenantId: string;
+    from: string | null;
+    to: string | null;
+    focusOrgUnitId: string | null;
+    level: string;
+    orgUnitId: string;
+    displayName: string;
+    parentOrgUnitId: string | null;
+    issuedCount: number;
+    publicBadgeViewCount: number;
+    verificationViewCount: number;
+    shareClickCount: number;
+    learnerClaimCount: number;
+    walletAcceptCount: number;
+    claimRate: number;
+    shareRate: number;
+  };
 
   const ORG_UNIT_HIERARCHY_DEPTH = {
     institution: 0,
@@ -284,6 +370,125 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     };
   };
 
+  const buildCsvResponse = <T extends Record<string, string | number | boolean | null | undefined>>(
+    input: {
+      baseName: string;
+      generatedAt: string;
+      rows: readonly T[];
+      columns: readonly CsvColumn<T>[];
+    },
+  ): Response => {
+    const filename = buildCsvFilename(input.baseName, input.generatedAt);
+    const csv = serializeCsv({
+      rows: input.rows,
+      columns: input.columns,
+    });
+
+    return new Response(csv, {
+      status: 200,
+      headers: buildCsvAttachmentHeaders(filename),
+    });
+  };
+
+  const normalizePageRangeQuery = (query: {
+    issuedFrom?: string | undefined;
+    issuedTo?: string | undefined;
+    badgeTemplateId?: string | undefined;
+    orgUnitId?: string | undefined;
+  }) => {
+    return {
+      from: query.issuedFrom,
+      to: query.issuedTo,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+    };
+  };
+
+  const OVERVIEW_EXPORT_COLUMNS: readonly CsvColumn<OverviewExportRow>[] = [
+    { key: "tenantId", header: "Tenant ID" },
+    { key: "issuedFrom", header: "Issued From" },
+    { key: "issuedTo", header: "Issued To" },
+    { key: "badgeTemplateId", header: "Badge Template ID" },
+    { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "state", header: "Lifecycle State" },
+    { key: "generatedAt", header: "Generated At" },
+    { key: "issued", header: "Issued" },
+    { key: "active", header: "Active" },
+    { key: "suspended", header: "Suspended" },
+    { key: "revoked", header: "Revoked" },
+    { key: "pendingReview", header: "Pending Review" },
+  ] as const;
+
+  const ENGAGEMENT_EXPORT_COLUMNS: readonly CsvColumn<EngagementExportRow>[] = [
+    { key: "tenantId", header: "Tenant ID" },
+    { key: "from", header: "Issued From" },
+    { key: "to", header: "Issued To" },
+    { key: "badgeTemplateId", header: "Badge Template ID" },
+    { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "generatedAt", header: "Generated At" },
+    { key: "issuedCount", header: "Issued Count" },
+    { key: "publicBadgeViewCount", header: "Public Badge View Count" },
+    { key: "verificationViewCount", header: "Verification View Count" },
+    { key: "shareClickCount", header: "Share Click Count" },
+    { key: "learnerClaimCount", header: "Learner Claim Count" },
+    { key: "walletAcceptCount", header: "Wallet Accept Count" },
+    { key: "claimRate", header: "Claim Rate" },
+    { key: "shareRate", header: "Share Rate" },
+  ] as const;
+
+  const TREND_EXPORT_COLUMNS: readonly CsvColumn<TrendExportRow>[] = [
+    { key: "tenantId", header: "Tenant ID" },
+    { key: "from", header: "Issued From" },
+    { key: "to", header: "Issued To" },
+    { key: "badgeTemplateId", header: "Badge Template ID" },
+    { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "bucket", header: "Bucket" },
+    { key: "bucketStart", header: "Bucket Start" },
+    { key: "issuedCount", header: "Issued Count" },
+    { key: "publicBadgeViewCount", header: "Public Badge View Count" },
+    { key: "verificationViewCount", header: "Verification View Count" },
+    { key: "shareClickCount", header: "Share Click Count" },
+    { key: "learnerClaimCount", header: "Learner Claim Count" },
+    { key: "walletAcceptCount", header: "Wallet Accept Count" },
+  ] as const;
+
+  const COMPARISON_EXPORT_COLUMNS: readonly CsvColumn<ComparisonExportRow>[] = [
+    { key: "tenantId", header: "Tenant ID" },
+    { key: "from", header: "Issued From" },
+    { key: "to", header: "Issued To" },
+    { key: "badgeTemplateId", header: "Badge Template ID" },
+    { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "groupBy", header: "Group By" },
+    { key: "groupId", header: "Group ID" },
+    { key: "issuedCount", header: "Issued Count" },
+    { key: "publicBadgeViewCount", header: "Public Badge View Count" },
+    { key: "verificationViewCount", header: "Verification View Count" },
+    { key: "shareClickCount", header: "Share Click Count" },
+    { key: "learnerClaimCount", header: "Learner Claim Count" },
+    { key: "walletAcceptCount", header: "Wallet Accept Count" },
+    { key: "claimRate", header: "Claim Rate" },
+    { key: "shareRate", header: "Share Rate" },
+  ] as const;
+
+  const HIERARCHY_EXPORT_COLUMNS: readonly CsvColumn<HierarchyExportRow>[] = [
+    { key: "tenantId", header: "Tenant ID" },
+    { key: "from", header: "Issued From" },
+    { key: "to", header: "Issued To" },
+    { key: "focusOrgUnitId", header: "Focus Org Unit ID" },
+    { key: "level", header: "Level" },
+    { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "displayName", header: "Display Name" },
+    { key: "parentOrgUnitId", header: "Parent Org Unit ID" },
+    { key: "issuedCount", header: "Issued Count" },
+    { key: "publicBadgeViewCount", header: "Public Badge View Count" },
+    { key: "verificationViewCount", header: "Verification View Count" },
+    { key: "shareClickCount", header: "Share Click Count" },
+    { key: "learnerClaimCount", header: "Learner Claim Count" },
+    { key: "walletAcceptCount", header: "Wallet Accept Count" },
+    { key: "claimRate", header: "Claim Rate" },
+    { key: "shareRate", header: "Share Rate" },
+  ] as const;
+
   app.get("/v1/tenants/:tenantId/reporting/overview", async (c) => {
     const reportingAccess = await requireReportingAccess(c);
 
@@ -352,6 +557,90 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       counts: overview.counts,
       metrics: buildReportingMetricEntries(overview.counts),
       generatedAt: overview.generatedAt,
+    });
+  });
+
+  app.get("/v1/tenants/:tenantId/reporting/overview/export.csv", async (c) => {
+    const reportingAccess = await requireReportingAccess(c);
+
+    if (reportingAccess instanceof Response) {
+      return reportingAccess;
+    }
+
+    let query;
+
+    try {
+      query = parseTenantReportingOverviewQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting overview query",
+        },
+        400,
+      );
+    }
+
+    if (reportingAccess.reportingAccess.visibility === "scoped") {
+      if (query.orgUnitId === undefined) {
+        return c.json(
+          {
+            error: "Scoped reporting overview requests require orgUnitId",
+          },
+          400,
+        );
+      }
+
+      const orgUnits = await listTenantOrgUnits(reportingAccess.db, {
+        tenantId: reportingAccess.tenantId,
+        includeInactive: true,
+      });
+      const orgUnitsById = buildOrgUnitMap(orgUnits);
+
+      if (
+        !isOrgUnitWithinRoots(
+          orgUnitsById,
+          query.orgUnitId,
+          reportingAccess.reportingAccess.scopedOrgUnitIds,
+        )
+      ) {
+        return c.json(
+          {
+            error: "Requested org unit is outside reporting scope",
+          },
+          403,
+        );
+      }
+    }
+
+    const overview = await getTenantReportingOverview(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      issuedFrom: query.issuedFrom,
+      issuedTo: query.issuedTo,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      state: query.state,
+    });
+
+    return buildCsvResponse({
+      baseName: "Reporting Overview Export",
+      generatedAt: overview.generatedAt,
+      rows: [
+        {
+          tenantId: overview.tenantId,
+          issuedFrom: overview.filters.issuedFrom,
+          issuedTo: overview.filters.issuedTo,
+          badgeTemplateId: overview.filters.badgeTemplateId,
+          orgUnitId: overview.filters.orgUnitId,
+          state: overview.filters.state,
+          generatedAt: overview.generatedAt,
+          issued: overview.counts.issued,
+          active: overview.counts.active,
+          suspended: overview.counts.suspended,
+          revoked: overview.counts.revoked,
+          pendingReview: overview.counts.pendingReview,
+        },
+      ],
+      columns: OVERVIEW_EXPORT_COLUMNS,
     });
   });
 
@@ -434,6 +723,112 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     });
   });
 
+  app.get("/v1/tenants/:tenantId/reporting/engagement/export.csv", async (c) => {
+    const reportingAccess = await requireReportingAccess(c);
+
+    if (reportingAccess instanceof Response) {
+      return reportingAccess;
+    }
+
+    let pageRangeQuery;
+
+    try {
+      pageRangeQuery = parseTenantReportingOverviewQuery({
+        issuedFrom: c.req.query("issuedFrom"),
+        issuedTo: c.req.query("issuedTo"),
+        badgeTemplateId: c.req.query("badgeTemplateId"),
+        orgUnitId: c.req.query("orgUnitId"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid engagement reporting query",
+        },
+        400,
+      );
+    }
+
+    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
+
+    let query;
+
+    try {
+      query = parseTenantReportingTrendQuery(normalizedRange);
+    } catch {
+      return c.json(
+        {
+          error: "Invalid engagement reporting query",
+        },
+        400,
+      );
+    }
+
+    if (reportingAccess.reportingAccess.visibility === "scoped") {
+      if (query.orgUnitId === undefined) {
+        return c.json(
+          {
+            error: "Scoped engagement reporting requests require orgUnitId",
+          },
+          400,
+        );
+      }
+
+      const orgUnits = await listTenantOrgUnits(reportingAccess.db, {
+        tenantId: reportingAccess.tenantId,
+        includeInactive: true,
+      });
+      const orgUnitsById = buildOrgUnitMap(orgUnits);
+
+      if (
+        !isOrgUnitWithinRoots(
+          orgUnitsById,
+          query.orgUnitId,
+          reportingAccess.reportingAccess.scopedOrgUnitIds,
+        )
+      ) {
+        return c.json(
+          {
+            error: "Requested org unit is outside reporting scope",
+          },
+          403,
+        );
+      }
+    }
+
+    const engagementCounts = await getTenantReportingEngagementCounts(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      from: query.from,
+      to: query.to,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+    });
+    const generatedAt = new Date().toISOString();
+
+    return buildCsvResponse({
+      baseName: "Reporting Engagement Export",
+      generatedAt,
+      rows: [
+        {
+          tenantId: reportingAccess.tenantId,
+          from: query.from ?? null,
+          to: query.to ?? null,
+          badgeTemplateId: query.badgeTemplateId ?? null,
+          orgUnitId: query.orgUnitId ?? null,
+          generatedAt,
+          issuedCount: engagementCounts.issuedCount,
+          publicBadgeViewCount: engagementCounts.publicBadgeViewCount,
+          verificationViewCount: engagementCounts.verificationViewCount,
+          shareClickCount: engagementCounts.shareClickCount,
+          learnerClaimCount: engagementCounts.learnerClaimCount,
+          walletAcceptCount: engagementCounts.walletAcceptCount,
+          claimRate: engagementCounts.claimRate,
+          shareRate: engagementCounts.shareRate,
+        },
+      ],
+      columns: ENGAGEMENT_EXPORT_COLUMNS,
+    });
+  });
+
   app.get("/v1/tenants/:tenantId/reporting/trends", async (c) => {
     const reportingAccess = await requireReportingAccess(c);
 
@@ -498,6 +893,114 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     return c.json({
       status: "ok",
       ...trends,
+    });
+  });
+
+  app.get("/v1/tenants/:tenantId/reporting/trends/export.csv", async (c) => {
+    const reportingAccess = await requireReportingAccess(c);
+
+    if (reportingAccess instanceof Response) {
+      return reportingAccess;
+    }
+
+    let pageRangeQuery;
+
+    try {
+      pageRangeQuery = parseTenantReportingOverviewQuery({
+        issuedFrom: c.req.query("issuedFrom"),
+        issuedTo: c.req.query("issuedTo"),
+        badgeTemplateId: c.req.query("badgeTemplateId"),
+        orgUnitId: c.req.query("orgUnitId"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting trend query",
+        },
+        400,
+      );
+    }
+
+    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
+
+    let query;
+
+    try {
+      query = parseTenantReportingTrendQuery({
+        ...normalizedRange,
+        bucket: c.req.query("bucket"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting trend query",
+        },
+        400,
+      );
+    }
+
+    if (reportingAccess.reportingAccess.visibility === "scoped") {
+      if (query.orgUnitId === undefined) {
+        return c.json(
+          {
+            error: "Scoped reporting trend requests require orgUnitId",
+          },
+          400,
+        );
+      }
+
+      const orgUnits = await listTenantOrgUnits(reportingAccess.db, {
+        tenantId: reportingAccess.tenantId,
+        includeInactive: true,
+      });
+      const orgUnitsById = buildOrgUnitMap(orgUnits);
+
+      if (
+        !isOrgUnitWithinRoots(
+          orgUnitsById,
+          query.orgUnitId,
+          reportingAccess.reportingAccess.scopedOrgUnitIds,
+        )
+      ) {
+        return c.json(
+          {
+            error: "Requested org unit is outside reporting scope",
+          },
+          403,
+        );
+      }
+    }
+
+    const trends = await getTenantReportingTrends(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      from: query.from,
+      to: query.to,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      bucket: query.bucket,
+    });
+
+    return buildCsvResponse({
+      baseName: "Reporting Trends Export",
+      generatedAt: trends.generatedAt,
+      rows: trends.series.map((row) => {
+        return {
+          tenantId: trends.tenantId,
+          from: trends.filters.from,
+          to: trends.filters.to,
+          badgeTemplateId: trends.filters.badgeTemplateId,
+          orgUnitId: trends.filters.orgUnitId,
+          bucket: trends.bucket,
+          bucketStart: row.bucketStart,
+          issuedCount: row.issuedCount,
+          publicBadgeViewCount: row.publicBadgeViewCount,
+          verificationViewCount: row.verificationViewCount,
+          shareClickCount: row.shareClickCount,
+          learnerClaimCount: row.learnerClaimCount,
+          walletAcceptCount: row.walletAcceptCount,
+        };
+      }),
+      columns: TREND_EXPORT_COLUMNS,
     });
   });
 
@@ -604,6 +1107,131 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     });
   });
 
+  app.get("/v1/tenants/:tenantId/reporting/comparisons/export.csv", async (c) => {
+    const reportingAccess = await requireReportingAccess(c);
+
+    if (reportingAccess instanceof Response) {
+      return reportingAccess;
+    }
+
+    let pageRangeQuery;
+
+    try {
+      pageRangeQuery = parseTenantReportingOverviewQuery({
+        issuedFrom: c.req.query("issuedFrom"),
+        issuedTo: c.req.query("issuedTo"),
+        badgeTemplateId: c.req.query("badgeTemplateId"),
+        orgUnitId: c.req.query("orgUnitId"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting comparison query",
+        },
+        400,
+      );
+    }
+
+    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
+
+    let query;
+
+    try {
+      query = parseTenantReportingComparisonQuery({
+        ...normalizedRange,
+        groupBy: c.req.query("groupBy"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting comparison query",
+        },
+        400,
+      );
+    }
+
+    let scopedOrgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord> | null = null;
+
+    if (reportingAccess.reportingAccess.visibility === "scoped") {
+      const orgUnits = await listTenantOrgUnits(reportingAccess.db, {
+        tenantId: reportingAccess.tenantId,
+        includeInactive: true,
+      });
+      scopedOrgUnitsById = buildOrgUnitMap(orgUnits);
+
+      if (
+        query.orgUnitId !== undefined &&
+        !isOrgUnitWithinRoots(
+          scopedOrgUnitsById,
+          query.orgUnitId,
+          reportingAccess.reportingAccess.scopedOrgUnitIds,
+        )
+      ) {
+        return c.json(
+          {
+            error: "Requested org unit is outside reporting scope",
+          },
+          403,
+        );
+      }
+
+      if (query.groupBy === "badgeTemplate" && query.orgUnitId === undefined) {
+        return c.json(
+          {
+            error: "Scoped badge-template comparison requests require orgUnitId",
+          },
+          400,
+        );
+      }
+    }
+
+    let comparisonRows = await listTenantReportingComparisons(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      from: query.from,
+      to: query.to,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      groupBy: query.groupBy,
+    });
+
+    if (
+      reportingAccess.reportingAccess.visibility === "scoped" &&
+      query.groupBy === "orgUnit" &&
+      scopedOrgUnitsById !== null
+    ) {
+      comparisonRows = filterComparisonRowsToScope(
+        comparisonRows,
+        scopedOrgUnitsById,
+        reportingAccess.reportingAccess.scopedOrgUnitIds,
+      );
+    }
+
+    return buildCsvResponse({
+      baseName: "Reporting Comparisons Export",
+      generatedAt: new Date().toISOString(),
+      rows: comparisonRows.map((row) => {
+        return {
+          tenantId: reportingAccess.tenantId,
+          from: query.from ?? null,
+          to: query.to ?? null,
+          badgeTemplateId: query.badgeTemplateId ?? null,
+          orgUnitId: query.orgUnitId ?? null,
+          groupBy: row.groupBy,
+          groupId: row.groupId,
+          issuedCount: row.issuedCount,
+          publicBadgeViewCount: row.publicBadgeViewCount,
+          verificationViewCount: row.verificationViewCount,
+          shareClickCount: row.shareClickCount,
+          learnerClaimCount: row.learnerClaimCount,
+          walletAcceptCount: row.walletAcceptCount,
+          claimRate: row.claimRate,
+          shareRate: row.shareRate,
+        };
+      }),
+      columns: COMPARISON_EXPORT_COLUMNS,
+    });
+  });
+
   app.get("/v1/tenants/:tenantId/reporting/hierarchy", async (c) => {
     const reportingAccess = await requireReportingAccess(c);
 
@@ -677,6 +1305,125 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
         },
         rows,
         generatedAt: new Date().toISOString(),
+      });
+    } catch (error: unknown) {
+      return c.json(
+        {
+          error:
+            error instanceof Error ? error.message : "Invalid reporting hierarchy query",
+        },
+        400,
+      );
+    }
+  });
+
+  app.get("/v1/tenants/:tenantId/reporting/hierarchy/export.csv", async (c) => {
+    const reportingAccess = await requireReportingAccess(c);
+
+    if (reportingAccess instanceof Response) {
+      return reportingAccess;
+    }
+
+    let pageRangeQuery;
+
+    try {
+      pageRangeQuery = parseTenantReportingOverviewQuery({
+        issuedFrom: c.req.query("issuedFrom"),
+        issuedTo: c.req.query("issuedTo"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting hierarchy query",
+        },
+        400,
+      );
+    }
+
+    let query;
+
+    try {
+      query = parseTenantReportingHierarchyQuery({
+        from: pageRangeQuery.issuedFrom,
+        to: pageRangeQuery.issuedTo,
+        focusOrgUnitId: c.req.query("focusOrgUnitId"),
+        level: c.req.query("level"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid reporting hierarchy query",
+        },
+        400,
+      );
+    }
+
+    const orgUnits = await listTenantOrgUnits(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      includeInactive: true,
+    });
+    const orgUnitsById = buildOrgUnitMap(orgUnits);
+
+    if (
+      reportingAccess.reportingAccess.visibility === "scoped" &&
+      query.focusOrgUnitId !== undefined &&
+      !isOrgUnitWithinRoots(
+        orgUnitsById,
+        query.focusOrgUnitId,
+        reportingAccess.reportingAccess.scopedOrgUnitIds,
+      )
+    ) {
+      return c.json(
+        {
+          error: "Requested org unit is outside reporting scope",
+        },
+        403,
+      );
+    }
+
+    const comparisonRows = await listTenantReportingComparisons(reportingAccess.db, {
+      tenantId: reportingAccess.tenantId,
+      from: query.from,
+      to: query.to,
+      groupBy: "orgUnit",
+    });
+
+    try {
+      const rows = aggregateHierarchyRows({
+        comparisonRows,
+        orgUnitsById,
+        focusOrgUnitId: query.focusOrgUnitId,
+        level: query.level,
+        scopedRootOrgUnitIds:
+          reportingAccess.reportingAccess.visibility === "scoped"
+            ? reportingAccess.reportingAccess.scopedOrgUnitIds
+            : [],
+      });
+
+      return buildCsvResponse({
+        baseName: "Reporting Hierarchy Export",
+        generatedAt: new Date().toISOString(),
+        rows: rows.map((row) => {
+          return {
+            tenantId: reportingAccess.tenantId,
+            from: query.from ?? null,
+            to: query.to ?? null,
+            focusOrgUnitId: query.focusOrgUnitId ?? null,
+            level: query.level,
+            orgUnitId: row.orgUnitId,
+            displayName: row.displayName,
+            parentOrgUnitId: row.parentOrgUnitId,
+            issuedCount: row.issuedCount,
+            publicBadgeViewCount: row.publicBadgeViewCount,
+            verificationViewCount: row.verificationViewCount,
+            shareClickCount: row.shareClickCount,
+            learnerClaimCount: row.learnerClaimCount,
+            walletAcceptCount: row.walletAcceptCount,
+            claimRate: row.claimRate,
+            shareRate: row.shareRate,
+          };
+        }),
+        columns: HIERARCHY_EXPORT_COLUMNS,
       });
     } catch (error: unknown) {
       return c.json(

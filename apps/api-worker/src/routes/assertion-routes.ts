@@ -4,6 +4,7 @@ import {
   findAssertionById,
   findBadgeTemplateById,
   listTenantAssertions,
+  listTenantAssertionLedgerExportRows,
   listAssertionLifecycleEvents,
   recordAssertionLifecycleTransition,
   resolveAssertionLifecycleState,
@@ -17,11 +18,13 @@ import {
   parseAssertionLifecycleTransitionRequest,
   parseAssertionPathParams,
   parseManualIssueBadgeRequest,
+  parseTenantAssertionLedgerExportQuery,
   parseTenantAssertionListQuery,
   parseTenantPathParams,
   type ManualIssueBadgeRequest,
 } from "@credtrail/validation";
 import type { AppBindings, AppContext, AppEnv } from "../app";
+import { buildTenantAssertionLedgerCsvExport } from "../reporting/ledger-export";
 
 type DirectIssueBadgeRequest = Pick<
   ManualIssueBadgeRequest,
@@ -81,6 +84,7 @@ interface RegisterAssertionRoutesInput {
     issuedByUserId?: string,
     options?: DirectIssueBadgeOptions,
   ) => Promise<DirectIssueBadgeResult>;
+  ADMIN_ROLES: readonly TenantMembershipRole[];
   ISSUER_ROLES: readonly TenantMembershipRole[];
   TENANT_MEMBER_ROLES: readonly TenantMembershipRole[];
   HttpErrorResponseClass: new (
@@ -107,6 +111,7 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
     requireDelegatedIssuingAuthorityPermission,
     assertionBelongsToTenant,
     issueBadgeForTenant,
+    ADMIN_ROLES,
     ISSUER_ROLES,
     TENANT_MEMBER_ROLES,
     HttpErrorResponseClass,
@@ -201,6 +206,62 @@ export const registerAssertionRoutes = (input: RegisterAssertionRoutesInput): vo
       tenantId: pathParams.tenantId,
       count: assertions.length,
       assertions,
+    });
+  });
+
+  app.get("/v1/tenants/:tenantId/assertions/ledger-export.csv", async (c): Promise<Response> => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    let query;
+
+    try {
+      query = parseTenantAssertionLedgerExportQuery({
+        issuedFrom: c.req.query("issuedFrom"),
+        issuedTo: c.req.query("issuedTo"),
+        badgeTemplateId: c.req.query("badgeTemplateId"),
+        orgUnitId: c.req.query("orgUnitId"),
+        state: c.req.query("state"),
+        recipientQuery: c.req.query("recipientQuery"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid assertion ledger export query parameters",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const exportResult = await listTenantAssertionLedgerExportRows(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      issuedFrom: query.issuedFrom,
+      issuedTo: query.issuedTo,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      state: query.state,
+      recipientQuery: query.recipientQuery,
+    });
+    const exportParts = buildTenantAssertionLedgerCsvExport(exportResult);
+
+    if (exportParts.status === "too_large") {
+      return c.json(
+        {
+          error: exportParts.error.error,
+          rowLimit: exportParts.error.rowLimit,
+          message: exportParts.error.message,
+        },
+        413,
+      );
+    }
+
+    return new Response(exportParts.csv, {
+      status: 200,
+      headers: exportParts.headers,
     });
   });
 

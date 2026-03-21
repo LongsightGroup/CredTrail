@@ -772,7 +772,7 @@ describe("GET /v1/tenants/:tenantId/reporting/*.csv", () => {
     expect(inScopeResponse.headers.get("cache-control")).toBe("no-store");
     expect(inScopeResponse.headers.get("content-type")).toBe("text/csv; charset=utf-8");
     expect(inScopeResponse.headers.get("content-disposition")).toContain('attachment; filename="');
-    expect(inScopeBody.charCodeAt(0)).toBe(0xfeff);
+    expect(stripBom(inScopeBody).startsWith("Tenant ID,")).toBe(true);
     expect(stripBom(inScopeBody)).toContain("Issued");
     expect(mockedGetTenantReportingOverview).toHaveBeenCalledWith(fakeDb, {
       tenantId: "tenant_123",

@@ -648,6 +648,18 @@ describe("assertion lifecycle endpoints", () => {
 });
 
 describe("GET /v1/tenants/:tenantId/assertions/ledger-export.csv", () => {
+  beforeEach(() => {
+    mockedFindActiveSessionByHash.mockReset();
+    mockedTouchSession.mockReset();
+    mockedFindTenantMembership.mockReset();
+    mockedListTenantAssertionLedgerExportRows.mockReset();
+    mockedListTenantAssertionLedgerExportRows.mockResolvedValue({
+      status: "ok",
+      rowLimit: 5000,
+      rows: [sampleLedgerExportRow()],
+    });
+  });
+
   it("allows owner and admin users to download the issued-badge ledger CSV", async () => {
     const env = createEnv();
 
@@ -678,7 +690,7 @@ describe("GET /v1/tenants/:tenantId/assertions/ledger-export.csv", () => {
       expect(response.headers.get("content-disposition")).toContain(
         'attachment; filename="issued-badge-ledger-',
       );
-      expect(body.charCodeAt(0)).toBe(0xfeff);
+      expect(body.startsWith("Assertion ID,")).toBe(true);
       expect(body).toContain("'=cmd|' /C calc'!A0");
     }
 

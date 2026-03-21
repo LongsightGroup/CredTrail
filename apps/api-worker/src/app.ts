@@ -1225,6 +1225,7 @@ registerAssertionRoutes({
   requireDelegatedIssuingAuthorityPermission,
   assertionBelongsToTenant,
   issueBadgeForTenant,
+  ADMIN_ROLES,
   ISSUER_ROLES,
   TENANT_MEMBER_ROLES,
   HttpErrorResponseClass: HttpErrorResponse,
