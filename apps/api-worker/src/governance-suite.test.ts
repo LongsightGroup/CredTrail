@@ -715,6 +715,20 @@ describe("org unit and badge ownership governance endpoints", () => {
         parentOrgUnitId: "tenant_123:org:college-eng",
       }),
       sampleTenantOrgUnit({
+        id: "tenant_123:org:department-math",
+        unitType: "department",
+        slug: "department-math",
+        displayName: "Mathematics",
+        parentOrgUnitId: "tenant_123:org:college-eng",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:program-cs",
+        unitType: "program",
+        slug: "program-cs",
+        displayName: "Computer Science Program",
+        parentOrgUnitId: "tenant_123:org:department-cs",
+      }),
+      sampleTenantOrgUnit({
         id: "tenant_123:org:department-history",
         unitType: "department",
         slug: "department-history",
@@ -857,6 +871,18 @@ describe("org unit and badge ownership governance endpoints", () => {
           },
           {
             groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-math",
+            issuedCount: 4,
+            publicBadgeViewCount: 8,
+            verificationViewCount: 3,
+            shareClickCount: 1,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 50,
+            shareRate: 25,
+          },
+          {
+            groupBy: "orgUnit",
             groupId: "tenant_123:org:department-history",
             issuedCount: 3,
             publicBadgeViewCount: 6,
@@ -921,9 +947,22 @@ describe("org unit and badge ownership governance endpoints", () => {
 
     expect(response.status).toBe(200);
     expect(html).toContain("Compare by badge template");
+    expect(html).toContain("Hierarchy drilldown");
+    expect(html).toContain("College of Engineering");
+    expect(html).toContain("Computer Science");
+    expect(html).toContain("Mathematics");
+    expect(html).toContain("Computer Science Program");
+    expect(html).toContain("Performer panels");
+    expect(html).toContain("Highest issuance volume");
+    expect(html).toContain("Highest claim rate");
+    expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
     expect(html).toContain("TypeScript Foundations");
     expect(html).not.toContain("Chemistry Lab");
     expect(html).not.toContain("College of Arts");
+    expect(html).not.toContain("History");
+    expect(html).not.toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Adepartment-history"',
+    );
     expect(mockedListDelegatedIssuingAuthorityGrants).not.toHaveBeenCalled();
     expect(mockedListTenantApiKeys).not.toHaveBeenCalled();
     expect(mockedListBadgeIssuanceRules).not.toHaveBeenCalled();

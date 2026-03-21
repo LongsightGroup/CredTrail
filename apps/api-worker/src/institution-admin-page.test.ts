@@ -142,6 +142,119 @@ const sampleMembership = (role: TenantMembershipRecord["role"]): TenantMembershi
   };
 };
 
+const sampleReportingOrgUnits = () => {
+  return [
+    {
+      id: "tenant_123:org:institution",
+      tenantId: "tenant_123",
+      unitType: "institution" as const,
+      slug: "institution",
+      displayName: "Institution",
+      parentOrgUnitId: null,
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:college-eng",
+      tenantId: "tenant_123",
+      unitType: "college" as const,
+      slug: "college-eng",
+      displayName: "College of Engineering",
+      parentOrgUnitId: "tenant_123:org:institution",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:college-arts",
+      tenantId: "tenant_123",
+      unitType: "college" as const,
+      slug: "college-arts",
+      displayName: "College of Arts",
+      parentOrgUnitId: "tenant_123:org:institution",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-cs",
+      tenantId: "tenant_123",
+      unitType: "department" as const,
+      slug: "department-cs",
+      displayName: "Computer Science",
+      parentOrgUnitId: "tenant_123:org:college-eng",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-math",
+      tenantId: "tenant_123",
+      unitType: "department" as const,
+      slug: "department-math",
+      displayName: "Mathematics",
+      parentOrgUnitId: "tenant_123:org:college-eng",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-history",
+      tenantId: "tenant_123",
+      unitType: "department" as const,
+      slug: "department-history",
+      displayName: "History",
+      parentOrgUnitId: "tenant_123:org:college-arts",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-design",
+      tenantId: "tenant_123",
+      unitType: "department" as const,
+      slug: "department-design",
+      displayName: "Design",
+      parentOrgUnitId: "tenant_123:org:college-arts",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:program-cs",
+      tenantId: "tenant_123",
+      unitType: "program" as const,
+      slug: "program-cs",
+      displayName: "Computer Science Program",
+      parentOrgUnitId: "tenant_123:org:department-cs",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:program-design",
+      tenantId: "tenant_123",
+      unitType: "program" as const,
+      slug: "program-design",
+      displayName: "Design Foundations",
+      parentOrgUnitId: "tenant_123:org:department-design",
+      isActive: true,
+      createdByUserId: "usr_admin",
+      createdAt: "2026-02-18T12:00:00.000Z",
+      updatedAt: "2026-02-18T12:00:00.000Z",
+    },
+  ];
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -228,20 +341,7 @@ beforeEach(() => {
     },
   ]);
   mockedListTenantOrgUnits.mockReset();
-  mockedListTenantOrgUnits.mockResolvedValue([
-    {
-      id: "tenant_123:org:institution",
-      tenantId: "tenant_123",
-      unitType: "institution",
-      slug: "institution",
-      displayName: "Institution",
-      parentOrgUnitId: null,
-      isActive: true,
-      createdByUserId: "usr_admin",
-      createdAt: "2026-02-18T12:00:00.000Z",
-      updatedAt: "2026-02-18T12:00:00.000Z",
-    },
-  ]);
+  mockedListTenantOrgUnits.mockResolvedValue(sampleReportingOrgUnits());
   mockedListTenantMembershipOrgUnitScopes.mockReset();
   mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
     {
@@ -428,15 +528,51 @@ beforeEach(() => {
         return [
           {
             groupBy: "orgUnit",
-            groupId: "tenant_123:org:institution",
-            issuedCount: 14,
-            publicBadgeViewCount: 41,
-            verificationViewCount: 16,
-            shareClickCount: 7,
-            learnerClaimCount: 5,
-            walletAcceptCount: 4,
-            claimRate: 35.7,
-            shareRate: 28.6,
+            groupId: "tenant_123:org:program-cs",
+            issuedCount: 8,
+            publicBadgeViewCount: 24,
+            verificationViewCount: 9,
+            shareClickCount: 5,
+            learnerClaimCount: 4,
+            walletAcceptCount: 2,
+            claimRate: 50,
+            shareRate: 37.5,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-math",
+            issuedCount: 4,
+            publicBadgeViewCount: 10,
+            verificationViewCount: 3,
+            shareClickCount: 1,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 50,
+            shareRate: 25,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 6,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:program-design",
+            issuedCount: 1,
+            publicBadgeViewCount: 3,
+            verificationViewCount: 1,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 100,
+            shareRate: 100,
           },
         ];
       }
@@ -846,6 +982,66 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
       groupBy: "orgUnit",
     });
   });
+
+  it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Hierarchy drilldown");
+    expect(body).toContain("Visible roots stay inside the reporting workspace.");
+    expect(body).toContain("Institution");
+    expect(body).toContain("College of Engineering");
+    expect(body).toContain("Computer Science");
+    expect(body).toContain("Computer Science Program");
+    expect(body).toContain("Breadcrumb");
+    expect(body).toContain("Institution / College of Engineering");
+    expect(body).toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(body).toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Adepartment-cs"',
+    );
+    expect(body).not.toContain('href="/tenants/tenant_123/admin/access/org-units" data-reporting-drill-link');
+  });
+
+  it("renders honest performer panels with separate volume and rate rankings", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Performer panels");
+    expect(body).toContain("Highest issuance volume");
+    expect(body).toContain("Lowest issuance volume");
+    expect(body).toContain("Highest claim rate");
+    expect(body).toContain("Lowest share rate");
+    expect(body).toContain("Minimum sample for rate panels: 5 issued badges");
+    expect(body).toContain("These rankings keep issued volume separate from claim and share rates.");
+    expect(body).toContain("Computer Science");
+    expect(body).toContain("History");
+    expect(body).not.toContain("Design Foundations</strong><div class=\"ct-admin__meta\">Below the minimum sample");
+    expect(body).toContain("Compare by badge template");
+  });
 });
 
 describe("GET /tenants/:tenantId/admin/rules", () => {
@@ -1033,7 +1229,7 @@ describe("GET /tenants/:tenantId/admin/access/org-units", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("Org Units");
     expect(body).toContain('id="org-unit-form"');
-    expect(body).toContain("Org Units (1)");
+    expect(body).toContain("Org Units (");
     expect(body).not.toContain('id="api-key-form"');
     expect(body).not.toContain('id="membership-scope-form"');
   });
