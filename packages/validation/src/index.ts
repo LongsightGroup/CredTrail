@@ -351,14 +351,10 @@ export const tenantReportingOverviewQuerySchema = z
     }
   });
 
-const tenantReportingEngagementQueryBaseSchema = z
-  .object({
-    from: reportingDateSchema.optional(),
-    to: reportingDateSchema.optional(),
-    badgeTemplateId: resourceIdSchema.optional(),
-    orgUnitId: resourceIdSchema.optional(),
-  })
-  .superRefine((value, ctx) => {
+const tenantReportingEngagementQueryRangeSchema = <T extends z.ZodRawShape>(
+  shape: T,
+) => {
+  return z.object(shape).superRefine((value, ctx) => {
     if (value.from === undefined || value.to === undefined) {
       return;
     }
@@ -371,12 +367,21 @@ const tenantReportingEngagementQueryBaseSchema = z
       });
     }
   });
+};
 
-export const tenantReportingTrendQuerySchema = tenantReportingEngagementQueryBaseSchema.extend({
+export const tenantReportingTrendQuerySchema = tenantReportingEngagementQueryRangeSchema({
+  from: reportingDateSchema.optional(),
+  to: reportingDateSchema.optional(),
+  badgeTemplateId: resourceIdSchema.optional(),
+  orgUnitId: resourceIdSchema.optional(),
   bucket: z.enum(["day"]).default("day"),
 });
 
-export const tenantReportingComparisonQuerySchema = tenantReportingEngagementQueryBaseSchema.extend({
+export const tenantReportingComparisonQuerySchema = tenantReportingEngagementQueryRangeSchema({
+  from: reportingDateSchema.optional(),
+  to: reportingDateSchema.optional(),
+  badgeTemplateId: resourceIdSchema.optional(),
+  orgUnitId: resourceIdSchema.optional(),
   groupBy: z.enum(["badgeTemplate", "orgUnit"]).default("badgeTemplate"),
 });
 

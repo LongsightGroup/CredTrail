@@ -148,7 +148,7 @@ describe("GET /v1/tenants/:tenantId/reporting/overview", () => {
         }),
         expect.objectContaining({
           key: "claimRate",
-          available: false,
+          available: true,
           value: null,
         }),
       ]),
