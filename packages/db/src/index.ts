@@ -4325,7 +4325,7 @@ export const resolveAssertionReportingAttribution = (input: {
 
 export const summarizeTenantReportingOverviewRows = (
   rows: readonly TenantReportingOverviewRow[],
-  stateFilter?: TenantReportingLifecycleFilter | undefined,
+  stateFilter?: TenantReportingLifecycleFilter,
 ): TenantReportingOverviewCounts => {
   const filteredRows =
     stateFilter === undefined
@@ -4628,7 +4628,7 @@ export const summarizeTenantReportingTrendRows = (
   input: TenantReportingEngagementFilters & { bucket: TenantReportingTrendBucket },
 ): TenantReportingTrendBucketRecord[] => {
   if (input.bucket !== "day") {
-    throw new Error(`Unsupported reporting trend bucket: ${input.bucket}`);
+    throw new Error("Unsupported reporting trend bucket");
   }
 
   const filteredRows = rows.filter((row) => matchesTenantReportingEngagementFilters(row, input));

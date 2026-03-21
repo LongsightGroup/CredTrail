@@ -64,7 +64,6 @@ vi.mock("./auth/better-auth-adapter", async () => {
 import {
   findTenantMembership,
   getTenantReportingEngagementCounts,
-  getTenantReportingOverview,
   getTenantReportingTrends,
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
