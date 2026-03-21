@@ -18,9 +18,11 @@ vi.mock("@credtrail/db", async () => {
     findLearnerProfileByIdentity: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    listAssertionEngagementEvents: vi.fn(),
     listAccessibleTenantContextsForUser: vi.fn(),
     listLearnerBadgeSummaries: vi.fn(),
     listLearnerIdentitiesByProfile: vi.fn(),
+    recordAssertionEngagementEvent: vi.fn(),
     removeLearnerIdentityAliasesByType: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
   };
@@ -52,14 +54,17 @@ vi.mock("./auth/better-auth-adapter", async () => {
 
 import {
   addLearnerIdentityAlias,
+  listAssertionEngagementEvents,
   findLearnerProfileByIdentity,
   findTenantMembership,
   findUserById,
   listAccessibleTenantContextsForUser,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
+  recordAssertionEngagementEvent,
   removeLearnerIdentityAliasesByType,
   resolveLearnerProfileForIdentity,
+  type AssertionEngagementEventRecord,
   type LearnerBadgeSummaryRecord,
   type LearnerProfileRecord,
   type SqlDatabase,
@@ -77,9 +82,11 @@ const mockedAddLearnerIdentityAlias = vi.mocked(addLearnerIdentityAlias);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindUserById = vi.mocked(findUserById);
+const mockedListAssertionEngagementEvents = vi.mocked(listAssertionEngagementEvents);
 const mockedListAccessibleTenantContextsForUser = vi.mocked(listAccessibleTenantContextsForUser);
 const mockedListLearnerBadgeSummaries = vi.mocked(listLearnerBadgeSummaries);
 const mockedListLearnerIdentitiesByProfile = vi.mocked(listLearnerIdentitiesByProfile);
+const mockedRecordAssertionEngagementEvent = vi.mocked(recordAssertionEngagementEvent);
 const mockedRemoveLearnerIdentityAliasesByType = vi.mocked(removeLearnerIdentityAliasesByType);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -196,6 +203,22 @@ const sampleLearnerBadge = (
   };
 };
 
+const sampleAssertionEngagementEvent = (
+  overrides?: Partial<AssertionEngagementEventRecord>,
+): AssertionEngagementEventRecord => {
+  return {
+    id: "aee_claim_123",
+    tenantId: "tenant_123",
+    assertionId: "tenant_123:assertion_456",
+    eventType: "learner_claim",
+    actorType: "learner",
+    channel: "learner_dashboard",
+    occurredAt: "2026-02-10T22:00:00.000Z",
+    createdAt: "2026-02-10T22:00:00.000Z",
+    ...overrides,
+  };
+};
+
 const sampleTenantMembership = (
   overrides?: Partial<TenantMembershipRecord>,
 ): TenantMembershipRecord => {
@@ -214,6 +237,8 @@ beforeEach(() => {
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
   mockedFindTenantMembership.mockReset();
   mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership());
+  mockedListAssertionEngagementEvents.mockReset();
+  mockedListAssertionEngagementEvents.mockResolvedValue([]);
   mockedListAccessibleTenantContextsForUser.mockReset();
   mockedListAccessibleTenantContextsForUser.mockResolvedValue([
     {
@@ -243,6 +268,11 @@ beforeEach(() => {
   );
   mockedResolveBetterAuthRequestedTenant.mockReset();
   mockedResolveBetterAuthRequestedTenant.mockResolvedValue(null);
+  mockedRecordAssertionEngagementEvent.mockReset();
+  mockedRecordAssertionEngagementEvent.mockResolvedValue({
+    status: "recorded",
+    event: sampleAssertionEngagementEvent(),
+  });
 });
 
 afterEach(() => {
@@ -371,6 +401,7 @@ describe("GET /tenants/:tenantId/learner/dashboard", () => {
     expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(body).toContain("/badges/public_assertion_999");
     expect(body).toContain("View public badge");
+    expect(body).toContain("Claim from dashboard");
     expect(body).toContain("Verified");
     expect(body).toContain("Revoked");
     expect(body).toContain("Profile settings");
@@ -386,6 +417,55 @@ describe("GET /tenants/:tenantId/learner/dashboard", () => {
       tenantId: "tenant_123",
       userId: "usr_123",
     });
+  });
+
+  it("renders persistent claim and wallet-accept states when engagement was already recorded", async () => {
+    const env = createEnv();
+
+    mockedListLearnerBadgeSummaries.mockResolvedValue([
+      sampleLearnerBadge(),
+      sampleLearnerBadge({
+        assertionId: "tenant_123:assertion_999",
+        assertionPublicId: "public_assertion_999",
+        badgeTitle: "Advanced TypeScript",
+      }),
+    ]);
+    mockedListAssertionEngagementEvents.mockImplementation(async (_db, input) => {
+      if (input.assertionId === "tenant_123:assertion_456") {
+        return [
+          sampleAssertionEngagementEvent({
+            assertionId: "tenant_123:assertion_456",
+            eventType: "learner_claim",
+          }),
+        ];
+      }
+
+      return [
+        sampleAssertionEngagementEvent({
+          id: "aee_wallet_123",
+          assertionId: "tenant_123:assertion_999",
+          eventType: "wallet_accept",
+          actorType: "wallet",
+          channel: "oid4vci",
+        }),
+      ];
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/learner/dashboard?claimStatus=recorded",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Credential claim recorded from your dashboard.");
+    expect(body).toContain("Claim recorded in CredTrail");
+    expect(body).toContain("Accepted in wallet");
   });
 
   it("renders configured learner DID and status notice", async () => {
@@ -723,5 +803,71 @@ describe("POST /tenants/:tenantId/learner/settings/did", () => {
     expect(mockedFindUserById).not.toHaveBeenCalled();
     expect(mockedRemoveLearnerIdentityAliasesByType).not.toHaveBeenCalled();
     expect(mockedAddLearnerIdentityAlias).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /tenants/:tenantId/learner/badges/:assertionId/claim", () => {
+  beforeEach(() => {
+    mockedFindUserById.mockReset();
+    mockedFindUserById.mockResolvedValue(sampleUserRecord());
+    mockedListLearnerBadgeSummaries.mockReset();
+    mockedListLearnerBadgeSummaries.mockResolvedValue([sampleLearnerBadge()]);
+  });
+
+  it("records an explicit learner claim and redirects back to the dashboard", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/learner/badges/tenant_123%3Aassertion_456/claim",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+
+    const redirectUrl = new URL(response.headers.get("location") ?? "", "http://localhost");
+
+    expect(response.status).toBe(303);
+    expect(redirectUrl.pathname).toBe("/tenants/tenant_123/learner/dashboard");
+    expect(redirectUrl.searchParams.get("claimStatus")).toBe("recorded");
+    expect(mockedRecordAssertionEngagementEvent).toHaveBeenCalledWith(
+      fakeDb,
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        assertionId: "tenant_123:assertion_456",
+        eventType: "learner_claim",
+        actorType: "learner",
+        channel: "learner_dashboard",
+        occurredAt: expect.stringMatching(/^20/),
+      }),
+    );
+  });
+
+  it("keeps the claim flow idempotent when the learner already claimed the credential", async () => {
+    const env = createEnv();
+
+    mockedRecordAssertionEngagementEvent.mockResolvedValueOnce({
+      status: "already_recorded",
+      event: sampleAssertionEngagementEvent(),
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/learner/badges/tenant_123%3Aassertion_456/claim",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+
+    const redirectUrl = new URL(response.headers.get("location") ?? "", "http://localhost");
+
+    expect(response.status).toBe(303);
+    expect(redirectUrl.searchParams.get("claimStatus")).toBe("already_recorded");
   });
 });
