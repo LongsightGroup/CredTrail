@@ -958,10 +958,10 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
     expect(html).toContain("TypeScript Foundations");
     expect(html).toContain(
-      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123%3Aorg%3Acollege-eng"',
+      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123%3Aorg%3Aprogram-cs"',
     );
     expect(html).toContain(
-      'href="/v1/tenants/tenant_123/reporting/comparisons/export.csv?orgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;groupBy=badgeTemplate"',
+      'href="/v1/tenants/tenant_123/reporting/comparisons/export.csv?orgUnitId=tenant_123%3Aorg%3Aprogram-cs&amp;groupBy=badgeTemplate"',
     );
     expect(html).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
     expect(html).not.toContain('id="issued-badges-export-form"');

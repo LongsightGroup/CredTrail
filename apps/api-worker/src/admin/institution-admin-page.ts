@@ -155,6 +155,33 @@ const buildReportingHierarchyFocusId = (orgUnitId: string): string => {
   return `reporting-hierarchy-focus-${encodeURIComponent(orgUnitId)}`;
 };
 
+const appendQueryParam = (
+  params: URLSearchParams,
+  key: string,
+  value: string | null | undefined,
+): void => {
+  const normalizedValue = value?.trim() ?? "";
+
+  if (normalizedValue.length > 0) {
+    params.set(key, normalizedValue);
+  }
+};
+
+const buildPathWithQuery = (
+  path: string,
+  queryEntries: ReadonlyArray<readonly [string, string | null | undefined]>,
+): string => {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of queryEntries) {
+    appendQueryParam(params, key, value);
+  }
+
+  const query = params.toString();
+
+  return query.length === 0 ? path : `${path}?${query}`;
+};
+
 type InstitutionAdminView =
   | "home"
   | "operations"
@@ -799,6 +826,61 @@ const renderInstitutionAdminPage = (
       }>${escapeHtml(`${orgUnit.displayName} (${orgUnit.unitType})`)}</option>`;
     })
     .join("\n");
+  const reportingAggregateExportEntries = [
+    ["issuedFrom", reportingIssuedFromValue],
+    ["issuedTo", reportingIssuedToValue],
+    ["badgeTemplateId", reportingBadgeTemplateIdValue],
+    ["orgUnitId", reportingOrgUnitIdValue],
+  ] as const;
+  const reportingOverviewExportHref = buildPathWithQuery(
+    `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/overview/export.csv`,
+    [...reportingAggregateExportEntries, ["state", reportingState]] as const,
+  );
+  const reportingEngagementExportHref = buildPathWithQuery(
+    `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/engagement/export.csv`,
+    reportingAggregateExportEntries,
+  );
+  const reportingTrendsExportHref = buildPathWithQuery(
+    `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/trends/export.csv`,
+    [...reportingAggregateExportEntries, ["bucket", "day"]] as const,
+  );
+  const reportingTemplateComparisonExportHref = buildPathWithQuery(
+    `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/comparisons/export.csv`,
+    [...reportingAggregateExportEntries, ["groupBy", "badgeTemplate"]] as const,
+  );
+  const reportingOrgUnitComparisonExportHref = buildPathWithQuery(
+    `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/comparisons/export.csv`,
+    [...reportingAggregateExportEntries, ["groupBy", "orgUnit"]] as const,
+  );
+  const buildReportingHierarchyExportHref = (focus: {
+    focusOrgUnitId: string;
+    level: ReportingHierarchyLevel;
+  }): string => {
+    return buildPathWithQuery(
+      `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/hierarchy/export.csv`,
+      [
+        ["issuedFrom", reportingIssuedFromValue],
+        ["issuedTo", reportingIssuedToValue],
+        ["focusOrgUnitId", focus.focusOrgUnitId],
+        ["level", focus.level],
+      ],
+    );
+  };
+  const reportingExportsPanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <div class="ct-cluster">
+      <h2>Export CSV</h2>
+      <span class="ct-admin__status-pill">Aggregate only</span>
+    </div>
+    <p>Download the current reporting slices directly from this workspace. These links preserve the visible filter state and stay scope-safe for reporting users.</p>
+    <div class="ct-cluster">
+      <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingOverviewExportHref)}">Overview CSV</a>
+      <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingEngagementExportHref)}">Engagement CSV</a>
+      <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingTrendsExportHref)}">Trends CSV</a>
+      <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingTemplateComparisonExportHref)}">Template comparisons CSV</a>
+      <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingOrgUnitComparisonExportHref)}">Org-unit comparisons CSV</a>
+    </div>
+    <p class="ct-admin__hint">Recipient-level ledger export stays in Operations for owner/admin users and does not appear in the reporting workspace.</p>
+  </article>`;
   const reportingMetricCardsMarkup =
     reportingMetrics.filter((metric) => metric.available).length === 0
       ? '<p class="ct-admin__empty">No reporting metrics are available yet.</p>'
@@ -1036,11 +1118,23 @@ const renderInstitutionAdminPage = (
     return `<section id="${escapeHtml(sectionId)}" class="ct-admin__reporting-focus-section ct-stack" data-reporting-focus-section tabindex="-1">
       <div class="ct-cluster">
         <h3>${escapeHtml(focusOrgUnit.displayName)}</h3>
-        <span class="ct-admin__status-pill">${escapeHtml(
-          childLevel === null
-            ? "Program leaf"
-            : `Shows ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} rows`,
-        )}</span>
+        <div class="ct-cluster">
+          <span class="ct-admin__status-pill">${escapeHtml(
+            childLevel === null
+              ? "Program leaf"
+              : `Shows ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} rows`,
+          )}</span>
+          ${
+            childLevel === null
+              ? ""
+              : `<a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(
+                  buildReportingHierarchyExportHref({
+                    focusOrgUnitId: focusOrgUnit.id,
+                    level: childLevel,
+                  }),
+                )}">Export CSV</a>`
+          }
+        </div>
       </div>
       <p class="ct-admin__eyebrow">Breadcrumb</p>
       <p class="ct-admin__reporting-breadcrumb">${escapeHtml(breadcrumbLabel)}</p>
@@ -2186,6 +2280,64 @@ const renderInstitutionAdminPage = (
       </label>
       <button type="submit">Load issued badges</button>
     </form>
+    <section class="ct-admin__panel ct-admin__panel--nested ct-stack">
+      <div class="ct-cluster">
+        <h3>Ledger export</h3>
+        <span class="ct-admin__status-pill">Owner/admin only</span>
+      </div>
+      <p>Download an audit-focused CSV directly from the operations workspace. This export stays separate from the browser-loaded ledger list and runs as a plain server-side attachment response.</p>
+      <form
+        id="issued-badges-export-form"
+        method="get"
+        action="/v1/tenants/${escapeHtml(input.tenant.id)}/assertions/ledger-export.csv"
+        class="ct-admin__form ct-admin__form--inline ct-grid"
+      >
+        <label>
+          Issued from
+          <input name="issuedFrom" type="date" />
+        </label>
+        <label>
+          Issued to
+          <input name="issuedTo" type="date" />
+        </label>
+        <label>
+          Badge template
+          <select name="badgeTemplateId">
+            <option value="">All templates</option>
+            ${templateFilterOptions}
+          </select>
+        </label>
+        <label>
+          Org unit
+          <select name="orgUnitId">
+            <option value="">All org units</option>
+            ${activeOrgUnitOptions}
+          </select>
+        </label>
+        <label>
+          Lifecycle state
+          <select name="state">
+            <option value="">All current states</option>
+            <option value="active">active</option>
+            <option value="suspended">suspended</option>
+            <option value="revoked">revoked</option>
+            <option value="expired">expired</option>
+            <option value="pending_review">pending review</option>
+          </select>
+        </label>
+        <label>
+          Recipient / assertion search
+          <input
+            name="recipientQuery"
+            type="text"
+            placeholder="Filter by recipient, identifier, or assertion ID"
+          />
+        </label>
+        <button type="submit">Export ledger CSV</button>
+      </form>
+      <p class="ct-admin__hint">Synchronous CSV export is capped at 5000 rows. Narrow the filters above if the export is too large for direct download.</p>
+      <p class="ct-admin__hint">Ancestor lineage columns reflect the current org tree only, while stable leaf attribution remains the historical contract for audit use.</p>
+    </section>
     <p id="issued-badges-status" class="ct-admin__status">Load tenant assertions from the browser.</p>
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
@@ -2540,6 +2692,7 @@ const renderInstitutionAdminPage = (
                   )}
                   <section class="ct-admin ct-stack">
                     ${reportingOverviewPanelMarkup}
+                    ${reportingExportsPanelMarkup}
                     ${reportingEngagementPanelMarkup}
                     ${reportingTrendPanelMarkup}
                     ${reportingTemplateComparisonPanelMarkup}

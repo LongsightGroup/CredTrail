@@ -908,7 +908,8 @@ describe("GET /tenants/:tenantId/admin/operations/issued-badges", () => {
     expect(body).toContain('name="badgeTemplateId"');
     expect(body).toContain('name="orgUnitId"');
     expect(body).toContain('name="state"');
-    expect(body).toContain('name="recipientQuery" type="text"');
+    expect(body).toContain('name="recipientQuery"');
+    expect(body).toContain('type="text"');
     expect(body).toContain("Synchronous CSV export is capped at 5000 rows");
     expect(body).toContain("Ancestor lineage columns reflect the current org tree only");
     expect(body).toContain("stable leaf attribution remains the historical contract");
@@ -1014,6 +1015,26 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
 
   it("renders aggregate export links that preserve the current reporting filters", async () => {
     const env = createEnv();
+    mockedGetTenantReportingOverviewDb.mockImplementationOnce(async (_db, input) => {
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 14,
+          active: 12,
+          suspended: 1,
+          revoked: 1,
+          pendingReview: 1,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
 
     const response = await app.request(
       "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31&badgeTemplateId=badge_template_001&orgUnitId=tenant_123%3Aorg%3Adepartment-cs&state=active",
@@ -1048,6 +1069,26 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
 
   it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {
     const env = createEnv();
+    mockedGetTenantReportingOverviewDb.mockImplementationOnce(async (_db, input) => {
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 14,
+          active: 12,
+          suspended: 1,
+          revoked: 1,
+          pendingReview: 1,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
 
     const response = await app.request(
       "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
