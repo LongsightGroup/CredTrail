@@ -2,19 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockedFindTenantAuthPolicy,
+  mockedGetTenantReportingComparisons,
+  mockedGetTenantReportingEngagementCounts,
   mockedListTenantAuthProviders,
   mockedListTenantBreakGlassAccounts,
-  mockedGetTenantReportingOverview,
   mockedListAccessibleTenantContextsForUser,
+  mockedGetTenantReportingOverview,
+  mockedGetTenantReportingTrends,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
 } = vi.hoisted(() => {
   return {
     mockedFindTenantAuthPolicy: vi.fn(),
+    mockedGetTenantReportingComparisons: vi.fn(),
+    mockedGetTenantReportingEngagementCounts: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedListTenantBreakGlassAccounts: vi.fn(),
-    mockedGetTenantReportingOverview: vi.fn(),
     mockedListAccessibleTenantContextsForUser: vi.fn(),
+    mockedGetTenantReportingOverview: vi.fn(),
+    mockedGetTenantReportingTrends: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
   };
@@ -29,11 +35,14 @@ vi.mock("@credtrail/db", async () => {
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
     findUserById: vi.fn(),
+    getTenantReportingEngagementCounts: mockedGetTenantReportingEngagementCounts,
     getTenantReportingOverview: mockedGetTenantReportingOverview,
+    getTenantReportingTrends: mockedGetTenantReportingTrends,
     listDelegatedIssuingAuthorityGrants: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
+    listTenantReportingComparisons: mockedGetTenantReportingComparisons,
     listTenantBreakGlassAccounts: mockedListTenantBreakGlassAccounts,
     listTenantMembershipOrgUnitScopes: vi.fn(),
     listTenantAuthProviders: mockedListTenantAuthProviders,
@@ -71,7 +80,7 @@ import {
   findTenantById,
   findTenantMembership,
   findUserById,
-  getTenantReportingOverview,
+  getTenantReportingEngagementCounts,
   listDelegatedIssuingAuthorityGrants,
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
@@ -79,6 +88,9 @@ import {
   listTenantApiKeys,
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
+  getTenantReportingOverview,
+  getTenantReportingTrends,
+  listTenantReportingComparisons,
   type SqlDatabase,
   type TenantMembershipRecord,
 } from "@credtrail/db";
@@ -96,7 +108,10 @@ const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
 const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
+const mockedGetTenantReportingComparisonsDb = vi.mocked(listTenantReportingComparisons);
+const mockedGetTenantReportingEngagementCountsDb = vi.mocked(getTenantReportingEngagementCounts);
 const mockedGetTenantReportingOverviewDb = vi.mocked(getTenantReportingOverview);
+const mockedGetTenantReportingTrendsDb = vi.mocked(getTenantReportingTrends);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -334,6 +349,16 @@ beforeEach(() => {
       twoFactorEnabled: true,
     },
   ]);
+  mockedListAccessibleTenantContextsForUser.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockResolvedValue([
+    {
+      tenantId: "tenant_123",
+      tenantSlug: "tenant-123",
+      tenantDisplayName: "Tenant 123",
+      tenantPlanTier: "team",
+      membershipRole: "admin",
+    },
+  ]);
   mockedGetTenantReportingOverviewDb.mockReset();
   mockedGetTenantReportingOverviewDb.mockResolvedValue({
     tenantId: "tenant_123",
@@ -353,16 +378,85 @@ beforeEach(() => {
     },
     generatedAt: "2026-03-21T12:00:00.000Z",
   });
-  mockedListAccessibleTenantContextsForUser.mockReset();
-  mockedListAccessibleTenantContextsForUser.mockResolvedValue([
-    {
-      tenantId: "tenant_123",
-      tenantSlug: "tenant-123",
-      tenantDisplayName: "Tenant 123",
-      tenantPlanTier: "team",
-      membershipRole: "admin",
+  mockedGetTenantReportingEngagementCountsDb.mockReset();
+  mockedGetTenantReportingEngagementCountsDb.mockResolvedValue({
+    issuedCount: 14,
+    publicBadgeViewCount: 41,
+    verificationViewCount: 16,
+    shareClickCount: 7,
+    learnerClaimCount: 5,
+    walletAcceptCount: 4,
+    claimRate: 35.7,
+    shareRate: 28.6,
+  });
+  mockedGetTenantReportingTrendsDb.mockReset();
+  mockedGetTenantReportingTrendsDb.mockResolvedValue({
+    tenantId: "tenant_123",
+    filters: {
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: null,
+      orgUnitId: null,
     },
-  ]);
+    bucket: "day",
+    series: [
+      {
+        bucketStart: "2026-03-01",
+        issuedCount: 3,
+        publicBadgeViewCount: 8,
+        verificationViewCount: 2,
+        shareClickCount: 1,
+        learnerClaimCount: 1,
+        walletAcceptCount: 1,
+      },
+      {
+        bucketStart: "2026-03-02",
+        issuedCount: 2,
+        publicBadgeViewCount: 5,
+        verificationViewCount: 3,
+        shareClickCount: 2,
+        learnerClaimCount: 1,
+        walletAcceptCount: 1,
+      },
+    ],
+    generatedAt: "2026-03-21T12:00:00.000Z",
+  });
+  mockedGetTenantReportingComparisonsDb.mockReset();
+  mockedGetTenantReportingComparisonsDb.mockImplementation(
+    async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+      if (input.groupBy === "orgUnit") {
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:institution",
+            issuedCount: 14,
+            publicBadgeViewCount: 41,
+            verificationViewCount: 16,
+            shareClickCount: 7,
+            learnerClaimCount: 5,
+            walletAcceptCount: 4,
+            claimRate: 35.7,
+            shareRate: 28.6,
+          },
+        ];
+      }
+
+      return [
+        {
+          groupBy: "badgeTemplate",
+          groupId: "badge_template_001",
+          issuedCount: 9,
+          publicBadgeViewCount: 28,
+          verificationViewCount: 11,
+          shareClickCount: 5,
+          learnerClaimCount: 4,
+          walletAcceptCount: 3,
+          claimRate: 44.4,
+          shareRate: 33.3,
+        },
+      ];
+    },
+  );
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockImplementation(
     (context: { req: { header(name: string): string | undefined } }) => {
@@ -485,7 +579,7 @@ describe("GET /tenants/:tenantId/admin", () => {
     expect(body).toContain("/v1/tenants/tenant_123/badge-rule-value-lists");
     expect(body).toContain("/v1/tenants/tenant_123/badge-rules/preview-simulate");
     expect(body).toContain("/v1/tenants/tenant_123/badge-rules/review-queue");
-    expect(body).toContain("User: admin@tenant-123.edu");
+    expect(body).toContain("admin@tenant-123.edu");
     expect(body).toContain('title="User ID: usr_admin"');
     expect(body).toContain("/assets/ui/foundation.");
     expect(body).toContain("/assets/ui/institution-admin.");
@@ -593,7 +687,7 @@ describe("GET /tenants/:tenantId/admin/operations", () => {
     expect(body).toContain(">Operations<");
     expect(body).toContain("Manual Issue Badge");
     expect(body).toContain('id="manual-issue-form"');
-    expect(body).toContain("Rule Review Queue");
+    expect(body).toContain("Review Queue");
     expect(body).toContain("Issued Badges");
     expect(body).toContain("Badge Status");
     expect(body).toContain('href="/tenants/tenant_123/admin/operations/review-queue"');
@@ -682,7 +776,7 @@ describe("GET /tenants/:tenantId/admin/operations/badge-status", () => {
 });
 
 describe("GET /tenants/:tenantId/admin/reporting", () => {
-  it("renders the reporting workspace on its own route", async () => {
+  it("renders the reporting workspace with engagement trends and comparison sections", async () => {
     const env = createEnv();
 
     const response = await app.request(
@@ -699,11 +793,19 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("Reporting");
     expect(body).toContain("Reporting Overview");
+    expect(body).toContain("Engagement Counts");
+    expect(body).toContain("Trend lines");
+    expect(body).toContain("Compare by badge template");
+    expect(body).toContain("Compare by org unit");
     expect(body).toContain("Metric Definitions");
-    expect(body).toContain("Claim rate");
-    expect(body).toContain("Deferred");
+    expect(body).toContain("Raw counts show event totals");
+    expect(body).toContain("Rates use distinct engaged assertions");
+    expect(body).toContain("Public badge views");
+    expect(body).toContain("35.7");
     expect(body).toContain('href="/tenants/tenant_123/admin/reporting"');
     expect(body).toContain("14");
+    expect(body).not.toContain("Manual Issue Badge");
+    expect(body).not.toContain('id="issued-badges-filter-form"');
     expect(mockedGetTenantReportingOverviewDb).toHaveBeenCalledWith(fakeDb, {
       tenantId: "tenant_123",
       issuedFrom: "2026-03-01",
@@ -711,6 +813,37 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
       badgeTemplateId: undefined,
       orgUnitId: undefined,
       state: undefined,
+    });
+    expect(mockedGetTenantReportingEngagementCountsDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+    });
+    expect(mockedGetTenantReportingTrendsDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      bucket: "day",
+    });
+    expect(mockedGetTenantReportingComparisonsDb).toHaveBeenNthCalledWith(1, fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      groupBy: "badgeTemplate",
+    });
+    expect(mockedGetTenantReportingComparisonsDb).toHaveBeenNthCalledWith(2, fakeDb, {
+      tenantId: "tenant_123",
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      groupBy: "orgUnit",
     });
   });
 });
@@ -767,10 +900,10 @@ describe("GET /tenants/:tenantId/admin/access", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body).toContain(">Access<");
-    expect(body).toContain("Open governance");
+    expect(body).toContain("Governance");
     expect(body).toContain('href="/tenants/tenant_123/admin/access/governance"');
-    expect(body).toContain("Open API keys");
-    expect(body).toContain("Open org units");
+    expect(body).toContain("API Keys");
+    expect(body).toContain("Org Units");
     expect(body).toContain('href="/tenants/tenant_123/admin/access/api-keys"');
     expect(body).toContain('href="/tenants/tenant_123/admin/access/org-units"');
     expect(body).not.toContain("Save scoped role");
@@ -812,9 +945,9 @@ describe("GET /tenants/:tenantId/admin/access", () => {
     expect(body).toContain("Campus OIDC");
     expect(body).toContain("Hosted enterprise sign-in supports OIDC providers.");
     expect(body).toContain("Legacy SAML compatibility");
-    expect(body).toContain("Open governance");
-    expect(body).toContain("Open API keys");
-    expect(body).toContain("Open org units");
+    expect(body).toContain("Governance");
+    expect(body).toContain("API Keys");
+    expect(body).toContain("Org Units");
     expect(body).not.toContain("OIDC or SAML connection metadata");
     expect(body).not.toContain('name="enforceForRoles"');
     expect(body).not.toContain('<option value="saml">');
