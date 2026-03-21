@@ -7,20 +7,34 @@ import {
   listBadgeTemplates,
   listPublicBadgeWallEntries,
   listTenantOrgUnits,
+  recordAssertionEngagementEvent,
   resolveAssertionLifecycleState,
   type SqlDatabase,
 } from "@credtrail/db";
+import type { ImmutableCredentialStore, JsonObject } from "@credtrail/core-domain";
 import type { Hono } from "hono";
 import { parseTenantPathParams } from "@credtrail/validation";
-import type { ImmutableCredentialStore } from "@credtrail/core-domain";
+import { badgeNameFromCredential, issuerNameFromCredential } from "../badges/credential-display";
 import type { AppBindings, AppEnv } from "../app";
 import type {
   PublicBadgeCriteriaRegistryViewModel,
   PublicBadgeCriteriaRuleViewRecord,
   PublicBadgeWallEntryViewRecord,
 } from "../badges/public-badge-pages";
+import { linkedInAddToProfileUrl } from "../utils/display-format";
+import { asString } from "../utils/value-parsers";
 
-interface RegisterPublicBadgeRoutesInput<PublicBadgeValue> {
+interface PublicBadgeRouteValue {
+  assertion: {
+    id: string;
+    tenantId: string;
+    publicId: string | null;
+    issuedAt: string;
+  };
+  credential: JsonObject;
+}
+
+interface RegisterPublicBadgeRoutesInput<PublicBadgeValue extends PublicBadgeRouteValue> {
   app: Hono<AppEnv>;
   resolveDatabase: (bindings: AppBindings) => SqlDatabase;
   loadPublicBadgeViewModel: (
@@ -159,7 +173,7 @@ const buildPublicBadgeCriteriaRegistryViewModel = async (
   };
 };
 
-export const registerPublicBadgeRoutes = <PublicBadgeValue>(
+export const registerPublicBadgeRoutes = <PublicBadgeValue extends PublicBadgeRouteValue>(
   input: RegisterPublicBadgeRoutesInput<PublicBadgeValue>,
 ): void => {
   const {
@@ -175,6 +189,51 @@ export const registerPublicBadgeRoutes = <PublicBadgeValue>(
     SAKAI_SHOWCASE_TENANT_ID,
     SAKAI_SHOWCASE_TEMPLATE_ID,
   } = input;
+
+  const recordPublicEngagement = async (
+    db: SqlDatabase,
+    value: PublicBadgeValue,
+    eventType: "public_badge_view" | "share_click",
+    channel?: string,
+  ): Promise<void> => {
+    await recordAssertionEngagementEvent(db, {
+      tenantId: value.assertion.tenantId,
+      assertionId: value.assertion.id,
+      eventType,
+      actorType: "anonymous",
+      ...(channel === undefined ? {} : { channel }),
+      occurredAt: new Date().toISOString(),
+    });
+  };
+
+  const shareRedirectUrlForChannel = (
+    requestUrl: string,
+    value: PublicBadgeValue,
+    channel: string,
+  ): string | null => {
+    const publicBadgePath = `/badges/${encodeURIComponent(
+      value.assertion.publicId ?? value.assertion.id,
+    )}`;
+    const publicBadgeUrl = new URL(publicBadgePath, requestUrl).toString();
+
+    if (channel === "linkedin-feed") {
+      const linkedInShareUrl = new URL("https://www.linkedin.com/sharing/share-offsite/");
+      linkedInShareUrl.searchParams.set("url", publicBadgeUrl);
+      return linkedInShareUrl.toString();
+    }
+
+    if (channel === "linkedin-profile") {
+      return linkedInAddToProfileUrl({
+        badgeName: badgeNameFromCredential(value.credential),
+        issuerName: issuerNameFromCredential(value.credential),
+        issuedAtIso: value.assertion.issuedAt,
+        credentialUrl: publicBadgeUrl,
+        credentialId: asString(value.credential.id) ?? value.assertion.id,
+      });
+    }
+
+    return null;
+  };
 
   app.get("/badges/:badgeIdentifier/public_url", (c) => {
     const badgeIdentifier = c.req.param("badgeIdentifier").trim();
@@ -204,7 +263,34 @@ export const registerPublicBadgeRoutes = <PublicBadgeValue>(
       return c.redirect(result.canonicalPath, 308);
     }
 
+    await recordPublicEngagement(resolveDatabase(c.env), result.value, "public_badge_view");
     return c.html(publicBadgePage(c.req.url, result.value));
+  });
+
+  app.get("/badges/:badgeIdentifier/share/:channel", async (c) => {
+    const badgeIdentifier = c.req.param("badgeIdentifier");
+    const channel = c.req.param("channel");
+    const db = resolveDatabase(c.env);
+    const result = await loadPublicBadgeViewModel(db, c.env.BADGE_OBJECTS, badgeIdentifier);
+
+    c.header("Cache-Control", "no-store");
+
+    if (result.status === "not_found") {
+      return c.html(publicBadgeNotFoundPage(c.req.url), 404);
+    }
+
+    if (result.status === "redirect") {
+      return c.redirect(`${result.canonicalPath}/share/${encodeURIComponent(channel)}`, 308);
+    }
+
+    const redirectUrl = shareRedirectUrlForChannel(c.req.url, result.value, channel);
+
+    if (redirectUrl === null) {
+      return c.text("Share action not supported", 404);
+    }
+
+    await recordPublicEngagement(db, result.value, "share_click", channel.replaceAll("-", "_"));
+    return c.redirect(redirectUrl, 302);
   });
 
   app.get("/badges/:badgeIdentifier/summary", async (c) => {

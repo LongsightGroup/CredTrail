@@ -349,18 +349,13 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(body).toContain("/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(body).toContain("Add to LinkedIn Profile");
     expect(body).toContain("Prefer a wallet? Scan the QR code or use the wallet tools below.");
-    expect(body).toContain("linkedin.com/profile/add");
-    expect(body).toContain("startTask=CERTIFICATION_NAME");
-    expect(body).toContain("name=TypeScript+Foundations");
-    expect(body).toContain("organizationName=Example+University");
-    expect(body).toContain("issueYear=2026");
-    expect(body).toContain("issueMonth=2");
     expect(body).toContain(
-      "certUrl=http%3A%2F%2Flocalhost%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-profile",
     );
-    expect(body).toContain("certId=urn%3Acredtrail%3Aassertion%3Atenant_123%253Aassertion_456");
     expect(body).toContain("Share on LinkedIn Feed");
-    expect(body).toContain("linkedin.com/sharing/share-offsite");
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-feed");
+    expect(body).not.toContain("linkedin.com/profile/add");
+    expect(body).not.toContain("linkedin.com/sharing/share-offsite");
     expect(body).not.toContain("Validate Assertion (IMS)");
     expect(body).not.toContain("Validate Badge Class (IMS)");
     expect(body).not.toContain("Validate Issuer (IMS)");
@@ -523,7 +518,10 @@ describe("GET /badges/:badgeIdentifier", () => {
       '<meta name="description" content="TypeScript Foundations credential issued by Example University."',
     );
     expect(body).toContain(
-      "certUrl=http%3A%2F%2Fbadges.newcredtrail.test%2Fbadges%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
+      'data-copy-value="http://badges.newcredtrail.test/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22"',
+    );
+    expect(body).toContain(
+      "credential_offer_uri=http%3A%2F%2Fbadges.newcredtrail.test%2Fcredentials%2Fv1%2Foffers%2F40a6dc92-85ec-4cb0-8a50-afb2ae700e22",
     );
   });
 

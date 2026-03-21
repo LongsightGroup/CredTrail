@@ -3,7 +3,11 @@ import {
   type ImmutableCredentialStore,
   type JsonObject,
 } from "@credtrail/core-domain";
-import { listAssertionStatusListEntries, type SqlDatabase } from "@credtrail/db";
+import {
+  listAssertionStatusListEntries,
+  recordAssertionEngagementEvent,
+  type SqlDatabase,
+} from "@credtrail/db";
 import type { Hono } from "hono";
 import { parseCredentialPathParams, parseTenantPathParams } from "@credtrail/validation";
 import type { AppBindings, AppContext, AppEnv } from "../app";
@@ -385,6 +389,13 @@ export const registerCredentialRoutes = <
     model: VerificationViewModel<AssertionValue, CredentialValue>,
   ): Promise<Response> => {
     c.header("Cache-Control", "no-store");
+    await recordAssertionEngagementEvent(resolveDatabase(c.env), {
+      tenantId: model.assertion.tenantId,
+      assertionId: model.assertion.id,
+      eventType: "verification_view",
+      actorType: "anonymous",
+      occurredAt: new Date().toISOString(),
+    });
 
     const statusList: CredentialStatusListReference | null =
       model.assertion.statusListIndex === null

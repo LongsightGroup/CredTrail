@@ -122,7 +122,6 @@ export const createPublicBadgePageRenderers = (
     issuerIdentifierFromCredential,
     issuerNameFromCredential,
     issuerUrlFromCredential,
-    linkedInAddToProfileUrl,
     publicBadgePathForAssertion,
     recipientAvatarUrlFromAssertion,
     recipientDisplayNameFromAssertion,
@@ -530,15 +529,12 @@ export const createPublicBadgePageRenderers = (
     qrCodeImageUrl.searchParams.set("format", "svg");
     qrCodeImageUrl.searchParams.set("margin", "0");
     qrCodeImageUrl.searchParams.set("data", walletOfferUrl);
-    const linkedInAddProfileUrl = linkedInAddToProfileUrl({
-      badgeName,
-      issuerName,
-      issuedAtIso: model.assertion.issuedAt,
-      credentialUrl: publicBadgeUrl,
-      credentialId: credentialUri,
-    });
-    const linkedInShareUrl = new URL("https://www.linkedin.com/sharing/share-offsite/");
-    linkedInShareUrl.searchParams.set("url", publicBadgeUrl);
+    const linkedInProfileSharePath = `/badges/${encodeURIComponent(
+      walletOfferBadgeIdentifier,
+    )}/share/linkedin-profile`;
+    const linkedInFeedSharePath = `/badges/${encodeURIComponent(
+      walletOfferBadgeIdentifier,
+    )}/share/linkedin-feed`;
     const advancedActionButtons = [
       `<a
           class="public-badge__button"
@@ -554,7 +550,7 @@ export const createPublicBadgePageRenderers = (
         </a>`,
       `<a
           class="public-badge__button"
-          href="${escapeHtml(linkedInShareUrl.toString())}"
+          href="${escapeHtml(linkedInFeedSharePath)}"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -1222,7 +1218,7 @@ export const createPublicBadgePageRenderers = (
             </p>
             <div class="public-badge__actions public-badge__actions--primary">
               <a class="public-badge__button public-badge__button--primary" href="${escapeHtml(
-                linkedInAddProfileUrl,
+                linkedInProfileSharePath,
               )}">
                 Add to LinkedIn Profile
               </a>
