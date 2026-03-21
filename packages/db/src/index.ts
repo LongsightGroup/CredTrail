@@ -1654,6 +1654,44 @@ export interface TenantReportingEngagementFilters {
   orgUnitId?: string | undefined;
 }
 
+export interface TenantReportingHierarchyQuery {
+  from?: string | undefined;
+  to?: string | undefined;
+  focusOrgUnitId?: string | undefined;
+  level: OrgUnitType;
+}
+
+export interface TenantReportingHierarchySourceRow {
+  assertionId: string;
+  badgeTemplateId: string;
+  orgUnitId: string;
+  issuedAt: string;
+  eventType: AssertionEngagementEventType | null;
+  occurredAt: string | null;
+}
+
+export interface TenantReportingHierarchyOrgUnitRecord {
+  id: string;
+  unitType: OrgUnitType;
+  displayName: string;
+  parentOrgUnitId: string | null;
+}
+
+export interface TenantReportingHierarchyGroupRecord {
+  level: OrgUnitType;
+  orgUnitId: string;
+  displayName: string;
+  parentOrgUnitId: string | null;
+  issuedCount: number;
+  publicBadgeViewCount: number;
+  verificationViewCount: number;
+  shareClickCount: number;
+  learnerClaimCount: number;
+  walletAcceptCount: number;
+  claimRate: number;
+  shareRate: number;
+}
+
 export interface GetTenantReportingEngagementCountsInput
   extends TenantReportingEngagementFilters {
   tenantId: string;
@@ -4387,6 +4425,13 @@ const tenantReportingComparisonRowZero = (
   };
 };
 
+const ORG_UNIT_HIERARCHY_DEPTH: Record<OrgUnitType, number> = {
+  institution: 0,
+  college: 1,
+  department: 2,
+  program: 3,
+};
+
 const createTenantReportingEngagementAggregate = (): TenantReportingEngagementAggregate => {
   return {
     issuedAssertionIds: new Set<string>(),
@@ -4704,6 +4749,163 @@ export const summarizeTenantReportingComparisonRows = (
       }
 
       return left.groupId.localeCompare(right.groupId);
+    });
+};
+
+const getReportingHierarchyOrgUnitOrThrow = (
+  orgUnitsById: ReadonlyMap<string, TenantReportingHierarchyOrgUnitRecord>,
+  orgUnitId: string,
+): TenantReportingHierarchyOrgUnitRecord => {
+  const orgUnit = orgUnitsById.get(orgUnitId);
+
+  if (orgUnit === undefined) {
+    throw new Error(`Org unit ${orgUnitId} is missing from the reporting hierarchy`);
+  }
+
+  return orgUnit;
+};
+
+const listReportingHierarchyLineage = (
+  orgUnitsById: ReadonlyMap<string, TenantReportingHierarchyOrgUnitRecord>,
+  orgUnitId: string,
+): TenantReportingHierarchyOrgUnitRecord[] => {
+  const lineage: TenantReportingHierarchyOrgUnitRecord[] = [];
+  const visited = new Set<string>();
+  let currentOrgUnitId: string | null = orgUnitId;
+
+  while (currentOrgUnitId !== null) {
+    if (visited.has(currentOrgUnitId)) {
+      throw new Error(`Detected an org-unit cycle while resolving hierarchy for ${orgUnitId}`);
+    }
+
+    visited.add(currentOrgUnitId);
+
+    const orgUnit = getReportingHierarchyOrgUnitOrThrow(orgUnitsById, currentOrgUnitId);
+    lineage.push(orgUnit);
+    currentOrgUnitId = orgUnit.parentOrgUnitId;
+  }
+
+  return lineage;
+};
+
+const isReportingHierarchyLineageWithinRoot = (
+  lineage: readonly TenantReportingHierarchyOrgUnitRecord[],
+  rootOrgUnitId: string,
+): boolean => {
+  return lineage.some((orgUnit) => orgUnit.id === rootOrgUnitId);
+};
+
+export const summarizeTenantReportingHierarchyRows = (input: {
+  rows: readonly TenantReportingHierarchySourceRow[];
+  orgUnits: readonly TenantReportingHierarchyOrgUnitRecord[];
+  query: TenantReportingHierarchyQuery;
+  scopedRootOrgUnitIds?: readonly string[] | undefined;
+}): TenantReportingHierarchyGroupRecord[] => {
+  const orgUnitsById = new Map(
+    input.orgUnits.map((orgUnit) => {
+      return [orgUnit.id, orgUnit] as const;
+    }),
+  );
+  const focusOrgUnit =
+    input.query.focusOrgUnitId === undefined
+      ? null
+      : getReportingHierarchyOrgUnitOrThrow(orgUnitsById, input.query.focusOrgUnitId);
+
+  if (
+    focusOrgUnit !== null &&
+    ORG_UNIT_HIERARCHY_DEPTH[focusOrgUnit.unitType] > ORG_UNIT_HIERARCHY_DEPTH[input.query.level]
+  ) {
+    throw new Error("focusOrgUnitId must be at or above the requested hierarchy level");
+  }
+
+  const scopedRootOrgUnitIds = Array.from(new Set(input.scopedRootOrgUnitIds ?? []));
+  for (const scopedRootOrgUnitId of scopedRootOrgUnitIds) {
+    getReportingHierarchyOrgUnitOrThrow(orgUnitsById, scopedRootOrgUnitId);
+  }
+
+  const groups = new Map<
+    string,
+    {
+      orgUnit: TenantReportingHierarchyOrgUnitRecord;
+      aggregate: TenantReportingEngagementAggregate;
+    }
+  >();
+
+  for (const row of input.rows) {
+    if (!isTimestampWithinReportingRange(row.issuedAt, input.query.from, input.query.to)) {
+      continue;
+    }
+
+    const lineage = listReportingHierarchyLineage(orgUnitsById, row.orgUnitId);
+
+    if (
+      focusOrgUnit !== null &&
+      !isReportingHierarchyLineageWithinRoot(lineage, focusOrgUnit.id)
+    ) {
+      continue;
+    }
+
+    if (
+      scopedRootOrgUnitIds.length > 0 &&
+      !scopedRootOrgUnitIds.some((scopedRootOrgUnitId) => {
+        return isReportingHierarchyLineageWithinRoot(lineage, scopedRootOrgUnitId);
+      })
+    ) {
+      continue;
+    }
+
+    const targetOrgUnit = lineage.find((orgUnit) => orgUnit.unitType === input.query.level);
+
+    if (targetOrgUnit === undefined) {
+      continue;
+    }
+
+    const group =
+      groups.get(targetOrgUnit.id) ??
+      (() => {
+        const created = {
+          orgUnit: targetOrgUnit,
+          aggregate: createTenantReportingEngagementAggregate(),
+        };
+        groups.set(targetOrgUnit.id, created);
+        return created;
+      })();
+
+    group.aggregate.issuedAssertionIds.add(row.assertionId);
+
+    if (
+      row.eventType !== null &&
+      row.occurredAt !== null &&
+      isTimestampWithinReportingRange(row.occurredAt, input.query.from, input.query.to)
+    ) {
+      applyTenantReportingEngagementEvent(group.aggregate, row.assertionId, row.eventType);
+    }
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const counts = finalizeTenantReportingEngagementCounts(group.aggregate);
+      return {
+        level: input.query.level,
+        orgUnitId: group.orgUnit.id,
+        displayName: group.orgUnit.displayName,
+        parentOrgUnitId: group.orgUnit.parentOrgUnitId,
+        issuedCount: counts.issuedCount,
+        publicBadgeViewCount: counts.publicBadgeViewCount,
+        verificationViewCount: counts.verificationViewCount,
+        shareClickCount: counts.shareClickCount,
+        learnerClaimCount: counts.learnerClaimCount,
+        walletAcceptCount: counts.walletAcceptCount,
+        claimRate: counts.claimRate,
+        shareRate: counts.shareRate,
+      };
+    })
+    .sort((left, right) => {
+      if (right.issuedCount !== left.issuedCount) {
+        return right.issuedCount - left.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
     });
 };
 

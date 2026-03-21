@@ -3,6 +3,7 @@ import {
   findTenantMembership,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
+  listTenantMembershipOrgUnitScopes,
   type DelegatedIssuingAuthorityAction,
   type SessionRecord,
   type SqlDatabase,
@@ -14,6 +15,7 @@ import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-cont
 export const ISSUER_ROLES: TenantMembershipRole[] = ["owner", "admin", "issuer"];
 export const TENANT_MEMBER_ROLES: TenantMembershipRole[] = ["owner", "admin", "issuer", "viewer"];
 export const ADMIN_ROLES: TenantMembershipRole[] = ["owner", "admin"];
+export const REPORTING_SCOPE_ROLES: TenantMembershipOrgUnitScopeRole[] = ["admin", "issuer"];
 
 export const isUniqueConstraintError = (error: unknown): boolean => {
   return (
@@ -41,6 +43,13 @@ export interface PrincipalTenantRoleResult {
   principal: AuthenticatedPrincipal;
   requestedTenant: RequestedTenantContext;
   membershipRole: TenantMembershipRole;
+}
+
+export interface TenantReportingAccessResult {
+  tenantId: string;
+  membershipRole: TenantMembershipRole;
+  visibility: "tenant" | "scoped";
+  scopedOrgUnitIds: string[];
 }
 
 interface CreateTenantAccessHelpersInput<
@@ -102,6 +111,59 @@ const hasRequiredRole = (
   allowedRoles: readonly TenantMembershipRole[],
 ): boolean => {
   return allowedRoles.includes(membershipRole);
+};
+
+export const resolveTenantReportingAccess = async (input: {
+  db: SqlDatabase;
+  tenantId: string;
+  userId: string;
+  membershipRole: TenantMembershipRole;
+}): Promise<TenantReportingAccessResult | null> => {
+  if (input.membershipRole === "owner" || input.membershipRole === "admin") {
+    return {
+      tenantId: input.tenantId,
+      membershipRole: input.membershipRole,
+      visibility: "tenant",
+      scopedOrgUnitIds: [],
+    };
+  }
+
+  if (input.membershipRole !== "issuer") {
+    return null;
+  }
+
+  const scopes = await listTenantMembershipOrgUnitScopes(input.db, {
+    tenantId: input.tenantId,
+    userId: input.userId,
+  });
+
+  if (scopes.length === 0) {
+    return {
+      tenantId: input.tenantId,
+      membershipRole: input.membershipRole,
+      visibility: "tenant",
+      scopedOrgUnitIds: [],
+    };
+  }
+
+  const scopedOrgUnitIds = Array.from(
+    new Set(
+      scopes
+        .filter((scope) => REPORTING_SCOPE_ROLES.includes(scope.role))
+        .map((scope) => scope.orgUnitId),
+    ),
+  ).sort((left, right) => left.localeCompare(right));
+
+  if (scopedOrgUnitIds.length === 0) {
+    return null;
+  }
+
+  return {
+    tenantId: input.tenantId,
+    membershipRole: input.membershipRole,
+    visibility: "scoped",
+    scopedOrgUnitIds,
+  };
 };
 
 export const requirePrincipalTenantRole = async <

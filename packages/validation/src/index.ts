@@ -385,6 +385,13 @@ export const tenantReportingComparisonQuerySchema = tenantReportingEngagementQue
   groupBy: z.enum(["badgeTemplate", "orgUnit"]).default("badgeTemplate"),
 });
 
+export const tenantReportingHierarchyQuerySchema = tenantReportingEngagementQueryRangeSchema({
+  from: reportingDateSchema.optional(),
+  to: reportingDateSchema.optional(),
+  focusOrgUnitId: resourceIdSchema.optional(),
+  level: orgUnitTypeSchema,
+});
+
 export const createBadgeTemplateRequestSchema = z.object({
   slug: badgeTemplateSlugSchema,
   title: badgeTemplateTitleSchema,
@@ -1336,6 +1343,7 @@ export type TenantAssertionListQuery = z.infer<typeof tenantAssertionListQuerySc
 export type TenantReportingOverviewQuery = z.infer<typeof tenantReportingOverviewQuerySchema>;
 export type TenantReportingTrendQuery = z.infer<typeof tenantReportingTrendQuerySchema>;
 export type TenantReportingComparisonQuery = z.infer<typeof tenantReportingComparisonQuerySchema>;
+export type TenantReportingHierarchyQuery = z.infer<typeof tenantReportingHierarchyQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
 export type CreateTenantOrgUnitRequest = z.infer<typeof createTenantOrgUnitRequestSchema>;
@@ -1631,6 +1639,12 @@ export const parseTenantReportingComparisonQuery = (
   input: unknown,
 ): TenantReportingComparisonQuery => {
   return tenantReportingComparisonQuerySchema.parse(input);
+};
+
+export const parseTenantReportingHierarchyQuery = (
+  input: unknown,
+): TenantReportingHierarchyQuery => {
+  return tenantReportingHierarchyQuerySchema.parse(input);
 };
 
 export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemplateRequest => {
