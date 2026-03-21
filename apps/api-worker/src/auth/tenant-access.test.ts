@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as tenantAccessModule from "./tenant-access";
 
 vi.mock("@credtrail/db", async () => {
   const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
@@ -6,10 +7,17 @@ vi.mock("@credtrail/db", async () => {
   return {
     ...actual,
     findTenantMembership: vi.fn(),
+    listTenantMembershipOrgUnitScopes: vi.fn(),
   };
 });
 
-import { findTenantMembership, type SqlDatabase, type TenantMembershipRecord } from "@credtrail/db";
+import {
+  findTenantMembership,
+  listTenantMembershipOrgUnitScopes,
+  type SqlDatabase,
+  type TenantMembershipOrgUnitScopeRecord,
+  type TenantMembershipRecord,
+} from "@credtrail/db";
 import { ADMIN_ROLES, requirePrincipalTenantRole, type TenantAccessContext } from "./tenant-access";
 import type { AuthenticatedPrincipal, RequestedTenantContext } from "./auth-context";
 
@@ -20,6 +28,7 @@ interface FakeBindings {
 type FakeContext = TenantAccessContext<FakeBindings>;
 
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
+const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
 
 const fakeDb = {
   prepare: vi.fn(),
@@ -68,8 +77,24 @@ const membershipRecord = (overrides?: Partial<TenantMembershipRecord>): TenantMe
   };
 };
 
+const scopeRecord = (
+  overrides?: Partial<TenantMembershipOrgUnitScopeRecord>,
+): TenantMembershipOrgUnitScopeRecord => {
+  return {
+    tenantId: "tenant_requested",
+    userId: "usr_123",
+    orgUnitId: "org_college_science",
+    role: "issuer",
+    createdByUserId: null,
+    createdAt: "2026-02-18T12:00:00.000Z",
+    updatedAt: "2026-02-18T12:00:00.000Z",
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedFindTenantMembership.mockReset();
+  mockedListTenantMembershipOrgUnitScopes.mockReset();
 });
 
 describe("requirePrincipalTenantRole", () => {
@@ -135,6 +160,93 @@ describe("requirePrincipalTenantRole", () => {
     expect((response as Response).status).toBe(403);
     await expect((response as Response).json()).resolves.toEqual({
       error: "Insufficient role for requested action",
+    });
+  });
+});
+
+describe("resolveTenantReportingAccess", () => {
+  const resolveTenantReportingAccess = (
+    tenantAccessModule as {
+      resolveTenantReportingAccess?: (input: {
+        db: SqlDatabase;
+        tenantId: string;
+        userId: string;
+        membershipRole: "owner" | "admin" | "issuer" | "viewer";
+      }) => Promise<unknown>;
+    }
+  ).resolveTenantReportingAccess;
+
+  it("keeps owner and admin reporting visibility tenant-wide", async () => {
+    expect(resolveTenantReportingAccess).toBeTypeOf("function");
+    mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
+      scopeRecord({
+        role: "issuer",
+      }),
+    ]);
+
+    await expect(
+      resolveTenantReportingAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "admin",
+      }),
+    ).resolves.toEqual({
+      tenantId: "tenant_requested",
+      membershipRole: "admin",
+      visibility: "tenant",
+      scopedOrgUnitIds: [],
+    });
+  });
+
+  it("resolves scoped issuer reporting access to subtree roots when reporting scopes exist", async () => {
+    expect(resolveTenantReportingAccess).toBeTypeOf("function");
+    mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
+      scopeRecord({
+        orgUnitId: "org_college_science",
+        role: "issuer",
+      }),
+      scopeRecord({
+        orgUnitId: "org_department_biology",
+        role: "viewer",
+      }),
+      scopeRecord({
+        orgUnitId: "org_department_biology",
+        role: "admin",
+      }),
+    ]);
+
+    await expect(
+      resolveTenantReportingAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "issuer",
+      }),
+    ).resolves.toEqual({
+      tenantId: "tenant_requested",
+      membershipRole: "issuer",
+      visibility: "scoped",
+      scopedOrgUnitIds: ["org_college_science", "org_department_biology"],
+    });
+  });
+
+  it("preserves legacy tenant-wide reporting access for issuers without scope rows", async () => {
+    expect(resolveTenantReportingAccess).toBeTypeOf("function");
+    mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([]);
+
+    await expect(
+      resolveTenantReportingAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "issuer",
+      }),
+    ).resolves.toEqual({
+      tenantId: "tenant_requested",
+      membershipRole: "issuer",
+      visibility: "tenant",
+      scopedOrgUnitIds: [],
     });
   });
 });
