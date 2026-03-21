@@ -5,10 +5,12 @@ import {
   findLearnerProfileByIdentity,
   findUserById,
   isLearnerIdentityLinkProofValid,
+  listAssertionEngagementEvents,
   listAccessibleTenantContextsForUser,
   listLearnerBadgeSummaries,
   listLearnerIdentitiesByProfile,
   markLearnerIdentityLinkProofUsed,
+  recordAssertionEngagementEvent,
   removeLearnerIdentityAliasesByType,
   resolveLearnerProfileForIdentity,
   type SqlDatabase,
@@ -16,6 +18,7 @@ import {
 } from "@credtrail/db";
 import type { Hono } from "hono";
 import {
+  parseAssertionPathParams,
   parseLearnerDidSettingsRequest,
   parseLearnerIdentityLinkRequest,
   parseLearnerIdentityLinkVerifyRequest,
@@ -24,6 +27,7 @@ import {
 import type { AppBindings, AppContext, AppEnv } from "../app";
 import type { AuthenticatedPrincipal, RequestedTenantContext } from "../auth/auth-context";
 import { buildOrganizationsPath } from "../auth/tenant-context-selection";
+import type { LearnerDashboardBadge } from "../learner/pages";
 
 interface RegisterLearnerRoutesInput<DidNotice> {
   app: Hono<AppEnv>;
@@ -49,12 +53,40 @@ interface RegisterLearnerRoutesInput<DidNotice> {
   learnerDashboardPage: (
     requestUrl: string,
     tenantId: string,
-    badges: Awaited<ReturnType<typeof listLearnerBadgeSummaries>>,
+    badges: readonly LearnerDashboardBadge[],
     learnerDid: string | null,
     didNotice: DidNotice,
+    claimNotice: string | null,
     switchOrganizationPath?: string | null,
   ) => string;
 }
+
+const learnerClaimStatusNoticeFromQuery = (
+  value: string | undefined,
+): "recorded" | "already_recorded" | "invalid" | null => {
+  switch (value) {
+    case "recorded":
+    case "already_recorded":
+    case "invalid":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const learnerBadgeClaimStateFromEvents = (
+  events: Awaited<ReturnType<typeof listAssertionEngagementEvents>>,
+): LearnerDashboardBadge["claimState"] => {
+  if (events.some((event) => event.eventType === "wallet_accept")) {
+    return "accepted";
+  }
+
+  if (events.some((event) => event.eventType === "learner_claim")) {
+    return "claimed";
+  }
+
+  return "claimable";
+};
 
 export const registerLearnerRoutes = <DidNotice>(
   input: RegisterLearnerRoutesInput<DidNotice>,
@@ -108,7 +140,21 @@ export const registerLearnerRoutes = <DidNotice>(
       tenantId: pathParams.tenantId,
       userId: roleCheck.principal.userId,
     });
+    const dashboardBadges = await Promise.all(
+      badges.map(async (badge) => {
+        const events = await listAssertionEngagementEvents(db, {
+          tenantId: pathParams.tenantId,
+          assertionId: badge.assertionId,
+        });
+
+        return {
+          ...badge,
+          claimState: learnerBadgeClaimStateFromEvents(events),
+        };
+      }),
+    );
     const didNotice = learnerDidSettingsNoticeFromQuery(c.req.query("didStatus"));
+    const claimNotice = learnerClaimStatusNoticeFromQuery(c.req.query("claimStatus"));
     const accessibleTenantContexts = await listAccessibleTenantContextsForUser(
       db,
       roleCheck.principal.userId,
@@ -124,12 +170,67 @@ export const registerLearnerRoutes = <DidNotice>(
       learnerDashboardPage(
         c.req.url,
         pathParams.tenantId,
-        badges,
+        dashboardBadges,
         learnerDid,
         didNotice,
+        claimNotice,
         switchOrganizationPath,
       ),
     );
+  });
+
+  app.post("/tenants/:tenantId/learner/badges/:assertionId/claim", async (c): Promise<Response> => {
+    const pathParams = parseAssertionPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const dashboardUrl = new URL(
+      `/tenants/${encodeURIComponent(pathParams.tenantId)}/learner/dashboard`,
+      c.req.url,
+    );
+    const db = resolveDatabase(c.env);
+    const user = await findUserById(db, roleCheck.principal.userId);
+
+    if (user === null) {
+      return c.json(
+        {
+          error: "Authenticated user not found",
+        },
+        404,
+      );
+    }
+
+    const badges = await listLearnerBadgeSummaries(db, {
+      tenantId: pathParams.tenantId,
+      userId: roleCheck.principal.userId,
+    });
+    const badge = badges.find(
+      (candidate) =>
+        candidate.assertionId === pathParams.assertionId && candidate.revokedAt === null,
+    );
+
+    if (badge === undefined) {
+      dashboardUrl.searchParams.set("claimStatus", "invalid");
+      return c.redirect(dashboardUrl.toString(), 303);
+    }
+
+    const result = await recordAssertionEngagementEvent(db, {
+      tenantId: pathParams.tenantId,
+      assertionId: pathParams.assertionId,
+      eventType: "learner_claim",
+      actorType: "learner",
+      channel: "learner_dashboard",
+      occurredAt: new Date().toISOString(),
+    });
+
+    dashboardUrl.searchParams.set(
+      "claimStatus",
+      result.status === "already_recorded" ? "already_recorded" : "recorded",
+    );
+    return c.redirect(dashboardUrl.toString(), 303);
   });
 
   app.post("/tenants/:tenantId/learner/settings/did", async (c): Promise<Response> => {

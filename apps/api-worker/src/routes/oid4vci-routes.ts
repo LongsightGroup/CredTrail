@@ -4,6 +4,7 @@ import {
   createOid4vciAccessToken,
   createOid4vciPreAuthorizedCode,
   findActiveOid4vciAccessTokenByHash,
+  recordAssertionEngagementEvent,
   type SqlDatabase,
 } from "@credtrail/db";
 import type { Hono } from "hono";
@@ -370,13 +371,14 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
   };
 
   const handleCredentialRequest = async (c: AppContext): Promise<Response> => {
+    const db = resolveDatabase(c.env);
     const bearerToken = extractBearerToken(c.req.header("authorization"));
 
     if (bearerToken === null) {
       return oid4vciErrorJson(c, 401, "invalid_token", "Bearer access token is required");
     }
 
-    const tokenRecord = await findActiveOid4vciAccessTokenByHash(resolveDatabase(c.env), {
+    const tokenRecord = await findActiveOid4vciAccessTokenByHash(db, {
       accessTokenHash: await sha256Hex(bearerToken),
       nowIso: new Date().toISOString(),
     });
@@ -433,7 +435,7 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     }
 
     const verification = await loadVerificationViewModel(
-      resolveDatabase(c.env),
+      db,
       c.env.BADGE_OBJECTS,
       tokenRecord.assertionId,
     );
@@ -441,6 +443,15 @@ export const registerOid4vciRoutes = (input: RegisterOid4vciRoutesInput): void =
     if (verification.status !== "ok") {
       return oid4vciErrorJson(c, 404, "invalid_token", "Credential not found for this token");
     }
+
+    await recordAssertionEngagementEvent(db, {
+      tenantId: verification.value.assertion.tenantId,
+      assertionId: verification.value.assertion.id,
+      eventType: "wallet_accept",
+      actorType: "wallet",
+      channel: "oid4vci",
+      occurredAt: new Date().toISOString(),
+    });
 
     c.header("Cache-Control", "no-store");
     return c.json({

@@ -2,6 +2,12 @@ import type { LearnerBadgeSummaryRecord } from "@credtrail/db";
 import { renderPageShell } from "@credtrail/ui-components";
 
 export type LearnerDidSettingsNotice = "updated" | "cleared" | "conflict" | "invalid";
+export type LearnerClaimStatusNotice = "recorded" | "already_recorded" | "invalid";
+export type LearnerBadgeClaimState = "claimable" | "claimed" | "accepted";
+
+export interface LearnerDashboardBadge extends LearnerBadgeSummaryRecord {
+  claimState: LearnerBadgeClaimState;
+}
 
 export const learnerDidSettingsNoticeFromQuery = (
   value: string | undefined,
@@ -10,6 +16,19 @@ export const learnerDidSettingsNoticeFromQuery = (
     case "updated":
     case "cleared":
     case "conflict":
+    case "invalid":
+      return value;
+    default:
+      return null;
+  }
+};
+
+const normalizeLearnerClaimStatusNotice = (
+  value: string | null,
+): LearnerClaimStatusNotice | null => {
+  switch (value) {
+    case "recorded":
+    case "already_recorded":
     case "invalid":
       return value;
     default:
@@ -28,11 +47,13 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
   return (
     requestUrl: string,
     tenantId: string,
-    badges: readonly LearnerBadgeSummaryRecord[],
+    badges: readonly LearnerDashboardBadge[],
     learnerDid: string | null,
     didNotice: LearnerDidSettingsNotice | null,
+    claimNotice: string | null,
     switchOrganizationPath?: string | null,
   ): string => {
+    const normalizedClaimNotice = normalizeLearnerClaimStatusNotice(claimNotice);
     const totalBadges = badges.length;
     const activeBadges = badges.filter((badge) => badge.revokedAt === null).length;
     const revokedBadges = totalBadges - activeBadges;
@@ -88,6 +109,14 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
       learnerDid === null
         ? '<p class="learner-dashboard__subtle">No learner DID is currently configured.</p>'
         : `<p class="learner-dashboard__subtle learner-dashboard__subtle--break">Current DID: <code>${escapeHtml(learnerDid)}</code></p>`;
+    const claimNoticeMarkup =
+      normalizedClaimNotice === null
+        ? ""
+        : normalizedClaimNotice === "recorded"
+          ? '<p class="learner-dashboard__notice learner-dashboard__notice--success">Credential claim recorded from your dashboard.</p>'
+          : normalizedClaimNotice === "already_recorded"
+            ? '<p class="learner-dashboard__notice learner-dashboard__notice--info">This credential was already claimed from your dashboard.</p>'
+            : '<p class="learner-dashboard__notice learner-dashboard__notice--danger">That badge could not be claimed from this dashboard.</p>';
     const switchOrganizationMarkup =
       switchOrganizationPath === undefined ||
       switchOrganizationPath === null ||
@@ -200,6 +229,16 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
                   badge.revokedAt === null
                     ? ""
                     : `<p class="learner-dashboard__danger">Revoked at ${escapeHtml(formatIsoTimestamp(badge.revokedAt))} UTC</p>`;
+                const claimActionMarkup =
+                  badge.revokedAt !== null
+                    ? ""
+                    : badge.claimState === "accepted"
+                      ? '<p class="learner-dashboard__claim-state learner-dashboard__claim-state--accepted">Accepted in wallet</p>'
+                      : badge.claimState === "claimed"
+                        ? '<p class="learner-dashboard__claim-state learner-dashboard__claim-state--claimed">Claim recorded in CredTrail</p>'
+                        : `<form method="post" action="/tenants/${encodeURIComponent(tenantId)}/learner/badges/${encodeURIComponent(badge.assertionId)}/claim" class="learner-dashboard__claim-form">
+                            <button type="submit" class="learner-dashboard__button learner-dashboard__button--secondary">Claim from dashboard</button>
+                          </form>`;
 
                 return `<article class="${badgeCardClass}">
                   <div class="learner-dashboard__badge-topline">
@@ -219,6 +258,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
                     </div>
                   </div>
                   ${revokedAtMarkup}
+                  ${claimActionMarkup}
                   <p class="learner-dashboard__badge-url">${escapeHtml(publicBadgeUrl)}</p>
                 </article>`;
               })
@@ -557,6 +597,12 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           background: rgba(255, 255, 255, 0.92);
         }
 
+        .learner-dashboard__button--secondary {
+          border-color: rgba(11, 90, 169, 0.2);
+          color: #12375e;
+          background: linear-gradient(180deg, rgba(255, 252, 244, 0.98), rgba(244, 249, 255, 0.96));
+        }
+
         .learner-dashboard__badge-grid {
           display: grid;
           gap: 1rem;
@@ -616,6 +662,23 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           margin: 0;
           color: var(--learner-ink);
           line-height: 1.2;
+        }
+
+        .learner-dashboard__claim-form {
+          margin: 0;
+        }
+
+        .learner-dashboard__claim-state {
+          margin: 0;
+          font-weight: 700;
+        }
+
+        .learner-dashboard__claim-state--claimed {
+          color: #0f5b84;
+        }
+
+        .learner-dashboard__claim-state--accepted {
+          color: #0a6f47;
         }
 
         .learner-dashboard__badge-description {
@@ -716,6 +779,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
             ${latestIssuedMarkup}
           </div>
         </header>
+        ${claimNoticeMarkup}
         ${badgesMarkup}
         ${didSettingsSection}
       </section>`,
