@@ -316,11 +316,17 @@ describe("GET /", () => {
       undefined,
       createEnv(),
     );
+    const hierarchyResponse = await isolatedApp.request(
+      "/v1/tenants/tenant_123/reporting/hierarchy",
+      undefined,
+      createEnv(),
+    );
 
     expect(overviewResponse.status).toBe(401);
     expect(engagementResponse.status).toBe(401);
     expect(trendsResponse.status).toBe(401);
     expect(comparisonsResponse.status).toBe(401);
+    expect(hierarchyResponse.status).toBe(401);
   });
 });
 

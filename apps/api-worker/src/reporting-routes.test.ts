@@ -5,6 +5,8 @@ const {
   mockedGetTenantReportingEngagementCounts,
   mockedGetTenantReportingOverview,
   mockedGetTenantReportingTrends,
+  mockedListTenantMembershipOrgUnitScopes,
+  mockedListTenantOrgUnits,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
 } = vi.hoisted(() => {
@@ -13,6 +15,8 @@ const {
     mockedGetTenantReportingEngagementCounts: vi.fn(),
     mockedGetTenantReportingOverview: vi.fn(),
     mockedGetTenantReportingTrends: vi.fn(),
+    mockedListTenantMembershipOrgUnitScopes: vi.fn(),
+    mockedListTenantOrgUnits: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
   };
@@ -27,6 +31,8 @@ vi.mock("@credtrail/db", async () => {
     getTenantReportingEngagementCounts: mockedGetTenantReportingEngagementCounts,
     getTenantReportingOverview: mockedGetTenantReportingOverview,
     getTenantReportingTrends: mockedGetTenantReportingTrends,
+    listTenantMembershipOrgUnitScopes: mockedListTenantMembershipOrgUnitScopes,
+    listTenantOrgUnits: mockedListTenantOrgUnits,
     listTenantReportingComparisons: mockedGetTenantReportingComparisons,
   };
 });
@@ -60,8 +66,12 @@ import {
   getTenantReportingEngagementCounts,
   getTenantReportingOverview,
   getTenantReportingTrends,
+  listTenantMembershipOrgUnitScopes,
+  listTenantOrgUnits,
   listTenantReportingComparisons,
   type SqlDatabase,
+  type TenantMembershipOrgUnitScopeRecord,
+  type TenantOrgUnitRecord,
 } from "@credtrail/db";
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
@@ -72,6 +82,8 @@ const mockedGetTenantReportingComparisonsDb = vi.mocked(listTenantReportingCompa
 const mockedGetTenantReportingEngagementCountsDb = vi.mocked(getTenantReportingEngagementCounts);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const mockedGetTenantReportingTrendsDb = vi.mocked(getTenantReportingTrends);
+const mockedListTenantMembershipOrgUnitScopesDb = vi.mocked(listTenantMembershipOrgUnitScopes);
+const mockedListTenantOrgUnitsDb = vi.mocked(listTenantOrgUnits);
 const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
@@ -82,6 +94,110 @@ const createEnv = () => {
     DATABASE_URL: "postgres://credtrail-test.local/db",
     BADGE_OBJECTS: {} as R2Bucket,
     PLATFORM_DOMAIN: "credtrail.test",
+  };
+};
+
+const sampleReportingOrgUnits = (): TenantOrgUnitRecord[] => {
+  return [
+    {
+      id: "tenant_123:org:institution",
+      tenantId: "tenant_123",
+      unitType: "institution",
+      slug: "institution",
+      displayName: "Tenant 123 Institution",
+      parentOrgUnitId: null,
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:college-eng",
+      tenantId: "tenant_123",
+      unitType: "college",
+      slug: "college-eng",
+      displayName: "College of Engineering",
+      parentOrgUnitId: "tenant_123:org:institution",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:college-arts",
+      tenantId: "tenant_123",
+      unitType: "college",
+      slug: "college-arts",
+      displayName: "College of Arts",
+      parentOrgUnitId: "tenant_123:org:institution",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-cs",
+      tenantId: "tenant_123",
+      unitType: "department",
+      slug: "department-cs",
+      displayName: "Computer Science",
+      parentOrgUnitId: "tenant_123:org:college-eng",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-math",
+      tenantId: "tenant_123",
+      unitType: "department",
+      slug: "department-math",
+      displayName: "Mathematics",
+      parentOrgUnitId: "tenant_123:org:college-eng",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-history",
+      tenantId: "tenant_123",
+      unitType: "department",
+      slug: "department-history",
+      displayName: "History",
+      parentOrgUnitId: "tenant_123:org:college-arts",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:program-cs",
+      tenantId: "tenant_123",
+      unitType: "program",
+      slug: "program-cs",
+      displayName: "Computer Science Program",
+      parentOrgUnitId: "tenant_123:org:department-cs",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    },
+  ];
+};
+
+const sampleScopedReportingScope = (
+  overrides?: Partial<TenantMembershipOrgUnitScopeRecord>,
+): TenantMembershipOrgUnitScopeRecord => {
+  return {
+    tenantId: "tenant_123",
+    userId: "usr_admin",
+    orgUnitId: "tenant_123:org:college-eng",
+    role: "issuer",
+    createdByUserId: "usr_owner",
+    createdAt: "2026-03-21T12:00:00.000Z",
+    updatedAt: "2026-03-21T12:00:00.000Z",
+    ...overrides,
   };
 };
 
@@ -194,6 +310,10 @@ beforeEach(() => {
       ];
     },
   );
+  mockedListTenantMembershipOrgUnitScopesDb.mockReset();
+  mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([]);
+  mockedListTenantOrgUnitsDb.mockReset();
+  mockedListTenantOrgUnitsDb.mockResolvedValue(sampleReportingOrgUnits());
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthPrincipal.mockResolvedValue({
     userId: "usr_admin",
@@ -297,6 +417,100 @@ describe("GET /v1/tenants/:tenantId/reporting/overview", () => {
     );
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe("GET /v1/tenants/:tenantId/reporting/hierarchy", () => {
+  it("returns hierarchy rollups for the requested focus org and level", async () => {
+    mockedGetTenantReportingComparisonsDb.mockImplementation(
+      async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+        if (input.groupBy !== "orgUnit") {
+          return [];
+        }
+
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:program-cs",
+            issuedCount: 8,
+            publicBadgeViewCount: 24,
+            verificationViewCount: 9,
+            shareClickCount: 5,
+            learnerClaimCount: 4,
+            walletAcceptCount: 2,
+            claimRate: 50,
+            shareRate: 37.5,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-math",
+            issuedCount: 4,
+            publicBadgeViewCount: 10,
+            verificationViewCount: 3,
+            shareClickCount: 1,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 50,
+            shareRate: 25,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 6,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      },
+    );
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/reporting/hierarchy?from=2026-03-01&to=2026-03-31&focusOrgUnitId=tenant_123:org:college-eng&level=department",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.json<{
+      status: string;
+      filters: {
+        focusOrgUnitId: string | null;
+        level: string;
+      };
+      rows: Array<{
+        orgUnitId: string;
+        level: string;
+        issuedCount: number;
+      }>;
+    }>();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("ok");
+    expect(body.filters).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      focusOrgUnitId: "tenant_123:org:college-eng",
+      level: "department",
+    });
+    expect(body.rows).toEqual([
+      expect.objectContaining({
+        orgUnitId: "tenant_123:org:department-cs",
+        level: "department",
+        issuedCount: 8,
+      }),
+      expect.objectContaining({
+        orgUnitId: "tenant_123:org:department-math",
+        level: "department",
+        issuedCount: 4,
+      }),
+    ]);
   });
 });
 
@@ -437,5 +651,94 @@ describe("GET /v1/tenants/:tenantId/reporting/comparisons", () => {
       orgUnitId: undefined,
       groupBy: "badgeTemplate",
     });
+  });
+
+  it("allows scoped issuers to read in-scope comparisons and rejects out-of-scope hierarchy focus", async () => {
+    mockedFindTenantMembership.mockResolvedValue({
+      tenantId: "tenant_123",
+      userId: "usr_admin",
+      role: "issuer",
+      createdAt: "2026-03-21T12:00:00.000Z",
+      updatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([sampleScopedReportingScope()]);
+    mockedGetTenantReportingComparisonsDb.mockImplementation(
+      async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+        if (input.groupBy !== "orgUnit") {
+          return [];
+        }
+
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-cs",
+            issuedCount: 7,
+            publicBadgeViewCount: 18,
+            verificationViewCount: 7,
+            shareClickCount: 3,
+            learnerClaimCount: 3,
+            walletAcceptCount: 2,
+            claimRate: 42.9,
+            shareRate: 28.6,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 5,
+            publicBadgeViewCount: 11,
+            verificationViewCount: 4,
+            shareClickCount: 2,
+            learnerClaimCount: 1,
+            walletAcceptCount: 1,
+            claimRate: 20,
+            shareRate: 20,
+          },
+        ];
+      },
+    );
+
+    const inScopeResponse = await app.request(
+      "/v1/tenants/tenant_123/reporting/comparisons?groupBy=orgUnit",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const inScopeBody = await inScopeResponse.json<{
+      rows: Array<{
+        groupId: string;
+      }>;
+    }>();
+
+    expect(inScopeResponse.status).toBe(200);
+    expect(inScopeBody.rows).toEqual([
+      expect.objectContaining({
+        groupId: "tenant_123:org:department-cs",
+      }),
+    ]);
+    expect(mockedGetTenantReportingComparisonsDb).toHaveBeenCalledWith(fakeDb, {
+      tenantId: "tenant_123",
+      from: undefined,
+      to: undefined,
+      badgeTemplateId: undefined,
+      orgUnitId: undefined,
+      groupBy: "orgUnit",
+    });
+
+    const outOfScopeResponse = await app.request(
+      "/v1/tenants/tenant_123/reporting/hierarchy?focusOrgUnitId=tenant_123:org:college-arts&level=department",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const outOfScopeBody = await outOfScopeResponse.json<{ error: string }>();
+
+    expect(outOfScopeResponse.status).toBe(403);
+    expect(outOfScopeBody.error).toBe("Requested org unit is outside reporting scope");
   });
 });

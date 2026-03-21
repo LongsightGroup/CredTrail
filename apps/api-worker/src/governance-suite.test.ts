@@ -28,18 +28,29 @@ vi.mock("@credtrail/db", async () => {
     findActiveSessionByHash: mockedFindActiveSessionByHash,
     findBadgeTemplateById: vi.fn(),
     findDelegatedIssuingAuthorityGrantById: vi.fn(),
+    findTenantAuthPolicy: vi.fn(),
     findTenantMembership: vi.fn(),
     findTenantById: vi.fn(),
     findTenantSsoSamlConfiguration: vi.fn(),
     findUserById: vi.fn(),
+    getTenantReportingEngagementCounts: vi.fn(),
+    getTenantReportingOverview: vi.fn(),
+    getTenantReportingTrends: vi.fn(),
     hasTenantMembershipOrgUnitAccess: vi.fn(),
     hasTenantMembershipOrgUnitScopeAssignments: vi.fn(),
+    listAccessibleTenantContextsForUser: vi.fn(),
+    listBadgeIssuanceRules: vi.fn(),
+    listBadgeIssuanceRuleVersions: vi.fn(),
+    listBadgeTemplates: vi.fn(),
     listBadgeTemplateOwnershipEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrantEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrants: vi.fn(),
+    listTenantAuthProviders: vi.fn(),
     listTenantMembershipOrgUnitScopes: vi.fn(),
     listTenantOrgUnits: vi.fn(),
     listTenantApiKeys: vi.fn(),
+    listTenantBreakGlassAccounts: vi.fn(),
+    listTenantReportingComparisons: vi.fn(),
     removeTenantMembershipOrgUnitScope: vi.fn(),
     revokeTenantApiKey: vi.fn(),
     revokeDelegatedIssuingAuthorityGrant: vi.fn(),
@@ -83,18 +94,29 @@ import {
   findActiveDelegatedIssuingAuthorityGrantForAction,
   findBadgeTemplateById,
   findDelegatedIssuingAuthorityGrantById,
+  findTenantAuthPolicy,
   findTenantMembership,
   findTenantById,
   findTenantSsoSamlConfiguration,
   findUserById,
+  getTenantReportingEngagementCounts,
+  getTenantReportingOverview,
+  getTenantReportingTrends,
   hasTenantMembershipOrgUnitAccess,
   hasTenantMembershipOrgUnitScopeAssignments,
+  listAccessibleTenantContextsForUser,
+  listBadgeIssuanceRules,
+  listBadgeIssuanceRuleVersions,
+  listBadgeTemplates,
   listBadgeTemplateOwnershipEvents,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
+  listTenantAuthProviders,
   listTenantApiKeys,
+  listTenantBreakGlassAccounts,
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
+  listTenantReportingComparisons,
   removeTenantMembershipOrgUnitScope,
   revokeTenantApiKey,
   revokeDelegatedIssuingAuthorityGrant,
@@ -135,22 +157,35 @@ const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindDelegatedIssuingAuthorityGrantById = vi.mocked(
   findDelegatedIssuingAuthorityGrantById,
 );
+const mockedFindTenantAuthPolicy = vi.mocked(findTenantAuthPolicy);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
 const mockedFindTenantSsoSamlConfiguration = vi.mocked(findTenantSsoSamlConfiguration);
 const mockedFindUserById = vi.mocked(findUserById);
+const mockedGetTenantReportingEngagementCounts = vi.mocked(getTenantReportingEngagementCounts);
+const mockedGetTenantReportingOverview = vi.mocked(getTenantReportingOverview);
+const mockedGetTenantReportingTrends = vi.mocked(getTenantReportingTrends);
 const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgUnitAccess);
 const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
+const mockedListAccessibleTenantContextsForUser = vi.mocked(
+  listAccessibleTenantContextsForUser,
+);
+const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
+const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
+const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListBadgeTemplateOwnershipEvents = vi.mocked(listBadgeTemplateOwnershipEvents);
 const mockedListDelegatedIssuingAuthorityGrantEvents = vi.mocked(
   listDelegatedIssuingAuthorityGrantEvents,
 );
 const mockedListDelegatedIssuingAuthorityGrants = vi.mocked(listDelegatedIssuingAuthorityGrants);
+const mockedListTenantAuthProviders = vi.mocked(listTenantAuthProviders);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
+const mockedListTenantBreakGlassAccounts = vi.mocked(listTenantBreakGlassAccounts);
 const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
+const mockedListTenantReportingComparisons = vi.mocked(listTenantReportingComparisons);
 const mockedRemoveTenantMembershipOrgUnitScope = vi.mocked(removeTenantMembershipOrgUnitScope);
 const mockedRevokeTenantApiKey = vi.mocked(revokeTenantApiKey);
 const mockedRevokeDelegatedIssuingAuthorityGrant = vi.mocked(revokeDelegatedIssuingAuthorityGrant);
@@ -261,6 +296,14 @@ beforeEach(() => {
   mockedHasTenantMembershipOrgUnitAccess.mockResolvedValue(false);
   mockedHasTenantMembershipOrgUnitScopeAssignments.mockReset();
   mockedHasTenantMembershipOrgUnitScopeAssignments.mockResolvedValue(false);
+  mockedListAccessibleTenantContextsForUser.mockReset();
+  mockedListAccessibleTenantContextsForUser.mockResolvedValue([]);
+  mockedListBadgeIssuanceRules.mockReset();
+  mockedListBadgeIssuanceRules.mockResolvedValue([]);
+  mockedListBadgeIssuanceRuleVersions.mockReset();
+  mockedListBadgeIssuanceRuleVersions.mockResolvedValue([]);
+  mockedListBadgeTemplates.mockReset();
+  mockedListBadgeTemplates.mockResolvedValue([sampleBadgeTemplate()]);
   mockedListBadgeTemplateOwnershipEvents.mockReset();
   mockedListBadgeTemplateOwnershipEvents.mockResolvedValue([]);
   mockedResolveBetterAuthPrincipal.mockReset();
@@ -286,12 +329,109 @@ beforeEach(() => {
   mockedListDelegatedIssuingAuthorityGrantEvents.mockResolvedValue([]);
   mockedListDelegatedIssuingAuthorityGrants.mockReset();
   mockedListDelegatedIssuingAuthorityGrants.mockResolvedValue([]);
+  mockedFindTenantAuthPolicy.mockReset();
+  mockedFindTenantAuthPolicy.mockResolvedValue(null);
+  mockedGetTenantReportingEngagementCounts.mockReset();
+  mockedGetTenantReportingEngagementCounts.mockResolvedValue({
+    issuedCount: 5,
+    publicBadgeViewCount: 14,
+    verificationViewCount: 5,
+    shareClickCount: 2,
+    learnerClaimCount: 2,
+    walletAcceptCount: 1,
+    claimRate: 40,
+    shareRate: 20,
+  });
+  mockedGetTenantReportingOverview.mockReset();
+  mockedGetTenantReportingOverview.mockResolvedValue({
+    tenantId: "tenant_123",
+    filters: {
+      issuedFrom: null,
+      issuedTo: null,
+      badgeTemplateId: null,
+      orgUnitId: null,
+      state: null,
+    },
+    counts: {
+      issued: 5,
+      active: 5,
+      suspended: 0,
+      revoked: 0,
+      pendingReview: 0,
+      claimRate: 40,
+      shareRate: 20,
+    },
+    generatedAt: "2026-03-21T12:00:00.000Z",
+  });
+  mockedGetTenantReportingTrends.mockReset();
+  mockedGetTenantReportingTrends.mockResolvedValue({
+    tenantId: "tenant_123",
+    filters: {
+      from: null,
+      to: null,
+      badgeTemplateId: null,
+      orgUnitId: null,
+    },
+    bucket: "day",
+    series: [
+      {
+        bucketStart: "2026-03-01",
+        issuedCount: 5,
+        publicBadgeViewCount: 14,
+        verificationViewCount: 5,
+        shareClickCount: 2,
+        learnerClaimCount: 2,
+        walletAcceptCount: 1,
+      },
+    ],
+    generatedAt: "2026-03-21T12:00:00.000Z",
+  });
+  mockedListTenantAuthProviders.mockReset();
+  mockedListTenantAuthProviders.mockResolvedValue([]);
   mockedListTenantApiKeys.mockReset();
   mockedListTenantApiKeys.mockResolvedValue([]);
+  mockedListTenantBreakGlassAccounts.mockReset();
+  mockedListTenantBreakGlassAccounts.mockResolvedValue([]);
   mockedListTenantMembershipOrgUnitScopes.mockReset();
   mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([]);
   mockedListTenantOrgUnits.mockReset();
   mockedListTenantOrgUnits.mockResolvedValue([]);
+  mockedListTenantReportingComparisons.mockReset();
+  mockedListTenantReportingComparisons.mockImplementation(
+    async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+      if (input.groupBy === "badgeTemplate") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_001",
+            issuedCount: 5,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 40,
+            shareRate: 20,
+          },
+        ];
+      }
+
+      return [
+        {
+          groupBy: "orgUnit",
+          groupId: "tenant_123:org:institution",
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+          claimRate: 40,
+          shareRate: 20,
+        },
+      ];
+    },
+  );
   mockedCreateTenantOrgUnit.mockReset();
   mockedCreateTenantApiKey.mockReset();
   mockedCreateTenantApiKey.mockResolvedValue(sampleTenantApiKey());
@@ -530,6 +670,266 @@ describe("org unit and badge ownership governance endpoints", () => {
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockReset();
     mockedFindActiveDelegatedIssuingAuthorityGrantForAction.mockResolvedValue(null);
     mockedCreateAuditLog.mockClear();
+  });
+
+  it("loads scoped reporting with a narrow page-data path and keeps badge-template comparisons available", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
+    mockedListTenantMembershipOrgUnitScopes.mockImplementation(
+      async (_db, input: { tenantId: string; userId?: string }) => {
+        if (input.userId === "usr_123") {
+          return [
+            sampleTenantMembershipOrgUnitScope({
+              userId: "usr_123",
+              orgUnitId: "tenant_123:org:college-eng",
+              role: "issuer",
+            }),
+          ];
+        }
+
+        return [];
+      },
+    );
+    mockedListTenantOrgUnits.mockResolvedValue([
+      sampleTenantOrgUnit(),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-eng",
+        unitType: "college",
+        slug: "college-eng",
+        displayName: "College of Engineering",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-arts",
+        unitType: "college",
+        slug: "college-arts",
+        displayName: "College of Arts",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-cs",
+        unitType: "department",
+        slug: "department-cs",
+        displayName: "Computer Science",
+        parentOrgUnitId: "tenant_123:org:college-eng",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-history",
+        unitType: "department",
+        slug: "department-history",
+        displayName: "History",
+        parentOrgUnitId: "tenant_123:org:college-arts",
+      }),
+    ]);
+    mockedListBadgeTemplates.mockResolvedValue([
+      sampleBadgeTemplate(),
+      sampleBadgeTemplate({
+        id: "badge_template_chem",
+        slug: "chemistry-lab",
+        title: "Chemistry Lab",
+        ownerOrgUnitId: "tenant_123:org:department-history",
+      }),
+    ]);
+    mockedGetTenantReportingOverview.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:department-cs") {
+        return {
+          tenantId: "tenant_123",
+          filters: {
+            issuedFrom: input.issuedFrom ?? null,
+            issuedTo: input.issuedTo ?? null,
+            badgeTemplateId: input.badgeTemplateId ?? null,
+            orgUnitId: input.orgUnitId,
+            state: input.state ?? null,
+          },
+          counts: {
+            issued: 5,
+            active: 5,
+            suspended: 0,
+            revoked: 0,
+            pendingReview: 0,
+            claimRate: 40,
+            shareRate: 20,
+          },
+          generatedAt: "2026-03-21T12:00:00.000Z",
+        };
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 0,
+          active: 0,
+          suspended: 0,
+          revoked: 0,
+          pendingReview: 0,
+          claimRate: 0,
+          shareRate: 0,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedGetTenantReportingEngagementCounts.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:department-cs") {
+        return {
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+          claimRate: 40,
+          shareRate: 20,
+        };
+      }
+
+      return {
+        issuedCount: 0,
+        publicBadgeViewCount: 0,
+        verificationViewCount: 0,
+        shareClickCount: 0,
+        learnerClaimCount: 0,
+        walletAcceptCount: 0,
+        claimRate: 0,
+        shareRate: 0,
+      };
+    });
+    mockedGetTenantReportingTrends.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:department-cs") {
+        return {
+          tenantId: "tenant_123",
+          filters: {
+            from: input.from ?? null,
+            to: input.to ?? null,
+            badgeTemplateId: input.badgeTemplateId ?? null,
+            orgUnitId: input.orgUnitId,
+          },
+          bucket: "day",
+          series: [
+            {
+              bucketStart: "2026-03-01",
+              issuedCount: 5,
+              publicBadgeViewCount: 14,
+              verificationViewCount: 5,
+              shareClickCount: 2,
+              learnerClaimCount: 2,
+              walletAcceptCount: 1,
+            },
+          ],
+          generatedAt: "2026-03-21T12:00:00.000Z",
+        };
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          from: input.from ?? null,
+          to: input.to ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+        },
+        bucket: "day",
+        series: [],
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedListTenantReportingComparisons.mockImplementation(async (_db, input) => {
+      if (input.groupBy === "orgUnit") {
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-cs",
+            issuedCount: 5,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 40,
+            shareRate: 20,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      if (input.orgUnitId === "tenant_123:org:department-cs") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_001",
+            issuedCount: 5,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 40,
+            shareRate: 20,
+          },
+        ];
+      }
+
+      if (input.orgUnitId === "tenant_123:org:department-history") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_chem",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      return [];
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("Compare by badge template");
+    expect(html).toContain("TypeScript Foundations");
+    expect(html).not.toContain("Chemistry Lab");
+    expect(html).not.toContain("College of Arts");
+    expect(mockedListDelegatedIssuingAuthorityGrants).not.toHaveBeenCalled();
+    expect(mockedListTenantApiKeys).not.toHaveBeenCalled();
+    expect(mockedListBadgeIssuanceRules).not.toHaveBeenCalled();
+    expect(mockedFindTenantAuthPolicy).not.toHaveBeenCalled();
+    expect(mockedListTenantAuthProviders).not.toHaveBeenCalled();
+    expect(mockedListTenantBreakGlassAccounts).not.toHaveBeenCalled();
   });
 
   it("lists tenant org units for issuer roles", async () => {
