@@ -8,6 +8,7 @@ import {
   parseResolveDedicatedDbProvisioningRequest,
   parseTenantApiKeyListQuery,
   parseTenantAssertionListQuery,
+  parseTenantAssertionLedgerExportQuery,
   parseTenantApiKeyPathParams,
   parseUpsertTenantAuthPolicyRequest,
   parseUpsertTenantAuthProviderRequest,
@@ -1419,6 +1420,41 @@ describe("enterprise governance request parsers", () => {
     expect(() => {
       parseTenantAssertionListQuery({
         limit: "0",
+      });
+    }).toThrowError();
+  });
+
+  it("parses tenant assertion ledger export filters and issued date bounds", () => {
+    const query = parseTenantAssertionLedgerExportQuery({
+      issuedFrom: "2026-03-01",
+      issuedTo: "2026-03-31",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "suspended",
+      recipientQuery: " learner.one@example.edu ",
+    });
+
+    expect(query).toEqual({
+      issuedFrom: "2026-03-01",
+      issuedTo: "2026-03-31",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "suspended",
+      recipientQuery: "learner.one@example.edu",
+    });
+  });
+
+  it("rejects invalid tenant assertion ledger export query values", () => {
+    expect(() => {
+      parseTenantAssertionLedgerExportQuery({
+        issuedFrom: "2026-03-31",
+        issuedTo: "2026-03-01",
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseTenantAssertionLedgerExportQuery({
+        state: "pending_review",
       });
     }).toThrowError();
   });
