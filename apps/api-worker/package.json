@@ -11,6 +11,7 @@
     "@credtrail/ui-components": "workspace:*",
     "@credtrail/validation": "workspace:*",
     "@hono/node-server": "^1.19.9",
+    "csv-stringify": "^6.7.0",
     "hono": "^4.7.2",
     "pdf-lib": "^1.17.1"
   }

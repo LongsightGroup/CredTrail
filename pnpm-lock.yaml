@@ -75,6 +75,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.9(hono@4.11.9)
+      csv-stringify:
+        specifier: ^6.7.0
+        version: 6.7.0
       hono:
         specifier: ^4.7.2
         version: 4.11.9
@@ -1576,6 +1579,9 @@ packages:
 
   cross-fetch@4.1.0:
     resolution: {integrity: sha512-uKm5PU+MHTootlWEY+mZ4vvXoCn4fLQxT9dSc1sXVMSFkINTJVN8cAQROpwcKm8bJ/c7rgZVIBWzH5T78sNZZw==}
+
+  csv-stringify@6.7.0:
+    resolution: {integrity: sha512-UdtziYp5HuTz7e5j8Nvq+a/3HQo+2/aJZ9xntNTpmRRIg/3YYqDVgiS9fvAhtNbnyfbv2ZBe0bqCHqzhE7FqWQ==}
 
   dcql@1.0.1:
     resolution: {integrity: sha512-XZ9VJfvHZwPbeg6O+GvyNi7P5n4L+J0ATCFBUvgn2LXzQPoatHnOt9b7uHHtFWZzxyD5ngLpBCEOteEzKgtIAA==}
@@ -3752,6 +3758,8 @@ snapshots:
       node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
+
+  csv-stringify@6.7.0: {}
 
   dcql@1.0.1(typescript@5.9.3):
     dependencies:
