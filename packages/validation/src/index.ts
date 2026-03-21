@@ -351,6 +351,35 @@ export const tenantReportingOverviewQuerySchema = z
     }
   });
 
+const tenantReportingEngagementQueryBaseSchema = z
+  .object({
+    from: reportingDateSchema.optional(),
+    to: reportingDateSchema.optional(),
+    badgeTemplateId: resourceIdSchema.optional(),
+    orgUnitId: resourceIdSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from === undefined || value.to === undefined) {
+      return;
+    }
+
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["to"],
+        message: "to must be on or after from",
+      });
+    }
+  });
+
+export const tenantReportingTrendQuerySchema = tenantReportingEngagementQueryBaseSchema.extend({
+  bucket: z.enum(["day"]).default("day"),
+});
+
+export const tenantReportingComparisonQuerySchema = tenantReportingEngagementQueryBaseSchema.extend({
+  groupBy: z.enum(["badgeTemplate", "orgUnit"]).default("badgeTemplate"),
+});
+
 export const createBadgeTemplateRequestSchema = z.object({
   slug: badgeTemplateSlugSchema,
   title: badgeTemplateTitleSchema,
@@ -1300,6 +1329,8 @@ export type DelegatedIssuingAuthorityGrantListQuery = z.infer<
 export type TenantApiKeyListQuery = z.infer<typeof tenantApiKeyListQuerySchema>;
 export type TenantAssertionListQuery = z.infer<typeof tenantAssertionListQuerySchema>;
 export type TenantReportingOverviewQuery = z.infer<typeof tenantReportingOverviewQuerySchema>;
+export type TenantReportingTrendQuery = z.infer<typeof tenantReportingTrendQuerySchema>;
+export type TenantReportingComparisonQuery = z.infer<typeof tenantReportingComparisonQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
 export type CreateTenantOrgUnitRequest = z.infer<typeof createTenantOrgUnitRequestSchema>;
@@ -1585,6 +1616,16 @@ export const parseTenantReportingOverviewQuery = (
   input: unknown,
 ): TenantReportingOverviewQuery => {
   return tenantReportingOverviewQuerySchema.parse(input);
+};
+
+export const parseTenantReportingTrendQuery = (input: unknown): TenantReportingTrendQuery => {
+  return tenantReportingTrendQuerySchema.parse(input);
+};
+
+export const parseTenantReportingComparisonQuery = (
+  input: unknown,
+): TenantReportingComparisonQuery => {
+  return tenantReportingComparisonQuerySchema.parse(input);
 };
 
 export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemplateRequest => {

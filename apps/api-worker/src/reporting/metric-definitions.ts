@@ -64,17 +64,17 @@ export const REPORTING_METRIC_DEFINITIONS: readonly ReportingMetricDefinition[] 
     key: "claimRate",
     label: "Claim rate",
     description: "Percent of issued badges that recipients actively claim or accept.",
-    source: "phase_10_engagement_capture",
-    available: false,
-    availabilityNote: "Requires product-owned learner claim events planned for Phase 10.",
+    source: "assertion_engagement_events + assertions",
+    available: true,
+    availabilityNote: null,
   },
   {
     key: "shareRate",
     label: "Share rate",
     description: "Percent of issued badges that recipients share outward from CredTrail.",
-    source: "phase_10_engagement_capture",
-    available: false,
-    availabilityNote: "Requires product-owned share events planned for Phase 10.",
+    source: "assertion_engagement_events + assertions",
+    available: true,
+    availabilityNote: null,
   },
 ] as const;
 
