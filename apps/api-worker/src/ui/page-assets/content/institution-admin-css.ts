@@ -323,6 +323,49 @@ export const INSTITUTION_ADMIN_CSS = `
   background: linear-gradient(90deg, var(--ct-brand-lake-500), var(--ct-brand-lake-700));
   transition: width var(--ct-duration-standard) var(--ct-ease-standard);
 }
+.ct-admin__reporting-root-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.ct-admin__reporting-root-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--ct-radius-pill);
+  border: 1px solid var(--ct-border-soft);
+  background: var(--ct-theme-surface-card);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.ct-admin__reporting-focus-section {
+  padding: 1rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid var(--ct-border-soft);
+  background: rgba(255, 255, 255, 0.72);
+}
+.ct-admin__reporting-focus-section:target,
+.ct-admin__reporting-focus-section[data-reporting-focus-active='true'] {
+  border-color: var(--ct-theme-border-info);
+  box-shadow: 0 0 0 3px rgba(15, 95, 166, 0.12);
+  background: rgba(238, 246, 255, 0.72);
+}
+.ct-admin__reporting-breadcrumb {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ct-theme-text-title);
+}
+.ct-admin__reporting-performer-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+.ct-admin__table--compact th,
+.ct-admin__table--compact td {
+  padding-block: 0.55rem;
+}
 .ct-admin__cta-link {
   display: inline-flex;
   align-items: center;

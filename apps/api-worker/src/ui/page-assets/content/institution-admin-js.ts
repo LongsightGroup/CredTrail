@@ -4922,6 +4922,27 @@ export const INSTITUTION_ADMIN_JS = `
     }
   }
 
+  const reportingFocusSections = Array.from(
+    document.querySelectorAll('[data-reporting-focus-section]'),
+  ).filter((candidate) => candidate instanceof HTMLElement);
+  const syncReportingFocusTarget = () => {
+    const targetId = window.location.hash.length > 1 ? window.location.hash.slice(1) : '';
+
+    for (const section of reportingFocusSections) {
+      const isActive = targetId.length > 0 && section.id === targetId;
+      section.dataset.reportingFocusActive = isActive ? 'true' : 'false';
+
+      if (isActive) {
+        section.focus({ preventScroll: true });
+      }
+    }
+  };
+
+  if (reportingFocusSections.length > 0) {
+    syncReportingFocusTarget();
+    window.addEventListener('hashchange', syncReportingFocusTarget);
+  }
+
   /* ── Mobile sidebar toggle ── */
   const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
   const sidebar = document.querySelector('.ct-admin-sidebar');

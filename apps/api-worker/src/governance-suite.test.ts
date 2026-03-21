@@ -746,7 +746,7 @@ describe("org unit and badge ownership governance endpoints", () => {
       }),
     ]);
     mockedGetTenantReportingOverview.mockImplementation(async (_db, input) => {
-      if (input.orgUnitId === "tenant_123:org:department-cs") {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
         return {
           tenantId: "tenant_123",
           filters: {
@@ -791,7 +791,7 @@ describe("org unit and badge ownership governance endpoints", () => {
       };
     });
     mockedGetTenantReportingEngagementCounts.mockImplementation(async (_db, input) => {
-      if (input.orgUnitId === "tenant_123:org:department-cs") {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
         return {
           issuedCount: 5,
           publicBadgeViewCount: 14,
@@ -816,7 +816,7 @@ describe("org unit and badge ownership governance endpoints", () => {
       };
     });
     mockedGetTenantReportingTrends.mockImplementation(async (_db, input) => {
-      if (input.orgUnitId === "tenant_123:org:department-cs") {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
         return {
           tenantId: "tenant_123",
           filters: {
@@ -859,7 +859,7 @@ describe("org unit and badge ownership governance endpoints", () => {
         return [
           {
             groupBy: "orgUnit",
-            groupId: "tenant_123:org:department-cs",
+            groupId: "tenant_123:org:program-cs",
             issuedCount: 5,
             publicBadgeViewCount: 14,
             verificationViewCount: 5,
@@ -896,7 +896,7 @@ describe("org unit and badge ownership governance endpoints", () => {
         ];
       }
 
-      if (input.orgUnitId === "tenant_123:org:department-cs") {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
         return [
           {
             groupBy: "badgeTemplate",

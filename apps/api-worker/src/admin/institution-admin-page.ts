@@ -91,6 +91,70 @@ const formatReportingDateLabel = (value: string): string => {
   }).format(date);
 };
 
+const REPORTING_HIERARCHY_LEVELS = [
+  "institution",
+  "college",
+  "department",
+  "program",
+] as const;
+type ReportingHierarchyLevel = (typeof REPORTING_HIERARCHY_LEVELS)[number];
+
+const REPORTING_HIERARCHY_DEPTH: Record<ReportingHierarchyLevel, number> = {
+  institution: 0,
+  college: 1,
+  department: 2,
+  program: 3,
+};
+
+const REPORTING_RATE_MIN_ISSUED = 5;
+const REPORTING_PERFORMER_ROW_LIMIT = 3;
+
+interface ReportingHierarchyRow {
+  orgUnitId: string;
+  level: ReportingHierarchyLevel;
+  issuedCount: number;
+  publicBadgeViewCount: number;
+  verificationViewCount: number;
+  shareClickCount: number;
+  learnerClaimCount: number;
+  walletAcceptCount: number;
+  claimRate: number;
+  shareRate: number;
+}
+
+const isReportingHierarchyLevel = (
+  value: TenantOrgUnitRecord["unitType"],
+): value is ReportingHierarchyLevel => {
+  return REPORTING_HIERARCHY_LEVELS.includes(value as ReportingHierarchyLevel);
+};
+
+const getNextReportingHierarchyLevel = (
+  level: ReportingHierarchyLevel,
+): ReportingHierarchyLevel | null => {
+  const index = REPORTING_HIERARCHY_LEVELS.indexOf(level);
+
+  return index === REPORTING_HIERARCHY_LEVELS.length - 1
+    ? null
+    : REPORTING_HIERARCHY_LEVELS[index + 1];
+};
+
+const formatReportingHierarchyLevelLabel = (level: ReportingHierarchyLevel): string => {
+  switch (level) {
+    case "institution":
+      return "Institution";
+    case "college":
+      return "College";
+    case "department":
+      return "Department";
+    case "program":
+      return "Program";
+  }
+};
+
+const buildReportingHierarchyFocusId = (orgUnitId: string): string => {
+  return `reporting-hierarchy-focus-${encodeURIComponent(orgUnitId)}`;
+};
+
 type InstitutionAdminView =
   | "home"
   | "operations"
@@ -206,6 +270,174 @@ const renderInstitutionAdminPage = (
         <span class="ct-admin__reporting-bar-fill"></span>
       </span>
     </div>`;
+  };
+  const buildVisibleOrgUnitLineage = (orgUnitId: string): TenantOrgUnitRecord[] => {
+    const lineage: TenantOrgUnitRecord[] = [];
+    const visited = new Set<string>();
+    let currentOrgUnitId: string | null = orgUnitId;
+
+    while (currentOrgUnitId !== null) {
+      if (visited.has(currentOrgUnitId)) {
+        break;
+      }
+
+      visited.add(currentOrgUnitId);
+      const orgUnit = orgUnitById.get(currentOrgUnitId);
+
+      if (orgUnit === undefined) {
+        break;
+      }
+
+      if (!isReportingHierarchyLevel(orgUnit.unitType)) {
+        break;
+      }
+
+      lineage.push(orgUnit);
+      currentOrgUnitId = orgUnit.parentOrgUnitId;
+    }
+
+    return lineage;
+  };
+  const aggregateReportingHierarchyRows = (input: {
+    comparisonRows: readonly TenantReportingComparisonRowRecord[];
+    focusOrgUnitId?: string | undefined;
+    level: ReportingHierarchyLevel;
+  }): ReportingHierarchyRow[] => {
+    const focusOrgUnit =
+      input.focusOrgUnitId === undefined ? null : orgUnitById.get(input.focusOrgUnitId) ?? null;
+
+    if (focusOrgUnit !== null && !isReportingHierarchyLevel(focusOrgUnit.unitType)) {
+      return [];
+    }
+
+    const groups = new Map<
+      string,
+      {
+        orgUnit: TenantOrgUnitRecord;
+        issuedCount: number;
+        publicBadgeViewCount: number;
+        verificationViewCount: number;
+        shareClickCount: number;
+        learnerClaimCount: number;
+        walletAcceptCount: number;
+        weightedClaimRateTotal: number;
+        weightedShareRateTotal: number;
+      }
+    >();
+
+    for (const row of input.comparisonRows) {
+      const lineage = buildVisibleOrgUnitLineage(row.groupId);
+
+      if (lineage.length === 0) {
+        continue;
+      }
+
+      if (focusOrgUnit !== null && !lineage.some((orgUnit) => orgUnit.id === focusOrgUnit.id)) {
+        continue;
+      }
+
+      const targetOrgUnit = lineage.find((orgUnit) => orgUnit.unitType === input.level);
+
+      if (targetOrgUnit === undefined) {
+        continue;
+      }
+
+      const group =
+        groups.get(targetOrgUnit.id) ??
+        (() => {
+          const created = {
+            orgUnit: targetOrgUnit,
+            issuedCount: 0,
+            publicBadgeViewCount: 0,
+            verificationViewCount: 0,
+            shareClickCount: 0,
+            learnerClaimCount: 0,
+            walletAcceptCount: 0,
+            weightedClaimRateTotal: 0,
+            weightedShareRateTotal: 0,
+          };
+          groups.set(targetOrgUnit.id, created);
+          return created;
+        })();
+
+      group.issuedCount += row.issuedCount;
+      group.publicBadgeViewCount += row.publicBadgeViewCount;
+      group.verificationViewCount += row.verificationViewCount;
+      group.shareClickCount += row.shareClickCount;
+      group.learnerClaimCount += row.learnerClaimCount;
+      group.walletAcceptCount += row.walletAcceptCount;
+      group.weightedClaimRateTotal += row.claimRate * row.issuedCount;
+      group.weightedShareRateTotal += row.shareRate * row.issuedCount;
+    }
+
+    return Array.from(groups.values())
+      .map((group) => {
+        const issuedCount = group.issuedCount;
+
+        return {
+          orgUnitId: group.orgUnit.id,
+          level: input.level,
+          issuedCount,
+          publicBadgeViewCount: group.publicBadgeViewCount,
+          verificationViewCount: group.verificationViewCount,
+          shareClickCount: group.shareClickCount,
+          learnerClaimCount: group.learnerClaimCount,
+          walletAcceptCount: group.walletAcceptCount,
+          claimRate: issuedCount === 0 ? 0 : group.weightedClaimRateTotal / issuedCount,
+          shareRate: issuedCount === 0 ? 0 : group.weightedShareRateTotal / issuedCount,
+        };
+      })
+      .sort((left, right) => {
+        if (right.issuedCount !== left.issuedCount) {
+          return right.issuedCount - left.issuedCount;
+        }
+
+        return left.orgUnitId.localeCompare(right.orgUnitId);
+      });
+  };
+  const buildReportingHierarchyDrillHref = (orgUnitId: string): string => {
+    return `${reportingPath}#${buildReportingHierarchyFocusId(orgUnitId)}`;
+  };
+  const renderReportingHierarchyRowLabel = (row: ReportingHierarchyRow): string => {
+    const orgUnit = orgUnitById.get(row.orgUnitId);
+
+    if (orgUnit === undefined || !isReportingHierarchyLevel(orgUnit.unitType)) {
+      return renderOrgUnitSummary(row.orgUnitId);
+    }
+
+    const nextLevel = getNextReportingHierarchyLevel(orgUnit.unitType);
+
+    if (nextLevel === null) {
+      return `${renderOrgUnitSummary(row.orgUnitId)}<div class="ct-admin__meta">Deepest reporting level</div>`;
+    }
+
+    return `${renderOrgUnitSummary(row.orgUnitId)}<div class="ct-admin__meta"><a data-reporting-drill-link href="${escapeHtml(
+      buildReportingHierarchyDrillHref(row.orgUnitId),
+    )}">View ${escapeHtml(formatReportingHierarchyLevelLabel(nextLevel).toLowerCase())} drilldown</a></div>`;
+  };
+  const renderReportingHierarchyRows = (
+    rows: readonly ReportingHierarchyRow[],
+    emptyLabel: string,
+  ): string => {
+    if (rows.length === 0) {
+      return `<tr><td colspan="9" class="ct-admin__empty">${escapeHtml(emptyLabel)}</td></tr>`;
+    }
+
+    return rows
+      .map((row) => {
+        return `<tr>
+          <td>${renderReportingHierarchyRowLabel(row)}</td>
+          <td>${renderReportingCountCell(row.issuedCount)}</td>
+          <td>${renderReportingCountCell(row.publicBadgeViewCount)}</td>
+          <td>${renderReportingCountCell(row.verificationViewCount)}</td>
+          <td>${renderReportingCountCell(row.shareClickCount)}</td>
+          <td>${renderReportingCountCell(row.learnerClaimCount)}</td>
+          <td>${renderReportingCountCell(row.walletAcceptCount)}</td>
+          <td>${escapeHtml(formatReportingRate(row.claimRate))}</td>
+          <td>${escapeHtml(formatReportingRate(row.shareRate))}</td>
+        </tr>`;
+      })
+      .join("\n");
   };
 
   for (const version of input.badgeRuleVersions) {
@@ -724,6 +956,314 @@ const renderInstitutionAdminPage = (
     reportingOrgUnitComparisons,
     "No org-unit comparisons available for the selected filters.",
   );
+  const reportingHierarchyRowsByLevel = new Map(
+    REPORTING_HIERARCHY_LEVELS.map((level) => [
+      level,
+      aggregateReportingHierarchyRows({
+        comparisonRows: reportingOrgUnitComparisons,
+        level,
+      }),
+    ]),
+  );
+  const reportingVisibleRoots = input.orgUnits
+    .filter(
+      (orgUnit) =>
+        isReportingHierarchyLevel(orgUnit.unitType) &&
+        (orgUnit.parentOrgUnitId === null || !orgUnitById.has(orgUnit.parentOrgUnitId)) &&
+        (reportingHierarchyRowsByLevel.get(orgUnit.unitType)?.some(
+          (row) => row.orgUnitId === orgUnit.id,
+        ) ??
+          false),
+    )
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+  const renderReportingHierarchyFocusSection = (
+    focusOrgUnit: TenantOrgUnitRecord,
+    breadcrumb: readonly TenantOrgUnitRecord[],
+  ): string => {
+    if (!isReportingHierarchyLevel(focusOrgUnit.unitType)) {
+      return "";
+    }
+
+    const childLevel = getNextReportingHierarchyLevel(focusOrgUnit.unitType);
+    const sectionId = buildReportingHierarchyFocusId(focusOrgUnit.id);
+    const rows =
+      childLevel === null
+        ? []
+        : aggregateReportingHierarchyRows({
+            comparisonRows: reportingOrgUnitComparisons,
+            focusOrgUnitId: focusOrgUnit.id,
+            level: childLevel,
+          });
+    const breadcrumbLabel = breadcrumb.map((orgUnit) => orgUnit.displayName).join(" / ");
+    const childMarkup =
+      childLevel === null
+        ? `<p class="ct-admin__hint">Program is the deepest reporting level in this workspace.</p>`
+        : `<div class="ct-admin__table-wrap">
+            <table class="ct-admin__table">
+              <thead>
+                <tr>
+                  <th>${escapeHtml(formatReportingHierarchyLevelLabel(childLevel))}</th>
+                  <th>Issued</th>
+                  <th>Public badge views</th>
+                  <th>Verification views</th>
+                  <th>Share clicks</th>
+                  <th>Claim actions</th>
+                  <th>Wallet accepts</th>
+                  <th>Claim rate</th>
+                  <th>Share rate</th>
+                </tr>
+              </thead>
+              <tbody data-reporting-bar-group="${escapeHtml(sectionId)}">
+                ${renderReportingHierarchyRows(
+                  rows,
+                  `No ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} rows available for this focus.`,
+                )}
+              </tbody>
+            </table>
+          </div>`;
+    const descendantMarkup = rows
+      .map((row) => {
+        const childOrgUnit = orgUnitById.get(row.orgUnitId);
+
+        if (childOrgUnit === undefined || !isReportingHierarchyLevel(childOrgUnit.unitType)) {
+          return "";
+        }
+
+        return renderReportingHierarchyFocusSection(childOrgUnit, [...breadcrumb, childOrgUnit]);
+      })
+      .join("\n");
+
+    return `<section id="${escapeHtml(sectionId)}" class="ct-admin__reporting-focus-section ct-stack" data-reporting-focus-section tabindex="-1">
+      <div class="ct-cluster">
+        <h3>${escapeHtml(focusOrgUnit.displayName)}</h3>
+        <span class="ct-admin__status-pill">${escapeHtml(
+          childLevel === null
+            ? "Program leaf"
+            : `Shows ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} rows`,
+        )}</span>
+      </div>
+      <p class="ct-admin__eyebrow">Breadcrumb</p>
+      <p class="ct-admin__reporting-breadcrumb">${escapeHtml(breadcrumbLabel)}</p>
+      ${childMarkup}
+      ${descendantMarkup}
+    </section>`;
+  };
+  const reportingHierarchyPanelMarkup =
+    reportingVisibleRoots.length === 0
+      ? `<article class="ct-admin__panel ct-stack">
+          <h2>Hierarchy drilldown</h2>
+          <p class="ct-admin__empty">No hierarchy rows are available for the current reporting filters.</p>
+        </article>`
+      : `<article class="ct-admin__panel ct-stack">
+          <div class="ct-cluster">
+            <h2>Hierarchy drilldown</h2>
+            <span class="ct-admin__status-pill">Workspace-local</span>
+          </div>
+          <p>Use these tables to move between institution, college, department, and program views without leaving reporting. The overview filters above stay exact-match; hierarchy drilldowns stay explicit here.</p>
+          <p class="ct-admin__hint">Visible roots stay inside the reporting workspace.</p>
+          <div class="ct-admin__reporting-root-links">
+            ${reportingVisibleRoots
+              .map((rootOrgUnit) => {
+                return `<a class="ct-admin__reporting-root-link" href="${escapeHtml(
+                  buildReportingHierarchyDrillHref(rootOrgUnit.id),
+                )}">${escapeHtml(rootOrgUnit.displayName)}</a>`;
+              })
+              .join("\n")}
+          </div>
+          ${reportingVisibleRoots
+            .map((rootOrgUnit) => renderReportingHierarchyFocusSection(rootOrgUnit, [rootOrgUnit]))
+            .join("\n")}
+        </article>`;
+  const reportingPerformerLevel =
+    REPORTING_HIERARCHY_LEVELS.filter(
+      (level) => (reportingHierarchyRowsByLevel.get(level)?.length ?? 0) > 0,
+    )
+      .sort((left, right) => {
+        const countDifference =
+          (reportingHierarchyRowsByLevel.get(right)?.length ?? 0) -
+          (reportingHierarchyRowsByLevel.get(left)?.length ?? 0);
+
+        if (countDifference !== 0) {
+          return countDifference;
+        }
+
+        return REPORTING_HIERARCHY_DEPTH[right] - REPORTING_HIERARCHY_DEPTH[left];
+      })[0] ?? null;
+  const reportingPerformerRows =
+    reportingPerformerLevel === null ? [] : (reportingHierarchyRowsByLevel.get(reportingPerformerLevel) ?? []);
+  const reportingRateEligibleRows = reportingPerformerRows.filter(
+    (row) => row.issuedCount >= REPORTING_RATE_MIN_ISSUED,
+  );
+  const renderPerformerTableRows = (
+    rows: readonly ReportingHierarchyRow[],
+    emptyLabel: string,
+  ): string => {
+    if (rows.length === 0) {
+      return `<tr><td colspan="4" class="ct-admin__empty">${escapeHtml(emptyLabel)}</td></tr>`;
+    }
+
+    return rows
+      .map((row) => {
+        return `<tr>
+          <td>${renderOrgUnitSummary(row.orgUnitId)}</td>
+          <td>${renderReportingCountCell(row.issuedCount)}</td>
+          <td>${escapeHtml(formatReportingRate(row.claimRate))}</td>
+          <td>${escapeHtml(formatReportingRate(row.shareRate))}</td>
+        </tr>`;
+      })
+      .join("\n");
+  };
+  const renderPerformerPanel = (input: {
+    title: string;
+    rows: readonly ReportingHierarchyRow[];
+    emptyLabel: string;
+    barGroup: string;
+  }): string => {
+    return `<article class="ct-admin__panel ct-admin__panel--nested ct-stack">
+      <h3>${escapeHtml(input.title)}</h3>
+      <div class="ct-admin__table-wrap">
+        <table class="ct-admin__table ct-admin__table--compact">
+          <thead>
+            <tr>
+              <th>Org unit</th>
+              <th>Issued</th>
+              <th>Claim rate</th>
+              <th>Share rate</th>
+            </tr>
+          </thead>
+          <tbody data-reporting-bar-group="${escapeHtml(input.barGroup)}">
+            ${renderPerformerTableRows(input.rows, input.emptyLabel)}
+          </tbody>
+        </table>
+      </div>
+    </article>`;
+  };
+  const reportingHighestVolumeRows = [...reportingPerformerRows]
+    .sort((left, right) => {
+      if (right.issuedCount !== left.issuedCount) {
+        return right.issuedCount - left.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingLowestVolumeRows = [...reportingPerformerRows]
+    .sort((left, right) => {
+      if (left.issuedCount !== right.issuedCount) {
+        return left.issuedCount - right.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingHighestClaimRateRows = [...reportingRateEligibleRows]
+    .sort((left, right) => {
+      if (right.claimRate !== left.claimRate) {
+        return right.claimRate - left.claimRate;
+      }
+
+      if (right.issuedCount !== left.issuedCount) {
+        return right.issuedCount - left.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingLowestClaimRateRows = [...reportingRateEligibleRows]
+    .sort((left, right) => {
+      if (left.claimRate !== right.claimRate) {
+        return left.claimRate - right.claimRate;
+      }
+
+      if (left.issuedCount !== right.issuedCount) {
+        return left.issuedCount - right.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingHighestShareRateRows = [...reportingRateEligibleRows]
+    .sort((left, right) => {
+      if (right.shareRate !== left.shareRate) {
+        return right.shareRate - left.shareRate;
+      }
+
+      if (right.issuedCount !== left.issuedCount) {
+        return right.issuedCount - left.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingLowestShareRateRows = [...reportingRateEligibleRows]
+    .sort((left, right) => {
+      if (left.shareRate !== right.shareRate) {
+        return left.shareRate - right.shareRate;
+      }
+
+      if (left.issuedCount !== right.issuedCount) {
+        return left.issuedCount - right.issuedCount;
+      }
+
+      return left.orgUnitId.localeCompare(right.orgUnitId);
+    })
+    .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const reportingPerformerPanelsMarkup =
+    reportingPerformerLevel === null
+      ? `<article class="ct-admin__panel ct-stack">
+          <h2>Performer panels</h2>
+          <p class="ct-admin__empty">No comparable hierarchy rows are available for performer rankings yet.</p>
+        </article>`
+      : `<article class="ct-admin__panel ct-stack">
+          <div class="ct-cluster">
+            <h2>Performer panels</h2>
+            <span class="ct-admin__status-pill">${escapeHtml(
+              `${formatReportingHierarchyLevelLabel(reportingPerformerLevel)} rows`,
+            )}</span>
+          </div>
+          <p>These rankings keep issued volume separate from claim and share rates.</p>
+          <p class="ct-admin__hint">Minimum sample for rate panels: ${escapeHtml(
+            formatReportingCount(REPORTING_RATE_MIN_ISSUED),
+          )} issued badges.</p>
+          <div class="ct-admin__reporting-performer-grid">
+            ${renderPerformerPanel({
+              title: "Highest issuance volume",
+              rows: reportingHighestVolumeRows,
+              emptyLabel: "No org units available for volume rankings.",
+              barGroup: "performer-high-volume",
+            })}
+            ${renderPerformerPanel({
+              title: "Lowest issuance volume",
+              rows: reportingLowestVolumeRows,
+              emptyLabel: "No org units available for volume rankings.",
+              barGroup: "performer-low-volume",
+            })}
+            ${renderPerformerPanel({
+              title: "Highest claim rate",
+              rows: reportingHighestClaimRateRows,
+              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+              barGroup: "performer-high-claim-rate",
+            })}
+            ${renderPerformerPanel({
+              title: "Lowest claim rate",
+              rows: reportingLowestClaimRateRows,
+              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+              barGroup: "performer-low-claim-rate",
+            })}
+            ${renderPerformerPanel({
+              title: "Highest share rate",
+              rows: reportingHighestShareRateRows,
+              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+              barGroup: "performer-high-share-rate",
+            })}
+            ${renderPerformerPanel({
+              title: "Lowest share rate",
+              rows: reportingLowestShareRateRows,
+              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+              barGroup: "performer-low-share-rate",
+            })}
+          </div>
+        </article>`;
   const authPolicyApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-policy`;
   const authProvidersApiPath = `/v1/tenants/${encodeURIComponent(input.tenant.id)}/auth-providers`;
   const enterpriseAuthPolicy = input.enterpriseAuthPolicy ?? {
@@ -1784,7 +2324,7 @@ const renderInstitutionAdminPage = (
 
   const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by org unit</h2>
-    <p>These comparisons stay at the Phase 10 reporting level. Hierarchy drilldowns remain deferred to the next phase.</p>
+    <p>This flat comparison remains available alongside hierarchy drilldowns so buyers can keep one explicit table for exact org-unit group rows.</p>
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
         <thead>
@@ -1991,8 +2531,8 @@ const renderInstitutionAdminPage = (
                     "Reporting",
                     "Track issuance, engagement, and comparison metrics with product-owned data that stays inside CredTrail.",
                     `<aside class="ct-admin-page-header__note">
-                      <h2>Phase 10 Scope</h2>
-                      <p>Trend lines and comparison tables live in the reporting workspace. Hierarchy drilldowns and exports remain deferred.</p>
+                      <h2>Phase 11 Scope</h2>
+                      <p>Hierarchy drilldowns, breadcrumbs, and performer panels now stay inside the reporting workspace. Filters above remain explicit and exact-match.</p>
                     </aside>`,
                   )}
                   <section class="ct-admin ct-stack">
@@ -2000,6 +2540,8 @@ const renderInstitutionAdminPage = (
                     ${reportingEngagementPanelMarkup}
                     ${reportingTrendPanelMarkup}
                     ${reportingTemplateComparisonPanelMarkup}
+                    ${reportingHierarchyPanelMarkup}
+                    ${reportingPerformerPanelsMarkup}
                     ${reportingOrgUnitComparisonPanelMarkup}
                     ${reportingDefinitionsPanelMarkup}
                     ${reportingDeferredPanelMarkup}
