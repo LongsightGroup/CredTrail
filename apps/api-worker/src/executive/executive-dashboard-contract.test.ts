@@ -149,4 +149,39 @@ describe("inferExecutiveDashboardDefaults", () => {
       window: "last-90-days",
     });
   });
+
+  it("keeps scoped executive slices honest even when a broader audience hint is requested", () => {
+    expect(
+      inferExecutiveDashboardDefaults({
+        today: "2026-03-22",
+        query: {
+          audience: "system",
+        },
+        visibility: "scoped",
+        scopedOrgUnitIds: ["tenant_123:org:department-cs"],
+        orgUnits: sampleExecutiveOrgUnits(),
+      }),
+    ).toMatchObject({
+      audience: "department",
+      focusOrgUnitId: "tenant_123:org:department-cs",
+      comparisonLevel: "program",
+    });
+  });
+
+  it("falls back to the focused program slice when no deeper comparison level exists", () => {
+    expect(
+      inferExecutiveDashboardDefaults({
+        today: "2026-03-22",
+        query: {},
+        visibility: "scoped",
+        scopedOrgUnitIds: ["tenant_123:org:program-cs"],
+        orgUnits: sampleExecutiveOrgUnits(),
+      }),
+    ).toMatchObject({
+      audience: "program",
+      focusOrgUnitId: "tenant_123:org:program-cs",
+      comparisonLevel: "program",
+      window: "last-90-days",
+    });
+  });
 });

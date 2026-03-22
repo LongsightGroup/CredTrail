@@ -267,7 +267,14 @@ const resolveAudience = (input: {
   focusOrgUnitId: string;
   orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>;
 }): ExecutiveDashboardAudience => {
-  if (input.query.audience !== undefined) {
+  const focusUnitType = input.orgUnitsById.get(input.focusOrgUnitId)?.unitType ?? "institution";
+
+  if (
+    input.query.audience !== undefined &&
+    input.visibility === "tenant" &&
+    focusUnitType === "institution" &&
+    (input.query.audience === "system" || input.query.audience === "institution")
+  ) {
     return input.query.audience;
   }
 
@@ -275,7 +282,7 @@ const resolveAudience = (input: {
     return "system";
   }
 
-  return input.orgUnitsById.get(input.focusOrgUnitId)?.unitType ?? "institution";
+  return focusUnitType;
 };
 
 export const inferExecutiveDashboardDefaults = (
