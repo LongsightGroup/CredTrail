@@ -3119,8 +3119,10 @@ const renderInstitutionAdminPage = (
       ? ""
       : `<section class="ct-admin__grid ct-stack">${reportingDeferredMetricsMarkup}</section>`;
   const reportingLowerStoryMarkup = `<section class="ct-admin__reporting-lower-story" aria-label="Reporting lower-page story">
-    <p class="ct-admin__eyebrow">Lower-page story</p>
-    <p>Move from template comparison into hierarchy context, performer rankings, and org-unit comparison while the exact tables stay adjacent to each shared visual.</p>
+    <div class="ct-admin__reporting-lower-story-intro ct-stack">
+      <p class="ct-admin__eyebrow">Lower-page story</p>
+      <p>Move from template comparison into hierarchy context, performer rankings, and org-unit comparison while the exact tables stay adjacent to each shared visual.</p>
+    </div>
     ${reportingTemplateComparisonPanelMarkup}
     ${reportingHierarchyPanelMarkup}
     ${reportingPerformerPanelsMarkup}

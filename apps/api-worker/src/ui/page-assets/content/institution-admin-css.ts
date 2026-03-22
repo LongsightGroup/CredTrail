@@ -723,6 +723,21 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-first-screen > * {
   min-width: 0;
 }
+.ct-admin__reporting-lower-story {
+  display: grid;
+  gap: 1rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(15, 95, 166, 0.14);
+}
+.ct-admin__reporting-lower-story-intro {
+  padding: 0.95rem 1rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 246, 255, 0.78));
+}
+.ct-admin__reporting-lower-story-intro p:last-child {
+  max-width: 62rem;
+}
 .ct-admin__reporting-supporting-grid {
   display: grid;
   gap: 0.95rem;
@@ -970,6 +985,22 @@ export const INSTITUTION_ADMIN_CSS = `
   gap: 0.85rem;
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
 }
+.ct-admin__reporting-performer-groups {
+  display: grid;
+  gap: 1rem;
+}
+.ct-admin__reporting-performer-group {
+  padding: 0.95rem 1rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(241, 247, 255, 0.82));
+}
+.ct-admin__reporting-performer-group .ct-admin__eyebrow {
+  margin-bottom: 0;
+}
+.ct-admin__reporting-performer-group .ct-admin__reporting-performer-grid {
+  gap: 0.9rem;
+}
 .ct-admin__panel--nested .ct-reporting-visual {
   padding: 0.85rem;
 }
@@ -996,6 +1027,10 @@ export const INSTITUTION_ADMIN_CSS = `
 @media (max-width: 768px) {
   .ct-admin__reporting-summary-band {
     padding: 1rem;
+  }
+  .ct-admin__reporting-lower-story-intro,
+  .ct-admin__reporting-performer-group {
+    padding: 0.85rem;
   }
   .ct-admin__reporting-summary-metrics {
     grid-template-columns: minmax(0, 1fr);
