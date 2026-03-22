@@ -460,6 +460,89 @@ export const INSTITUTION_ADMIN_CSS = `
   line-height: 1.35;
   color: var(--ct-theme-text-muted);
 }
+.ct-reporting-visual[data-reporting-visual-kind='comparison-ranked'] .ct-reporting-visual__surface {
+  padding: 0.8rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 248, 255, 0.92));
+}
+.ct-reporting-visual__comparison-ranked {
+  display: grid;
+  gap: 0.75rem;
+}
+.ct-reporting-visual__comparison-ranked-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+.ct-reporting-visual__comparison-ranked-item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.72rem 0.78rem;
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  border-radius: var(--ct-radius-md);
+  background: rgba(255, 255, 255, 0.76);
+}
+.ct-reporting-visual__comparison-ranked-item[data-reporting-visual-index='1'] {
+  border-style: dashed;
+}
+.ct-reporting-visual__comparison-ranked-item[data-reporting-visual-index='2'] {
+  border-left-width: 3px;
+}
+.ct-reporting-visual__comparison-ranked-item[data-reporting-visual-index='3'] {
+  box-shadow: inset 0 0 0 1px rgba(15, 95, 166, 0.14);
+}
+.ct-reporting-visual__comparison-ranked-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.ct-reporting-visual__comparison-ranked-label {
+  min-width: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ct-theme-text-title);
+}
+.ct-reporting-visual__comparison-ranked-value {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ct-theme-text-title);
+}
+.ct-reporting-visual__comparison-ranked-bar-track {
+  block-size: 0.52rem;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-reporting-visual-track);
+  overflow: hidden;
+}
+.ct-reporting-visual__comparison-ranked-bar {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--ct-reporting-visual-accent);
+}
+.ct-reporting-visual__comparison-ranked-bar--1 {
+  background: rgba(15, 95, 166, 0.78);
+}
+.ct-reporting-visual__comparison-ranked-bar--2 {
+  background: rgba(15, 95, 166, 0.58);
+}
+.ct-reporting-visual__comparison-ranked-bar--3 {
+  background: rgba(15, 95, 166, 0.92);
+}
+.ct-reporting-visual__comparison-ranked-detail {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--ct-theme-text-muted);
+}
+.ct-reporting-visual__comparison-ranked-overflow {
+  margin: 0;
+  padding-top: 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ct-theme-text-muted);
+}
 .ct-reporting-visual__bar-track,
 .ct-reporting-visual__segment-track {
   fill: var(--ct-reporting-visual-track);

@@ -1,6 +1,10 @@
 import { escapeHtml } from "../utils/display-format";
 
-export type ReportingVisualKind = "comparison-bars" | "stacked-summary" | "trend-series";
+export type ReportingVisualKind =
+  | "comparison-bars"
+  | "comparison-ranked"
+  | "stacked-summary"
+  | "trend-series";
 export type ReportingVisualHeadingLevel = "h3" | "h4";
 
 export interface ReportingVisualSeriesPoint {
@@ -20,6 +24,7 @@ export interface ReportingVisualProps {
 }
 
 const REPORTING_VISUAL_EMPTY_MESSAGE = "No reporting data available for this view yet.";
+const REPORTING_COMPARISON_RANKED_LIMIT = 5;
 const REPORTING_VISUAL_WIDTH = 360;
 const REPORTING_VISUAL_PADDING = 16;
 
@@ -58,6 +63,18 @@ const normalizeValue = (value: number): number => {
 
 const hasRenderableData = (series: readonly ReportingVisualSeriesPoint[]): boolean => {
   return series.some((point) => normalizeValue(point.value) > 0);
+};
+
+const sortComparisonRankedSeries = (
+  series: readonly ReportingVisualSeriesPoint[],
+): ReportingVisualSeriesPoint[] => {
+  return [...series].sort((left, right) => {
+    if (right.value !== left.value) {
+      return right.value - left.value;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
 };
 
 const buildVisualId = (input: ReportingVisualProps): string => {
@@ -113,6 +130,12 @@ const buildSummaryText = (
     return `${highestPoint.label} peaks at ${formatValue(highestPoint.value)} while ${lowestPoint.label} sits at ${formatValue(lowestPoint.value)}.`;
   }
 
+  if (input.kind === "comparison-ranked") {
+    const highestRankedPoint = sortComparisonRankedSeries(normalizedSeries)[0] ?? highestPoint;
+
+    return `${highestRankedPoint.label} leads at ${formatValue(highestRankedPoint.value)} across ${normalizedSeries.length} comparison rows.`;
+  }
+
   return `${highestPoint.label} leads at ${formatValue(highestPoint.value)} across ${normalizedSeries.length} comparison points.`;
 };
 
@@ -122,6 +145,10 @@ const renderLegend = (
   totalValue: number,
   maxValue: number,
 ): string => {
+  if (input.kind === "comparison-ranked") {
+    return "";
+  }
+
   const items = normalizedSeries
     .map((point, index) => {
       const detail = buildLegendDetail(input, point, maxValue, totalValue);
@@ -142,6 +169,51 @@ const renderLegend = (
   return `<div class="ct-reporting-visual__legend-block">
     <p class="ct-reporting-visual__legend-title">Legend</p>
     <ol class="ct-reporting-visual__legend">${items}</ol>
+  </div>`;
+};
+
+const renderComparisonRankedGraphic = (
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  titleId: string,
+  descriptionIds: string,
+): string => {
+  const sortedSeries = sortComparisonRankedSeries(normalizedSeries);
+  const emphasizedSeries = sortedSeries.slice(0, REPORTING_COMPARISON_RANKED_LIMIT);
+  const maxValue = Math.max(...emphasizedSeries.map((point) => point.value), 1);
+  const items = emphasizedSeries
+    .map((point, index) => {
+      const width = Math.max((point.value / maxValue) * 100, 12);
+      const detailMarkup =
+        point.detail === undefined || point.detail.trim().length === 0
+          ? ""
+          : `<span class="ct-reporting-visual__comparison-ranked-detail">${escapeHtml(point.detail)}</span>`;
+
+      return `<li class="ct-reporting-visual__comparison-ranked-item" data-reporting-visual-index="${String(index)}">
+        <div class="ct-reporting-visual__comparison-ranked-head">
+          <span class="ct-reporting-visual__comparison-ranked-label">${escapeHtml(point.label)}</span>
+          <strong class="ct-reporting-visual__comparison-ranked-value">${escapeHtml(formatValue(point.value))}</strong>
+        </div>
+        <div class="ct-reporting-visual__comparison-ranked-bar-track" aria-hidden="true">
+          <span class="ct-reporting-visual__comparison-ranked-bar ct-reporting-visual__comparison-ranked-bar--${String(
+            index % 4,
+          )}" style="width:${width.toFixed(2)}%"></span>
+        </div>
+        ${detailMarkup}
+      </li>`;
+    })
+    .join("");
+  const overflowMarkup =
+    sortedSeries.length > REPORTING_COMPARISON_RANKED_LIMIT
+      ? `<p class="ct-reporting-visual__comparison-ranked-overflow">Top ${String(
+          REPORTING_COMPARISON_RANKED_LIMIT,
+        )} shown here. The exact table below keeps all ${String(sortedSeries.length)} visible rows.</p>`
+      : "";
+
+  return `<div class="ct-reporting-visual__comparison-ranked" role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionIds}" data-reporting-visual-emphasis-count="${String(Math.min(sortedSeries.length, REPORTING_COMPARISON_RANKED_LIMIT))}">
+    <ol class="ct-reporting-visual__comparison-ranked-list">
+      ${items}
+    </ol>
+    ${overflowMarkup}
   </div>`;
 };
 
@@ -304,6 +376,8 @@ const renderGraphic = (
   descriptionIds: string,
 ): string => {
   switch (input.kind) {
+    case "comparison-ranked":
+      return renderComparisonRankedGraphic(normalizedSeries, titleId, descriptionIds);
     case "comparison-bars":
       return renderComparisonGraphic(normalizedSeries, titleId, descriptionIds);
     case "stacked-summary":

@@ -332,11 +332,32 @@ const renderInstitutionAdminPage = (
       input.claimRate,
     )} claim · ${formatReportingRate(input.shareRate)} share`;
   };
+  const buildReportingComparisonSeries = (
+    rows: readonly TenantReportingComparisonRowRecord[],
+  ): ReportingVisualSeriesPoint[] => {
+    return rows
+      .map((row) => ({
+        label: getReportingComparisonLabel(row),
+        value: row.issuedCount,
+        detail: buildReportingLegendDetail({
+          publicBadgeViewCount: row.publicBadgeViewCount,
+          claimRate: row.claimRate,
+          shareRate: row.shareRate,
+        }),
+      }))
+      .sort((left, right) => {
+        if (right.value !== left.value) {
+          return right.value - left.value;
+        }
+
+        return left.label.localeCompare(right.label);
+      });
+  };
   const renderReportingVisualModule = (input: {
     description: string;
     headingLevel?: "h3" | "h4";
     id?: string;
-    kind: "comparison-bars" | "stacked-summary" | "trend-series";
+    kind: "comparison-bars" | "comparison-ranked" | "stacked-summary" | "trend-series";
     note?: string;
     series: readonly ReportingVisualSeriesPoint[];
     title: string;
@@ -1371,20 +1392,12 @@ const renderInstitutionAdminPage = (
     reportingTemplateComparisons.length === 0
       ? ""
       : renderReportingVisualModule({
-          kind: "stacked-summary",
-          title: "Issued mix by badge template",
+          kind: "comparison-ranked",
+          title: "Issued ranking by badge template",
           description:
-            "Shared visual summarizes how issued volume is distributed across badge templates for the same filters shown in the table.",
-          series: reportingTemplateComparisons.map((row) => ({
-            label: getReportingComparisonLabel(row),
-            value: row.issuedCount,
-            detail: buildReportingLegendDetail({
-              publicBadgeViewCount: row.publicBadgeViewCount,
-              claimRate: row.claimRate,
-              shareRate: row.shareRate,
-            }),
-          })),
-          note: "The table below keeps the full row-level counts and rate definitions visible.",
+            "Volume-first comparison ranks badge templates by issued count while keeping public views and claim/share rates visible as adjacent detail.",
+          series: buildReportingComparisonSeries(reportingTemplateComparisons),
+          note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingOrgUnitComparisonRowsMarkup = renderReportingComparisonRows(
     reportingOrgUnitComparisons,
@@ -1394,20 +1407,12 @@ const renderInstitutionAdminPage = (
     reportingOrgUnitComparisons.length === 0
       ? ""
       : renderReportingVisualModule({
-          kind: "stacked-summary",
-          title: "Issued mix by org unit",
+          kind: "comparison-ranked",
+          title: "Issued ranking by org unit",
           description:
-            "Shared visual summarizes current org-unit reporting rows while the exact comparison table stays below.",
-          series: reportingOrgUnitComparisons.map((row) => ({
-            label: getReportingComparisonLabel(row),
-            value: row.issuedCount,
-            detail: buildReportingLegendDetail({
-              publicBadgeViewCount: row.publicBadgeViewCount,
-              claimRate: row.claimRate,
-              shareRate: row.shareRate,
-            }),
-          })),
-          note: "This figure stays aligned to the same org-unit comparison rows and exports shown elsewhere in reporting.",
+            "Volume-first comparison ranks org units by issued count while keeping public views and claim/share rates visible as adjacent detail.",
+          series: buildReportingComparisonSeries(reportingOrgUnitComparisons),
+          note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingHierarchyRowsByLevel = new Map(
     REPORTING_HIERARCHY_LEVELS.map((level) => [
@@ -2909,7 +2914,7 @@ const renderInstitutionAdminPage = (
 
   const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by badge template</h2>
-    <p>Use this table to compare issuance volume, supported engagement counts, and rate metrics across badge templates without leaving reporting.</p>
+    <p>Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible badge-template row.</p>
     <div class="ct-admin__reporting-panel-media">
       ${reportingTemplateComparisonVisualMarkup}
       <div class="ct-admin__table-wrap">
@@ -2937,7 +2942,7 @@ const renderInstitutionAdminPage = (
 
   const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by org unit</h2>
-    <p>This flat comparison remains available alongside hierarchy drilldowns so buyers can keep one explicit table for exact org-unit group rows.</p>
+    <p>Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible org-unit row alongside hierarchy drilldowns.</p>
     <div class="ct-admin__reporting-panel-media">
       ${reportingOrgUnitComparisonVisualMarkup}
       <div class="ct-admin__table-wrap">
