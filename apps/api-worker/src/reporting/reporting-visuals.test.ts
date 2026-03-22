@@ -129,6 +129,33 @@ describe("renderReporting", () => {
     expect(html).not.toContain("Chemistry");
   });
 
+  it("renders an honesty-focused summary override when comparison context must stay explicit", () => {
+    const html = renderReporting({
+      kind: "comparison-ranked" as unknown as Parameters<typeof renderReporting>[0]["kind"],
+      title: "Highest claim rate",
+      description: "Rate leaders should still state the compare level and keep issued totals visible.",
+      summaryOverride:
+        "Comparing department rows by claim rate. Issued totals stay visible beside each ranked rate row.",
+      series: [
+        {
+          label: "Computer Science",
+          value: 50,
+          detail: "8 issued · 37.5% share",
+        },
+        {
+          label: "History",
+          value: 33.3,
+          detail: "6 issued · 16.7% share",
+        },
+      ],
+    } as Parameters<typeof renderReporting>[0]);
+
+    expect(html).toContain(
+      "Comparing department rows by claim rate. Issued totals stay visible beside each ranked rate row.",
+    );
+    expect(html).not.toContain("Computer Science leads at 50");
+  });
+
   it("emits stable reporting-visual hooks for the chart surface, legend, and visible values", () => {
     const html = renderReporting({
       kind: "comparison-bars",
