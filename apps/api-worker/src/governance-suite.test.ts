@@ -169,9 +169,7 @@ const mockedHasTenantMembershipOrgUnitAccess = vi.mocked(hasTenantMembershipOrgU
 const mockedHasTenantMembershipOrgUnitScopeAssignments = vi.mocked(
   hasTenantMembershipOrgUnitScopeAssignments,
 );
-const mockedListAccessibleTenantContextsForUser = vi.mocked(
-  listAccessibleTenantContextsForUser,
-);
+const mockedListAccessibleTenantContextsForUser = vi.mocked(listAccessibleTenantContextsForUser);
 const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
 const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
@@ -371,6 +369,7 @@ beforeEach(() => {
       to: null,
       badgeTemplateId: null,
       orgUnitId: null,
+      state: null,
     },
     bucket: "day",
     series: [
@@ -677,7 +676,7 @@ describe("org unit and badge ownership governance endpoints", () => {
 
     mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
     mockedListTenantMembershipOrgUnitScopes.mockImplementation(
-      async (_db, input: { tenantId: string; userId?: string }) => {
+      async (_db, input: { tenantId: string; userId?: string | undefined }) => {
         if (input.userId === "usr_123") {
           return [
             sampleTenantMembershipOrgUnitScope({
@@ -823,7 +822,8 @@ describe("org unit and badge ownership governance endpoints", () => {
             from: input.from ?? null,
             to: input.to ?? null,
             badgeTemplateId: input.badgeTemplateId ?? null,
-            orgUnitId: input.orgUnitId,
+            orgUnitId: input.orgUnitId ?? null,
+            state: input.state ?? null,
           },
           bucket: "day",
           series: [
@@ -848,6 +848,7 @@ describe("org unit and badge ownership governance endpoints", () => {
           to: input.to ?? null,
           badgeTemplateId: input.badgeTemplateId ?? null,
           orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
         },
         bucket: "day",
         series: [],

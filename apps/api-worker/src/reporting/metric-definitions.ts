@@ -1,9 +1,6 @@
 import type { TenantReportingOverviewCounts } from "@credtrail/db";
 
-export type ReportingMetricKey =
-  | keyof TenantReportingOverviewCounts
-  | "claimRate"
-  | "shareRate";
+export type ReportingMetricKey = keyof TenantReportingOverviewCounts | "claimRate" | "shareRate";
 
 export interface ReportingMetricDefinition {
   key: ReportingMetricKey;
@@ -83,11 +80,13 @@ export const buildReportingMetricEntries = (
 ): ReportingMetricEntry[] => {
   return REPORTING_METRIC_DEFINITIONS.map((definition) => {
     const value =
-      definition.key in counts ? counts[definition.key as keyof TenantReportingOverviewCounts] : null;
+      definition.key in counts
+        ? counts[definition.key as keyof TenantReportingOverviewCounts]
+        : null;
 
     return {
       ...definition,
-      value: definition.available ? value : null,
+      value: definition.available ? (value ?? null) : null,
     };
   });
 };

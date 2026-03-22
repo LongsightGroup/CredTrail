@@ -43,6 +43,7 @@ import {
   upsertUserByEmail,
   type SessionRecord,
   type SqlDatabase,
+  type TenantReportingLifecycleFilter,
   type TenantMembershipRole,
 } from "@credtrail/db";
 import type { Hono } from "hono";
@@ -436,7 +437,7 @@ export const registerTenantGovernanceRoutes = (
     issuedTo?: string | undefined;
     badgeTemplateId?: string | undefined;
     orgUnitId?: string | undefined;
-    state?: "active" | "suspended" | "revoked" | "pending_review" | undefined;
+    state?: TenantReportingLifecycleFilter | undefined;
   }): Promise<InstitutionAdminPageData | Response> => {
     if (input.membershipRole === "owner" || input.membershipRole === "admin") {
       return loadInstitutionAdminPageData(
@@ -568,9 +569,7 @@ export const registerTenantGovernanceRoutes = (
         ...toReportingComparisonFilters(reportingPageFilters, "badgeTemplate"),
       }),
     ]);
-    const visibleBadgeTemplateIds = new Set(
-      reportingTemplateComparisons.map((row) => row.groupId),
-    );
+    const visibleBadgeTemplateIds = new Set(reportingTemplateComparisons.map((row) => row.groupId));
 
     if (input.badgeTemplateId !== undefined) {
       visibleBadgeTemplateIds.add(input.badgeTemplateId);

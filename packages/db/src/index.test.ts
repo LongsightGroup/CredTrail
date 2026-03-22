@@ -2241,7 +2241,9 @@ describe("engagement reporting foundation", () => {
     expect(sql).toContain("'share_click'");
     expect(sql).toContain("'learner_claim'");
     expect(sql).toContain("'wallet_accept'");
-    expect(sql).toContain("FOREIGN KEY (assertion_id) REFERENCES assertions (id) ON DELETE CASCADE");
+    expect(sql).toContain(
+      "FOREIGN KEY (assertion_id) REFERENCES assertions (id) ON DELETE CASCADE",
+    );
     expect(sql).toContain("idx_assertion_engagement_events_tenant_occurred_at");
     expect(sql).toContain("idx_assertion_engagement_events_assertion_type");
   });
@@ -2253,6 +2255,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_blue",
         orgUnitId: "org_program",
         issuedAt: "2026-03-01T08:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: null,
         occurredAt: null,
       },
@@ -2261,6 +2266,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_blue",
         orgUnitId: "org_program",
         issuedAt: "2026-03-01T10:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "public_badge_view" as const,
         occurredAt: "2026-03-02T09:00:00.000Z",
       },
@@ -2269,6 +2277,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_blue",
         orgUnitId: "org_program",
         issuedAt: "2026-03-01T10:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "verification_view" as const,
         occurredAt: "2026-03-02T10:00:00.000Z",
       },
@@ -2277,6 +2288,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_blue",
         orgUnitId: "org_program",
         issuedAt: "2026-03-02T11:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "share_click" as const,
         occurredAt: "2026-03-03T12:00:00.000Z",
       },
@@ -2285,6 +2299,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_other",
         orgUnitId: "org_program",
         issuedAt: "2026-03-02T12:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "public_badge_view" as const,
         occurredAt: "2026-03-02T13:00:00.000Z",
       },
@@ -2335,6 +2352,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_science",
         orgUnitId: "org_science",
         issuedAt: "2026-03-01T08:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: null,
         occurredAt: null,
       },
@@ -2343,6 +2363,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_science",
         orgUnitId: "org_science",
         issuedAt: "2026-03-01T09:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "share_click" as const,
         occurredAt: "2026-03-02T08:00:00.000Z",
       },
@@ -2351,6 +2374,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_science",
         orgUnitId: "org_science",
         issuedAt: "2026-03-01T09:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "share_click" as const,
         occurredAt: "2026-03-02T09:00:00.000Z",
       },
@@ -2359,6 +2385,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_science",
         orgUnitId: "org_science",
         issuedAt: "2026-03-01T10:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "learner_claim" as const,
         occurredAt: "2026-03-03T08:00:00.000Z",
       },
@@ -2367,6 +2396,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_science",
         orgUnitId: "org_science",
         issuedAt: "2026-03-01T10:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "wallet_accept" as const,
         occurredAt: "2026-03-03T09:00:00.000Z",
       },
@@ -2375,6 +2407,9 @@ describe("engagement reporting foundation", () => {
         badgeTemplateId: "bt_arts",
         orgUnitId: "org_arts",
         issuedAt: "2026-03-02T10:00:00.000Z",
+        revokedAt: null,
+        latestToState: null,
+        latestReasonCode: null,
         eventType: "share_click" as const,
         occurredAt: "2026-03-04T08:00:00.000Z",
       },
@@ -2954,10 +2989,7 @@ describe("ledger export foundation", () => {
         paramIndex += 3;
       }
 
-      if (
-        normalizedSql.includes("CASE") ||
-        normalizedSql.includes("COALESCE(lifecycle.to_state")
-      ) {
+      if (normalizedSql.includes("CASE") || normalizedSql.includes("COALESCE(lifecycle.to_state")) {
         state = this.expectString(this.boundParams[paramIndex], "state");
         paramIndex += 1;
       }
@@ -2973,11 +3005,11 @@ describe("ledger export foundation", () => {
         .filter((row) => row.tenantId === tenantId)
         .filter((row) => (issuedFrom === undefined ? true : row.issuedAt >= issuedFrom))
         .filter((row) => (issuedTo === undefined ? true : row.issuedAt <= issuedTo))
-        .filter((row) => (badgeTemplateId === undefined ? true : row.badgeTemplateId === badgeTemplateId))
-        .filter((row) => (orgUnitId === undefined ? true : row.orgUnitId === orgUnitId))
         .filter((row) =>
-          state === undefined ? true : this.resolveState(row).state === state,
+          badgeTemplateId === undefined ? true : row.badgeTemplateId === badgeTemplateId,
         )
+        .filter((row) => (orgUnitId === undefined ? true : row.orgUnitId === orgUnitId))
+        .filter((row) => (state === undefined ? true : this.resolveState(row).state === state))
         .filter((row) => {
           if (recipientQuery === undefined) {
             return true;
@@ -3005,7 +3037,10 @@ describe("ledger export foundation", () => {
       const includeInactive = this.boundParams[1] === 1;
 
       return this.db.orgUnits.filter((row) => {
-        return row.tenantId === tenantId && (includeInactive || row.isActive === 1 || row.isActive === true);
+        return (
+          row.tenantId === tenantId &&
+          (includeInactive || row.isActive === 1 || row.isActive === true)
+        );
       });
     }
 
@@ -3312,8 +3347,14 @@ describe("ledger export foundation", () => {
   it("returns an explicit too_large status above the synchronous export cap", async () => {
     expect(listTenantAssertionLedgerExportRows).toBeTypeOf("function");
 
+    const firstBaseLedgerRow = baseLedgerRows[0];
+
+    if (firstBaseLedgerRow === undefined) {
+      throw new Error("Expected at least one base ledger row fixture");
+    }
+
     const overCapRows = Array.from({ length: synchronousExportRowLimit + 1 }, (_, index) => ({
-      ...baseLedgerRows[0],
+      ...firstBaseLedgerRow,
       assertionId: `assertion_${index}`,
       publicId: `public_${index}`,
       recipientIdentity: `learner.${index}@example.edu`,

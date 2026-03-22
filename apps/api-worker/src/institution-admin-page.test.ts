@@ -497,6 +497,7 @@ beforeEach(() => {
       to: "2026-03-31",
       badgeTemplateId: null,
       orgUnitId: null,
+      state: null,
     },
     bucket: "day",
     series: [
@@ -1122,7 +1123,9 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain(
       'href="/v1/tenants/tenant_123/reporting/hierarchy/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;level=department"',
     );
-    expect(body).not.toContain('href="/tenants/tenant_123/admin/access/org-units" data-reporting-drill-link');
+    expect(body).not.toContain(
+      'href="/tenants/tenant_123/admin/access/org-units" data-reporting-drill-link',
+    );
   });
 
   it("renders honest performer panels with separate volume and rate rankings", async () => {
@@ -1146,10 +1149,14 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Highest claim rate");
     expect(body).toContain("Lowest share rate");
     expect(body).toContain("Minimum sample for rate panels: 5 issued badges");
-    expect(body).toContain("These rankings keep issued volume separate from claim and share rates.");
+    expect(body).toContain(
+      "These rankings keep issued volume separate from claim and share rates.",
+    );
     expect(body).toContain("Computer Science");
     expect(body).toContain("History");
-    expect(body).not.toContain("Design Foundations</strong><div class=\"ct-admin__meta\">Below the minimum sample");
+    expect(body).not.toContain(
+      'Design Foundations</strong><div class="ct-admin__meta">Below the minimum sample',
+    );
     expect(body).toContain("Compare by badge template");
   });
 });

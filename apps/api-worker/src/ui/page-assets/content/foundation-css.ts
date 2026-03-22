@@ -2,7 +2,7 @@ export const FOUNDATION_CSS = `
 :root {
   color-scheme: light;
   --ct-font-sans: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
-  --ct-font-display: 'Fraunces', Georgia, serif;
+  --ct-font-display: 'Newsreader', Georgia, serif;
   --ct-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Raw brand palette. Use semantic tokens for component/page styles. */

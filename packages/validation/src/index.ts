@@ -374,9 +374,7 @@ export const tenantReportingOverviewQuerySchema = z
     }
   });
 
-const tenantReportingEngagementQueryRangeSchema = <T extends z.ZodRawShape>(
-  shape: T,
-) => {
+const tenantReportingEngagementQueryRangeSchema = <T extends z.ZodRawShape>(shape: T) => {
   return z.object(shape).superRefine((value, ctx) => {
     if (value.from === undefined || value.to === undefined) {
       return;
@@ -1662,9 +1660,7 @@ export const parseTenantAssertionLedgerExportQuery = (
   return tenantAssertionLedgerExportQuerySchema.parse(input);
 };
 
-export const parseTenantReportingOverviewQuery = (
-  input: unknown,
-): TenantReportingOverviewQuery => {
+export const parseTenantReportingOverviewQuery = (input: unknown): TenantReportingOverviewQuery => {
   return tenantReportingOverviewQuerySchema.parse(input);
 };
 

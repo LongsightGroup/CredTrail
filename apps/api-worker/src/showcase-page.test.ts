@@ -110,7 +110,7 @@ describe("GET /showcase/:tenantId", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(body).toContain("Badge Wall · sakai");
+    expect(body).toContain("Sakai 1000+ Commits Contributor · sakai");
     expect(body).toContain("2 issued badges");
     expect(body).toContain("/badges/a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf");
     expect(body).toContain("/badges/620b51c5-c6f8-4506-8a5c-2daaa2eb6f04");
@@ -118,19 +118,21 @@ describe("GET /showcase/:tenantId", () => {
     expect(body).toContain(
       '<link rel="canonical" href="http://localhost/showcase/sakai?badgeTemplateId=badge_template_sakai_1000"',
     );
-    expect(body).toContain('<meta property="og:title" content="Badge Wall · sakai | CredTrail"');
+    expect(body).toContain(
+      '<meta property="og:title" content="Sakai 1000+ Commits Contributor · sakai | CredTrail"',
+    );
     expect(body).toContain('<meta property="og:type" content="website"');
     expect(body).toContain('<meta name="twitter:card" content="summary"');
     expect(body).toContain(
-      '<meta name="description" content="Public badge URLs issued under tenant &quot;sakai&quot; for badge template &quot;badge_template_sakai_1000&quot;."',
+      '<meta name="description" content="Publicly verified credentials for Sakai 1000+ Commits Contributor."',
     );
     expect(body).toContain("http://localhost/badges/a77ab5e5-bd08-40c3-accd-cf29ed1fdbbf");
     expect(body).toContain("@ottenhoff");
     expect(body).toContain("Sakai 1000+ Commits Contributor");
     expect(body).toContain("Sakai Distinguished Contributor");
     expect(body).toContain("github.com/ottenhoff.png");
-    expect(body).toContain("Show public URL");
-    expect(body).not.toContain("Show raw badge URL");
+    expect(body).toContain("View credential");
+    expect(body).toContain("Copy link");
     expect(body).toContain(".badge-wall__hero-link:hover");
     expect(body).toContain(".badge-wall__button--primary:hover");
     expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
@@ -173,7 +175,8 @@ describe("GET /showcase/:tenantId", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain("badge template &quot;badge_template_sakai_1000&quot;");
+    expect(body).toContain("badge_template_sakai_1000 · sakai");
+    expect(body).toContain("Publicly verified credentials for badge_template_sakai_1000.");
     expect(mockedListPublicBadgeWallEntries).toHaveBeenCalledWith(fakeDb, {
       tenantId: "sakai",
       badgeTemplateId: "badge_template_sakai_1000",

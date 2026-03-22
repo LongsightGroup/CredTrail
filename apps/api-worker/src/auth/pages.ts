@@ -3,25 +3,6 @@ import type { AccessibleTenantContextView } from "./tenant-context-selection";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml } from "../utils/display-format";
 
-const renderLoginSteps = (
-  steps: readonly {
-    title: string;
-    body: string;
-  }[],
-): string =>
-  `<ol class="ct-login__steps">
-    ${steps
-      .map(
-        (step) => `<li class="ct-login__step">
-          <span class="ct-login__step-copy">
-            <strong>${escapeHtml(step.title)}</strong>
-            <span>${escapeHtml(step.body)}</span>
-          </span>
-        </li>`,
-      )
-      .join("")}
-  </ol>`;
-
 export const magicLinkLoginPage = (input: {
   tenantId: string;
   nextPath: string;
@@ -137,44 +118,14 @@ export const magicLinkLoginPage = (input: {
         ? "Choose your institution sign-in or request a hosted CredTrail sign-in link."
         : "Continue with your institution sign-in to open this CredTrail tenant."
       : "Enter your tenant ID and institution email. CredTrail will email you a secure sign-in link.";
-  const loginStepsMarkup = renderLoginSteps([
-    enterpriseProviders.length > 0
-      ? {
-          title: "Choose how to continue.",
-          body: localLoginAllowed
-            ? "Use institution sign-in, or request a hosted link when your tenant allows it."
-            : "Use your institution identity provider to sign in.",
-        }
-      : {
-          title: "Enter tenant and email.",
-          body: "Use the email your institution already uses for CredTrail access.",
-        },
-    enterpriseProviders.length > 0
-      ? {
-          title: "Finish verification.",
-          body: "Your identity provider or one-time link completes the sign-in step.",
-        }
-      : {
-          title: "Use the link from your inbox.",
-          body: "The CredTrail email expires in 10 minutes.",
-        },
-    {
-      title: "Return to your tenant.",
-      body: "CredTrail brings you back to the page you were trying to open.",
-    },
-  ]);
-
   return renderPageShell(
     "Sign In · CredTrail",
     `<section class="ct-login ct-stack">
-      <div class="ct-login__card ct-grid">
-        <div class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Secure sign-in</p>
-          <h1 class="ct-login__title">Access your CredTrail tenant</h1>
-          <p class="ct-login__lede">
-            ${loginIntroText}
-          </p>
-          ${loginStepsMarkup}
+      <div class="ct-login__card">
+        <div class="ct-login__header">
+          <p class="ct-login__brand">CredTrail</p>
+          <h1 class="ct-login__title">Sign in to your institution</h1>
+          <p class="ct-login__lede">${loginIntroText}</p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${loginReasonNotice}
@@ -225,23 +176,11 @@ export const organizationChooserPage = (input: {
   return renderPageShell(
     "Choose Organization · CredTrail",
     `<section class="ct-login ct-stack">
-      <div class="ct-login__card ct-grid">
-        <div class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Organization access</p>
-          <h1 class="ct-login__title">Choose a CredTrail organization</h1>
-          <p class="ct-login__lede">
-            Your account can access more than one tenant. Pick the organization you want to open in this session.
-          </p>
-          ${renderLoginSteps([
-            {
-              title: "Select the organization you need.",
-              body: "Each choice opens the tenant admin or learner surface for this session.",
-            },
-            {
-              title: "Keep tenant work separate.",
-              body: "CredTrail stays tenant-scoped even when one account can access multiple organizations.",
-            },
-          ])}
+      <div class="ct-login__card">
+        <div class="ct-login__header">
+          <p class="ct-login__brand">CredTrail</p>
+          <h1 class="ct-login__title">Choose an organization</h1>
+          <p class="ct-login__lede">Your account has access to more than one tenant. Select the organization to open.</p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
           <section class="ct-stack" aria-labelledby="organization-chooser-title">
@@ -295,32 +234,16 @@ export const localBreakGlassLoginPage = (input: {
   return renderPageShell(
     "Break-Glass Local Access · CredTrail",
     `<section class="ct-login ct-stack">
-      <div class="ct-login__card ct-grid">
-        <div class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Emergency access</p>
+      <div class="ct-login__card">
+        <div class="ct-login__header">
+          <p class="ct-login__brand">CredTrail</p>
           <h1 class="ct-login__title">Break-glass local sign-in</h1>
-          <p class="ct-login__lede">
-            This path is reserved for explicit fallback accounts when institution SSO is unavailable.
-          </p>
-          ${renderLoginSteps([
-            {
-              title: "Use your break-glass credentials.",
-              body: "This access path is reserved for designated fallback accounts only.",
-            },
-            {
-              title: "Complete local MFA.",
-              body: "CredTrail requires a valid TOTP challenge before tenant access is granted.",
-            },
-            {
-              title: "Return to the requested tenant path.",
-              body: "After verification, CredTrail sends you back to the page you originally requested.",
-            },
-          ])}
+          <p class="ct-login__lede">Reserved for designated fallback accounts when institution SSO is unavailable.</p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}
           <section class="ct-stack" aria-labelledby="break-glass-local-title">
-            <h2 id="break-glass-local-title" class="ct-login__form-title">Local break-glass sign-in</h2>
+            <h2 id="break-glass-local-title" class="ct-login__form-title">Sign in with local credentials</h2>
             <form class="ct-login__form ct-stack" method="post" action="/auth/local/sign-in">
               <input type="hidden" name="tenantId" value="${escapeHtml(input.tenantId)}" />
               <input type="hidden" name="next" value="${escapeHtml(input.nextPath)}" />
@@ -373,13 +296,11 @@ export const localResetPasswordPage = (input: {
   return renderPageShell(
     "Reset Local Password · CredTrail",
     `<section class="ct-login ct-stack">
-      <div class="ct-login__card ct-grid">
-        <div class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Local setup</p>
+      <div class="ct-login__card">
+        <div class="ct-login__header">
+          <p class="ct-login__brand">CredTrail</p>
           <h1 class="ct-login__title">Set your local password</h1>
-          <p class="ct-login__lede">
-            Finish local break-glass setup, then return to tenant sign-in and complete MFA enrollment.
-          </p>
+          <p class="ct-login__lede">Finish local break-glass setup, then return to sign in and complete MFA enrollment.</p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}
@@ -440,17 +361,15 @@ export const localTwoFactorPage = (input: {
   return renderPageShell(
     "Local MFA · CredTrail",
     `<section class="ct-login ct-stack">
-      <div class="ct-login__card ct-grid">
-        <div class="ct-login__hero ct-stack">
-          <p class="ct-login__eyebrow">Local MFA</p>
+      <div class="ct-login__card">
+        <div class="ct-login__header">
+          <p class="ct-login__brand">CredTrail</p>
           <h1 class="ct-login__title">${
             input.setup === null || input.setup === undefined
-              ? "Complete local MFA enrollment"
+              ? "Complete MFA enrollment"
               : "Verify your authenticator code"
           }</h1>
-          <p class="ct-login__lede">
-            Break-glass local access is not active until a valid TOTP code is verified.
-          </p>
+          <p class="ct-login__lede">Break-glass local access requires a valid TOTP code before tenant access is granted.</p>
         </div>
         <div class="ct-login__form-wrap ct-stack">
           ${notice.length === 0 ? "" : `<p class="ct-login__context">${escapeHtml(notice)}</p>`}

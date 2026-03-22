@@ -253,6 +253,7 @@ beforeEach(() => {
       to: "2026-03-31",
       badgeTemplateId: null,
       orgUnitId: null,
+      state: null,
     },
     bucket: "day",
     series: [

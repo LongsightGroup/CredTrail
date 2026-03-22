@@ -125,42 +125,44 @@ export const institutionAdminRuleBuilderPage = (input: {
           ></iframe>
         </div>`;
 
+  const rulesWorkspacePath = `${tenantAdminPath}/rules`;
+
   return renderPageShell(
     `Rule Builder · ${input.tenant.displayName}`,
-    `<section class="ct-admin ct-admin--rule-builder ct-stack">
-      <header class="ct-admin__hero ct-stack">
-        <div class="ct-admin__hero-layout ct-grid">
-          <div class="ct-stack">
-            <h1>Visual Rule Builder</h1>
-            <p>
-              Design issuance logic the way operations teams actually work: start from a known pattern,
-              tighten conditions, run a dry run, and only then create a governance draft.
-            </p>
-          </div>
-          <aside class="ct-admin__hero-note ct-stack">
-            <p class="ct-admin__eyebrow">Operating pattern</p>
-            <h2>Model, test, then release</h2>
-            <p>
-              Strong rule builders keep setup, logic, validation, and approval distinct so bad drafts
-              do not slip into governance review.
-            </p>
-          </aside>
-        </div>
-        <div class="ct-admin__meta-grid ct-cluster">
-          <span class="ct-admin__pill">Tenant: ${escapeHtml(input.tenant.id)}</span>
-          <span class="ct-admin__pill">Role: ${escapeHtml(input.membershipRole)}</span>
-          <span class="ct-admin__pill" title="User ID: ${escapeHtml(input.userId)}">User: ${escapeHtml(
-            userLabel,
-          )}</span>
-        </div>
-        <nav class="ct-admin__quick-links ct-cluster" aria-label="Builder links">
-          <a href="${escapeHtml(tenantAdminPath)}">Back to dashboard</a>
-          <a href="#rule-builder-stepper">Builder workflow</a>
-          <a href="#builder-step-test">Dry-run test</a>
-          <a href="#rule-builder-review-surface">Release review</a>
-          <a href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
+    `<div class="ct-admin-shell">
+      <aside class="ct-admin-sidebar">
+        <a class="ct-admin-sidebar__brand" href="${escapeHtml(tenantAdminPath)}">CredTrail</a>
+        <nav class="ct-admin-sidebar__nav" aria-label="Admin navigation">
+          <a class="ct-admin-sidebar__link" href="${escapeHtml(tenantAdminPath)}">Home</a>
+          <p class="ct-admin-sidebar__section-label">Operations</p>
+          <a class="ct-admin-sidebar__link" href="${escapeHtml(tenantAdminPath)}/operations">Overview</a>
+          <p class="ct-admin-sidebar__section-label">Configuration</p>
+          <a class="ct-admin-sidebar__link" href="${escapeHtml(rulesWorkspacePath)}" aria-current="page">Rules</a>
+          <p class="ct-admin-sidebar__section-label">Access</p>
+          <a class="ct-admin-sidebar__link" href="${escapeHtml(tenantAdminPath)}/access">Overview</a>
         </nav>
-      </header>
+        <div class="ct-admin-sidebar__footer">
+          <a class="ct-admin-sidebar__footer-link ct-admin-sidebar__link--external" href="${escapeHtml(showcasePath)}" target="_blank" rel="noopener noreferrer">Public showcase</a>
+        </div>
+      </aside>
+      <div class="ct-admin-main">
+        <header class="ct-admin-topbar">
+          <button type="button" class="ct-admin-topbar__toggle" aria-label="Toggle navigation" data-sidebar-toggle>☰</button>
+          <p class="ct-admin-topbar__title">${escapeHtml(input.tenant.displayName)}</p>
+          <div class="ct-admin-topbar__user">
+            <span class="ct-admin-topbar__chip">${escapeHtml(input.membershipRole)}</span>
+            <span title="User ID: ${escapeHtml(input.userId)}">${escapeHtml(userLabel)}</span>
+          </div>
+        </header>
+        <div class="ct-admin-content">
+          <div class="ct-admin-page-header">
+            <h1>Visual Rule Builder</h1>
+            <p>Design issuance logic the way operations teams actually work: start from a known pattern, tighten conditions, run a dry run, and only then create a governance draft.</p>
+            <aside class="ct-admin-page-header__note">
+              <h2>Model, test, then release</h2>
+              <p>Strong rule builders keep setup, logic, validation, and approval distinct so bad drafts do not slip into governance review.</p>
+            </aside>
+          </div>
 
       <section class="ct-admin__builder-shell ct-grid">
         <aside class="ct-admin__builder-sidebar ct-stack">
@@ -699,7 +701,10 @@ export const institutionAdminRuleBuilderPage = (input: {
       </section>
 
       <script id="ct-admin-context" type="application/json">${adminPageContextJson}</script>
-    </section>`,
+        </div>
+      </div>
+    </div>`,
     renderPageAssetTags(["foundationCss", "institutionAdminCss", "institutionAdminJs"]),
+    "admin",
   );
 };

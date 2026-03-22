@@ -698,28 +698,12 @@ export const createPublicBadgePageRenderers = (
         }
   
         .public-badge__card {
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(
-            165deg,
-            var(--ct-theme-surface-card-strong),
-            var(--ct-theme-surface-soft)
-          );
+          background: var(--ct-theme-surface-card-strong);
           border: 1px solid var(--ct-theme-border-soft);
           border-radius: var(--public-badge-card-radius);
           box-shadow: var(--ct-theme-shadow-soft);
           padding: var(--public-badge-card-padding);
           animation: public-badge-enter 420ms ease-out both;
-        }
-
-        .public-badge__card::after {
-          content: '';
-          position: absolute;
-          inset: auto -16% -70% auto;
-          width: 14rem;
-          height: 14rem;
-          background: radial-gradient(circle, var(--ct-theme-accent-glow-1), transparent 70%);
-          pointer-events: none;
         }
 
         .public-badge__card:nth-child(2) {
@@ -877,8 +861,8 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__title {
           margin: 0;
-          font-size: clamp(1.65rem, 3.7vw, 2.45rem);
-          line-height: 1.15;
+          font-size: clamp(1.4rem, 3vw, 1.85rem);
+          line-height: 1.2;
         }
   
         .public-badge__issuer,
@@ -898,7 +882,7 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__recipient-name {
           margin: 0;
-          font-size: 1.35rem;
+          font-size: 1.08rem;
           font-weight: 700;
         }
   
@@ -919,7 +903,7 @@ export const createPublicBadgePageRenderers = (
   
         .public-badge__section-title {
           margin: 0;
-          font-size: 1.12rem;
+          font-size: 1rem;
         }
 
         .public-badge__share {
@@ -1376,8 +1360,13 @@ export const createPublicBadgePageRenderers = (
     entries: readonly PublicBadgeWallEntryViewRecord[],
     filterBadgeTemplateId: string | null,
   ): string => {
+    const displayTenantName = tenantId;
+    const firstBadgeTitle = entries.length > 0 ? (entries[0]?.badgeTitle ?? null) : null;
+    const filterLabel = firstBadgeTitle ?? filterBadgeTemplateId;
     const title =
-      filterBadgeTemplateId === null ? `Badge Wall · ${tenantId}` : `Badge Wall · ${tenantId}`;
+      filterBadgeTemplateId === null
+        ? `Issued Credentials · ${displayTenantName}`
+        : `${filterLabel ?? "Credentials"} · ${displayTenantName}`;
     const badgeWallPath =
       filterBadgeTemplateId === null
         ? `/showcase/${encodeURIComponent(tenantId)}`
@@ -1387,8 +1376,8 @@ export const createPublicBadgePageRenderers = (
     const canonicalUrl = new URL(badgeWallPath, requestUrl).toString();
     const subtitle =
       filterBadgeTemplateId === null
-        ? `Public badge URLs issued under tenant "${tenantId}".`
-        : `Public badge URLs issued under tenant "${tenantId}" for badge template "${filterBadgeTemplateId}".`;
+        ? `Publicly verified credentials issued by this institution.`
+        : `Publicly verified credentials for ${filterLabel ?? "this badge"}.`;
     const criteriaRegistryPath =
       filterBadgeTemplateId === null
         ? `/showcase/${encodeURIComponent(tenantId)}/criteria`
@@ -1467,14 +1456,10 @@ export const createPublicBadgePageRenderers = (
                     </div>
                   </div>
                   <div class="badge-wall__actions">
-                    <a class="badge-wall__button badge-wall__button--primary" href="${escapeHtml(badgePath)}">View badge</a>
+                    <a class="badge-wall__button badge-wall__button--primary" href="${escapeHtml(badgePath)}">View credential</a>
                     <button class="badge-wall__button" type="button" data-copy-value="${escapeHtml(
                       badgeUrl,
                     )}">Copy link</button>
-                    <details class="badge-wall__url-details">
-                      <summary>Show public URL</summary>
-                      <p class="badge-wall__url" title="${escapeHtml(badgeUrl)}">${escapeHtml(badgeUrl)}</p>
-                    </details>
                     <p class="badge-wall__copy-status" aria-live="polite"></p>
                   </div>
                 </div>
@@ -1501,100 +1486,75 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__hero {
-          position: relative;
-          overflow: hidden;
           display: grid;
-          gap: 0.85rem;
-          padding: clamp(1.2rem, 3vw, 1.7rem);
+          gap: 0.65rem;
+          padding: clamp(1.1rem, 2.5vw, 1.5rem);
           border: 1px solid var(--ct-theme-border-soft);
-          border-radius: 1.45rem;
-          background: linear-gradient(
-            165deg,
-            var(--ct-theme-surface-card-strong),
-            var(--ct-theme-surface-soft)
-          );
+          border-radius: 1.25rem;
+          background: var(--ct-theme-surface-card-strong);
           color: var(--ct-theme-text-title);
           box-shadow: var(--ct-theme-shadow-soft);
         }
 
-        .badge-wall__hero::after {
-          content: '';
-          position: absolute;
-          inset: auto -12% -72% auto;
-          width: 14rem;
-          height: 14rem;
-          background: radial-gradient(circle, var(--ct-theme-accent-glow-1), transparent 70%);
-          pointer-events: none;
-        }
-
         .badge-wall__hero h1 {
-          position: relative;
-          z-index: 1;
           margin: 0;
           color: var(--ct-theme-text-title);
-          font-size: clamp(1.65rem, 3.7vw, 2.45rem);
-          line-height: 1.15;
+          font-size: clamp(1.3rem, 2.5vw, 1.65rem);
+          line-height: 1.2;
         }
 
         .badge-wall__lead {
-          position: relative;
-          z-index: 1;
           margin: 0;
-          max-width: 52rem;
+          max-width: 48rem;
           color: var(--ct-theme-text-muted);
-          font-size: clamp(1rem, 2vw, 1.08rem);
-          line-height: 1.6;
+          font-size: 0.92rem;
+          line-height: 1.55;
         }
 
         .badge-wall__count {
-          position: relative;
-          z-index: 1;
           display: inline-flex;
           align-items: center;
           width: fit-content;
           margin: 0;
-          padding: 0.35rem 0.78rem;
+          padding: 0.25rem 0.65rem;
           border: 1px solid var(--ct-theme-border-soft);
           border-radius: 999px;
-          background: color-mix(
-            in srgb,
-            var(--ct-theme-surface-card-strong) 90%,
-            var(--ct-theme-surface-soft)
-          );
-          color: var(--ct-theme-link);
-          font-size: 0.92rem;
-          font-weight: 700;
-          letter-spacing: 0.01em;
+          background: var(--ct-theme-surface-soft);
+          color: var(--ct-theme-text-muted);
+          font-size: 0.82rem;
+          font-weight: 600;
         }
 
         .badge-wall__hero-link {
-          position: relative;
-          z-index: 1;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           width: fit-content;
-          min-height: 2.75rem;
-          padding: 0.6rem 0.95rem;
-          border: 1px solid transparent;
-          border-radius: 0.7rem;
-          color: var(--ct-theme-text-on-brand);
+          min-height: 2.5rem;
+          padding: 0.5rem 0.88rem;
+          border: 1px solid var(--ct-theme-border-default);
+          border-radius: 0.6rem;
+          color: var(--ct-theme-text-body);
           text-decoration: none;
-          font-weight: 700;
-          background: var(--ct-theme-gradient-action);
-          box-shadow: 0 10px 22px rgba(13, 60, 116, 0.14);
+          font-size: 0.88rem;
+          font-weight: 600;
+          background: linear-gradient(
+            180deg,
+            var(--ct-theme-surface-card-strong),
+            var(--ct-theme-surface-info)
+          );
           transition:
             transform var(--ct-duration-fast) var(--ct-ease-standard),
             box-shadow var(--ct-duration-fast) var(--ct-ease-standard),
-            background var(--ct-duration-fast) var(--ct-ease-standard);
+            border-color var(--ct-duration-fast) var(--ct-ease-standard);
         }
 
         .badge-wall__hero-link:hover,
         .badge-wall__hero-link:focus-visible {
-          color: var(--ct-theme-text-on-brand);
-          background: var(--ct-theme-gradient-action-hover);
+          color: var(--ct-theme-text-body);
           transform: translateY(-1px);
           box-shadow: var(--ct-theme-shadow-soft);
+          border-color: var(--ct-theme-border-strong);
         }
   
         .badge-wall__list {
@@ -1740,35 +1700,30 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__actions {
-          display: grid;
-          grid-template-columns: repeat(2, auto);
-          gap: 0.35rem 0.5rem;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.35rem;
           align-items: center;
-          justify-items: end;
+          justify-content: flex-end;
           flex: 0 0 auto;
         }
 
         .badge-wall__button {
           display: inline-flex;
           flex: 0 0 auto;
-          inline-size: 7.75rem;
           align-items: center;
           justify-content: center;
           appearance: none;
           border: 1px solid var(--ct-theme-border-default);
-          border-radius: 0.62rem;
-          min-height: 2.5rem;
-          height: 2.5rem;
+          border-radius: 0.55rem;
+          min-height: 2.2rem;
+          height: 2.2rem;
           padding: 0 0.7rem;
           font-size: 0.78rem;
-          font-weight: 700;
+          font-weight: 600;
           line-height: 1.2;
-          color: var(--ct-theme-text-body);
-          background: linear-gradient(
-            180deg,
-            var(--ct-theme-surface-card-strong),
-            var(--ct-theme-surface-info)
-          );
+          color: var(--ct-theme-text-muted);
+          background: var(--ct-theme-surface-card-strong);
           cursor: pointer;
           text-decoration: none;
           transition:
@@ -1786,43 +1741,24 @@ export const createPublicBadgePageRenderers = (
         }
 
         .badge-wall__button--primary {
-          border-color: transparent;
-          color: var(--ct-theme-text-on-brand);
-          background: var(--ct-theme-gradient-action);
-          box-shadow: 0 0.48rem 0.95rem rgba(7, 27, 51, 0.13);
+          color: var(--ct-theme-link);
+          border-color: var(--ct-theme-border-info);
+          background: var(--ct-theme-surface-info);
+          font-weight: 700;
         }
 
         .badge-wall__button--primary:hover {
-          color: var(--ct-theme-text-on-brand);
-          background: var(--ct-theme-gradient-action-hover);
-          box-shadow: 0 0.58rem 1.08rem rgba(7, 27, 51, 0.16);
+          color: var(--ct-theme-link-hover);
+          border-color: var(--ct-theme-link);
         }
 
         .badge-wall__copy-status {
           margin: 0;
-          grid-column: 1 / -1;
-          font-size: 0.78rem;
+          width: 100%;
+          font-size: 0.75rem;
           color: var(--ct-theme-text-subtle);
           min-height: 1rem;
           text-align: right;
-        }
-
-        .badge-wall__url-details {
-          grid-column: 1 / -1;
-          width: fit-content;
-          justify-self: end;
-        }
-
-        .badge-wall__url-details summary {
-          cursor: pointer;
-          font-size: 0.78rem;
-          font-weight: 700;
-          color: var(--ct-theme-text-muted);
-          list-style: none;
-        }
-
-        .badge-wall__url-details summary::-webkit-details-marker {
-          display: none;
         }
   
         .badge-wall__empty {
@@ -1855,26 +1791,17 @@ export const createPublicBadgePageRenderers = (
           }
 
           .badge-wall__actions {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            justify-items: stretch;
+            justify-content: flex-start;
           }
 
-          .badge-wall__button {
-            width: 100%;
-            inline-size: 100%;
-          }
-
-          .badge-wall__copy-status,
-          .badge-wall__url-details {
-            justify-self: start;
+          .badge-wall__copy-status {
             text-align: left;
           }
         }
       </style>
       <section class="badge-wall">
         <header class="badge-wall__hero">
-          <h1 style="margin:0;">${escapeHtml(title)}</h1>
+          <h1>${escapeHtml(title)}</h1>
           <p class="badge-wall__lead">${escapeHtml(subtitle)}</p>
           <p class="badge-wall__count">${escapeHtml(String(entries.length))} issued badges</p>
           <a class="badge-wall__hero-link" href="${escapeHtml(criteriaRegistryPath)}">

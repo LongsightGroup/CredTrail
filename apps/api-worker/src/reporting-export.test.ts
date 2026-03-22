@@ -23,7 +23,7 @@ const sampleLedgerRow = (
     publicId: "public_123",
     badgeTemplateId: "badge_template_science",
     badgeTitle: "Foundations of Microbiology",
-    recipientIdentity: "=HYPERLINK(\"https://example.edu\")",
+    recipientIdentity: '=HYPERLINK("https://example.edu")',
     recipientIdentityType: "email",
     issuedAt: "2026-03-10T15:45:00.000Z",
     issuedByUserId: "user_issuer",

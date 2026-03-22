@@ -249,7 +249,7 @@ const sampleLedgerExportRow = (
     transitionedAt: null,
     orgUnitId: "tenant_123:org:institution",
     orgUnitDisplayName: "Tenant 123 Institution",
-    attributionSource: "issuance_time_owner",
+    attributionSource: "issuance_snapshot",
     currentInstitutionName: "Tenant 123 Institution",
     currentCollegeName: null,
     currentDepartmentName: null,

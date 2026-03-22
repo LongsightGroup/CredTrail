@@ -34,10 +34,7 @@ export const toReportingEngagementFilters = (filters: ReportingPageFilters) => {
   };
 };
 
-export const toReportingTrendFilters = (
-  filters: ReportingPageFilters,
-  bucket: "day" = "day",
-) => {
+export const toReportingTrendFilters = (filters: ReportingPageFilters, bucket: "day" = "day") => {
   return {
     ...toReportingEngagementFilters(filters),
     bucket,

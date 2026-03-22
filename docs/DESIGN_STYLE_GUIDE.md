@@ -103,15 +103,17 @@ Elevation and motion:
 
 ## 4) Typography System
 
-- Display/headings: `--ct-font-display` (`Fraunces`), used for page titles and major section headers.
+- Display/headings: `--ct-font-display` (`Newsreader`), used for page titles and major section headers.
 - Body/UI text: `--ct-font-sans` (`Space Grotesk`), used everywhere else.
 - Monospace: `--ct-font-mono` for JSON, IDs, and technical output.
 
 Rules:
 
-- Headings use display font with tight tracking.
+- Headings use display font with tight tracking (-0.02em).
 - Dense operational tables/forms use sans for legibility.
+- Admin page headers use restrained sizes: h1 at `clamp(1.25rem, 2.5vw, 1.6rem)`.
 - Avoid mixing additional font families.
+- Newsreader replaces the previous Fraunces pairing for stronger editorial authority without decorative softness.
 
 ## 5) Layout, Spacing, and Radius
 

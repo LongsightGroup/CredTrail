@@ -349,9 +349,7 @@ describe("GET /badges/:badgeIdentifier", () => {
     expect(body).toContain("/credentials/v1/dcc/exchanges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22");
     expect(body).toContain("Add to LinkedIn Profile");
     expect(body).toContain("Prefer a wallet? Scan the QR code or use the wallet tools below.");
-    expect(body).toContain(
-      "/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-profile",
-    );
+    expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-profile");
     expect(body).toContain("Share on LinkedIn Feed");
     expect(body).toContain("/badges/40a6dc92-85ec-4cb0-8a50-afb2ae700e22/share/linkedin-feed");
     expect(body).not.toContain("linkedin.com/profile/add");

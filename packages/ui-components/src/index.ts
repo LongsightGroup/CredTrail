@@ -11,7 +11,7 @@ export const renderPageShell = (
   title: string,
   bodyContent: string,
   headContent = "",
-  variant: "shell" | "open" = "shell",
+  variant: "shell" | "open" | "admin" = "shell",
 ): string => {
   const safeTitle = escapeHtml(title);
 
@@ -26,7 +26,7 @@ export const renderPageShell = (
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     ${headContent}
@@ -34,7 +34,7 @@ export const renderPageShell = (
       :root {
         color-scheme: light;
         --ct-font-sans: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
-        --ct-font-display: 'Fraunces', Georgia, serif;
+        --ct-font-display: 'Newsreader', Georgia, serif;
         --ct-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
         --ct-brand-midnight-950: #071a31;
         --ct-brand-midnight-900: #0b2748;
@@ -244,6 +244,22 @@ export const renderPageShell = (
         margin: 0 auto;
         padding: clamp(1.5rem, 3vw, 3rem) clamp(1rem, 2.5vw, 2rem);
         max-width: 1120px;
+      }
+
+      body[data-variant="admin"] {
+        background: #f7f9fc;
+      }
+
+      body[data-variant="admin"] main {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        backdrop-filter: none;
+        box-shadow: none;
+        animation: none;
       }
     </style>
   </head>

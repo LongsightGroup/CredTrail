@@ -2,14 +2,19 @@ import { SYNCHRONOUS_EXPORT_ROW_LIMIT } from "@credtrail/db";
 import { stringify } from "csv-stringify/sync";
 
 export type CsvCell = string | number | boolean | null | undefined;
-export type CsvRow = Record<string, CsvCell>;
+type CsvSerializableKey<T extends object> = Extract<
+  {
+    [K in keyof T]: T[K] extends CsvCell ? K : never;
+  }[keyof T],
+  string
+>;
 
-export interface CsvColumn<T extends CsvRow> {
-  key: Extract<keyof T, string>;
+export interface CsvColumn<T extends object> {
+  key: CsvSerializableKey<T>;
   header: string;
 }
 
-export interface SerializeCsvInput<T extends CsvRow> {
+export interface SerializeCsvInput<T extends object> {
   rows: readonly T[];
   columns: readonly CsvColumn<T>[];
 }
@@ -64,8 +69,14 @@ export const createExportTooLargeError = (
   };
 };
 
-export const serializeCsv = <T extends CsvRow>(input: SerializeCsvInput<T>): string => {
-  return stringify(input.rows, {
+export const serializeCsv = <T extends object>(input: SerializeCsvInput<T>): string => {
+  const rows = input.rows.map((row) => {
+    return Object.fromEntries(
+      input.columns.map((column) => [column.key, row[column.key] as CsvCell]),
+    );
+  });
+
+  return stringify(rows, {
     header: true,
     bom: true,
     escape_formulas: true,

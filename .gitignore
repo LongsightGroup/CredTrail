@@ -8,6 +8,7 @@ coverage/
 
 # Local project surfaces
 .local/
+.beads/
 artifacts/
 .playwright-cli/
 output/

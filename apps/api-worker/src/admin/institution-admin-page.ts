@@ -95,12 +95,7 @@ const formatReportingDateLabel = (value: string): string => {
   }).format(date);
 };
 
-const REPORTING_HIERARCHY_LEVELS = [
-  "institution",
-  "college",
-  "department",
-  "program",
-] as const;
+const REPORTING_HIERARCHY_LEVELS = ["institution", "college", "department", "program"] as const;
 type ReportingHierarchyLevel = (typeof REPORTING_HIERARCHY_LEVELS)[number];
 
 const REPORTING_HIERARCHY_DEPTH: Record<ReportingHierarchyLevel, number> = {
@@ -139,7 +134,7 @@ const getNextReportingHierarchyLevel = (
 
   return index === REPORTING_HIERARCHY_LEVELS.length - 1
     ? null
-    : REPORTING_HIERARCHY_LEVELS[index + 1];
+    : (REPORTING_HIERARCHY_LEVELS[index + 1] ?? null);
 };
 
 const formatReportingHierarchyLevelLabel = (level: ReportingHierarchyLevel): string => {
@@ -277,9 +272,7 @@ const renderInstitutionAdminPage = (
       .map((badgeTemplateId) => templateById.get(badgeTemplateId)?.title ?? badgeTemplateId)
       .join(", ");
   };
-  const renderReportingComparisonGroupLabel = (
-    row: TenantReportingComparisonRowRecord,
-  ): string => {
+  const renderReportingComparisonGroupLabel = (row: TenantReportingComparisonRowRecord): string => {
     if (row.groupBy === "badgeTemplate") {
       const template = templateById.get(row.groupId);
 
@@ -335,7 +328,7 @@ const renderInstitutionAdminPage = (
     level: ReportingHierarchyLevel;
   }): ReportingHierarchyRow[] => {
     const focusOrgUnit =
-      input.focusOrgUnitId === undefined ? null : orgUnitById.get(input.focusOrgUnitId) ?? null;
+      input.focusOrgUnitId === undefined ? null : (orgUnitById.get(input.focusOrgUnitId) ?? null);
 
     if (focusOrgUnit !== null && !isReportingHierarchyLevel(focusOrgUnit.unitType)) {
       return [];
@@ -981,7 +974,8 @@ const renderInstitutionAdminPage = (
       : [
           {
             label: "Claim rate",
-            description: "Distinct claimed or accepted assertions over issued badges in the same window.",
+            description:
+              "Distinct claimed or accepted assertions over issued badges in the same window.",
             value: reportingEngagementCounts.claimRate,
           },
           {
@@ -1062,9 +1056,9 @@ const renderInstitutionAdminPage = (
       (orgUnit) =>
         isReportingHierarchyLevel(orgUnit.unitType) &&
         (orgUnit.parentOrgUnitId === null || !orgUnitById.has(orgUnit.parentOrgUnitId)) &&
-        (reportingHierarchyRowsByLevel.get(orgUnit.unitType)?.some(
-          (row) => row.orgUnitId === orgUnit.id,
-        ) ??
+        (reportingHierarchyRowsByLevel
+          .get(orgUnit.unitType)
+          ?.some((row) => row.orgUnitId === orgUnit.id) ??
           false),
     )
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
@@ -1181,20 +1175,21 @@ const renderInstitutionAdminPage = (
   const reportingPerformerLevel =
     REPORTING_HIERARCHY_LEVELS.filter(
       (level) => (reportingHierarchyRowsByLevel.get(level)?.length ?? 0) > 1,
-    )
-      .sort((left, right) => {
-        const countDifference =
-          (reportingHierarchyRowsByLevel.get(right)?.length ?? 0) -
-          (reportingHierarchyRowsByLevel.get(left)?.length ?? 0);
+    ).sort((left, right) => {
+      const countDifference =
+        (reportingHierarchyRowsByLevel.get(right)?.length ?? 0) -
+        (reportingHierarchyRowsByLevel.get(left)?.length ?? 0);
 
-        if (countDifference !== 0) {
-          return countDifference;
-        }
+      if (countDifference !== 0) {
+        return countDifference;
+      }
 
-        return REPORTING_HIERARCHY_DEPTH[right] - REPORTING_HIERARCHY_DEPTH[left];
-      })[0] ?? null;
+      return REPORTING_HIERARCHY_DEPTH[right] - REPORTING_HIERARCHY_DEPTH[left];
+    })[0] ?? null;
   const reportingPerformerRows =
-    reportingPerformerLevel === null ? [] : (reportingHierarchyRowsByLevel.get(reportingPerformerLevel) ?? []);
+    reportingPerformerLevel === null
+      ? []
+      : (reportingHierarchyRowsByLevel.get(reportingPerformerLevel) ?? []);
   const reportingRateEligibleRows = reportingPerformerRows.filter(
     (row) => row.issuedCount >= REPORTING_RATE_MIN_ISSUED,
   );
@@ -2632,19 +2627,19 @@ const renderInstitutionAdminPage = (
           ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
           : view === "operationsIssuedBadges"
             ? `Issued Badges · Institution Admin · ${input.tenant.displayName}`
-        : view === "operationsBadgeStatus"
-          ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
-          : view === "reporting"
-            ? `Reporting · Institution Admin · ${input.tenant.displayName}`
-          : view === "rules"
-            ? `Rules · Institution Admin · ${input.tenant.displayName}`
-            : view === "access"
-                  ? `Access · Institution Admin · ${input.tenant.displayName}`
-                  : view === "accessGovernance"
-                    ? `Governance Delegation · Institution Admin · ${input.tenant.displayName}`
-                    : view === "accessApiKeys"
-                      ? `API Keys · Institution Admin · ${input.tenant.displayName}`
-                      : `Org Units · Institution Admin · ${input.tenant.displayName}`;
+            : view === "operationsBadgeStatus"
+              ? `Badge Status · Institution Admin · ${input.tenant.displayName}`
+              : view === "reporting"
+                ? `Reporting · Institution Admin · ${input.tenant.displayName}`
+                : view === "rules"
+                  ? `Rules · Institution Admin · ${input.tenant.displayName}`
+                  : view === "access"
+                    ? `Access · Institution Admin · ${input.tenant.displayName}`
+                    : view === "accessGovernance"
+                      ? `Governance Delegation · Institution Admin · ${input.tenant.displayName}`
+                      : view === "accessApiKeys"
+                        ? `API Keys · Institution Admin · ${input.tenant.displayName}`
+                        : `Org Units · Institution Admin · ${input.tenant.displayName}`;
 
   const viewContent =
     view === "home"
@@ -2712,11 +2707,11 @@ const renderInstitutionAdminPage = (
                     ${reportingDefinitionsPanelMarkup}
                     ${reportingDeferredPanelMarkup}
                   </section>`
-              : view === "rules"
-                ? `${renderPageHeader(
-                    "Rules",
-                    "Keep authoring, template maintenance, and governance context together in one focused workspace.",
-                  )}
+                : view === "rules"
+                  ? `${renderPageHeader(
+                      "Rules",
+                      "Keep authoring, template maintenance, and governance context together in one focused workspace.",
+                    )}
                   <section class="ct-admin ct-stack">
                     <section class="ct-admin__layout ct-grid ct-grid--sidebar">
                       <div class="ct-admin__grid ct-stack">
@@ -2732,23 +2727,23 @@ const renderInstitutionAdminPage = (
                       </div>
                     </section>
                   </section>`
-                : view === "access"
-                  ? `${renderPageHeader(
-                      "Access",
-                      "Governance, API keys, and org units are accessible from the sidebar.",
-                    )}
+                  : view === "access"
+                    ? `${renderPageHeader(
+                        "Access",
+                        "Governance, API keys, and org units are accessible from the sidebar.",
+                      )}
                     <section class="ct-admin ct-stack">
                       ${enterpriseAuthPanelMarkup}
                     </section>`
-                  : view === "accessGovernance"
-                    ? `${renderPageHeader(
-                        "Governance Delegation",
-                        "Grant org-unit access and time-boxed badge authority with direct removal from the current assignments list.",
-                        `<aside class="ct-admin-page-header__note">
+                    : view === "accessGovernance"
+                      ? `${renderPageHeader(
+                          "Governance Delegation",
+                          "Grant org-unit access and time-boxed badge authority with direct removal from the current assignments list.",
+                          `<aside class="ct-admin-page-header__note">
                           <h2>Choose The Smallest Access</h2>
                           <p>Use scoped roles for standing access. Use delegated authority when someone only needs temporary badge operations.</p>
                         </aside>`,
-                      )}
+                        )}
                       <section class="ct-admin ct-stack">
                         ${governanceGuidePanelMarkup}
                         ${membershipScopePanelMarkup}
@@ -2756,11 +2751,11 @@ const renderInstitutionAdminPage = (
                         ${delegatedGrantPanelMarkup}
                         ${delegatedGrantTableMarkup}
                       </section>`
-                    : view === "accessApiKeys"
-                      ? `${renderPageHeader(
-                          "API Keys",
-                          "Create, review, and revoke tenant API keys.",
-                        )}
+                      : view === "accessApiKeys"
+                        ? `${renderPageHeader(
+                            "API Keys",
+                            "Create, review, and revoke tenant API keys.",
+                          )}
                         <section class="ct-admin ct-stack">
                           <section class="ct-admin__layout ct-grid ct-grid--sidebar">
                             <div class="ct-admin__grid ct-stack">
@@ -2771,7 +2766,7 @@ const renderInstitutionAdminPage = (
                             </div>
                           </section>
                         </section>`
-                      : `${renderPageHeader("Org Units", "Create and review org structure.")}
+                        : `${renderPageHeader("Org Units", "Create and review org structure.")}
                         <section class="ct-admin ct-stack">
                           <section class="ct-admin__layout ct-grid ct-grid--sidebar">
                             <div class="ct-admin__grid ct-stack">

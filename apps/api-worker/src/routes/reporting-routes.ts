@@ -30,7 +30,6 @@ import {
   toReportingEngagementFilters,
   toReportingHierarchyFilters,
   toReportingTrendFilters,
-  toReportingOverviewFilters,
 } from "../reporting/reporting-page-filters";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
 
@@ -237,7 +236,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     const focusOrgUnit =
       input.focusOrgUnitId === undefined
         ? null
-        : input.orgUnitsById.get(input.focusOrgUnitId) ?? null;
+        : (input.orgUnitsById.get(input.focusOrgUnitId) ?? null);
 
     if (input.focusOrgUnitId !== undefined && focusOrgUnit === null) {
       throw new Error(`Org unit ${input.focusOrgUnitId} is missing from the reporting hierarchy`);
@@ -383,14 +382,14 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     };
   };
 
-  const buildCsvResponse = <T extends Record<string, string | number | boolean | null | undefined>>(
-    input: {
-      baseName: string;
-      generatedAt: string;
-      rows: readonly T[];
-      columns: readonly CsvColumn<T>[];
-    },
-  ): Response => {
+  const buildCsvResponse = <
+    T extends Record<string, string | number | boolean | null | undefined>,
+  >(input: {
+    baseName: string;
+    generatedAt: string;
+    rows: readonly T[];
+    columns: readonly CsvColumn<T>[];
+  }): Response => {
     const filename = buildCsvFilename(input.baseName, input.generatedAt);
     const csv = serializeCsv({
       rows: input.rows,
@@ -1296,8 +1295,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     } catch (error: unknown) {
       return c.json(
         {
-          error:
-            error instanceof Error ? error.message : "Invalid reporting hierarchy query",
+          error: error instanceof Error ? error.message : "Invalid reporting hierarchy query",
         },
         400,
       );
@@ -1438,8 +1436,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     } catch (error: unknown) {
       return c.json(
         {
-          error:
-            error instanceof Error ? error.message : "Invalid reporting hierarchy query",
+          error: error instanceof Error ? error.message : "Invalid reporting hierarchy query",
         },
         400,
       );

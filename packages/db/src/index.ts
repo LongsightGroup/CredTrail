@@ -1696,8 +1696,7 @@ export interface TenantReportingHierarchyGroupRecord {
   shareRate: number;
 }
 
-export interface GetTenantReportingEngagementCountsInput
-  extends TenantReportingEngagementFilters {
+export interface GetTenantReportingEngagementCountsInput extends TenantReportingEngagementFilters {
   tenantId: string;
 }
 
@@ -4365,7 +4364,10 @@ const tenantReportingLifecycleFromRow = (
 export const resolveAssertionReportingAttribution = (input: {
   issuedAt: string;
   currentOwnerOrgUnitId: string;
-  ownershipEvents: readonly Pick<BadgeTemplateOwnershipEventRecord, "toOrgUnitId" | "transferredAt">[];
+  ownershipEvents: readonly Pick<
+    BadgeTemplateOwnershipEventRecord,
+    "toOrgUnitId" | "transferredAt"
+  >[];
 }): {
   orgUnitId: string;
   attributionSource: AssertionReportingAttributionSource;
@@ -4643,9 +4645,13 @@ const resolveTenantReportingTrendRange = (
 
   return {
     from:
-      explicitFrom === undefined ? (sortedKeys[0] ?? normalizeReportingDateKey(explicitTo!, "start")) : normalizeReportingDateKey(explicitFrom, "start"),
+      explicitFrom === undefined
+        ? (sortedKeys[0] ?? normalizeReportingDateKey(explicitTo!, "start"))
+        : normalizeReportingDateKey(explicitFrom, "start"),
     to:
-      explicitTo === undefined ? (sortedKeys.at(-1) ?? normalizeReportingDateKey(explicitFrom!, "end")) : normalizeReportingDateKey(explicitTo, "end"),
+      explicitTo === undefined
+        ? (sortedKeys.at(-1) ?? normalizeReportingDateKey(explicitFrom!, "end"))
+        : normalizeReportingDateKey(explicitTo, "end"),
   };
 };
 
@@ -4677,10 +4683,8 @@ const finalizeTenantReportingEngagementCounts = (
   counts.shareClickCount = aggregate.counts.shareClickCount;
   counts.learnerClaimCount = aggregate.counts.learnerClaimCount;
   counts.walletAcceptCount = aggregate.counts.walletAcceptCount;
-  counts.shareRate =
-    issuedCount === 0 ? 0 : aggregate.shareEngagedAssertionIds.size / issuedCount;
-  counts.claimRate =
-    issuedCount === 0 ? 0 : aggregate.claimEngagedAssertionIds.size / issuedCount;
+  counts.shareRate = issuedCount === 0 ? 0 : aggregate.shareEngagedAssertionIds.size / issuedCount;
+  counts.claimRate = issuedCount === 0 ? 0 : aggregate.claimEngagedAssertionIds.size / issuedCount;
 
   return counts;
 };
@@ -4923,7 +4927,10 @@ export const summarizeTenantReportingHierarchyRows = (input: {
   >();
 
   for (const row of input.rows) {
-    if (input.query.badgeTemplateId !== undefined && row.badgeTemplateId !== input.query.badgeTemplateId) {
+    if (
+      input.query.badgeTemplateId !== undefined &&
+      row.badgeTemplateId !== input.query.badgeTemplateId
+    ) {
       continue;
     }
 
@@ -4937,10 +4944,7 @@ export const summarizeTenantReportingHierarchyRows = (input: {
 
     const lineage = listReportingHierarchyLineage(orgUnitsById, row.orgUnitId);
 
-    if (
-      focusOrgUnit !== null &&
-      !isReportingHierarchyLineageWithinRoot(lineage, focusOrgUnit.id)
-    ) {
+    if (focusOrgUnit !== null && !isReportingHierarchyLineageWithinRoot(lineage, focusOrgUnit.id)) {
       continue;
     }
 
@@ -7874,17 +7878,11 @@ const buildCurrentOrgUnitLineageNames = (
   orgUnitId: string,
 ): Pick<
   TenantAssertionLedgerExportRowRecord,
-  | "currentInstitutionName"
-  | "currentCollegeName"
-  | "currentDepartmentName"
-  | "currentProgramName"
+  "currentInstitutionName" | "currentCollegeName" | "currentDepartmentName" | "currentProgramName"
 > => {
   const lineageNames: Pick<
     TenantAssertionLedgerExportRowRecord,
-    | "currentInstitutionName"
-    | "currentCollegeName"
-    | "currentDepartmentName"
-    | "currentProgramName"
+    "currentInstitutionName" | "currentCollegeName" | "currentDepartmentName" | "currentProgramName"
   > = {
     currentInstitutionName: null,
     currentCollegeName: null,
@@ -14183,10 +14181,7 @@ export const listTenantAssertionLedgerExportRows = async (
   throw new Error("Unable to load tenant assertion ledger export rows after retrying setup");
 };
 
-const normalizeReportingDateBoundary = (
-  value: string,
-  boundary: "start" | "end",
-): string => {
+const normalizeReportingDateBoundary = (value: string, boundary: "start" | "end"): string => {
   const trimmed = value.trim();
   const date = trimmed.includes("T")
     ? new Date(trimmed)
@@ -14537,7 +14532,10 @@ export const recordAssertionEngagementEvent = async (
     throw new Error(`Assertion ${input.assertionId} not found for tenant ${input.tenantId}`);
   }
 
-  const existingAttribution = await findAssertionReportingAttributionByAssertionId(db, input.assertionId);
+  const existingAttribution = await findAssertionReportingAttributionByAssertionId(
+    db,
+    input.assertionId,
+  );
 
   if (existingAttribution === null) {
     await backfillAssertionReportingAttributionsForTenant(db, input.tenantId);
