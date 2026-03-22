@@ -1652,11 +1652,15 @@ export interface TenantReportingEngagementFilters {
   to?: string | undefined;
   badgeTemplateId?: string | undefined;
   orgUnitId?: string | undefined;
+  state?: TenantReportingLifecycleFilter | undefined;
 }
 
 export interface TenantReportingHierarchyQuery {
   from?: string | undefined;
   to?: string | undefined;
+  badgeTemplateId?: string | undefined;
+  orgUnitId?: string | undefined;
+  state?: TenantReportingLifecycleFilter | undefined;
   focusOrgUnitId?: string | undefined;
   level: OrgUnitType;
 }
@@ -1732,6 +1736,7 @@ export interface TenantReportingTrendRecord {
     to: string | null;
     badgeTemplateId: string | null;
     orgUnitId: string | null;
+    state: TenantReportingLifecycleFilter | null;
   };
   bucket: TenantReportingTrendBucket;
   series: TenantReportingTrendBucketRecord[];
@@ -3936,6 +3941,9 @@ interface TenantReportingEngagementRow {
   badgeTemplateId: string;
   orgUnitId: string;
   issuedAt: string;
+  revokedAt: string | null;
+  latestToState: AssertionLifecycleState | null;
+  latestReasonCode: AssertionLifecycleReasonCode | null;
   eventType: AssertionEngagementEventType | null;
   occurredAt: string | null;
 }
@@ -4565,8 +4573,11 @@ const isTimestampWithinReportingRange = (
 };
 
 const matchesTenantReportingEngagementFilters = (
-  row: Pick<TenantReportingEngagementRow, "badgeTemplateId" | "orgUnitId">,
-  input: Pick<TenantReportingEngagementFilters, "badgeTemplateId" | "orgUnitId">,
+  row: Pick<
+    TenantReportingEngagementRow,
+    "badgeTemplateId" | "orgUnitId" | "revokedAt" | "latestToState" | "latestReasonCode"
+  >,
+  input: Pick<TenantReportingEngagementFilters, "badgeTemplateId" | "orgUnitId" | "state">,
 ): boolean => {
   if (input.badgeTemplateId !== undefined && row.badgeTemplateId !== input.badgeTemplateId) {
     return false;
@@ -4574,6 +4585,18 @@ const matchesTenantReportingEngagementFilters = (
 
   if (input.orgUnitId !== undefined && row.orgUnitId !== input.orgUnitId) {
     return false;
+  }
+
+  if (input.state !== undefined) {
+    const lifecycleState = tenantReportingLifecycleFromRow(row);
+
+    if (input.state === "pending_review") {
+      return lifecycleState === "suspended" && row.latestReasonCode === "appeal_pending";
+    }
+
+    if (lifecycleState !== input.state) {
+      return false;
+    }
   }
 
   return true;
@@ -4900,6 +4923,14 @@ export const summarizeTenantReportingHierarchyRows = (input: {
   >();
 
   for (const row of input.rows) {
+    if (input.query.badgeTemplateId !== undefined && row.badgeTemplateId !== input.query.badgeTemplateId) {
+      continue;
+    }
+
+    if (input.query.orgUnitId !== undefined && row.orgUnitId !== input.query.orgUnitId) {
+      continue;
+    }
+
     if (!isTimestampWithinReportingRange(row.issuedAt, input.query.from, input.query.to)) {
       continue;
     }
@@ -14624,11 +14655,23 @@ const listTenantReportingEngagementRows = async (
           attribution.badge_template_id AS badgeTemplateId,
           attribution.org_unit_id AS orgUnitId,
           assertions.issued_at AS issuedAt,
+          assertions.revoked_at AS revokedAt,
+          lifecycle.to_state AS latestToState,
+          lifecycle.reason_code AS latestReasonCode,
           events.event_type AS eventType,
           events.occurred_at AS occurredAt
         FROM assertions
         INNER JOIN assertion_reporting_attributions attribution
           ON attribution.assertion_id = assertions.id
+        LEFT JOIN assertion_lifecycle_events lifecycle
+          ON lifecycle.id = (
+            SELECT ale.id
+            FROM assertion_lifecycle_events ale
+            WHERE ale.tenant_id = assertions.tenant_id
+              AND ale.assertion_id = assertions.id
+            ORDER BY ale.transitioned_at DESC, ale.created_at DESC, ale.id DESC
+            LIMIT 1
+          )
         LEFT JOIN assertion_engagement_events events
           ON events.tenant_id = assertions.tenant_id
           AND events.assertion_id = assertions.id
@@ -14651,6 +14694,11 @@ const listTenantReportingEngagementRows = async (
 
       if (isMissingAssertionEngagementEventsTableError(error)) {
         await ensureAssertionEngagementEventsTable(db);
+        continue;
+      }
+
+      if (isMissingAssertionLifecycleEventsTableError(error)) {
+        await ensureAssertionLifecycleEventsTable(db);
         continue;
       }
 
@@ -14682,6 +14730,7 @@ export const getTenantReportingTrends = async (
       to: input.to ?? null,
       badgeTemplateId: input.badgeTemplateId ?? null,
       orgUnitId: input.orgUnitId ?? null,
+      state: input.state ?? null,
     },
     bucket: input.bucket,
     series: summarizeTenantReportingTrendRows(rows, input),
@@ -14780,6 +14829,7 @@ export const getTenantReportingOverview = async (
     to: input.issuedTo,
     badgeTemplateId: input.badgeTemplateId,
     orgUnitId: input.orgUnitId,
+    state: input.state,
   });
 
   return {

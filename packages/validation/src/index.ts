@@ -397,6 +397,7 @@ export const tenantReportingTrendQuerySchema = tenantReportingEngagementQueryRan
   to: reportingDateSchema.optional(),
   badgeTemplateId: resourceIdSchema.optional(),
   orgUnitId: resourceIdSchema.optional(),
+  state: z.enum(["active", "suspended", "revoked", "expired", "pending_review"]).optional(),
   bucket: z.enum(["day"]).default("day"),
 });
 
@@ -405,12 +406,16 @@ export const tenantReportingComparisonQuerySchema = tenantReportingEngagementQue
   to: reportingDateSchema.optional(),
   badgeTemplateId: resourceIdSchema.optional(),
   orgUnitId: resourceIdSchema.optional(),
+  state: z.enum(["active", "suspended", "revoked", "expired", "pending_review"]).optional(),
   groupBy: z.enum(["badgeTemplate", "orgUnit"]).default("badgeTemplate"),
 });
 
 export const tenantReportingHierarchyQuerySchema = tenantReportingEngagementQueryRangeSchema({
   from: reportingDateSchema.optional(),
   to: reportingDateSchema.optional(),
+  badgeTemplateId: resourceIdSchema.optional(),
+  orgUnitId: resourceIdSchema.optional(),
+  state: z.enum(["active", "suspended", "revoked", "expired", "pending_review"]).optional(),
   focusOrgUnitId: resourceIdSchema.optional(),
   level: orgUnitTypeSchema,
 });

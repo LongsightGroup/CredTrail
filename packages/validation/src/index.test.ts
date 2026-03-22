@@ -74,6 +74,9 @@ import {
   parseTenantSigningRegistry,
   parseUpdateBadgeTemplateRequest,
   parseTransferBadgeTemplateOwnershipRequest,
+  parseTenantReportingComparisonQuery,
+  parseTenantReportingHierarchyQuery,
+  parseTenantReportingTrendQuery,
 } from "./index";
 
 describe("parseQueueJob", () => {
@@ -1455,6 +1458,74 @@ describe("enterprise governance request parsers", () => {
     expect(() => {
       parseTenantAssertionLedgerExportQuery({
         state: "pending_review",
+      });
+    }).toThrowError();
+  });
+
+  it("parses reporting trend and comparison queries with lifecycle-state filters", () => {
+    expect(
+      parseTenantReportingTrendQuery({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        badgeTemplateId: "badge_template_science",
+        orgUnitId: "org_program_microbiology",
+        state: "expired",
+        bucket: "day",
+      }),
+    ).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "expired",
+      bucket: "day",
+    });
+
+    expect(
+      parseTenantReportingComparisonQuery({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        badgeTemplateId: "badge_template_science",
+        orgUnitId: "org_program_microbiology",
+        state: "pending_review",
+        groupBy: "orgUnit",
+      }),
+    ).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "pending_review",
+      groupBy: "orgUnit",
+    });
+  });
+
+  it("parses hierarchy queries with full page-filter parity", () => {
+    expect(
+      parseTenantReportingHierarchyQuery({
+        from: "2026-03-01",
+        to: "2026-03-31",
+        badgeTemplateId: "badge_template_science",
+        orgUnitId: "org_program_microbiology",
+        state: "active",
+        focusOrgUnitId: "org_college_science",
+        level: "department",
+      }),
+    ).toEqual({
+      from: "2026-03-01",
+      to: "2026-03-31",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "active",
+      focusOrgUnitId: "org_college_science",
+      level: "department",
+    });
+
+    expect(() => {
+      parseTenantReportingTrendQuery({
+        from: "2026-03-31",
+        to: "2026-03-01",
+        state: "paused",
       });
     }).toThrowError();
   });
