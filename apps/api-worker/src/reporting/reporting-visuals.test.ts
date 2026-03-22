@@ -105,6 +105,9 @@ describe("renderReporting", () => {
     expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual");
     expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__legend");
     expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__surface");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__trend-axis");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__trend-callouts");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-admin__reporting-trend-hero");
     expect(INSTITUTION_ADMIN_CSS).toContain("data-reporting-visual-kind");
     expect(INSTITUTION_ADMIN_CSS).toContain("@media (max-width: 960px)");
     expect(INSTITUTION_ADMIN_CSS).toContain("repeating-linear-gradient");

@@ -511,6 +511,59 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-reporting-visual__point--3 {
   stroke: rgba(15, 95, 166, 0.98);
 }
+.ct-reporting-visual__trend-context {
+  display: grid;
+  gap: 0.8rem;
+}
+.ct-reporting-visual__trend-axis {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ct-reporting-visual__trend-axis-item {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  border-radius: var(--ct-radius-md);
+  background: rgba(255, 255, 255, 0.78);
+}
+.ct-reporting-visual__trend-axis-label,
+.ct-reporting-visual__trend-callout-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ct-theme-text-subtle);
+}
+.ct-reporting-visual__trend-axis-value,
+.ct-reporting-visual__trend-callout-value,
+.ct-reporting-visual__trend-callout-metric {
+  color: var(--ct-theme-text-title);
+  font-variant-numeric: tabular-nums;
+}
+.ct-reporting-visual__trend-axis-detail,
+.ct-reporting-visual__trend-callout-detail {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ct-theme-text-muted);
+}
+.ct-reporting-visual__trend-callouts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+.ct-reporting-visual__trend-callout {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(238, 246, 255, 0.76));
+}
 .ct-reporting-visual__empty {
   padding: 1rem;
   border: 1px dashed rgba(15, 95, 166, 0.28);
@@ -526,6 +579,10 @@ export const INSTITUTION_ADMIN_CSS = `
     padding: 0.75rem;
   }
   .ct-reporting-visual__legend {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ct-reporting-visual__trend-axis,
+  .ct-reporting-visual__trend-callouts {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -592,6 +649,36 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-supporting-rail .ct-admin__panel {
   position: sticky;
   top: 4.75rem;
+}
+.ct-admin__reporting-trend-hero {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  grid-template-columns: minmax(17rem, 0.9fr) minmax(0, 1.2fr);
+}
+.ct-admin__reporting-trend-intro {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  border-radius: var(--ct-radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(238, 246, 255, 0.8));
+}
+.ct-admin__reporting-trend-callouts {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+.ct-admin__reporting-trend-callout {
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+.ct-admin__reporting-trend-callout h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.ct-admin__reporting-trend-callout .ct-admin__meta + .ct-admin__meta {
+  margin-top: 0.2rem;
 }
 .ct-admin__reporting-visual-grid {
   display: grid;
@@ -684,6 +771,7 @@ export const INSTITUTION_ADMIN_CSS = `
   padding-block: 0.55rem;
 }
 @media (max-width: 1100px) {
+  .ct-admin__reporting-trend-hero,
   .ct-admin__reporting-summary-layout,
   .ct-admin__reporting-supporting-grid,
   .ct-admin__reporting-panel-media,
