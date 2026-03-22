@@ -1089,6 +1089,38 @@ const renderInstitutionAdminPage = (
             note: "This visual does not replace the rate cards; it keeps the same definitions in a shared presentation seam.",
           })}
         </div>`;
+  const reportingOverviewVisualMarkup =
+    reportingOverview === null
+      ? ""
+      : renderReportingVisualModule({
+          kind: "stacked-summary",
+          title: "Current badge-state mix",
+          description:
+            "Shared visual summarizes the same lifecycle-state counts shown in the cards for the current reporting slice.",
+          series: [
+            {
+              label: "Active",
+              value: reportingOverview.counts.active,
+              detail: `${formatReportingCount(reportingOverview.counts.active)} currently active badges`,
+            },
+            {
+              label: "Suspended",
+              value: reportingOverview.counts.suspended,
+              detail: `${formatReportingCount(reportingOverview.counts.suspended)} currently suspended badges`,
+            },
+            {
+              label: "Revoked",
+              value: reportingOverview.counts.revoked,
+              detail: `${formatReportingCount(reportingOverview.counts.revoked)} revoked badges`,
+            },
+            {
+              label: "Pending review",
+              value: reportingOverview.counts.pendingReview,
+              detail: `${formatReportingCount(reportingOverview.counts.pendingReview)} suspended-for-review badges`,
+            },
+          ] as const,
+          note: "Cards below retain the exact lifecycle counts used for reporting review and export parity.",
+        });
   const reportingTrendVisualMarkup =
     reportingTrends === null || reportingTrends.series.length === 0
       ? ""
@@ -2630,8 +2662,11 @@ const renderInstitutionAdminPage = (
         <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingPath)}">Reset</a>
       </div>
     </form>
-    <div class="ct-admin__metric-grid">
-      ${reportingMetricCardsMarkup}
+    <div class="ct-admin__reporting-panel-media">
+      ${reportingOverviewVisualMarkup}
+      <div class="ct-admin__metric-grid">
+        ${reportingMetricCardsMarkup}
+      </div>
     </div>
     <p class="ct-admin__hint">Generated ${escapeHtml(
       reportingOverview === null ? "just now" : formatIsoTimestamp(reportingOverview.generatedAt),
@@ -2660,76 +2695,82 @@ const renderInstitutionAdminPage = (
   const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Trend lines</h2>
     <p>Trend lines combine issuance and supported engagement counts over time for the same reporting filters. Claim actions and wallet accepts remain separate events here.</p>
-    ${reportingTrendVisualMarkup}
-    <div class="ct-admin__table-wrap">
-      <table class="ct-admin__table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Issued</th>
-            <th>Public badge views</th>
-            <th>Verification views</th>
-            <th>Share clicks</th>
-            <th>Claim actions</th>
-            <th>Wallet accepts</th>
-          </tr>
-        </thead>
-        <tbody data-reporting-bar-group="trends">
-          ${reportingTrendRowsMarkup}
-        </tbody>
-      </table>
+    <div class="ct-admin__reporting-panel-media">
+      ${reportingTrendVisualMarkup}
+      <div class="ct-admin__table-wrap">
+        <table class="ct-admin__table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Issued</th>
+              <th>Public badge views</th>
+              <th>Verification views</th>
+              <th>Share clicks</th>
+              <th>Claim actions</th>
+              <th>Wallet accepts</th>
+            </tr>
+          </thead>
+          <tbody data-reporting-bar-group="trends">
+            ${reportingTrendRowsMarkup}
+          </tbody>
+        </table>
+      </div>
     </div>
   </article>`;
 
   const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by badge template</h2>
     <p>Use this table to compare issuance volume, supported engagement counts, and rate metrics across badge templates without leaving reporting.</p>
-    ${reportingTemplateComparisonVisualMarkup}
-    <div class="ct-admin__table-wrap">
-      <table class="ct-admin__table">
-        <thead>
-          <tr>
-            <th>Badge template</th>
-            <th>Issued</th>
-            <th>Public badge views</th>
-            <th>Verification views</th>
-            <th>Share clicks</th>
-            <th>Claim actions</th>
-            <th>Wallet accepts</th>
-            <th>Claim rate</th>
-            <th>Share rate</th>
-          </tr>
-        </thead>
-        <tbody data-reporting-bar-group="template-comparisons">
-          ${reportingTemplateComparisonRowsMarkup}
-        </tbody>
-      </table>
+    <div class="ct-admin__reporting-panel-media">
+      ${reportingTemplateComparisonVisualMarkup}
+      <div class="ct-admin__table-wrap">
+        <table class="ct-admin__table">
+          <thead>
+            <tr>
+              <th>Badge template</th>
+              <th>Issued</th>
+              <th>Public badge views</th>
+              <th>Verification views</th>
+              <th>Share clicks</th>
+              <th>Claim actions</th>
+              <th>Wallet accepts</th>
+              <th>Claim rate</th>
+              <th>Share rate</th>
+            </tr>
+          </thead>
+          <tbody data-reporting-bar-group="template-comparisons">
+            ${reportingTemplateComparisonRowsMarkup}
+          </tbody>
+        </table>
+      </div>
     </div>
   </article>`;
 
   const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by org unit</h2>
     <p>This flat comparison remains available alongside hierarchy drilldowns so buyers can keep one explicit table for exact org-unit group rows.</p>
-    ${reportingOrgUnitComparisonVisualMarkup}
-    <div class="ct-admin__table-wrap">
-      <table class="ct-admin__table">
-        <thead>
-          <tr>
-            <th>Org unit</th>
-            <th>Issued</th>
-            <th>Public badge views</th>
-            <th>Verification views</th>
-            <th>Share clicks</th>
-            <th>Claim actions</th>
-            <th>Wallet accepts</th>
-            <th>Claim rate</th>
-            <th>Share rate</th>
-          </tr>
-        </thead>
-        <tbody data-reporting-bar-group="org-comparisons">
-          ${reportingOrgUnitComparisonRowsMarkup}
-        </tbody>
-      </table>
+    <div class="ct-admin__reporting-panel-media">
+      ${reportingOrgUnitComparisonVisualMarkup}
+      <div class="ct-admin__table-wrap">
+        <table class="ct-admin__table">
+          <thead>
+            <tr>
+              <th>Org unit</th>
+              <th>Issued</th>
+              <th>Public badge views</th>
+              <th>Verification views</th>
+              <th>Share clicks</th>
+              <th>Claim actions</th>
+              <th>Wallet accepts</th>
+              <th>Claim rate</th>
+              <th>Share rate</th>
+            </tr>
+          </thead>
+          <tbody data-reporting-bar-group="org-comparisons">
+            ${reportingOrgUnitComparisonRowsMarkup}
+          </tbody>
+        </table>
+      </div>
     </div>
   </article>`;
 
