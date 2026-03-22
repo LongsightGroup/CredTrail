@@ -544,3 +544,7 @@ export const seededDemoReportingFixture: SeededDemoReportingFixture = {
     rawOrgUnitComparisons: scopedRawOrgUnitComparisons,
   },
 };
+
+export const getSeededDemoReportingRouteFixture = (): SeededDemoReportingFixture => {
+  return seededDemoReportingFixture;
+};
