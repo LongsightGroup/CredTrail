@@ -418,6 +418,42 @@ export const tenantReportingHierarchyQuerySchema = tenantReportingEngagementQuer
   level: orgUnitTypeSchema,
 });
 
+export const executiveDashboardAudienceSchema = z.enum([
+  "system",
+  "institution",
+  "college",
+  "department",
+  "program",
+]);
+
+export const executiveDashboardWindowSchema = z.enum(["last-30-days", "last-90-days"]);
+
+export const tenantExecutiveDashboardQuerySchema = z
+  .object({
+    issuedFrom: reportingDateSchema.optional(),
+    issuedTo: reportingDateSchema.optional(),
+    badgeTemplateId: resourceIdSchema.optional(),
+    orgUnitId: resourceIdSchema.optional(),
+    state: z.enum(["active", "suspended", "revoked", "expired", "pending_review"]).optional(),
+    window: executiveDashboardWindowSchema.optional(),
+    audience: executiveDashboardAudienceSchema.optional(),
+    focusOrgUnitId: resourceIdSchema.optional(),
+    comparisonLevel: orgUnitTypeSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.issuedFrom === undefined || value.issuedTo === undefined) {
+      return;
+    }
+
+    if (value.issuedFrom > value.issuedTo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["issuedTo"],
+        message: "issuedTo must be on or after issuedFrom",
+      });
+    }
+  });
+
 export const createBadgeTemplateRequestSchema = z.object({
   slug: badgeTemplateSlugSchema,
   title: badgeTemplateTitleSchema,
@@ -1373,6 +1409,9 @@ export type TenantReportingOverviewQuery = z.infer<typeof tenantReportingOvervie
 export type TenantReportingTrendQuery = z.infer<typeof tenantReportingTrendQuerySchema>;
 export type TenantReportingComparisonQuery = z.infer<typeof tenantReportingComparisonQuerySchema>;
 export type TenantReportingHierarchyQuery = z.infer<typeof tenantReportingHierarchyQuerySchema>;
+export type ExecutiveDashboardAudience = z.infer<typeof executiveDashboardAudienceSchema>;
+export type ExecutiveDashboardWindow = z.infer<typeof executiveDashboardWindowSchema>;
+export type TenantExecutiveDashboardQuery = z.infer<typeof tenantExecutiveDashboardQuerySchema>;
 export type CreateBadgeTemplateRequest = z.infer<typeof createBadgeTemplateRequestSchema>;
 export type UpdateBadgeTemplateRequest = z.infer<typeof updateBadgeTemplateRequestSchema>;
 export type CreateTenantOrgUnitRequest = z.infer<typeof createTenantOrgUnitRequestSchema>;
@@ -1678,6 +1717,12 @@ export const parseTenantReportingHierarchyQuery = (
   input: unknown,
 ): TenantReportingHierarchyQuery => {
   return tenantReportingHierarchyQuerySchema.parse(input);
+};
+
+export const parseTenantExecutiveDashboardQuery = (
+  input: unknown,
+): TenantExecutiveDashboardQuery => {
+  return tenantExecutiveDashboardQuerySchema.parse(input);
 };
 
 export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemplateRequest => {

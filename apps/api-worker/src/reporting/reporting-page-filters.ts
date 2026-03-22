@@ -59,6 +59,17 @@ export const toReportingHierarchyFilters = (filters: ReportingHierarchyPageFilte
   };
 };
 
+export const createReportingHierarchyPageFilters = (
+  filters: ReportingPageFilters,
+  input: Pick<ReportingHierarchyPageFilters, "focusOrgUnitId" | "level">,
+): ReportingHierarchyPageFilters => {
+  return {
+    ...filters,
+    focusOrgUnitId: input.focusOrgUnitId,
+    level: input.level,
+  };
+};
+
 export const buildReportingPageQueryEntries = (
   filters: ReportingPageFilters,
 ): ReadonlyArray<readonly [string, string | null | undefined]> => {
