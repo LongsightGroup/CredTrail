@@ -96,7 +96,29 @@ const formatReportingDateLabel = (value: string): string => {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   }).format(date);
+};
+
+const formatReportingStateLabel = (value: string | null | undefined): string => {
+  if (value === null || value === undefined || value.trim().length === 0) {
+    return "All current states";
+  }
+
+  switch (value) {
+    case "pending_review":
+      return "Pending review";
+    case "active":
+      return "active";
+    case "suspended":
+      return "suspended";
+    case "revoked":
+      return "revoked";
+    case "expired":
+      return "expired";
+    default:
+      return value;
+  }
 };
 
 const REPORTING_HIERARCHY_LEVELS = ["institution", "college", "department", "program"] as const;
@@ -920,6 +942,119 @@ const renderInstitutionAdminPage = (
       <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingOrgUnitComparisonExportHref)}">Org-unit comparisons CSV</a>
     </div>
     <p class="ct-admin__hint">Recipient-level ledger export stays in Operations for owner/admin users and does not appear in the reporting workspace.</p>
+  </article>`;
+  const reportingGeneratedAtLabel =
+    reportingOverview === null
+      ? "Generated just now"
+      : `Generated ${formatIsoTimestamp(reportingOverview.generatedAt)}`;
+  const reportingSummaryContextItems = [
+    {
+      label: "Issued window",
+      value:
+        reportingIssuedFromValue.length > 0 && reportingIssuedToValue.length > 0
+          ? `${formatReportingDateLabel(reportingIssuedFromValue)} to ${formatReportingDateLabel(reportingIssuedToValue)}`
+          : reportingIssuedFromValue.length > 0
+            ? `From ${formatReportingDateLabel(reportingIssuedFromValue)}`
+            : reportingIssuedToValue.length > 0
+              ? `Through ${formatReportingDateLabel(reportingIssuedToValue)}`
+              : "All issue dates",
+    },
+    {
+      label: "Badge template",
+      value:
+        reportingBadgeTemplateIdValue.length > 0
+          ? (templateById.get(reportingBadgeTemplateIdValue)?.title ?? reportingBadgeTemplateIdValue)
+          : "All templates",
+    },
+    {
+      label: "Org scope",
+      value:
+        reportingOrgUnitIdValue.length > 0
+          ? getReportingOrgUnitLabel(reportingOrgUnitIdValue)
+          : "All visible org units",
+    },
+    {
+      label: "Lifecycle state",
+      value: formatReportingStateLabel(reportingState),
+    },
+  ] as const;
+  const reportingExecutiveSummaryMetrics = [
+    {
+      key: "issued",
+      label: "Issued badges",
+      value: formatReportingCount(reportingOverview?.counts.issued ?? reportingEngagementCounts?.issuedCount ?? 0),
+      detail: "Current issued volume for the selected reporting slice.",
+    },
+    {
+      key: "claim-rate",
+      label: "Claim rate",
+      value: formatReportingRate(reportingEngagementCounts?.claimRate ?? 0),
+      detail: "Distinct claimed or accepted assertions over issued badges.",
+    },
+    {
+      key: "share-rate",
+      label: "Share rate",
+      value: formatReportingRate(reportingEngagementCounts?.shareRate ?? 0),
+      detail: "Distinct shared assertions over issued badges in the same slice.",
+    },
+    {
+      key: "public-badge-views",
+      label: "Public badge views",
+      value: formatReportingCount(reportingEngagementCounts?.publicBadgeViewCount ?? 0),
+      detail: "CredTrail-owned public badge page loads for the current slice.",
+    },
+  ] as const;
+  const reportingExecutiveSummaryMarkup = `<article class="ct-admin__panel ct-stack">
+    <div class="ct-admin__reporting-summary-band">
+      <div class="ct-admin__reporting-summary-layout">
+        <div class="ct-stack">
+          <div class="ct-cluster">
+            <div class="ct-stack">
+              <p class="ct-admin__eyebrow">Executive Summary</p>
+              <h2>Executive Summary</h2>
+            </div>
+            <span class="ct-admin__status-pill">KPI-first</span>
+          </div>
+          <p class="ct-admin__reporting-summary-copy">Current reporting slice shows ${escapeHtml(
+            formatReportingCount(reportingOverview?.counts.issued ?? reportingEngagementCounts?.issuedCount ?? 0),
+          )} issued badges, ${escapeHtml(formatReportingRate(reportingEngagementCounts?.claimRate ?? 0))} claim rate, ${escapeHtml(
+            formatReportingRate(reportingEngagementCounts?.shareRate ?? 0),
+          )} share rate, and ${escapeHtml(
+            formatReportingCount(reportingEngagementCounts?.publicBadgeViewCount ?? 0),
+          )} public badge views.</p>
+        </div>
+        <div class="ct-admin__reporting-summary-metrics">
+          ${reportingExecutiveSummaryMetrics
+            .map((metric) => {
+              return `<article class="ct-admin__metric-card ct-admin__metric-card--reporting-summary ct-stack" data-reporting-summary-metric="${escapeHtml(
+                metric.key,
+              )}">
+                <p class="ct-admin__eyebrow">${escapeHtml(metric.label)}</p>
+                <strong class="ct-admin__metric-value">${escapeHtml(metric.value)}</strong>
+                <p class="ct-admin__hint">${escapeHtml(metric.detail)}</p>
+              </article>`;
+            })
+            .join("\n")}
+        </div>
+      </div>
+    </div>
+    <section class="ct-admin__reporting-summary-context" aria-label="Current slice">
+      <div class="ct-stack">
+        <div class="ct-cluster">
+          <p class="ct-admin__eyebrow">Current slice</p>
+          <span class="ct-admin__status-pill">${escapeHtml(reportingGeneratedAtLabel)}</span>
+        </div>
+        <div class="ct-cluster">
+          ${reportingSummaryContextItems
+            .map((item) => {
+              return `<span class="ct-admin__status-pill"><strong>${escapeHtml(item.label)}:</strong> ${escapeHtml(
+                item.value,
+              )}</span>`;
+            })
+            .join("\n")}
+        </div>
+      </div>
+    </section>
   </article>`;
   const reportingMetricCardsMarkup =
     reportingMetrics.filter((metric) => metric.available).length === 0
@@ -2621,7 +2756,10 @@ const renderInstitutionAdminPage = (
   </article>`;
 
   const reportingOverviewPanelMarkup = `<article id="reporting-overview-panel" class="ct-admin__panel ct-stack">
-    <h2>Reporting Overview</h2>
+    <div class="ct-cluster">
+      <h2>Reporting Overview</h2>
+      <span class="ct-admin__status-pill">Supporting detail</span>
+    </div>
     <p>Filter by issue date, template, org unit, or current badge state. Counts reflect product-owned data only, and analytics stay in this reporting workspace.</p>
     <form method="get" action="${escapeHtml(reportingPath)}" class="ct-admin__form ct-admin__form--inline ct-grid">
       <label>
@@ -2963,6 +3101,7 @@ const renderInstitutionAdminPage = (
                     </aside>`,
                   )}
                   <section class="ct-admin ct-stack">
+                    ${reportingExecutiveSummaryMarkup}
                     ${reportingOverviewPanelMarkup}
                     ${reportingExportsPanelMarkup}
                     ${reportingEngagementPanelMarkup}
