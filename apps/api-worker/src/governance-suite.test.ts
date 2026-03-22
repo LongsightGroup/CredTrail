@@ -957,6 +957,9 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain("Highest issuance volume");
     expect(html).toContain("Highest claim rate");
     expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
+    expect(html).toContain('class="ct-reporting-visual"');
+    expect(html).toContain('data-reporting-visual-kind="comparison-bars"');
+    expect(html).toContain('class="ct-reporting-visual__legend"');
     expect(html).toContain("TypeScript Foundations");
     expect(html).toContain(
       'href="/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123%3Aorg%3Aprogram-cs"',

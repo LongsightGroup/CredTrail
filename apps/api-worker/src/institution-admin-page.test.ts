@@ -1071,6 +1071,54 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
   });
 
+  it("renders shared reporting visuals without losing filter and export affordances", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('class="ct-reporting-visual"');
+    expect(body).toContain('data-reporting-visual-kind="comparison-bars"');
+    expect(body).toContain('data-reporting-visual-kind="trend-series"');
+    expect(body).toContain('class="ct-reporting-visual__legend"');
+    expect(body).toContain("Legend");
+    expect(body).toContain("Public badge views");
+    expect(body).toContain("Claim rate");
+    expect(body).toContain('form method="get" action="/tenants/tenant_123/admin/reporting"');
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31"',
+    );
+  });
+
+  it("renders reporting chart markup directly in the server response", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('<svg class="ct-reporting-visual__graphic"');
+    expect(body).toContain('role="img"');
+    expect(body).toContain("Visible labels and numeric values are listed in the legend below.");
+  });
+
   it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {
     const env = createEnv();
     mockedGetTenantReportingOverviewDb.mockImplementationOnce(async (_db, input) => {
