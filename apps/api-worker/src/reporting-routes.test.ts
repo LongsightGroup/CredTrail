@@ -499,6 +499,9 @@ describe("GET /v1/tenants/:tenantId/reporting/hierarchy", () => {
     expect(body.filters).toEqual({
       from: "2026-03-01",
       to: "2026-03-31",
+      badgeTemplateId: null,
+      orgUnitId: null,
+      state: null,
       focusOrgUnitId: "tenant_123:org:college-eng",
       level: "department",
     });
@@ -556,6 +559,7 @@ describe("GET /v1/tenants/:tenantId/reporting/engagement", () => {
       to: "2026-03-31",
       badgeTemplateId: undefined,
       orgUnitId: undefined,
+      state: undefined,
     });
   });
 });
@@ -861,7 +865,7 @@ describe("GET /v1/tenants/:tenantId/reporting/*.csv", () => {
     );
 
     const response = await app.request(
-      "/v1/tenants/tenant_123/reporting/hierarchy/export.csv?issuedFrom=2026-03-01&issuedTo=2026-03-31&focusOrgUnitId=tenant_123:org:college-eng&level=department",
+      "/v1/tenants/tenant_123/reporting/hierarchy/export.csv?issuedFrom=2026-03-01&issuedTo=2026-03-31&badgeTemplateId=badge_template_001&orgUnitId=tenant_123%3Aorg%3Adepartment-cs&state=active&focusOrgUnitId=tenant_123:org:college-eng&level=department",
       {
         headers: {
           Cookie: "better-auth.session_token=session-token",
@@ -877,8 +881,13 @@ describe("GET /v1/tenants/:tenantId/reporting/*.csv", () => {
       tenantId: "tenant_123",
       from: "2026-03-01",
       to: "2026-03-31",
+      badgeTemplateId: "badge_template_001",
+      orgUnitId: "tenant_123:org:department-cs",
+      state: "active",
       groupBy: "orgUnit",
     });
+    expect(body).toContain("Badge Template ID");
+    expect(body).toContain("Lifecycle State");
     expect(body).toContain("Computer Science");
     expect(body).not.toContain("History");
   });

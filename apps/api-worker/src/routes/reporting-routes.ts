@@ -25,6 +25,13 @@ import {
   serializeCsv,
   type CsvColumn,
 } from "../reporting/csv-export";
+import {
+  toReportingComparisonFilters,
+  toReportingEngagementFilters,
+  toReportingHierarchyFilters,
+  toReportingTrendFilters,
+  toReportingOverviewFilters,
+} from "../reporting/reporting-page-filters";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
 
 interface RegisterReportingRoutesInput {
@@ -69,6 +76,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     to: string | null;
     badgeTemplateId: string | null;
     orgUnitId: string | null;
+    state: string | null;
     generatedAt: string;
     issuedCount: number;
     publicBadgeViewCount: number;
@@ -85,6 +93,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     to: string | null;
     badgeTemplateId: string | null;
     orgUnitId: string | null;
+    state: string | null;
     bucket: string;
     bucketStart: string;
     issuedCount: number;
@@ -100,6 +109,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     to: string | null;
     badgeTemplateId: string | null;
     orgUnitId: string | null;
+    state: string | null;
     groupBy: string;
     groupId: string;
     issuedCount: number;
@@ -115,6 +125,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     tenantId: string;
     from: string | null;
     to: string | null;
+    badgeTemplateId: string | null;
+    orgUnitIdFilter: string | null;
+    state: string | null;
     focusOrgUnitId: string | null;
     level: string;
     orgUnitId: string;
@@ -390,20 +403,6 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     });
   };
 
-  const normalizePageRangeQuery = (query: {
-    issuedFrom?: string | undefined;
-    issuedTo?: string | undefined;
-    badgeTemplateId?: string | undefined;
-    orgUnitId?: string | undefined;
-  }) => {
-    return {
-      from: query.issuedFrom,
-      to: query.issuedTo,
-      badgeTemplateId: query.badgeTemplateId,
-      orgUnitId: query.orgUnitId,
-    };
-  };
-
   const OVERVIEW_EXPORT_COLUMNS: readonly CsvColumn<OverviewExportRow>[] = [
     { key: "tenantId", header: "Tenant ID" },
     { key: "issuedFrom", header: "Issued From" },
@@ -425,6 +424,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     { key: "to", header: "Issued To" },
     { key: "badgeTemplateId", header: "Badge Template ID" },
     { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "state", header: "Lifecycle State" },
     { key: "generatedAt", header: "Generated At" },
     { key: "issuedCount", header: "Issued Count" },
     { key: "publicBadgeViewCount", header: "Public Badge View Count" },
@@ -442,6 +442,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     { key: "to", header: "Issued To" },
     { key: "badgeTemplateId", header: "Badge Template ID" },
     { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "state", header: "Lifecycle State" },
     { key: "bucket", header: "Bucket" },
     { key: "bucketStart", header: "Bucket Start" },
     { key: "issuedCount", header: "Issued Count" },
@@ -458,6 +459,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     { key: "to", header: "Issued To" },
     { key: "badgeTemplateId", header: "Badge Template ID" },
     { key: "orgUnitId", header: "Org Unit ID" },
+    { key: "state", header: "Lifecycle State" },
     { key: "groupBy", header: "Group By" },
     { key: "groupId", header: "Group ID" },
     { key: "issuedCount", header: "Issued Count" },
@@ -474,6 +476,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     { key: "tenantId", header: "Tenant ID" },
     { key: "from", header: "Issued From" },
     { key: "to", header: "Issued To" },
+    { key: "badgeTemplateId", header: "Badge Template ID" },
+    { key: "orgUnitIdFilter", header: "Org Unit Filter" },
+    { key: "state", header: "Lifecycle State" },
     { key: "focusOrgUnitId", header: "Focus Org Unit ID" },
     { key: "level", header: "Level" },
     { key: "orgUnitId", header: "Org Unit ID" },
@@ -702,6 +707,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       to: query.to,
       badgeTemplateId: query.badgeTemplateId,
       orgUnitId: query.orgUnitId,
+      state: query.state,
     });
     const { claimRate, shareRate, ...counts } = engagementCounts;
 
@@ -713,6 +719,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
         to: query.to ?? null,
         badgeTemplateId: query.badgeTemplateId ?? null,
         orgUnitId: query.orgUnitId ?? null,
+        state: query.state ?? null,
       },
       counts,
       rates: {
@@ -733,12 +740,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     let pageRangeQuery;
 
     try {
-      pageRangeQuery = parseTenantReportingOverviewQuery({
-        issuedFrom: c.req.query("issuedFrom"),
-        issuedTo: c.req.query("issuedTo"),
-        badgeTemplateId: c.req.query("badgeTemplateId"),
-        orgUnitId: c.req.query("orgUnitId"),
-      });
+      pageRangeQuery = parseTenantReportingOverviewQuery(c.req.query());
     } catch {
       return c.json(
         {
@@ -748,20 +750,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       );
     }
 
-    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
-
-    let query;
-
-    try {
-      query = parseTenantReportingTrendQuery(normalizedRange);
-    } catch {
-      return c.json(
-        {
-          error: "Invalid engagement reporting query",
-        },
-        400,
-      );
-    }
+    const query = toReportingEngagementFilters(pageRangeQuery);
 
     if (reportingAccess.reportingAccess.visibility === "scoped") {
       if (query.orgUnitId === undefined) {
@@ -797,10 +786,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     const engagementCounts = await getTenantReportingEngagementCounts(reportingAccess.db, {
       tenantId: reportingAccess.tenantId,
-      from: query.from,
-      to: query.to,
-      badgeTemplateId: query.badgeTemplateId,
-      orgUnitId: query.orgUnitId,
+      ...query,
     });
     const generatedAt = new Date().toISOString();
 
@@ -814,6 +800,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
           to: query.to ?? null,
           badgeTemplateId: query.badgeTemplateId ?? null,
           orgUnitId: query.orgUnitId ?? null,
+          state: query.state ?? null,
           generatedAt,
           issuedCount: engagementCounts.issuedCount,
           publicBadgeViewCount: engagementCounts.publicBadgeViewCount,
@@ -883,11 +870,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     const trends = await getTenantReportingTrends(reportingAccess.db, {
       tenantId: reportingAccess.tenantId,
-      from: query.from,
-      to: query.to,
-      badgeTemplateId: query.badgeTemplateId,
-      orgUnitId: query.orgUnitId,
-      bucket: query.bucket,
+      ...query,
     });
 
     return c.json({
@@ -906,12 +889,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     let pageRangeQuery;
 
     try {
-      pageRangeQuery = parseTenantReportingOverviewQuery({
-        issuedFrom: c.req.query("issuedFrom"),
-        issuedTo: c.req.query("issuedTo"),
-        badgeTemplateId: c.req.query("badgeTemplateId"),
-        orgUnitId: c.req.query("orgUnitId"),
-      });
+      pageRangeQuery = parseTenantReportingOverviewQuery(c.req.query());
     } catch {
       return c.json(
         {
@@ -921,13 +899,11 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       );
     }
 
-    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
-
     let query;
 
     try {
       query = parseTenantReportingTrendQuery({
-        ...normalizedRange,
+        ...toReportingTrendFilters(pageRangeQuery),
         bucket: c.req.query("bucket"),
       });
     } catch {
@@ -990,6 +966,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
           to: trends.filters.to,
           badgeTemplateId: trends.filters.badgeTemplateId,
           orgUnitId: trends.filters.orgUnitId,
+          state: trends.filters.state,
           bucket: trends.bucket,
           bucketStart: row.bucketStart,
           issuedCount: row.issuedCount,
@@ -1061,11 +1038,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     let comparisonRows = await listTenantReportingComparisons(reportingAccess.db, {
       tenantId: reportingAccess.tenantId,
-      from: query.from,
-      to: query.to,
-      badgeTemplateId: query.badgeTemplateId,
-      orgUnitId: query.orgUnitId,
-      groupBy: query.groupBy,
+      ...query,
     });
 
     if (
@@ -1088,6 +1061,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
         to: query.to ?? null,
         badgeTemplateId: query.badgeTemplateId ?? null,
         orgUnitId: query.orgUnitId ?? null,
+        state: query.state ?? null,
         groupBy: query.groupBy,
       },
       rows: comparisonRows.map((row) => {
@@ -1117,12 +1091,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     let pageRangeQuery;
 
     try {
-      pageRangeQuery = parseTenantReportingOverviewQuery({
-        issuedFrom: c.req.query("issuedFrom"),
-        issuedTo: c.req.query("issuedTo"),
-        badgeTemplateId: c.req.query("badgeTemplateId"),
-        orgUnitId: c.req.query("orgUnitId"),
-      });
+      pageRangeQuery = parseTenantReportingOverviewQuery(c.req.query());
     } catch {
       return c.json(
         {
@@ -1132,13 +1101,11 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       );
     }
 
-    const normalizedRange = normalizePageRangeQuery(pageRangeQuery);
-
     let query;
 
     try {
       query = parseTenantReportingComparisonQuery({
-        ...normalizedRange,
+        ...toReportingComparisonFilters(pageRangeQuery, "badgeTemplate"),
         groupBy: c.req.query("groupBy"),
       });
     } catch {
@@ -1187,11 +1154,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     let comparisonRows = await listTenantReportingComparisons(reportingAccess.db, {
       tenantId: reportingAccess.tenantId,
-      from: query.from,
-      to: query.to,
-      badgeTemplateId: query.badgeTemplateId,
-      orgUnitId: query.orgUnitId,
-      groupBy: query.groupBy,
+      ...query,
     });
 
     if (
@@ -1216,6 +1179,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
           to: query.to ?? null,
           badgeTemplateId: query.badgeTemplateId ?? null,
           orgUnitId: query.orgUnitId ?? null,
+          state: query.state ?? null,
           groupBy: row.groupBy,
           groupId: row.groupId,
           issuedCount: row.issuedCount,
@@ -1260,6 +1224,23 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     if (
       reportingAccess.reportingAccess.visibility === "scoped" &&
+      query.orgUnitId !== undefined &&
+      !isOrgUnitWithinRoots(
+        orgUnitsById,
+        query.orgUnitId,
+        reportingAccess.reportingAccess.scopedOrgUnitIds,
+      )
+    ) {
+      return c.json(
+        {
+          error: "Requested org unit is outside reporting scope",
+        },
+        403,
+      );
+    }
+
+    if (
+      reportingAccess.reportingAccess.visibility === "scoped" &&
       query.focusOrgUnitId !== undefined &&
       !isOrgUnitWithinRoots(
         orgUnitsById,
@@ -1279,6 +1260,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       tenantId: reportingAccess.tenantId,
       from: query.from,
       to: query.to,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      state: query.state,
       groupBy: "orgUnit",
     });
 
@@ -1300,6 +1284,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
         filters: {
           from: query.from ?? null,
           to: query.to ?? null,
+          badgeTemplateId: query.badgeTemplateId ?? null,
+          orgUnitId: query.orgUnitId ?? null,
+          state: query.state ?? null,
           focusOrgUnitId: query.focusOrgUnitId ?? null,
           level: query.level,
         },
@@ -1327,10 +1314,7 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
     let pageRangeQuery;
 
     try {
-      pageRangeQuery = parseTenantReportingOverviewQuery({
-        issuedFrom: c.req.query("issuedFrom"),
-        issuedTo: c.req.query("issuedTo"),
-      });
+      pageRangeQuery = parseTenantReportingOverviewQuery(c.req.query());
     } catch {
       return c.json(
         {
@@ -1344,8 +1328,11 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
 
     try {
       query = parseTenantReportingHierarchyQuery({
-        from: pageRangeQuery.issuedFrom,
-        to: pageRangeQuery.issuedTo,
+        ...toReportingHierarchyFilters({
+          ...pageRangeQuery,
+          level: c.req.query("level") as never,
+          focusOrgUnitId: c.req.query("focusOrgUnitId"),
+        }),
         focusOrgUnitId: c.req.query("focusOrgUnitId"),
         level: c.req.query("level"),
       });
@@ -1363,6 +1350,23 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       includeInactive: true,
     });
     const orgUnitsById = buildOrgUnitMap(orgUnits);
+
+    if (
+      reportingAccess.reportingAccess.visibility === "scoped" &&
+      query.orgUnitId !== undefined &&
+      !isOrgUnitWithinRoots(
+        orgUnitsById,
+        query.orgUnitId,
+        reportingAccess.reportingAccess.scopedOrgUnitIds,
+      )
+    ) {
+      return c.json(
+        {
+          error: "Requested org unit is outside reporting scope",
+        },
+        403,
+      );
+    }
 
     if (
       reportingAccess.reportingAccess.visibility === "scoped" &&
@@ -1385,6 +1389,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
       tenantId: reportingAccess.tenantId,
       from: query.from,
       to: query.to,
+      badgeTemplateId: query.badgeTemplateId,
+      orgUnitId: query.orgUnitId,
+      state: query.state,
       groupBy: "orgUnit",
     });
 
@@ -1408,6 +1415,9 @@ export const registerReportingRoutes = (input: RegisterReportingRoutesInput): vo
             tenantId: reportingAccess.tenantId,
             from: query.from ?? null,
             to: query.to ?? null,
+            badgeTemplateId: query.badgeTemplateId ?? null,
+            orgUnitIdFilter: query.orgUnitId ?? null,
+            state: query.state ?? null,
             focusOrgUnitId: query.focusOrgUnitId ?? null,
             level: query.level,
             orgUnitId: row.orgUnitId,
