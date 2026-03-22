@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { INSTITUTION_ADMIN_CSS } from "../ui/page-assets/content/institution-admin-css";
 import { renderReporting } from "./reporting-visuals";
 
 describe("renderReporting", () => {
@@ -57,6 +58,36 @@ describe("renderReporting", () => {
     expect(html).toContain("Total");
     expect(html).toContain("8");
     expect(html).toContain("aria-describedby");
+  });
+
+  it("emits stable reporting-visual hooks for the chart surface, legend, and visible values", () => {
+    const html = renderReporting({
+      kind: "comparison-bars",
+      title: "Program performance",
+      description: "Issued badges by program.",
+      series: [
+        { label: "Computer Science", value: 18 },
+        { label: "History", value: 9 },
+      ],
+    });
+
+    expect(html).toContain('class="ct-reporting-visual"');
+    expect(html).toContain('data-reporting-visual-kind="comparison-bars"');
+    expect(html).toContain('class="ct-reporting-visual__surface"');
+    expect(html).toContain('class="ct-reporting-visual__legend"');
+    expect(html).toContain('class="ct-reporting-visual__legend-value"');
+    expect(html).toContain('data-reporting-visual-index="0"');
+  });
+
+  it("defines reporting visual CSS tokens, responsive surface rules, and non-color emphasis states", () => {
+    expect(INSTITUTION_ADMIN_CSS).toContain("--ct-reporting-visual-surface");
+    expect(INSTITUTION_ADMIN_CSS).toContain("--ct-reporting-visual-accent");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__legend");
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-reporting-visual__surface");
+    expect(INSTITUTION_ADMIN_CSS).toContain("data-reporting-visual-kind");
+    expect(INSTITUTION_ADMIN_CSS).toContain("@media (max-width: 960px)");
+    expect(INSTITUTION_ADMIN_CSS).toContain("repeating-linear-gradient");
   });
 
   it("renders a deliberate fallback for empty or zero-data visuals", () => {

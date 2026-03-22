@@ -128,7 +128,7 @@ const renderLegend = (
           ? ""
           : `<span class="ct-reporting-visual__legend-detail">${escapeHtml(detail)}</span>`;
 
-      return `<li class="ct-reporting-visual__legend-item">
+      return `<li class="ct-reporting-visual__legend-item" data-reporting-visual-index="${String(index)}">
         <span class="ct-reporting-visual__swatch ct-reporting-visual__swatch--${String(index % 4)}" aria-hidden="true"></span>
         <span class="ct-reporting-visual__legend-label">${escapeHtml(point.label)}</span>
         <strong class="ct-reporting-visual__legend-value">${escapeHtml(formatValue(point.value))}</strong>
@@ -152,7 +152,9 @@ const renderComparisonGraphic = (
   const barHeight = 18;
   const gap = 14;
   const chartHeight =
-    REPORTING_VISUAL_PADDING * 2 + normalizedSeries.length * barHeight + (normalizedSeries.length - 1) * gap;
+    REPORTING_VISUAL_PADDING * 2 +
+    normalizedSeries.length * barHeight +
+    (normalizedSeries.length - 1) * gap;
   const availableWidth = REPORTING_VISUAL_WIDTH - REPORTING_VISUAL_PADDING * 2;
 
   const bars = normalizedSeries
