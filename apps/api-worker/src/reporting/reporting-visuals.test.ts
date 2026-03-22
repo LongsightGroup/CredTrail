@@ -156,6 +156,29 @@ describe("renderReporting", () => {
     expect(html).not.toContain("Computer Science leads at 50");
   });
 
+  it("renders a dedicated sparse-state wrapper when only one comparison row is visible", () => {
+    const html = renderReporting({
+      kind: "comparison-ranked" as unknown as Parameters<typeof renderReporting>[0]["kind"],
+      title: "Compare by badge template",
+      description: "Thin-data slices should stay honest about how much comparison context exists.",
+      sparseMessage:
+        "Only one visible comparison row matches this slice, so use the exact row below for detail.",
+      series: [
+        {
+          label: "Applied Analytics",
+          value: 9,
+          detail: "12 public views · 44.4% claim · 22.2% share",
+        },
+      ],
+    } as Parameters<typeof renderReporting>[0] & { sparseMessage: string });
+
+    expect(html).toContain('data-reporting-visual-state="sparse"');
+    expect(html).toContain(
+      "Only one visible comparison row matches this slice, so use the exact row below for detail.",
+    );
+    expect(html).not.toContain("Applied Analytics leads at 9");
+  });
+
   it("emits stable reporting-visual hooks for the chart surface, legend, and visible values", () => {
     const html = renderReporting({
       kind: "comparison-bars",

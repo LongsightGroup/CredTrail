@@ -268,6 +268,23 @@ const getReportingPanelMarkup = (html: string, heading: string): string => {
   return html.slice(start, end);
 };
 
+const getReportingPanelArticleMarkup = (html: string, heading: string): string => {
+  const headingMarkup = `<h2>${heading}</h2>`;
+  const headingIndex = html.indexOf(headingMarkup);
+
+  expect(headingIndex).toBeGreaterThan(-1);
+
+  const start = html.lastIndexOf("<article", headingIndex);
+
+  expect(start).toBeGreaterThan(-1);
+
+  const end = html.indexOf("</article>", headingIndex);
+
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+};
+
 const getReportingPanelVisualMarkup = (panelMarkup: string): string => {
   const tableWrapStart = panelMarkup.indexOf('<div class="ct-admin__table-wrap">');
 
@@ -1204,6 +1221,237 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
       body.indexOf("Detailed trend table"),
     );
     expect(body.indexOf("Trend lines")).toBeLessThan(body.indexOf("Export CSV"));
+  });
+
+  it("renders deliberate empty shells for trend, comparison, hierarchy, and performer panels", async () => {
+    const env = createEnv();
+    mockedGetTenantReportingOverviewDb.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      filters: {
+        issuedFrom: null,
+        issuedTo: null,
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      counts: {
+        issued: 0,
+        active: 0,
+        suspended: 0,
+        revoked: 0,
+        pendingReview: 0,
+      },
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedGetTenantReportingEngagementCountsDb.mockResolvedValueOnce({
+      issuedCount: 0,
+      publicBadgeViewCount: 0,
+      verificationViewCount: 0,
+      shareClickCount: 0,
+      learnerClaimCount: 0,
+      walletAcceptCount: 0,
+      claimRate: 0,
+      shareRate: 0,
+    });
+    mockedGetTenantReportingTrendsDb.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      filters: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      bucket: "day",
+      series: [],
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedGetTenantReportingComparisonsDb.mockResolvedValueOnce([]);
+    mockedGetTenantReportingComparisonsDb.mockResolvedValueOnce([]);
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+    const trendPanel = getReportingPanelArticleMarkup(body, "Trend lines");
+    const templatePanel = getReportingPanelArticleMarkup(body, "Compare by badge template");
+    const orgUnitPanel = getReportingPanelArticleMarkup(body, "Compare by org unit");
+    const hierarchyPanel = getReportingPanelArticleMarkup(body, "Hierarchy drilldown");
+    const performerPanel = getReportingPanelArticleMarkup(body, "Performer panels");
+
+    expect(response.status).toBe(200);
+    expect(trendPanel).toContain('data-reporting-state="empty"');
+    expect(trendPanel).toContain("This reporting slice does not have enough activity to chart yet.");
+    expect(templatePanel).toContain('data-reporting-state="empty"');
+    expect(templatePanel).toContain("No badge-template rows are visible for this slice yet.");
+    expect(orgUnitPanel).toContain('data-reporting-state="empty"');
+    expect(orgUnitPanel).toContain("No org-unit rows are visible for this slice yet.");
+    expect(hierarchyPanel).toContain('data-reporting-state="empty"');
+    expect(hierarchyPanel).toContain(
+      "Hierarchy drilldowns appear here once visible org-unit rows exist for this slice.",
+    );
+    expect(performerPanel).toContain('data-reporting-state="empty"');
+    expect(performerPanel).toContain(
+      "Performer rankings appear once this slice includes comparable hierarchy rows.",
+    );
+  });
+
+  it("marks thin-data reporting slices as sparse and drops momentum or ranking language", async () => {
+    const env = createEnv();
+    mockedGetTenantReportingOverviewDb.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      filters: {
+        issuedFrom: null,
+        issuedTo: null,
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      counts: {
+        issued: 5,
+        active: 5,
+        suspended: 0,
+        revoked: 0,
+        pendingReview: 0,
+      },
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedGetTenantReportingEngagementCountsDb.mockResolvedValueOnce({
+      issuedCount: 5,
+      publicBadgeViewCount: 14,
+      verificationViewCount: 5,
+      shareClickCount: 2,
+      learnerClaimCount: 2,
+      walletAcceptCount: 1,
+      claimRate: 40,
+      shareRate: 20,
+    });
+    mockedGetTenantReportingTrendsDb.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      filters: {
+        from: "2026-03-01",
+        to: "2026-03-31",
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      bucket: "day",
+      series: [
+        {
+          bucketStart: "2026-03-01",
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+        },
+      ],
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedGetTenantReportingComparisonsDb.mockImplementationOnce(async () => {
+      return [
+        {
+          groupBy: "badgeTemplate",
+          groupId: "badge_template_001",
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+          claimRate: 40,
+          shareRate: 20,
+        },
+      ];
+    });
+    mockedGetTenantReportingComparisonsDb.mockImplementationOnce(async () => {
+      return [
+        {
+          groupBy: "orgUnit",
+          groupId: "tenant_123:org:program-cs",
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+          claimRate: 40,
+          shareRate: 20,
+        },
+      ];
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+    const trendPanel = getReportingPanelArticleMarkup(body, "Trend lines");
+    const templatePanel = getReportingPanelArticleMarkup(body, "Compare by badge template");
+    const orgUnitPanel = getReportingPanelArticleMarkup(body, "Compare by org unit");
+    const hierarchyPanel = getReportingPanelArticleMarkup(body, "Hierarchy drilldown");
+    const performerPanel = getReportingPanelArticleMarkup(body, "Performer panels");
+
+    expect(response.status).toBe(200);
+    expect(trendPanel).toContain('data-reporting-state="sparse"');
+    expect(trendPanel).toContain(
+      "Only one visible time bucket matches this reporting slice, so treat it as a current snapshot rather than a momentum read.",
+    );
+    expect(trendPanel).not.toContain("Read issued badge momentum first");
+    expect(templatePanel).toContain('data-reporting-state="sparse"');
+    expect(templatePanel).toContain(
+      "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail.",
+    );
+    expect(templatePanel).not.toContain("Start with the ranked visual");
+    expect(orgUnitPanel).toContain('data-reporting-state="sparse"');
+    expect(orgUnitPanel).toContain(
+      "Only one org-unit row is visible in this slice, so use the exact row below to read the current context.",
+    );
+    expect(orgUnitPanel).not.toContain("Start with the ranked visual");
+    expect(hierarchyPanel).toContain('data-reporting-state="sparse"');
+    expect(hierarchyPanel).toContain("This slice currently resolves to one visible reporting path.");
+    expect(performerPanel).toContain('data-reporting-state="sparse"');
+    expect(performerPanel).toContain(
+      "Rankings stay paused until this slice has more than one comparable hierarchy row.",
+    );
+  });
+
+  it("renders an SSR-honest pending hook on the reporting filter form", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+    const overviewPanel = getReportingPanelArticleMarkup(body, "Reporting Overview");
+
+    expect(response.status).toBe(200);
+    expect(overviewPanel).toContain('id="reporting-filters-form"');
+    expect(overviewPanel).toContain('data-reporting-submit-state="idle"');
+    expect(overviewPanel).toContain('id="reporting-filters-status"');
+    expect(overviewPanel).toContain('data-reporting-submit-status');
+    expect(overviewPanel).toContain(
+      "Applying filters refreshes this page with the selected reporting slice.",
+    );
+    expect(overviewPanel).not.toContain("Loading dashboard");
   });
 
   it("renders reporting chart markup directly in the server response", async () => {
