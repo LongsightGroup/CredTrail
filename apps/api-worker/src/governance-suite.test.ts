@@ -963,6 +963,13 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain('aria-label="Reporting hierarchy breadcrumb"');
     expect(html).toContain("ct-admin__reporting-focus-summary");
     expect(html).toContain("Reporting workspace");
+    expect(html).toContain("data-reporting-root-link");
+    expect(html).toContain(
+      'data-reporting-focus-target="reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(html).toContain(
+      'data-reporting-focus-root="reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
     expect(html).toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
     );

@@ -1572,6 +1572,13 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Next child level");
     expect(body).toContain("Reporting workspace");
     expect(body).toContain("Keeps this drilldown inside reporting");
+    expect(body).toContain("data-reporting-root-link");
+    expect(body).toContain(
+      'data-reporting-focus-target="reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(body).toContain(
+      'data-reporting-focus-root="reporting-hierarchy-focus-tenant_123%3Aorg%3Ainstitution"',
+    );
     expect(body).not.toContain("Institution / College of Engineering");
     expect(body).toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
