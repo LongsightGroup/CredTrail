@@ -534,6 +534,65 @@ export const INSTITUTION_ADMIN_CSS = `
   flex-wrap: wrap;
   gap: 0.55rem;
 }
+.ct-admin__reporting-summary-band {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid rgba(15, 95, 166, 0.14);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(238, 246, 255, 0.94)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__reporting-summary-layout {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.95fr);
+}
+.ct-admin__reporting-summary-copy {
+  margin: 0;
+  max-width: 48rem;
+  font-size: 0.96rem;
+  color: var(--ct-theme-text-body);
+}
+.ct-admin__reporting-summary-metrics {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.ct-admin__metric-card--reporting-summary {
+  min-height: 100%;
+  border-color: rgba(15, 95, 166, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: none;
+}
+.ct-admin__reporting-summary-context {
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(15, 95, 166, 0.12);
+}
+.ct-admin__reporting-summary-context .ct-cluster {
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+.ct-admin__reporting-supporting-grid {
+  display: grid;
+  gap: 0.95rem;
+  align-items: start;
+  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.78fr);
+}
+.ct-admin__reporting-supporting-grid > * {
+  min-width: 0;
+}
+.ct-admin__reporting-supporting-rail {
+  display: grid;
+  gap: 0.95rem;
+}
+.ct-admin__reporting-supporting-rail .ct-admin__panel {
+  position: sticky;
+  top: 4.75rem;
+}
 .ct-admin__reporting-visual-grid {
   display: grid;
   gap: 0.9rem;
@@ -625,13 +684,24 @@ export const INSTITUTION_ADMIN_CSS = `
   padding-block: 0.55rem;
 }
 @media (max-width: 1100px) {
+  .ct-admin__reporting-summary-layout,
+  .ct-admin__reporting-supporting-grid,
   .ct-admin__reporting-panel-media,
   .ct-admin__reporting-visual-grid,
   .ct-admin__reporting-performer-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .ct-admin__reporting-supporting-rail .ct-admin__panel {
+    position: static;
+  }
 }
 @media (max-width: 768px) {
+  .ct-admin__reporting-summary-band {
+    padding: 1rem;
+  }
+  .ct-admin__reporting-summary-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .ct-admin__reporting-focus-section {
     padding: 0.85rem;
   }

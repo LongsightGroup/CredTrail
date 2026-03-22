@@ -3102,8 +3102,12 @@ const renderInstitutionAdminPage = (
                   )}
                   <section class="ct-admin ct-stack">
                     ${reportingExecutiveSummaryMarkup}
-                    ${reportingOverviewPanelMarkup}
-                    ${reportingExportsPanelMarkup}
+                    <section class="ct-admin__reporting-supporting-grid">
+                      ${reportingOverviewPanelMarkup}
+                      <aside class="ct-admin__reporting-supporting-rail">
+                        ${reportingExportsPanelMarkup}
+                      </aside>
+                    </section>
                     ${reportingEngagementPanelMarkup}
                     ${reportingTrendPanelMarkup}
                     ${reportingTemplateComparisonPanelMarkup}
