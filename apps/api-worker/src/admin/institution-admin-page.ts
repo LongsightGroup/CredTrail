@@ -1345,15 +1345,16 @@ const renderInstitutionAdminPage = (
   const reportingTrendActivityRowCount =
     reportingTrends?.series.filter((row) => hasReportingActivity(row)).length ?? 0;
   const reportingTrendState = classifyReportingPanelState(reportingTrendActivityRowCount);
+  const reportingTrendSeries = reportingTrends?.series ?? [];
   const reportingTrendVisualMarkup =
-    reportingTrends === null || reportingTrends.series.length === 0
+    reportingTrendSeries.length === 0
       ? ""
       : renderReportingVisualModule({
           kind: "trend-series",
           title: "Issued over time",
           description:
             "Shared SSR trend visual uses issued counts from the current reporting filter slice. The full table remains below for supported engagement detail.",
-          series: reportingTrends.series.map((row) => ({
+          series: reportingTrendSeries.map((row) => ({
             label: formatReportingDateLabel(row.bucketStart),
             value: row.issuedCount,
             detail: `${formatReportingCount(row.publicBadgeViewCount)} public views · ${formatReportingCount(row.shareClickCount)} shares`,
@@ -1361,9 +1362,9 @@ const renderInstitutionAdminPage = (
           note: "The table below preserves every visible count so the chart remains a summary, not a second interpretation layer.",
         });
   const reportingTrendRowsMarkup =
-    reportingTrends === null || reportingTrends.series.length === 0
+    reportingTrendSeries.length === 0
       ? '<tr><td colspan="7" class="ct-admin__empty">No trend data available for the selected filters.</td></tr>'
-      : reportingTrends.series
+      : reportingTrendSeries
           .map((row) => {
             return `<tr>
               <td><strong>${escapeHtml(formatReportingDateLabel(row.bucketStart))}</strong></td>
@@ -1395,16 +1396,16 @@ const renderInstitutionAdminPage = (
               "Use the exact table below to review the current counts behind this slice before drawing a broader trend story.",
           })
       : (() => {
-          const startRow = reportingTrends.series[0];
-          const latestRow = reportingTrends.series[reportingTrends.series.length - 1] ?? startRow;
-          const peakRow =
-            reportingTrends.series.reduce((highestRow, row) => {
-              return row.issuedCount > highestRow.issuedCount ? row : highestRow;
-            }, startRow) ?? latestRow;
+          const startRow = reportingTrendSeries[0];
 
-          if (startRow === undefined || latestRow === undefined || peakRow === undefined) {
+          if (startRow === undefined) {
             return '<div class="ct-admin__empty">No trend data available for the selected filters.</div>';
           }
+
+          const latestRow = reportingTrendSeries[reportingTrendSeries.length - 1] ?? startRow;
+          const peakRow = reportingTrendSeries.reduce((highestRow, row) => {
+            return row.issuedCount > highestRow.issuedCount ? row : highestRow;
+          }, startRow);
 
           return `<div class="ct-admin__reporting-trend-hero">
             <div class="ct-admin__reporting-trend-intro ct-stack">
@@ -1479,10 +1480,12 @@ const renderInstitutionAdminPage = (
           description:
             "Volume-first comparison ranks badge templates by issued count while keeping public views and claim/share rates visible as adjacent detail.",
           series: buildReportingComparisonSeries(reportingTemplateComparisons),
-          sparseMessage:
-            reportingTemplateComparisonState === "sparse"
-              ? "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail."
-              : undefined,
+          ...(reportingTemplateComparisonState === "sparse"
+            ? {
+                sparseMessage:
+                  "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail.",
+              }
+            : {}),
           note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingOrgUnitComparisonRowsMarkup = renderReportingComparisonRows(
@@ -1507,10 +1510,12 @@ const renderInstitutionAdminPage = (
           description:
             "Volume-first comparison ranks org units by issued count while keeping public views and claim/share rates visible as adjacent detail.",
           series: buildReportingComparisonSeries(reportingOrgUnitComparisons),
-          sparseMessage:
-            reportingOrgUnitComparisonState === "sparse"
-              ? "Only one org-unit row is visible in this slice, so use the exact row below to read the current context."
-              : undefined,
+          ...(reportingOrgUnitComparisonState === "sparse"
+            ? {
+                sparseMessage:
+                  "Only one org-unit row is visible in this slice, so use the exact row below to read the current context.",
+              }
+            : {}),
           note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingHierarchyRowsByLevel = new Map(
