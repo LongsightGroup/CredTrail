@@ -1447,6 +1447,7 @@ const renderInstitutionAdminPage = (
 
     const childLevel = getNextReportingHierarchyLevel(focusOrgUnit.unitType);
     const sectionId = buildReportingHierarchyFocusId(focusOrgUnit.id);
+    const rootSectionId = buildReportingHierarchyFocusId((breadcrumb[0] ?? focusOrgUnit).id);
     const currentLevelLabel = formatReportingHierarchyLevelLabel(focusOrgUnit.unitType);
     const childLevelLabel =
       childLevel === null ? "Deepest reporting level" : formatReportingHierarchyLevelLabel(childLevel);
@@ -1471,6 +1472,8 @@ const renderInstitutionAdminPage = (
                   )}</span>`
                 : `<a class="ct-admin__reporting-breadcrumb-link" href="${escapeHtml(
                     buildReportingHierarchyDrillHref(orgUnit.id),
+                  )}" data-reporting-focus-link data-reporting-focus-target="${escapeHtml(
+                    buildReportingHierarchyFocusId(orgUnit.id),
                   )}">${escapeHtml(orgUnit.displayName)}</a>`
             }</li>`;
           })
@@ -1564,7 +1567,9 @@ const renderInstitutionAdminPage = (
       })
       .join("\n");
 
-    return `<section id="${escapeHtml(sectionId)}" class="ct-admin__reporting-focus-section ct-stack" data-reporting-focus-section tabindex="-1">
+    return `<section id="${escapeHtml(sectionId)}" class="ct-admin__reporting-focus-section ct-stack" data-reporting-focus-root="${escapeHtml(
+      rootSectionId,
+    )}" data-reporting-focus-section tabindex="-1">
       <div class="ct-cluster">
         <h3>${escapeHtml(focusOrgUnit.displayName)}</h3>
         <div class="ct-cluster">
@@ -1610,6 +1615,8 @@ const renderInstitutionAdminPage = (
               .map((rootOrgUnit) => {
                 return `<a class="ct-admin__reporting-root-link" href="${escapeHtml(
                   buildReportingHierarchyDrillHref(rootOrgUnit.id),
+                )}" data-reporting-focus-link data-reporting-root-link data-reporting-focus-target="${escapeHtml(
+                  buildReportingHierarchyFocusId(rootOrgUnit.id),
                 )}">${escapeHtml(rootOrgUnit.displayName)}</a>`;
               })
               .join("\n")}

@@ -825,6 +825,8 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-root-link {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   min-height: 2.25rem;
   padding: 0.35rem 0.85rem;
   border-radius: var(--ct-radius-pill);
@@ -833,12 +835,36 @@ export const INSTITUTION_ADMIN_CSS = `
   font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
+  color: var(--ct-theme-text-title);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
+}
+.ct-admin__reporting-root-link:hover {
+  border-color: rgba(15, 95, 166, 0.24);
+  background: rgba(238, 246, 255, 0.82);
+}
+.ct-admin__reporting-root-link:focus-visible,
+.ct-admin__reporting-breadcrumb-link:focus-visible {
+  outline: 2px solid rgba(15, 95, 166, 0.36);
+  outline-offset: 2px;
+}
+.ct-admin__reporting-root-link[data-reporting-focus-active='true'],
+.ct-admin__reporting-root-link[aria-current='location'] {
+  border-color: var(--ct-theme-border-info);
+  background: rgba(238, 246, 255, 0.92);
+  box-shadow: 0 0 0 3px rgba(15, 95, 166, 0.1);
 }
 .ct-admin__reporting-focus-section {
+  display: grid;
+  gap: 0.85rem;
   padding: 1rem;
   border-radius: var(--ct-radius-md);
   border: 1px solid var(--ct-border-soft);
   background: rgba(255, 255, 255, 0.72);
+  scroll-margin-top: 1rem;
 }
 .ct-admin__reporting-focus-section:target,
 .ct-admin__reporting-focus-section[data-reporting-focus-active='true'] {
@@ -846,10 +872,98 @@ export const INSTITUTION_ADMIN_CSS = `
   box-shadow: 0 0 0 3px rgba(15, 95, 166, 0.12);
   background: rgba(238, 246, 255, 0.72);
 }
-.ct-admin__reporting-breadcrumb {
+.ct-admin__reporting-breadcrumb-nav {
+  padding-block: 0.1rem 0.15rem;
+}
+.ct-admin__reporting-breadcrumb-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ct-admin__reporting-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.ct-admin__reporting-breadcrumb-item:not(:last-child)::after {
+  content: "/";
+  color: var(--ct-theme-text-muted);
+}
+.ct-admin__reporting-breadcrumb-link,
+.ct-admin__reporting-breadcrumb-current {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ct-theme-text-title);
+}
+.ct-admin__reporting-breadcrumb-link {
+  text-decoration: none;
+}
+.ct-admin__reporting-breadcrumb-link:hover {
+  color: var(--ct-theme-link);
+}
+.ct-admin__reporting-breadcrumb-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: var(--ct-radius-pill);
+  background: rgba(15, 95, 166, 0.08);
+}
+.ct-admin__reporting-focus-summary {
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid rgba(15, 95, 166, 0.14);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(244, 248, 252, 0.92)),
+    rgba(255, 255, 255, 0.92);
+}
+.ct-admin__reporting-focus-summary-title {
+  margin: 0;
+  font-family: var(--ct-font-display);
+  font-size: 1.08rem;
+  line-height: 1.2;
+  color: var(--ct-theme-text-title);
+}
+.ct-admin__reporting-focus-summary-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  margin: 0;
+}
+.ct-admin__reporting-focus-summary-item {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--ct-radius-md);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(15, 95, 166, 0.1);
+}
+.ct-admin__reporting-focus-summary-item dt {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ct-theme-text-muted);
+}
+.ct-admin__reporting-focus-summary-item dd {
+  margin: 0;
+  color: var(--ct-theme-text-title);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.ct-admin__reporting-focus-section[data-reporting-focus-active='true'] .ct-admin__reporting-focus-summary,
+.ct-admin__reporting-focus-section:target .ct-admin__reporting-focus-summary {
+  border-color: rgba(15, 95, 166, 0.24);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(234, 244, 255, 0.96)),
+    rgba(255, 255, 255, 0.94);
 }
 .ct-admin__reporting-performer-grid {
   display: grid;
@@ -886,8 +1000,20 @@ export const INSTITUTION_ADMIN_CSS = `
   .ct-admin__reporting-summary-metrics {
     grid-template-columns: minmax(0, 1fr);
   }
+  .ct-admin__reporting-root-links {
+    gap: 0.45rem;
+  }
+  .ct-admin__reporting-root-link,
+  .ct-admin__reporting-breadcrumb-current {
+    width: 100%;
+    justify-content: flex-start;
+  }
   .ct-admin__reporting-focus-section {
     padding: 0.85rem;
+  }
+  .ct-admin__reporting-breadcrumb-list,
+  .ct-admin__reporting-focus-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
   .ct-admin__reporting-visual-note {
     padding-inline-start: 0.65rem;

@@ -4925,8 +4925,14 @@ export const INSTITUTION_ADMIN_JS = `
   const reportingFocusSections = Array.from(
     document.querySelectorAll('[data-reporting-focus-section]'),
   ).filter((candidate) => candidate instanceof HTMLElement);
+  const reportingFocusLinks = Array.from(
+    document.querySelectorAll('[data-reporting-focus-link]'),
+  ).filter((candidate) => candidate instanceof HTMLElement);
+  const reportingFocusSectionsById = new Map(reportingFocusSections.map((section) => [section.id, section]));
   const syncReportingFocusTarget = () => {
     const targetId = window.location.hash.length > 1 ? window.location.hash.slice(1) : '';
+    const targetSection = targetId.length > 0 ? reportingFocusSectionsById.get(targetId) : undefined;
+    const activeRootTargetId = targetSection?.dataset.reportingFocusRoot ?? '';
 
     for (const section of reportingFocusSections) {
       const isActive = targetId.length > 0 && section.id === targetId;
@@ -4936,9 +4942,25 @@ export const INSTITUTION_ADMIN_JS = `
         section.focus({ preventScroll: true });
       }
     }
+
+    for (const link of reportingFocusLinks) {
+      const focusTarget = link.dataset.reportingFocusTarget ?? '';
+      const isRootLink = link.hasAttribute('data-reporting-root-link');
+      const isActive =
+        (targetId.length > 0 && focusTarget === targetId) ||
+        (isRootLink && activeRootTargetId.length > 0 && focusTarget === activeRootTargetId);
+
+      link.dataset.reportingFocusActive = isActive ? 'true' : 'false';
+
+      if (isActive) {
+        link.setAttribute('aria-current', isRootLink ? 'location' : 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
+    }
   };
 
-  if (reportingFocusSections.length > 0) {
+  if (reportingFocusSections.length > 0 || reportingFocusLinks.length > 0) {
     syncReportingFocusTarget();
     window.addEventListener('hashchange', syncReportingFocusTarget);
   }
