@@ -250,3 +250,76 @@ describe("resolveTenantReportingAccess", () => {
     });
   });
 });
+
+describe("resolveTenantExecutiveAccess", () => {
+  const resolveTenantExecutiveAccess = (
+    tenantAccessModule as {
+      resolveTenantExecutiveAccess?: (input: {
+        db: SqlDatabase;
+        tenantId: string;
+        userId: string;
+        membershipRole: "owner" | "admin" | "issuer" | "viewer";
+      }) => Promise<unknown>;
+    }
+  ).resolveTenantExecutiveAccess;
+
+  it("keeps owner and admin executive visibility tenant-wide", async () => {
+    expect(resolveTenantExecutiveAccess).toBeTypeOf("function");
+
+    await expect(
+      resolveTenantExecutiveAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "owner",
+      }),
+    ).resolves.toEqual({
+      tenantId: "tenant_requested",
+      membershipRole: "owner",
+      visibility: "tenant",
+      scopedOrgUnitIds: [],
+    });
+  });
+
+  it("resolves scoped executive access for narrower audiences from existing org scopes", async () => {
+    expect(resolveTenantExecutiveAccess).toBeTypeOf("function");
+    mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([
+      scopeRecord({
+        orgUnitId: "org_college_science",
+        role: "viewer",
+      }),
+      scopeRecord({
+        orgUnitId: "org_department_biology",
+        role: "issuer",
+      }),
+    ]);
+
+    await expect(
+      resolveTenantExecutiveAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "viewer",
+      }),
+    ).resolves.toEqual({
+      tenantId: "tenant_requested",
+      membershipRole: "viewer",
+      visibility: "scoped",
+      scopedOrgUnitIds: ["org_college_science", "org_department_biology"],
+    });
+  });
+
+  it("fails closed for viewers without executive scopes", async () => {
+    expect(resolveTenantExecutiveAccess).toBeTypeOf("function");
+    mockedListTenantMembershipOrgUnitScopes.mockResolvedValue([]);
+
+    await expect(
+      resolveTenantExecutiveAccess?.({
+        db: fakeDb,
+        tenantId: "tenant_requested",
+        userId: "usr_123",
+        membershipRole: "viewer",
+      }),
+    ).resolves.toBeNull();
+  });
+});
