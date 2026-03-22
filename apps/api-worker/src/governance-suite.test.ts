@@ -960,6 +960,13 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain("Computer Science");
     expect(html).toContain("Mathematics");
     expect(html).toContain("Computer Science Program");
+    expect(html).toContain('aria-label="Reporting hierarchy breadcrumb"');
+    expect(html).toContain('class="ct-admin__reporting-focus-summary"');
+    expect(html).toContain("Reporting workspace");
+    expect(html).toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(html).toContain('aria-current="page">Computer Science</span>');
     expect(html).toContain("Performer panels");
     expect(html).toContain("Highest issuance volume");
     expect(html).toContain("Highest claim rate");
@@ -992,6 +999,7 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).not.toContain("College of Arts");
     expect(html).not.toContain("History");
     expect(html).not.toContain("6 public views · 33.3% claim · 16.7% share");
+    expect(html).not.toContain('aria-current="page">History</span>');
     expect(html).not.toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Adepartment-history"',
     );

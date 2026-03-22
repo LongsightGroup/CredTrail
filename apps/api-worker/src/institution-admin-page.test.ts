@@ -1559,7 +1559,20 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Computer Science");
     expect(body).toContain("Computer Science Program");
     expect(body).toContain("Breadcrumb");
-    expect(body).toContain("Institution / College of Engineering");
+    expect(body).toContain('aria-label="Reporting hierarchy breadcrumb"');
+    expect(body).toContain('class="ct-admin__reporting-breadcrumb-list"');
+    expect(body).toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Ainstitution"',
+    );
+    expect(body).toContain('aria-current="page">College of Engineering</span>');
+    expect(body).toContain('aria-current="page">Computer Science</span>');
+    expect(body).toContain('class="ct-admin__reporting-focus-summary"');
+    expect(body).toContain("Current focus");
+    expect(body).toContain("Current hierarchy level");
+    expect(body).toContain("Next child level");
+    expect(body).toContain("Reporting workspace");
+    expect(body).toContain("Keeps this drilldown inside reporting");
+    expect(body).not.toContain("Institution / College of Engineering");
     expect(body).toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
     );
