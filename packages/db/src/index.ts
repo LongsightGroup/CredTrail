@@ -1696,6 +1696,45 @@ export interface TenantReportingHierarchyGroupRecord {
   shareRate: number;
 }
 
+export interface TenantExecutiveRollupQuery {
+  from?: string | undefined;
+  to?: string | undefined;
+  badgeTemplateId?: string | undefined;
+  orgUnitId?: string | undefined;
+  state?: TenantReportingLifecycleFilter | undefined;
+  focusOrgUnitId: string;
+  comparisonLevel: OrgUnitType;
+}
+
+export interface TenantExecutiveRollupRecord {
+  focusOrgUnitId: string;
+  focusDisplayName: string;
+  focusParentOrgUnitId: string | null;
+  focusUnitType: OrgUnitType;
+  comparisonLevel: OrgUnitType;
+  focusLineageOrgUnitIds: string[];
+  filters: {
+    from: string | null;
+    to: string | null;
+    badgeTemplateId: string | null;
+    orgUnitId: string | null;
+    state: TenantReportingLifecycleFilter | null;
+  };
+  rows: TenantReportingHierarchyGroupRecord[];
+}
+
+export interface GetTenantExecutiveRollupInput extends TenantReportingEngagementFilters {
+  tenantId: string;
+  focusOrgUnitId: string;
+  comparisonLevel: OrgUnitType;
+  scopedRootOrgUnitIds?: readonly string[] | undefined;
+}
+
+export interface GetTenantExecutiveRollupResult extends TenantExecutiveRollupRecord {
+  tenantId: string;
+  generatedAt: string;
+}
+
 export interface GetTenantReportingEngagementCountsInput extends TenantReportingEngagementFilters {
   tenantId: string;
 }
@@ -5010,6 +5049,53 @@ export const summarizeTenantReportingHierarchyRows = (input: {
 
       return left.orgUnitId.localeCompare(right.orgUnitId);
     });
+};
+
+export const summarizeTenantExecutiveRollup = (input: {
+  rows: readonly TenantReportingHierarchySourceRow[];
+  orgUnits: readonly TenantReportingHierarchyOrgUnitRecord[];
+  query: TenantExecutiveRollupQuery;
+  scopedRootOrgUnitIds?: readonly string[] | undefined;
+}): TenantExecutiveRollupRecord => {
+  const orgUnitsById = new Map(
+    input.orgUnits.map((orgUnit) => {
+      return [orgUnit.id, orgUnit] as const;
+    }),
+  );
+  const focusOrgUnit = getReportingHierarchyOrgUnitOrThrow(orgUnitsById, input.query.focusOrgUnitId);
+  const focusLineageOrgUnitIds = listReportingHierarchyLineage(orgUnitsById, input.query.focusOrgUnitId)
+    .map((orgUnit) => orgUnit.id)
+    .reverse();
+
+  return {
+    focusOrgUnitId: focusOrgUnit.id,
+    focusDisplayName: focusOrgUnit.displayName,
+    focusParentOrgUnitId: focusOrgUnit.parentOrgUnitId,
+    focusUnitType: focusOrgUnit.unitType,
+    comparisonLevel: input.query.comparisonLevel,
+    focusLineageOrgUnitIds,
+    filters: {
+      from: input.query.from ?? null,
+      to: input.query.to ?? null,
+      badgeTemplateId: input.query.badgeTemplateId ?? null,
+      orgUnitId: input.query.orgUnitId ?? null,
+      state: input.query.state ?? null,
+    },
+    rows: summarizeTenantReportingHierarchyRows({
+      rows: input.rows,
+      orgUnits: input.orgUnits,
+      query: {
+        from: input.query.from,
+        to: input.query.to,
+        badgeTemplateId: input.query.badgeTemplateId,
+        orgUnitId: input.query.orgUnitId,
+        state: input.query.state,
+        focusOrgUnitId: input.query.focusOrgUnitId,
+        level: input.query.comparisonLevel,
+      },
+      scopedRootOrgUnitIds: input.scopedRootOrgUnitIds,
+    }),
+  };
 };
 
 export const normalizeEmail = (email: string): string => {
@@ -14742,6 +14828,52 @@ export const listTenantReportingComparisons = async (
 ): Promise<TenantReportingComparisonRowRecord[]> => {
   const rows = await listTenantReportingEngagementRows(db, input);
   return summarizeTenantReportingComparisonRows(rows, input);
+};
+
+export const getTenantExecutiveRollup = async (
+  db: SqlDatabase,
+  input: GetTenantExecutiveRollupInput,
+): Promise<GetTenantExecutiveRollupResult> => {
+  const [rows, orgUnits] = await Promise.all([
+    listTenantReportingEngagementRows(db, {
+      tenantId: input.tenantId,
+      from: input.from,
+      to: input.to,
+      badgeTemplateId: input.badgeTemplateId,
+      orgUnitId: input.orgUnitId,
+      state: input.state,
+    }),
+    listTenantOrgUnits(db, {
+      tenantId: input.tenantId,
+      includeInactive: true,
+    }),
+  ]);
+
+  return {
+    tenantId: input.tenantId,
+    ...summarizeTenantExecutiveRollup({
+      rows,
+      orgUnits: orgUnits.map((orgUnit) => {
+        return {
+          id: orgUnit.id,
+          unitType: orgUnit.unitType,
+          displayName: orgUnit.displayName,
+          parentOrgUnitId: orgUnit.parentOrgUnitId,
+        };
+      }),
+      query: {
+        from: input.from,
+        to: input.to,
+        badgeTemplateId: input.badgeTemplateId,
+        orgUnitId: input.orgUnitId,
+        state: input.state,
+        focusOrgUnitId: input.focusOrgUnitId,
+        comparisonLevel: input.comparisonLevel,
+      },
+      scopedRootOrgUnitIds: input.scopedRootOrgUnitIds,
+    }),
+    generatedAt: new Date().toISOString(),
+  };
 };
 
 export const getTenantReportingOverview = async (
