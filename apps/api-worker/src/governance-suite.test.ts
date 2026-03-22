@@ -966,11 +966,16 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
     expect(html).toContain('class="ct-reporting-visual"');
     expect(html).toContain('data-reporting-visual-kind="comparison-bars"');
-    expect(html).toContain('data-reporting-visual-kind="stacked-summary"');
+    expect(html.match(/data-reporting-visual-kind="comparison-ranked"/g)).toHaveLength(2);
+    expect(html).toContain('class="ct-reporting-visual__comparison-ranked-list"');
     expect(html).toContain('class="ct-reporting-visual__legend"');
     expect(html).toContain('class="ct-admin__reporting-panel-media"');
     expect(html).toContain("Current badge-state mix");
     expect(html).toContain("TypeScript Foundations");
+    expect(html).toContain("14 public views · 40.0% claim · 20.0% share");
+    expect(html.match(/The table below keeps the full row set with exact counts and rate definitions\./g)).toHaveLength(2);
+    expect(html).toContain('data-reporting-bar-group="template-comparisons"');
+    expect(html).toContain('data-reporting-bar-group="org-comparisons"');
     expect(html).toContain(
       'href="/v1/tenants/tenant_123/reporting/overview/export.csv?orgUnitId=tenant_123%3Aorg%3Aprogram-cs"',
     );
@@ -986,6 +991,7 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).not.toContain("Chemistry Lab");
     expect(html).not.toContain("College of Arts");
     expect(html).not.toContain("History");
+    expect(html).not.toContain("6 public views · 33.3% claim · 16.7% share");
     expect(html).not.toContain(
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Adepartment-history"',
     );
