@@ -965,6 +965,7 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain('data-reporting-summary-metric="claim-rate"');
     expect(body).toContain('data-reporting-summary-metric="share-rate"');
     expect(body).toContain('data-reporting-summary-metric="public-badge-views"');
+    expect(body).toContain("First read");
     expect(body).toContain("Reporting Overview");
     expect(body).toContain("Engagement Counts");
     expect(body).toContain("Trend lines");
@@ -979,6 +980,8 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("14");
     expect(body.indexOf("Executive Summary")).toBeLessThan(body.indexOf("Reporting Overview"));
     expect(body.indexOf("Executive Summary")).toBeLessThan(body.indexOf("Engagement Counts"));
+    expect(body.indexOf("Trend lines")).toBeLessThan(body.indexOf("Export CSV"));
+    expect(body).not.toContain("Phase 11 Scope");
     expect(body).not.toContain("Manual Issue Badge");
     expect(body).not.toContain('id="issued-badges-filter-form"');
     expect(mockedGetTenantReportingOverviewDb).toHaveBeenCalledWith(fakeDb, {
@@ -1179,6 +1182,7 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body.indexOf('class="ct-admin__reporting-trend-hero"')).toBeLessThan(
       body.indexOf("Detailed trend table"),
     );
+    expect(body.indexOf("Trend lines")).toBeLessThan(body.indexOf("Export CSV"));
   });
 
   it("renders reporting chart markup directly in the server response", async () => {
