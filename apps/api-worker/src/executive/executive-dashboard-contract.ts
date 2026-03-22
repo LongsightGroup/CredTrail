@@ -38,6 +38,7 @@ export interface ExecutiveDashboardDefaults {
   audience: ExecutiveDashboardAudience;
   window: ExecutiveDashboardWindow | "custom";
   focusOrgUnitId: string;
+  focusUnitType: OrgUnitType;
   comparisonLevel: OrgUnitType;
   comparisonGroupBy: "orgUnit";
   reportingFilters: ReportingPageFilters;
@@ -306,6 +307,11 @@ export const inferExecutiveDashboardDefaults = (
     visibleOrgUnitIds,
     orgUnitsById,
   });
+  const focusUnitType = orgUnitsById.get(focusOrgUnitId)?.unitType;
+
+  if (focusUnitType === undefined) {
+    throw new Error(`Executive focus org unit ${focusOrgUnitId} was not found`);
+  }
 
   return {
     audience: resolveAudience({
@@ -316,6 +322,7 @@ export const inferExecutiveDashboardDefaults = (
     }),
     window,
     focusOrgUnitId,
+    focusUnitType,
     comparisonLevel,
     comparisonGroupBy: "orgUnit",
     reportingFilters,

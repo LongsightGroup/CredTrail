@@ -88,9 +88,44 @@ const buildExecutiveKpis = (): ExecutiveKpiDescriptor[] => {
 
 const labelForLevel = (level: OrgUnitType) => ORG_UNIT_LABELS[level];
 
+const hasDeeperComparisonLevel = (defaults: ExecutiveDashboardDefaults): boolean => {
+  return defaults.comparisonLevel !== defaults.focusUnitType;
+};
+
+const buildFocusFallbackModules = (
+  defaults: ExecutiveDashboardDefaults,
+): ExecutiveDashboardModuleDescriptor[] => {
+  const focusLabel = labelForLevel(defaults.focusUnitType);
+
+  return [
+    {
+      id: "focus-summary",
+      kind: "focus_summary",
+      title: `Current ${focusLabel.singular} summary`,
+      description: `Keep the executive story centered on this ${focusLabel.singular} when there is no deeper visible level to compare honestly.`,
+      audience: defaults.audience,
+      focusOrgUnitId: defaults.focusOrgUnitId,
+      comparisonLevel: defaults.comparisonLevel,
+    },
+    {
+      id: "drilldown",
+      kind: "drilldown",
+      title: `Review ${focusLabel.singular} detail`,
+      description: `Carry the current executive slice into detailed review for this ${focusLabel.singular} without inventing a broader comparison story.`,
+      audience: defaults.audience,
+      focusOrgUnitId: defaults.focusOrgUnitId,
+      comparisonLevel: defaults.comparisonLevel,
+    },
+  ];
+};
+
 const buildComparisonModules = (
   defaults: ExecutiveDashboardDefaults,
 ): ExecutiveDashboardModuleDescriptor[] => {
+  if (!hasDeeperComparisonLevel(defaults)) {
+    return buildFocusFallbackModules(defaults);
+  }
+
   const levelLabel = labelForLevel(defaults.comparisonLevel);
 
   return [

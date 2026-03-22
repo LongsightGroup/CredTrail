@@ -11,6 +11,7 @@ const sampleDefaults = (
     audience: "system",
     window: "last-90-days",
     focusOrgUnitId: "tenant_123:org:institution",
+    focusUnitType: "institution",
     comparisonLevel: "college",
     comparisonGroupBy: "orgUnit",
     reportingFilters: {
@@ -54,6 +55,7 @@ describe("buildExecutiveKpiCatalog", () => {
       defaults: sampleDefaults({
         audience: "college",
         focusOrgUnitId: "tenant_123:org:college-eng",
+        focusUnitType: "college",
         comparisonLevel: "department",
         hierarchyFilters: {
           issuedFrom: "2025-12-23",
@@ -114,5 +116,33 @@ describe("buildExecutiveKpiCatalog", () => {
         ranking: "bottom",
       }),
     ]);
+  });
+
+  it("falls back to a focus summary when the current executive slice has no deeper comparison level", () => {
+    const catalog = buildExecutiveKpiCatalog({
+      defaults: sampleDefaults({
+        audience: "program",
+        focusOrgUnitId: "tenant_123:org:program-cs",
+        focusUnitType: "program",
+        comparisonLevel: "program",
+        hierarchyFilters: {
+          issuedFrom: "2025-12-23",
+          issuedTo: "2026-03-22",
+          focusOrgUnitId: "tenant_123:org:program-cs",
+          level: "program",
+        },
+      }),
+    });
+
+    expect(catalog.modules.map((module) => module.id)).toEqual(["focus-summary", "drilldown"]);
+    expect(catalog.modules[0]).toMatchObject({
+      kind: "focus_summary",
+      comparisonLevel: "program",
+    });
+    expect(
+      catalog.modules.some(
+        (module) => module.kind === "top_movers" || module.kind === "laggards",
+      ),
+    ).toBe(false);
   });
 });

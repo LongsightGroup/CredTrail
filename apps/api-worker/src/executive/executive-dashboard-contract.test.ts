@@ -81,6 +81,7 @@ describe("inferExecutiveDashboardDefaults", () => {
       audience: "system",
       window: "last-90-days",
       focusOrgUnitId: "tenant_123:org:institution",
+      focusUnitType: "institution",
       comparisonLevel: "college",
       comparisonGroupBy: "orgUnit",
       reportingFilters: {
@@ -113,6 +114,7 @@ describe("inferExecutiveDashboardDefaults", () => {
       audience: "college",
       window: "last-30-days",
       focusOrgUnitId: "tenant_123:org:college-eng",
+      focusUnitType: "college",
       comparisonLevel: "department",
       comparisonGroupBy: "orgUnit",
       reportingFilters: {
@@ -145,6 +147,7 @@ describe("inferExecutiveDashboardDefaults", () => {
     expect(inferExecutiveDashboardDefaults(input)).toMatchObject({
       audience: "college",
       focusOrgUnitId: "tenant_123:org:college-arts",
+      focusUnitType: "college",
       comparisonLevel: "department",
       window: "last-90-days",
     });
@@ -164,6 +167,7 @@ describe("inferExecutiveDashboardDefaults", () => {
     ).toMatchObject({
       audience: "department",
       focusOrgUnitId: "tenant_123:org:department-cs",
+      focusUnitType: "department",
       comparisonLevel: "program",
     });
   });
@@ -180,6 +184,7 @@ describe("inferExecutiveDashboardDefaults", () => {
     ).toMatchObject({
       audience: "program",
       focusOrgUnitId: "tenant_123:org:program-cs",
+      focusUnitType: "program",
       comparisonLevel: "program",
       window: "last-90-days",
     });
