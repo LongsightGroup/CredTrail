@@ -87,6 +87,12 @@ import { institutionAdminRuleBuilderPage } from "../admin/institution-admin-rule
 import { buildLocalTwoFactorPath } from "../auth/break-glass-policy";
 import { resolveTenantReportingAccess } from "../auth/tenant-access";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
+import {
+  toReportingComparisonFilters,
+  toReportingEngagementFilters,
+  toReportingOverviewFilters,
+  toReportingTrendFilters,
+} from "../reporting/reporting-page-filters";
 import { buildOrganizationsPath } from "../auth/tenant-context-selection";
 
 interface RegisterTenantGovernanceRoutesInput {
@@ -508,9 +514,15 @@ export const registerTenantGovernanceRoutes = (
 
     const reportingOrgUnitComparisonsRaw = await listTenantReportingComparisons(db, {
       tenantId: input.tenantId,
-      from: input.issuedFrom,
-      to: input.issuedTo,
-      badgeTemplateId: input.badgeTemplateId,
+      ...toReportingComparisonFilters(
+        {
+          issuedFrom: input.issuedFrom,
+          issuedTo: input.issuedTo,
+          badgeTemplateId: input.badgeTemplateId,
+          state: input.state,
+        },
+        "orgUnit",
+      ),
       groupBy: "orgUnit",
     });
     const reportingOrgUnitComparisons =
@@ -526,12 +538,12 @@ export const registerTenantGovernanceRoutes = (
       (scopedRootOrgUnitIds.length === 0
         ? undefined
         : (reportingOrgUnitComparisons[0]?.groupId ?? scopedRootOrgUnitIds[0]));
-    const reportingFilters = {
-      tenantId: input.tenantId,
-      from: input.issuedFrom,
-      to: input.issuedTo,
+    const reportingPageFilters = {
+      issuedFrom: input.issuedFrom,
+      issuedTo: input.issuedTo,
       badgeTemplateId: input.badgeTemplateId,
       orgUnitId: selectedOrgUnitId,
+      state: input.state,
     };
     const [
       reportingOverview,
@@ -541,20 +553,19 @@ export const registerTenantGovernanceRoutes = (
     ] = await Promise.all([
       getTenantReportingOverview(db, {
         tenantId: input.tenantId,
-        issuedFrom: input.issuedFrom,
-        issuedTo: input.issuedTo,
-        badgeTemplateId: input.badgeTemplateId,
-        orgUnitId: selectedOrgUnitId,
-        state: input.state,
+        ...toReportingOverviewFilters(reportingPageFilters),
       }),
-      getTenantReportingEngagementCounts(db, reportingFilters),
+      getTenantReportingEngagementCounts(db, {
+        tenantId: input.tenantId,
+        ...toReportingEngagementFilters(reportingPageFilters),
+      }),
       getTenantReportingTrends(db, {
-        ...reportingFilters,
-        bucket: "day",
+        tenantId: input.tenantId,
+        ...toReportingTrendFilters(reportingPageFilters),
       }),
       listTenantReportingComparisons(db, {
-        ...reportingFilters,
-        groupBy: "badgeTemplate",
+        tenantId: input.tenantId,
+        ...toReportingComparisonFilters(reportingPageFilters, "badgeTemplate"),
       }),
     ]);
     const visibleBadgeTemplateIds = new Set(
@@ -765,12 +776,12 @@ export const registerTenantGovernanceRoutes = (
 
     if (pageData.reportingOverview === undefined) {
       const db = resolveDatabase(c.env);
-      const engagementFilters = {
-        tenantId: pathParams.tenantId,
-        from: reportingQuery.issuedFrom,
-        to: reportingQuery.issuedTo,
+      const reportingPageFilters = {
+        issuedFrom: reportingQuery.issuedFrom,
+        issuedTo: reportingQuery.issuedTo,
         badgeTemplateId: reportingQuery.badgeTemplateId,
         orgUnitId: reportingQuery.orgUnitId,
+        state: reportingQuery.state,
       };
       const [
         reportingOverview,
@@ -781,24 +792,23 @@ export const registerTenantGovernanceRoutes = (
       ] = await Promise.all([
         getTenantReportingOverview(db, {
           tenantId: pathParams.tenantId,
-          issuedFrom: reportingQuery.issuedFrom,
-          issuedTo: reportingQuery.issuedTo,
-          badgeTemplateId: reportingQuery.badgeTemplateId,
-          orgUnitId: reportingQuery.orgUnitId,
-          state: reportingQuery.state,
+          ...toReportingOverviewFilters(reportingPageFilters),
         }),
-        getTenantReportingEngagementCounts(db, engagementFilters),
+        getTenantReportingEngagementCounts(db, {
+          tenantId: pathParams.tenantId,
+          ...toReportingEngagementFilters(reportingPageFilters),
+        }),
         getTenantReportingTrends(db, {
-          ...engagementFilters,
-          bucket: "day",
+          tenantId: pathParams.tenantId,
+          ...toReportingTrendFilters(reportingPageFilters),
         }),
         listTenantReportingComparisons(db, {
-          ...engagementFilters,
-          groupBy: "badgeTemplate",
+          tenantId: pathParams.tenantId,
+          ...toReportingComparisonFilters(reportingPageFilters, "badgeTemplate"),
         }),
         listTenantReportingComparisons(db, {
-          ...engagementFilters,
-          groupBy: "orgUnit",
+          tenantId: pathParams.tenantId,
+          ...toReportingComparisonFilters(reportingPageFilters, "orgUnit"),
         }),
       ]);
 

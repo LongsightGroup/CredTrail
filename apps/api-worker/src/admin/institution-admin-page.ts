@@ -18,6 +18,10 @@ import type {
 } from "@credtrail/db";
 import { renderPageShell } from "@credtrail/ui-components";
 import type { ReportingMetricEntry } from "../reporting/metric-definitions";
+import {
+  buildReportingHierarchyQueryEntries,
+  buildReportingPageQueryEntries,
+} from "../reporting/reporting-page-filters";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
@@ -827,14 +831,17 @@ const renderInstitutionAdminPage = (
     })
     .join("\n");
   const reportingAggregateExportEntries = [
-    ["issuedFrom", reportingIssuedFromValue],
-    ["issuedTo", reportingIssuedToValue],
-    ["badgeTemplateId", reportingBadgeTemplateIdValue],
-    ["orgUnitId", reportingOrgUnitIdValue],
+    ...buildReportingPageQueryEntries({
+      issuedFrom: reportingIssuedFromValue,
+      issuedTo: reportingIssuedToValue,
+      badgeTemplateId: reportingBadgeTemplateIdValue,
+      orgUnitId: reportingOrgUnitIdValue,
+      state: reportingState ?? undefined,
+    }),
   ] as const;
   const reportingOverviewExportHref = buildPathWithQuery(
     `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/overview/export.csv`,
-    [...reportingAggregateExportEntries, ["state", reportingState]] as const,
+    reportingAggregateExportEntries,
   );
   const reportingEngagementExportHref = buildPathWithQuery(
     `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/engagement/export.csv`,
@@ -858,12 +865,15 @@ const renderInstitutionAdminPage = (
   }): string => {
     return buildPathWithQuery(
       `/v1/tenants/${encodeURIComponent(input.tenant.id)}/reporting/hierarchy/export.csv`,
-      [
-        ["issuedFrom", reportingIssuedFromValue],
-        ["issuedTo", reportingIssuedToValue],
-        ["focusOrgUnitId", focus.focusOrgUnitId],
-        ["level", focus.level],
-      ],
+      buildReportingHierarchyQueryEntries({
+        issuedFrom: reportingIssuedFromValue,
+        issuedTo: reportingIssuedToValue,
+        badgeTemplateId: reportingBadgeTemplateIdValue,
+        orgUnitId: reportingOrgUnitIdValue,
+        state: reportingState ?? undefined,
+        focusOrgUnitId: focus.focusOrgUnitId,
+        level: focus.level,
+      }),
     );
   };
   const reportingExportsPanelMarkup = `<article class="ct-admin__panel ct-stack">
