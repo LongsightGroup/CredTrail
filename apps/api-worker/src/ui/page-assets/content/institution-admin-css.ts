@@ -1114,6 +1114,25 @@ export const INSTITUTION_ADMIN_CSS = `
     grid-template-columns: minmax(16rem, 21rem) minmax(0, 1fr);
   }
 }
+@media (max-width: 900px) {
+  .ct-admin__reporting-presentation-shell,
+  .ct-admin__reporting-secondary-story {
+    gap: 0.9rem;
+  }
+  .ct-admin__reporting-presentation-note {
+    gap: 0.6rem;
+  }
+  .ct-admin__reporting-supporting-grid,
+  .ct-admin__reporting-panel-media,
+  .ct-admin__reporting-focus-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ct-admin__reporting-lower-story-intro,
+  .ct-admin__reporting-focus-section,
+  .ct-admin__reporting-performer-group {
+    padding: 0.9rem;
+  }
+}
 @media (max-width: 1100px) {
   .ct-admin__reporting-presentation-note,
   .ct-admin__reporting-trend-hero,

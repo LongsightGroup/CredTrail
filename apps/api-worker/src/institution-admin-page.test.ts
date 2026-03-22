@@ -98,6 +98,7 @@ import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
 import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-reporting-fixture";
+import { INSTITUTION_ADMIN_CSS } from "./ui/page-assets/content/institution-admin-css";
 import { INSTITUTION_ADMIN_JS } from "./ui/page-assets/content/institution-admin-js";
 
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -1235,6 +1236,17 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain('id="reporting-filters-form"');
     expect(body).toContain('method="get" action="/tenants/tenant_123/admin/reporting"');
     expect(body).toContain("Overview CSV");
+  });
+
+  it("ships a mid-width reporting breakpoint for walkthrough layouts", () => {
+    expect(INSTITUTION_ADMIN_CSS).toContain("@media (max-width: 900px)");
+    expect(INSTITUTION_ADMIN_CSS).toContain(
+      ".ct-admin__reporting-presentation-shell,\n  .ct-admin__reporting-secondary-story {\n    gap: 0.9rem;",
+    );
+    expect(INSTITUTION_ADMIN_CSS).toContain(
+      ".ct-admin__reporting-supporting-grid,\n  .ct-admin__reporting-panel-media,\n  .ct-admin__reporting-focus-summary-grid {\n    grid-template-columns: minmax(0, 1fr);",
+    );
+    expect(INSTITUTION_ADMIN_CSS).toContain(".ct-admin__reporting-presentation-note {\n    gap: 0.6rem;");
   });
 
   it("renders a chart-first trend hero while keeping the detailed trend table in the response", async () => {
