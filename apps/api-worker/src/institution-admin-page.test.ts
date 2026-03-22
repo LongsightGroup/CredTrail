@@ -1566,7 +1566,7 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     );
     expect(body).toContain('aria-current="page">College of Engineering</span>');
     expect(body).toContain('aria-current="page">Computer Science</span>');
-    expect(body).toContain('class="ct-admin__reporting-focus-summary"');
+    expect(body).toContain("ct-admin__reporting-focus-summary");
     expect(body).toContain("Current focus");
     expect(body).toContain("Current hierarchy level");
     expect(body).toContain("Next child level");

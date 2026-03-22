@@ -1015,6 +1015,9 @@ const renderInstitutionAdminPage = (
       value: formatReportingStateLabel(reportingState),
     },
   ] as const;
+  const reportingHierarchyScopeSummary = reportingSummaryContextItems
+    .map((item) => `${item.label}: ${item.value}`)
+    .join(" · ");
   const reportingExecutiveSummaryMetrics = [
     {
       key: "issued",
@@ -1444,6 +1447,9 @@ const renderInstitutionAdminPage = (
 
     const childLevel = getNextReportingHierarchyLevel(focusOrgUnit.unitType);
     const sectionId = buildReportingHierarchyFocusId(focusOrgUnit.id);
+    const currentLevelLabel = formatReportingHierarchyLevelLabel(focusOrgUnit.unitType);
+    const childLevelLabel =
+      childLevel === null ? "Deepest reporting level" : formatReportingHierarchyLevelLabel(childLevel);
     const rows =
       childLevel === null
         ? []
@@ -1452,17 +1458,60 @@ const renderInstitutionAdminPage = (
             focusOrgUnitId: focusOrgUnit.id,
             level: childLevel,
           });
-    const breadcrumbLabel = breadcrumb.map((orgUnit) => orgUnit.displayName).join(" / ");
+    const breadcrumbMarkup = `<nav class="ct-admin__reporting-breadcrumb-nav" aria-label="Reporting hierarchy breadcrumb">
+      <ol class="ct-admin__reporting-breadcrumb-list">
+        ${breadcrumb
+          .map((orgUnit, index) => {
+            const isCurrent = index === breadcrumb.length - 1;
+
+            return `<li class="ct-admin__reporting-breadcrumb-item">${
+              isCurrent
+                ? `<span class="ct-admin__reporting-breadcrumb-current" aria-current="page">${escapeHtml(
+                    orgUnit.displayName,
+                  )}</span>`
+                : `<a class="ct-admin__reporting-breadcrumb-link" href="${escapeHtml(
+                    buildReportingHierarchyDrillHref(orgUnit.id),
+                  )}">${escapeHtml(orgUnit.displayName)}</a>`
+            }</li>`;
+          })
+          .join("\n")}
+      </ol>
+    </nav>`;
+    const focusSummaryCopy =
+      childLevel === null
+        ? "Keeps this drilldown inside reporting while marking the deepest visible reporting leaf for the current workspace slice."
+        : `Keeps this drilldown inside reporting while the exact ${childLevelLabel.toLowerCase()} table and export link stay adjacent to the shared visual.`;
+    const focusSummaryMarkup = `<section class="ct-admin__reporting-focus-summary ct-stack" aria-label="Hierarchy focus summary">
+      <div class="ct-stack">
+        <p class="ct-admin__eyebrow">Current focus</p>
+        <p class="ct-admin__reporting-focus-summary-title">${escapeHtml(focusOrgUnit.displayName)}</p>
+        <p class="ct-admin__hint">${escapeHtml(focusSummaryCopy)}</p>
+      </div>
+      <dl class="ct-admin__reporting-focus-summary-grid">
+        <div class="ct-admin__reporting-focus-summary-item">
+          <dt>Current hierarchy level</dt>
+          <dd>${escapeHtml(currentLevelLabel)}</dd>
+        </div>
+        <div class="ct-admin__reporting-focus-summary-item">
+          <dt>Next child level</dt>
+          <dd>${escapeHtml(childLevelLabel)}</dd>
+        </div>
+        <div class="ct-admin__reporting-focus-summary-item">
+          <dt>Reporting workspace</dt>
+          <dd>${escapeHtml(reportingHierarchyScopeSummary)}</dd>
+        </div>
+      </dl>
+    </section>`;
     const visualMarkup =
       childLevel === null || rows.length === 0
         ? ""
         : renderReportingVisualModule({
-            kind: "comparison-bars",
+            kind: "comparison-ranked",
             headingLevel: "h4",
             id: `${sectionId}-visual`,
-            title: `${focusOrgUnit.displayName} ${formatReportingHierarchyLevelLabel(childLevel)} overview`,
+            title: `${focusOrgUnit.displayName} ${childLevelLabel} ranking`,
             description:
-              "Shared visual compares issued volume across the currently visible child rows. Detailed counts remain in the table.",
+              "Volume-first hierarchy summary ranks the visible child rows by issued count while keeping public views plus claim/share detail adjacent to each ranked row.",
             series: rows.map((row) => ({
               label: getReportingOrgUnitLabel(row.orgUnitId),
               value: row.issuedCount,
@@ -1472,7 +1521,7 @@ const renderInstitutionAdminPage = (
                 shareRate: row.shareRate,
               }),
             })),
-            note: `The ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} table below keeps every visible count and drill target intact.`,
+            note: `The exact ${childLevelLabel.toLowerCase()} table below keeps every visible row, drill target, and export context intact.`,
           });
     const childMarkup =
       childLevel === null
@@ -1537,7 +1586,8 @@ const renderInstitutionAdminPage = (
         </div>
       </div>
       <p class="ct-admin__eyebrow">Breadcrumb</p>
-      <p class="ct-admin__reporting-breadcrumb">${escapeHtml(breadcrumbLabel)}</p>
+      ${breadcrumbMarkup}
+      ${focusSummaryMarkup}
       ${childMarkup}
       ${descendantMarkup}
     </section>`;
