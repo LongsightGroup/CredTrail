@@ -947,9 +947,9 @@ const renderInstitutionAdminPage = (
   const reportingExportsPanelMarkup = `<article class="ct-admin__panel ct-stack">
     <div class="ct-cluster">
       <h2>Export CSV</h2>
-      <span class="ct-admin__status-pill">Aggregate only</span>
+      <span class="ct-admin__status-pill">Supporting operations</span>
     </div>
-    <p>Download the current reporting slices directly from this workspace. These links preserve the visible filter state and stay scope-safe for reporting users.</p>
+    <p>Download the current reporting slices directly from this workspace after you have read the summary, trend, and supporting detail above. These links preserve the visible filter state and stay scope-safe for reporting users.</p>
     <div class="ct-cluster">
       <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingOverviewExportHref)}">Overview CSV</a>
       <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingEngagementExportHref)}">Engagement CSV</a>
@@ -2866,7 +2866,7 @@ const renderInstitutionAdminPage = (
   const reportingEngagementPanelMarkup = `<article class="ct-admin__panel ct-stack">
     <div class="ct-cluster">
       <h2>Engagement Counts</h2>
-      <span class="ct-admin__status-pill">Phase 10 product data</span>
+      <span class="ct-admin__status-pill">Product-owned events</span>
     </div>
     <p>Raw counts show event totals. Rates use distinct engaged assertions over issued badges, so comparison tables do not inflate because of repeat clicks from one assertion.</p>
     ${reportingEngagementVisualsMarkup}
@@ -3145,22 +3145,24 @@ const renderInstitutionAdminPage = (
               : view === "reporting"
                 ? `${renderPageHeader(
                     "Reporting",
-                    "Track issuance, engagement, and comparison metrics with product-owned data that stays inside CredTrail.",
+                    "Read the current slice, program health, and momentum first, then move into exports, comparisons, and drilldowns.",
                     `<aside class="ct-admin-page-header__note">
-                      <h2>Phase 11 Scope</h2>
-                      <p>Hierarchy drilldowns, breadcrumbs, and performer panels now stay inside the reporting workspace. Filters above remain explicit and exact-match.</p>
+                      <h2>First read</h2>
+                      <p>Confirm the current slice, use the executive summary for program health, and read the trend module before dropping into exports or deeper reporting detail.</p>
                     </aside>`,
                   )}
                   <section class="ct-admin ct-stack">
-                    ${reportingExecutiveSummaryMarkup}
-                    <section class="ct-admin__reporting-supporting-grid">
+                    <section class="ct-admin__reporting-first-screen ct-stack">
+                      ${reportingExecutiveSummaryMarkup}
                       ${reportingOverviewPanelMarkup}
+                    </section>
+                    ${reportingTrendPanelMarkup}
+                    <section class="ct-admin__reporting-supporting-grid">
+                      ${reportingEngagementPanelMarkup}
                       <aside class="ct-admin__reporting-supporting-rail">
                         ${reportingExportsPanelMarkup}
                       </aside>
                     </section>
-                    ${reportingEngagementPanelMarkup}
-                    ${reportingTrendPanelMarkup}
                     ${reportingTemplateComparisonPanelMarkup}
                     ${reportingHierarchyPanelMarkup}
                     ${reportingPerformerPanelsMarkup}

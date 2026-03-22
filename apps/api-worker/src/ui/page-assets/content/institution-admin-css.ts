@@ -633,6 +633,13 @@ export const INSTITUTION_ADMIN_CSS = `
   gap: 0.55rem;
   align-items: flex-start;
 }
+.ct-admin__reporting-first-screen {
+  display: grid;
+  gap: 1rem;
+}
+.ct-admin__reporting-first-screen > * {
+  min-width: 0;
+}
 .ct-admin__reporting-supporting-grid {
   display: grid;
   gap: 0.95rem;
@@ -649,6 +656,12 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-supporting-rail .ct-admin__panel {
   position: sticky;
   top: 4.75rem;
+  border-color: rgba(15, 95, 166, 0.12);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92),
+    rgba(244, 249, 255, 0.94)
+  );
 }
 .ct-admin__reporting-trend-hero {
   display: grid;
