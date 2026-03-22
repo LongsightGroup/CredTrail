@@ -20,6 +20,7 @@ export interface ReportingVisualProps {
   series: readonly ReportingVisualSeriesPoint[];
   id?: string;
   emptyMessage?: string;
+  sparseMessage?: string;
   headingLevel?: ReportingVisualHeadingLevel;
   summaryOverride?: string;
   seriesOrder?: "input" | "value-desc";
@@ -423,6 +424,20 @@ export const renderReporting = (input: ReportingVisualProps): string => {
       </figcaption>
       <div id="${summaryId}" class="ct-reporting-visual__empty">
         ${escapeHtml(input.emptyMessage ?? REPORTING_VISUAL_EMPTY_MESSAGE)}
+      </div>
+    </figure>`;
+  }
+
+  const trimmedSparseMessage = input.sparseMessage?.trim();
+
+  if (trimmedSparseMessage !== undefined && trimmedSparseMessage.length > 0) {
+    return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="sparse">
+      <figcaption class="ct-reporting-visual__header">
+        <${titleTag} id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</${titleTag}>
+        ${descriptionMarkup}
+      </figcaption>
+      <div id="${summaryId}" class="ct-reporting-visual__empty ct-reporting-visual__empty--sparse">
+        ${escapeHtml(trimmedSparseMessage)}
       </div>
     </figure>`;
   }

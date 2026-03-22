@@ -1190,7 +1190,8 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Current badge-state mix");
     expect(body).toContain("Public badge views");
     expect(body).toContain("Claim rate");
-    expect(body).toContain('form method="get" action="/tenants/tenant_123/admin/reporting"');
+    expect(body).toContain('id="reporting-filters-form"');
+    expect(body).toContain('method="get" action="/tenants/tenant_123/admin/reporting"');
     expect(body).toContain("Overview CSV");
   });
 

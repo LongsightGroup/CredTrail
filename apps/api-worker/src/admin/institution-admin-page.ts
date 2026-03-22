@@ -147,6 +147,17 @@ interface ReportingHierarchyRow {
   shareRate: number;
 }
 
+type ReportingPanelState = "rich" | "sparse" | "empty";
+
+interface ReportingActivityCounts {
+  issuedCount: number;
+  publicBadgeViewCount: number;
+  verificationViewCount: number;
+  shareClickCount: number;
+  learnerClaimCount: number;
+  walletAcceptCount: number;
+}
+
 const isReportingHierarchyLevel = (
   value: TenantOrgUnitRecord["unitType"],
 ): value is ReportingHierarchyLevel => {
@@ -353,14 +364,47 @@ const renderInstitutionAdminPage = (
         return left.label.localeCompare(right.label);
       });
   };
+  const hasReportingActivity = (input: ReportingActivityCounts): boolean => {
+    return (
+      input.issuedCount > 0 ||
+      input.publicBadgeViewCount > 0 ||
+      input.verificationViewCount > 0 ||
+      input.shareClickCount > 0 ||
+      input.learnerClaimCount > 0 ||
+      input.walletAcceptCount > 0
+    );
+  };
+  const classifyReportingPanelState = (activeRowCount: number): ReportingPanelState => {
+    if (activeRowCount === 0) {
+      return "empty";
+    }
+
+    return activeRowCount === 1 ? "sparse" : "rich";
+  };
+  const renderReportingStateShell = (input: {
+    description: string;
+    eyebrow: string;
+    state: Exclude<ReportingPanelState, "rich">;
+    title: string;
+  }): string => {
+    return `<section class="ct-admin__reporting-state-shell ct-stack" data-reporting-panel-state="${escapeHtml(
+      input.state,
+    )}">
+      <p class="ct-admin__eyebrow">${escapeHtml(input.eyebrow)}</p>
+      <h3>${escapeHtml(input.title)}</h3>
+      <p class="ct-admin__hint">${escapeHtml(input.description)}</p>
+    </section>`;
+  };
   const renderReportingVisualModule = (input: {
     description: string;
+    emptyMessage?: string;
     headingLevel?: "h3" | "h4";
     id?: string;
     kind: "comparison-bars" | "comparison-ranked" | "stacked-summary" | "trend-series";
     note?: string;
     series: readonly ReportingVisualSeriesPoint[];
     seriesOrder?: "input" | "value-desc";
+    sparseMessage?: string;
     summaryOverride?: string;
     title: string;
   }): string => {
@@ -1298,6 +1342,9 @@ const renderInstitutionAdminPage = (
           ] as const,
           note: "Cards below retain the exact lifecycle counts used for reporting review and export parity.",
         });
+  const reportingTrendActivityRowCount =
+    reportingTrends?.series.filter((row) => hasReportingActivity(row)).length ?? 0;
+  const reportingTrendState = classifyReportingPanelState(reportingTrendActivityRowCount);
   const reportingTrendVisualMarkup =
     reportingTrends === null || reportingTrends.series.length === 0
       ? ""
@@ -1330,8 +1377,23 @@ const renderInstitutionAdminPage = (
           })
           .join("\n");
   const reportingTrendHeroMarkup =
-    reportingTrends === null || reportingTrends.series.length === 0
-      ? '<div class="ct-admin__empty">No trend data available for the selected filters.</div>'
+    reportingTrendState === "empty"
+      ? renderReportingStateShell({
+          state: "empty",
+          eyebrow: "No trend line yet",
+          title: "This reporting slice does not have enough activity to chart yet.",
+          description:
+            "Expand the date range or remove a filter to see how issuance changes over time for this reporting slice.",
+        })
+      : reportingTrendState === "sparse"
+        ? renderReportingStateShell({
+            state: "sparse",
+            eyebrow: "Thin-data slice",
+            title:
+              "Only one visible time bucket matches this reporting slice, so treat it as a current snapshot rather than a momentum read.",
+            description:
+              "Use the exact table below to review the current counts behind this slice before drawing a broader trend story.",
+          })
       : (() => {
           const startRow = reportingTrends.series[0];
           const latestRow = reportingTrends.series[reportingTrends.series.length - 1] ?? startRow;
@@ -1365,6 +1427,12 @@ const renderInstitutionAdminPage = (
             ${reportingTrendVisualMarkup}
           </div>`;
         })();
+  const reportingTrendIntroCopy =
+    reportingTrendState === "rich"
+      ? "Use the chart first to read issuance momentum for the selected reporting slice. The detailed table remains below so each supporting engagement count stays visible and reviewable."
+      : reportingTrendState === "sparse"
+        ? "Only one visible time bucket matches this reporting slice, so the exact table below provides the honest current-state read."
+        : "The detailed table remains available even when the selected reporting slice has not produced enough activity to draw a trend line yet.";
   const renderReportingComparisonRows = (
     rows: readonly TenantReportingComparisonRowRecord[],
     emptyLabel: string,
@@ -1393,30 +1461,56 @@ const renderInstitutionAdminPage = (
     reportingTemplateComparisons,
     "No badge-template comparisons available for the selected filters.",
   );
+  const reportingTemplateComparisonState = classifyReportingPanelState(
+    reportingTemplateComparisons.filter((row) => hasReportingActivity(row)).length,
+  );
   const reportingTemplateComparisonVisualMarkup =
-    reportingTemplateComparisons.length === 0
-      ? ""
+    reportingTemplateComparisonState === "empty"
+      ? renderReportingStateShell({
+          state: "empty",
+          eyebrow: "No comparison rows yet",
+          title: "No badge-template rows are visible for this slice yet.",
+          description:
+            "Widen the reporting window or remove a filter to compare badge-template performance inside this workspace.",
+        })
       : renderReportingVisualModule({
           kind: "comparison-ranked",
           title: "Issued ranking by badge template",
           description:
             "Volume-first comparison ranks badge templates by issued count while keeping public views and claim/share rates visible as adjacent detail.",
           series: buildReportingComparisonSeries(reportingTemplateComparisons),
+          sparseMessage:
+            reportingTemplateComparisonState === "sparse"
+              ? "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail."
+              : undefined,
           note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingOrgUnitComparisonRowsMarkup = renderReportingComparisonRows(
     reportingOrgUnitComparisons,
     "No org-unit comparisons available for the selected filters.",
   );
+  const reportingOrgUnitComparisonState = classifyReportingPanelState(
+    reportingOrgUnitComparisons.filter((row) => hasReportingActivity(row)).length,
+  );
   const reportingOrgUnitComparisonVisualMarkup =
-    reportingOrgUnitComparisons.length === 0
-      ? ""
+    reportingOrgUnitComparisonState === "empty"
+      ? renderReportingStateShell({
+          state: "empty",
+          eyebrow: "No comparison rows yet",
+          title: "No org-unit rows are visible for this slice yet.",
+          description:
+            "Widen the reporting window or remove a filter to compare org-unit performance inside this workspace.",
+        })
       : renderReportingVisualModule({
           kind: "comparison-ranked",
           title: "Issued ranking by org unit",
           description:
             "Volume-first comparison ranks org units by issued count while keeping public views and claim/share rates visible as adjacent detail.",
           series: buildReportingComparisonSeries(reportingOrgUnitComparisons),
+          sparseMessage:
+            reportingOrgUnitComparisonState === "sparse"
+              ? "Only one org-unit row is visible in this slice, so use the exact row below to read the current context."
+              : undefined,
           note: "The table below keeps the full row set with exact counts and rate definitions.",
         });
   const reportingHierarchyRowsByLevel = new Map(
@@ -1428,6 +1522,17 @@ const renderInstitutionAdminPage = (
       }),
     ]),
   );
+  const reportingHierarchyComparableRowCount = Math.max(
+    0,
+    ...REPORTING_HIERARCHY_LEVELS.map(
+      (level) =>
+        reportingHierarchyRowsByLevel
+          .get(level)
+          ?.filter((row) => hasReportingActivity(row))
+          .length ?? 0,
+    ),
+  );
+  const reportingHierarchyState = classifyReportingPanelState(reportingHierarchyComparableRowCount);
   const reportingVisibleRoots = input.orgUnits
     .filter(
       (orgUnit) =>
@@ -1599,19 +1704,37 @@ const renderInstitutionAdminPage = (
       ${descendantMarkup}
     </section>`;
   };
-  const reportingHierarchyPanelMarkup =
-    reportingVisibleRoots.length === 0
-      ? `<article class="ct-admin__panel ct-stack">
-          <h2>Hierarchy drilldown</h2>
-          <p class="ct-admin__empty">No hierarchy rows are available for the current reporting filters.</p>
-        </article>`
-      : `<article class="ct-admin__panel ct-stack">
-          <div class="ct-cluster">
-            <h2>Hierarchy drilldown</h2>
-            <span class="ct-admin__status-pill">Workspace-local</span>
-          </div>
-          <p>Use these tables to move between institution, college, department, and program views without leaving reporting. The overview filters above stay exact-match; hierarchy drilldowns stay explicit here.</p>
-          <p class="ct-admin__hint">Visible roots stay inside the reporting workspace.</p>
+  const reportingHierarchyStateShellMarkup =
+    reportingHierarchyState === "rich"
+      ? ""
+      : reportingHierarchyState === "sparse"
+        ? renderReportingStateShell({
+            state: "sparse",
+            eyebrow: "Thin-data slice",
+            title: "This slice currently resolves to one visible reporting path.",
+            description:
+              "Use the current focus summary and exact hierarchy table below to review the visible path without implying a fuller tree.",
+          })
+        : renderReportingStateShell({
+            state: "empty",
+            eyebrow: "No hierarchy rows yet",
+            title: "Hierarchy drilldowns appear here once visible org-unit rows exist for this slice.",
+            description:
+              "The reporting route stays the same; this panel fills in as soon as the current slice exposes hierarchy rows.",
+          });
+  const reportingHierarchyPanelMarkup = `<article class="ct-admin__panel ct-stack" data-reporting-state="${escapeHtml(
+    reportingHierarchyState,
+  )}">
+    <div class="ct-cluster">
+      <h2>Hierarchy drilldown</h2>
+      <span class="ct-admin__status-pill">Workspace-local</span>
+    </div>
+    <p>Use these tables to move between institution, college, department, and program views without leaving reporting. The overview filters above stay exact-match; hierarchy drilldowns stay explicit here.</p>
+    ${reportingHierarchyStateShellMarkup}
+    ${
+      reportingHierarchyState === "empty"
+        ? ""
+        : `<p class="ct-admin__hint">Visible roots stay inside the reporting workspace.</p>
           <div class="ct-admin__reporting-root-links">
             ${reportingVisibleRoots
               .map((rootOrgUnit) => {
@@ -1625,8 +1748,9 @@ const renderInstitutionAdminPage = (
           </div>
           ${reportingVisibleRoots
             .map((rootOrgUnit) => renderReportingHierarchyFocusSection(rootOrgUnit, [rootOrgUnit]))
-            .join("\n")}
-        </article>`;
+            .join("\n")}`
+    }
+  </article>`;
   const reportingPerformerLevel =
     REPORTING_HIERARCHY_LEVELS.filter(
       (level) => (reportingHierarchyRowsByLevel.get(level)?.length ?? 0) > 1,
@@ -1649,6 +1773,7 @@ const renderInstitutionAdminPage = (
     reportingPerformerLevel === null
       ? null
       : formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase();
+  const reportingPerformerState = classifyReportingPanelState(reportingHierarchyComparableRowCount);
   const reportingRateEligibleRows = reportingPerformerRows.filter(
     (row) => row.issuedCount >= REPORTING_RATE_MIN_ISSUED,
   );
@@ -1844,12 +1969,25 @@ const renderInstitutionAdminPage = (
     </section>`;
   };
   const reportingPerformerPanelsMarkup =
-    reportingPerformerLevel === null
-      ? `<article class="ct-admin__panel ct-stack">
+    reportingPerformerState !== "rich" || reportingPerformerLevel === null
+      ? `<article class="ct-admin__panel ct-stack" data-reporting-state="${escapeHtml(
+          reportingPerformerState,
+        )}">
           <h2>Performer panels</h2>
-          <p class="ct-admin__empty">No comparable hierarchy rows are available for performer rankings yet.</p>
+          ${renderReportingStateShell({
+            state: reportingPerformerState === "empty" ? "empty" : "sparse",
+            eyebrow: reportingPerformerState === "empty" ? "No rankings yet" : "Thin-data slice",
+            title:
+              reportingPerformerState === "empty"
+                ? "Performer rankings appear once this slice includes comparable hierarchy rows."
+                : "Rankings stay paused until this slice has more than one comparable hierarchy row.",
+            description:
+              reportingPerformerState === "empty"
+                ? "This section reuses the same visible hierarchy rows shown above, so it stays honest when the current slice has nothing comparable to rank."
+                : "The current slice still shows real hierarchy data above, but performer rankings wait until more than one visible row can be compared honestly.",
+          })}
         </article>`
-      : `<article class="ct-admin__panel ct-stack">
+      : `<article class="ct-admin__panel ct-stack" data-reporting-state="rich">
           <div class="ct-cluster">
             <h2>Performer panels</h2>
             <span class="ct-admin__status-pill">${escapeHtml(
@@ -2944,7 +3082,7 @@ const renderInstitutionAdminPage = (
       <span class="ct-admin__status-pill">Supporting detail</span>
     </div>
     <p>Filter by issue date, template, org unit, or current badge state. Counts reflect product-owned data only, and analytics stay in this reporting workspace.</p>
-    <form method="get" action="${escapeHtml(reportingPath)}" class="ct-admin__form ct-admin__form--inline ct-grid">
+    <form id="reporting-filters-form" method="get" action="${escapeHtml(reportingPath)}" class="ct-admin__form ct-admin__form--inline ct-grid" data-reporting-submit-state="idle">
       <label>
         Issued from
         <input name="issuedFrom" type="date" value="${escapeHtml(reportingIssuedFromValue)}" />
@@ -2983,6 +3121,7 @@ const renderInstitutionAdminPage = (
         <a class="ct-admin__button ct-admin__button--secondary" href="${escapeHtml(reportingPath)}">Reset</a>
       </div>
     </form>
+    <p id="reporting-filters-status" class="ct-admin__hint" data-reporting-submit-status aria-live="polite">Applying filters refreshes this page with the selected reporting slice.</p>
     <div class="ct-admin__reporting-panel-media">
       ${reportingOverviewVisualMarkup}
       <div class="ct-admin__metric-grid">
@@ -3013,9 +3152,11 @@ const renderInstitutionAdminPage = (
     }
   </article>`;
 
-  const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+  const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack" data-reporting-state="${escapeHtml(
+    reportingTrendState,
+  )}">
     <h2>Trend lines</h2>
-    <p>Use the chart first to read issuance momentum for the selected reporting slice. The detailed table remains below so each supporting engagement count stays visible and reviewable.</p>
+    <p>${escapeHtml(reportingTrendIntroCopy)}</p>
     ${reportingTrendHeroMarkup}
     <div class="ct-admin__table-wrap">
       <h3>Detailed trend table</h3>
@@ -3038,9 +3179,17 @@ const renderInstitutionAdminPage = (
     </div>
   </article>`;
 
-  const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+  const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack" data-reporting-state="${escapeHtml(
+    reportingTemplateComparisonState,
+  )}">
     <h2>Compare by badge template</h2>
-    <p>Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible badge-template row.</p>
+    <p>${escapeHtml(
+      reportingTemplateComparisonState === "rich"
+        ? "Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible badge-template row."
+        : reportingTemplateComparisonState === "sparse"
+          ? "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail."
+          : "Review the current slice below. The comparison table stays in place even when no badge-template rows are yet visible for the selected filters.",
+    )}</p>
     <div class="ct-admin__reporting-panel-media">
       ${reportingTemplateComparisonVisualMarkup}
       <div class="ct-admin__table-wrap">
@@ -3066,9 +3215,17 @@ const renderInstitutionAdminPage = (
     </div>
   </article>`;
 
-  const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
+  const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack" data-reporting-state="${escapeHtml(
+    reportingOrgUnitComparisonState,
+  )}">
     <h2>Compare by org unit</h2>
-    <p>Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible org-unit row alongside hierarchy drilldowns.</p>
+    <p>${escapeHtml(
+      reportingOrgUnitComparisonState === "rich"
+        ? "Start with the ranked visual for volume-first scanning, then use the exact table below to inspect every visible org-unit row alongside hierarchy drilldowns."
+        : reportingOrgUnitComparisonState === "sparse"
+          ? "Only one org-unit row is visible in this slice, so use the exact row below to read the current context."
+          : "Review the current slice below. The comparison table stays in place even when no org-unit rows are yet visible for the selected filters.",
+    )}</p>
     <div class="ct-admin__reporting-panel-media">
       ${reportingOrgUnitComparisonVisualMarkup}
       <div class="ct-admin__table-wrap">

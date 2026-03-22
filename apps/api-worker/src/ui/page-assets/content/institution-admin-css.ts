@@ -654,6 +654,15 @@ export const INSTITUTION_ADMIN_CSS = `
   background: rgba(255, 255, 255, 0.78);
   color: var(--ct-theme-text-muted);
 }
+.ct-reporting-visual__empty--sparse,
+.ct-reporting-visual[data-reporting-visual-state='sparse'] .ct-reporting-visual__empty {
+  border-style: solid;
+  border-color: rgba(15, 95, 166, 0.16);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(238, 246, 255, 0.86)),
+    rgba(255, 255, 255, 0.9);
+  color: var(--ct-theme-text-body);
+}
 @media (max-width: 960px) {
   .ct-reporting-visual {
     padding: 0.9rem;
@@ -809,6 +818,42 @@ export const INSTITUTION_ADMIN_CSS = `
   font-size: 0.82rem;
   line-height: 1.45;
   color: var(--ct-theme-text-muted);
+}
+.ct-admin__panel[data-reporting-state='empty'],
+.ct-admin__panel[data-reporting-state='sparse'] {
+  border-color: rgba(15, 95, 166, 0.16);
+}
+.ct-admin__panel[data-reporting-state='sparse'] {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.9)),
+    rgba(255, 255, 255, 0.92);
+}
+.ct-admin__reporting-state-shell {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: var(--ct-radius-md);
+  border: 1px dashed rgba(15, 95, 166, 0.22);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(249, 251, 253, 0.92)),
+    rgba(255, 255, 255, 0.9);
+}
+.ct-admin__reporting-state-shell h3 {
+  margin: 0;
+  font-family: var(--ct-font-display);
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--ct-theme-text-title);
+}
+.ct-admin__reporting-state-shell[data-reporting-panel-state='sparse'] {
+  border-style: solid;
+  border-color: rgba(15, 95, 166, 0.16);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(238, 246, 255, 0.88)),
+    rgba(255, 255, 255, 0.94);
+}
+[data-reporting-submit-status] {
+  margin: 0;
 }
 .ct-admin__reporting-panel-media {
   display: grid;
