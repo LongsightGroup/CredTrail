@@ -557,6 +557,14 @@ export const INSTITUTION_ADMIN_CSS = `
   display: grid;
   gap: 0.95rem;
   align-items: start;
+  grid-template-columns: minmax(19rem, 25rem) minmax(0, 1fr);
+}
+.ct-admin__reporting-panel-media > * {
+  min-width: 0;
+}
+.ct-admin__reporting-panel-media .ct-admin__metric-grid,
+.ct-admin__reporting-panel-media .ct-admin__table-wrap {
+  min-width: 0;
 }
 .ct-admin__reporting-table-number {
   display: inline-flex;
