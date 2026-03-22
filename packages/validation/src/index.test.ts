@@ -75,6 +75,7 @@ import {
   parseUpdateBadgeTemplateRequest,
   parseTransferBadgeTemplateOwnershipRequest,
   parseTenantReportingComparisonQuery,
+  parseTenantExecutiveDashboardQuery,
   parseTenantReportingHierarchyQuery,
   parseTenantReportingTrendQuery,
 } from "./index";
@@ -1526,6 +1527,35 @@ describe("enterprise governance request parsers", () => {
         from: "2026-03-31",
         to: "2026-03-01",
         state: "paused",
+      });
+    }).toThrowError();
+  });
+
+  it("parses executive dashboard queries with reporting-filter parity and smart-default hints", () => {
+    expect(
+      parseTenantExecutiveDashboardQuery({
+        window: "last-30-days",
+        audience: "college",
+        badgeTemplateId: "badge_template_science",
+        orgUnitId: "org_program_microbiology",
+        state: "active",
+        focusOrgUnitId: "org_college_science",
+        comparisonLevel: "department",
+      }),
+    ).toEqual({
+      window: "last-30-days",
+      audience: "college",
+      badgeTemplateId: "badge_template_science",
+      orgUnitId: "org_program_microbiology",
+      state: "active",
+      focusOrgUnitId: "org_college_science",
+      comparisonLevel: "department",
+    });
+
+    expect(() => {
+      parseTenantExecutiveDashboardQuery({
+        window: "last-quarter",
+        audience: "campus",
       });
     }).toThrowError();
   });
