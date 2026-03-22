@@ -1153,6 +1153,34 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Overview CSV");
   });
 
+  it("renders a chart-first trend hero while keeping the detailed trend table in the response", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Trend lines");
+    expect(body).toContain('class="ct-admin__reporting-trend-hero"');
+    expect(body).toContain('class="ct-admin__reporting-trend-callouts"');
+    expect(body).toContain("Peak day");
+    expect(body).toContain("Latest day");
+    expect(body).toContain("Detailed trend table");
+    expect(body).toContain("Public badge views");
+    expect(body).toContain("Wallet accepts");
+    expect(body.indexOf('class="ct-admin__reporting-trend-hero"')).toBeLessThan(
+      body.indexOf("Detailed trend table"),
+    );
+  });
+
   it("renders reporting chart markup directly in the server response", async () => {
     const env = createEnv();
 

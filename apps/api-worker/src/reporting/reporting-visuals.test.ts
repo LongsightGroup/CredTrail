@@ -60,6 +60,26 @@ describe("renderReporting", () => {
     expect(html).toContain("aria-describedby");
   });
 
+  it("renders trend visuals with visible time anchors and chart callouts for chart-first reading", () => {
+    const html = renderReporting({
+      kind: "trend-series",
+      title: "Issued over time",
+      description: "Issued badges by day.",
+      series: [
+        { label: "Mar 1", value: 3, detail: "8 public views" },
+        { label: "Mar 2", value: 2, detail: "5 public views" },
+      ],
+    });
+
+    expect(html).toContain('class="ct-reporting-visual__trend-axis"');
+    expect(html).toContain("Start");
+    expect(html).toContain("Latest");
+    expect(html).toContain("Peak");
+    expect(html).toContain("Mar 1");
+    expect(html).toContain("Mar 2");
+    expect(html).toContain("8 public views");
+  });
+
   it("emits stable reporting-visual hooks for the chart surface, legend, and visible values", () => {
     const html = renderReporting({
       kind: "comparison-bars",
