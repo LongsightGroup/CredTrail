@@ -3275,6 +3275,10 @@ const renderInstitutionAdminPage = (
     reportingDeferredMetricsMarkup.length === 0
       ? ""
       : `<section class="ct-admin__grid ct-stack">${reportingDeferredMetricsMarkup}</section>`;
+  const reportingPresentationNoteMarkup = `<aside class="ct-admin__reporting-presentation-note ct-stack" aria-label="Current tenant reporting note">
+    <p class="ct-admin__eyebrow">Current tenant view</p>
+    <p>This walkthrough stays on the current tenant and selected filters. Keep the first screen, export rail, and exact tables visible so screenshots and live walkthroughs stay honest to the real reporting slice.</p>
+  </aside>`;
   const reportingLowerStoryMarkup = `<section class="ct-admin__reporting-lower-story" aria-label="Reporting lower-page story">
     <div class="ct-admin__reporting-lower-story-intro ct-stack">
       <p class="ct-admin__eyebrow">Lower-page story</p>
@@ -3450,20 +3454,27 @@ const renderInstitutionAdminPage = (
                     </aside>`,
                   )}
                   <section class="ct-admin ct-stack">
-                    <section class="ct-admin__reporting-first-screen ct-stack">
-                      ${reportingExecutiveSummaryMarkup}
-                      ${reportingOverviewPanelMarkup}
+                    <section class="ct-admin__reporting-presentation-shell ct-stack">
+                      ${reportingPresentationNoteMarkup}
+                      <section class="ct-admin__reporting-primary-story ct-stack">
+                        <section class="ct-admin__reporting-first-screen ct-stack">
+                          ${reportingExecutiveSummaryMarkup}
+                          ${reportingOverviewPanelMarkup}
+                        </section>
+                        ${reportingTrendPanelMarkup}
+                        <section class="ct-admin__reporting-supporting-grid">
+                          ${reportingEngagementPanelMarkup}
+                          <aside class="ct-admin__reporting-supporting-rail">
+                            ${reportingExportsPanelMarkup}
+                          </aside>
+                        </section>
+                      </section>
                     </section>
-                    ${reportingTrendPanelMarkup}
-                    <section class="ct-admin__reporting-supporting-grid">
-                      ${reportingEngagementPanelMarkup}
-                      <aside class="ct-admin__reporting-supporting-rail">
-                        ${reportingExportsPanelMarkup}
-                      </aside>
+                    <section class="ct-admin__reporting-secondary-story ct-stack">
+                      ${reportingLowerStoryMarkup}
+                      ${reportingDefinitionsPanelMarkup}
+                      ${reportingDeferredPanelMarkup}
                     </section>
-                    ${reportingLowerStoryMarkup}
-                    ${reportingDefinitionsPanelMarkup}
-                    ${reportingDeferredPanelMarkup}
                   </section>`
                 : view === "rules"
                   ? `${renderPageHeader(

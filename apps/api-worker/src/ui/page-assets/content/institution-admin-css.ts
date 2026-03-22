@@ -725,6 +725,48 @@ export const INSTITUTION_ADMIN_CSS = `
   gap: 0.55rem;
   align-items: flex-start;
 }
+.ct-admin__reporting-presentation-shell {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: var(--ct-radius-xl);
+  border: 1px solid rgba(15, 95, 166, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 247, 255, 0.92)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow: var(--ct-shadow-soft);
+}
+.ct-admin__reporting-presentation-note {
+  display: grid;
+  gap: 0.65rem 1rem;
+  align-items: start;
+  grid-template-columns: minmax(11rem, 13rem) minmax(0, 1fr);
+  padding: 0.95rem 1rem;
+  border-radius: var(--ct-radius-lg);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(246, 250, 255, 0.82)),
+    rgba(255, 255, 255, 0.88);
+}
+.ct-admin__reporting-presentation-note .ct-admin__eyebrow {
+  margin-bottom: 0;
+}
+.ct-admin__reporting-presentation-note p:last-child {
+  max-width: 60rem;
+  color: var(--ct-theme-text-body);
+}
+.ct-admin__reporting-primary-story,
+.ct-admin__reporting-secondary-story {
+  display: grid;
+  gap: 1rem;
+}
+.ct-admin__reporting-secondary-story {
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(15, 95, 166, 0.14);
+}
+.ct-admin__reporting-secondary-story > * {
+  min-width: 0;
+}
 .ct-admin__reporting-first-screen {
   display: grid;
   gap: 1rem;
@@ -735,8 +777,6 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-lower-story {
   display: grid;
   gap: 1rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid rgba(15, 95, 166, 0.14);
 }
 .ct-admin__reporting-lower-story-intro {
   padding: 0.95rem 1rem;
@@ -749,9 +789,9 @@ export const INSTITUTION_ADMIN_CSS = `
 }
 .ct-admin__reporting-supporting-grid {
   display: grid;
-  gap: 0.95rem;
+  gap: 1rem;
   align-items: start;
-  grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.78fr);
+  grid-template-columns: minmax(0, 1.24fr) minmax(18rem, 0.8fr);
 }
 .ct-admin__reporting-supporting-grid > * {
   min-width: 0;
@@ -759,6 +799,7 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__reporting-supporting-rail {
   display: grid;
   gap: 0.95rem;
+  align-content: start;
 }
 .ct-admin__reporting-supporting-rail .ct-admin__panel {
   position: sticky;
@@ -866,9 +907,9 @@ export const INSTITUTION_ADMIN_CSS = `
 }
 .ct-admin__reporting-panel-media {
   display: grid;
-  gap: 0.95rem;
+  gap: 1rem;
   align-items: start;
-  grid-template-columns: minmax(19rem, 25rem) minmax(0, 1fr);
+  grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
 }
 .ct-admin__reporting-panel-media > * {
   min-width: 0;
@@ -1065,7 +1106,16 @@ export const INSTITUTION_ADMIN_CSS = `
 .ct-admin__table--compact td {
   padding-block: 0.55rem;
 }
+@media (max-width: 1280px) {
+  .ct-admin__reporting-presentation-note {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ct-admin__reporting-panel-media {
+    grid-template-columns: minmax(16rem, 21rem) minmax(0, 1fr);
+  }
+}
 @media (max-width: 1100px) {
+  .ct-admin__reporting-presentation-note,
   .ct-admin__reporting-trend-hero,
   .ct-admin__reporting-summary-layout,
   .ct-admin__reporting-supporting-grid,
@@ -1079,6 +1129,13 @@ export const INSTITUTION_ADMIN_CSS = `
   }
 }
 @media (max-width: 768px) {
+  .ct-admin__reporting-presentation-shell,
+  .ct-admin__reporting-presentation-note {
+    padding: 0.85rem;
+  }
+  .ct-admin__reporting-secondary-story {
+    padding-top: 0.85rem;
+  }
   .ct-admin__reporting-summary-band {
     padding: 1rem;
   }
