@@ -1610,20 +1610,28 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("Performer panels");
+    expect(body).toContain('class="ct-admin__reporting-performer-groups"');
+    expect(body).toContain("Volume rankings");
+    expect(body).toContain("Rate rankings");
+    expect(body).toContain("Compare level: department rows in the current visible hierarchy.");
+    expect(body).toContain(
+      "Rate rankings require at least 5 issued badges so issued totals stay visible beside every rate callout.",
+    );
     expect(body).toContain("Highest issuance volume");
     expect(body).toContain("Lowest issuance volume");
     expect(body).toContain("Highest claim rate");
     expect(body).toContain("Lowest share rate");
-    expect(body).toContain("Minimum sample for rate panels: 5 issued badges");
-    expect(body).toContain(
-      "These rankings keep issued volume separate from claim and share rates.",
-    );
+    expect(body).toContain("Comparing department rows by claim rate.");
+    expect(body).toContain("Issued totals stay visible beside each ranked rate row.");
     expect(body).toContain("Computer Science");
     expect(body).toContain("History");
     expect(body).not.toContain(
       'Design Foundations</strong><div class="ct-admin__meta">Below the minimum sample',
     );
-    expect(body).toContain("Compare by badge template");
+    expect(body).toContain('class="ct-admin__reporting-lower-story"');
+    expect(body.indexOf("Compare by badge template")).toBeLessThan(body.indexOf("Hierarchy drilldown"));
+    expect(body.indexOf("Hierarchy drilldown")).toBeLessThan(body.indexOf("Performer panels"));
+    expect(body.indexOf("Performer panels")).toBeLessThan(body.indexOf("Compare by org unit"));
   });
 });
 

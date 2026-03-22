@@ -974,10 +974,18 @@ describe("org unit and badge ownership governance endpoints", () => {
       'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
     );
     expect(html).toContain('aria-current="page">Computer Science</span>');
+    expect(html).toContain('class="ct-admin__reporting-lower-story"');
     expect(html).toContain("Performer panels");
+    expect(html).toContain("Volume rankings");
+    expect(html).toContain("Rate rankings");
+    expect(html).toContain("Compare level: department rows in the current visible hierarchy.");
     expect(html).toContain("Highest issuance volume");
     expect(html).toContain("Highest claim rate");
-    expect(html).toContain("Minimum sample for rate panels: 5 issued badges");
+    expect(html).toContain(
+      "Rate rankings require at least 5 issued badges so issued totals stay visible beside every rate callout.",
+    );
+    expect(html).toContain("Comparing department rows by claim rate.");
+    expect(html).toContain("Issued totals stay visible beside each ranked rate row.");
     expect(html).toContain('class="ct-reporting-visual"');
     expect(html).toContain('data-reporting-visual-kind="comparison-bars"');
     expect((html.match(/data-reporting-visual-kind="comparison-ranked"/g) ?? []).length).toBeGreaterThanOrEqual(
@@ -1000,6 +1008,9 @@ describe("org unit and badge ownership governance endpoints", () => {
     );
     expect(html.indexOf("Executive Summary")).toBeLessThan(html.indexOf("Export CSV"));
     expect(html.indexOf("Trend lines")).toBeLessThan(html.indexOf("Export CSV"));
+    expect(html.indexOf("Compare by badge template")).toBeLessThan(html.indexOf("Hierarchy drilldown"));
+    expect(html.indexOf("Hierarchy drilldown")).toBeLessThan(html.indexOf("Performer panels"));
+    expect(html.indexOf("Performer panels")).toBeLessThan(html.indexOf("Compare by org unit"));
     expect(html).not.toContain("Phase 10 product data");
     expect(html).not.toContain("Phase 11 Scope");
     expect(html).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
