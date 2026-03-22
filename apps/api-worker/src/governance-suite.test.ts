@@ -224,6 +224,23 @@ const createEnv = (): {
   };
 };
 
+const getReportingPanelArticleMarkup = (html: string, heading: string): string => {
+  const headingMarkup = `<h2>${heading}</h2>`;
+  const headingIndex = html.indexOf(headingMarkup);
+
+  expect(headingIndex).toBeGreaterThan(-1);
+
+  const start = html.lastIndexOf("<article", headingIndex);
+
+  expect(start).toBeGreaterThan(-1);
+
+  const end = html.indexOf("</article>", headingIndex);
+
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+};
+
 const loadAppWithMockedAuthProviders = async (input: {
   betterAuthPrincipal?: {
     userId: string;
@@ -1029,6 +1046,473 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(mockedFindTenantAuthPolicy).not.toHaveBeenCalled();
     expect(mockedListTenantAuthProviders).not.toHaveBeenCalled();
     expect(mockedListTenantBreakGlassAccounts).not.toHaveBeenCalled();
+  });
+
+  it("keeps sparse reporting states scoped to already-visible rows", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
+    mockedListTenantMembershipOrgUnitScopes.mockImplementation(
+      async (_db, input: { tenantId: string; userId?: string | undefined }) => {
+        if (input.userId === "usr_123") {
+          return [
+            sampleTenantMembershipOrgUnitScope({
+              userId: "usr_123",
+              orgUnitId: "tenant_123:org:college-eng",
+              role: "issuer",
+            }),
+          ];
+        }
+
+        return [];
+      },
+    );
+    mockedListTenantOrgUnits.mockResolvedValue([
+      sampleTenantOrgUnit(),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-eng",
+        unitType: "college",
+        slug: "college-eng",
+        displayName: "College of Engineering",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-arts",
+        unitType: "college",
+        slug: "college-arts",
+        displayName: "College of Arts",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-cs",
+        unitType: "department",
+        slug: "department-cs",
+        displayName: "Computer Science",
+        parentOrgUnitId: "tenant_123:org:college-eng",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:program-cs",
+        unitType: "program",
+        slug: "program-cs",
+        displayName: "Computer Science Program",
+        parentOrgUnitId: "tenant_123:org:department-cs",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-history",
+        unitType: "department",
+        slug: "department-history",
+        displayName: "History",
+        parentOrgUnitId: "tenant_123:org:college-arts",
+      }),
+    ]);
+    mockedListBadgeTemplates.mockResolvedValue([
+      sampleBadgeTemplate(),
+      sampleBadgeTemplate({
+        id: "badge_template_chem",
+        slug: "chemistry-lab",
+        title: "Chemistry Lab",
+        ownerOrgUnitId: "tenant_123:org:department-history",
+      }),
+    ]);
+    mockedGetTenantReportingOverview.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
+        return {
+          tenantId: "tenant_123",
+          filters: {
+            issuedFrom: input.issuedFrom ?? null,
+            issuedTo: input.issuedTo ?? null,
+            badgeTemplateId: input.badgeTemplateId ?? null,
+            orgUnitId: input.orgUnitId,
+            state: input.state ?? null,
+          },
+          counts: {
+            issued: 5,
+            active: 5,
+            suspended: 0,
+            revoked: 0,
+            pendingReview: 0,
+            claimRate: 40,
+            shareRate: 20,
+          },
+          generatedAt: "2026-03-21T12:00:00.000Z",
+        };
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 0,
+          active: 0,
+          suspended: 0,
+          revoked: 0,
+          pendingReview: 0,
+          claimRate: 0,
+          shareRate: 0,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedGetTenantReportingEngagementCounts.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
+        return {
+          issuedCount: 5,
+          publicBadgeViewCount: 14,
+          verificationViewCount: 5,
+          shareClickCount: 2,
+          learnerClaimCount: 2,
+          walletAcceptCount: 1,
+          claimRate: 40,
+          shareRate: 20,
+        };
+      }
+
+      return {
+        issuedCount: 0,
+        publicBadgeViewCount: 0,
+        verificationViewCount: 0,
+        shareClickCount: 0,
+        learnerClaimCount: 0,
+        walletAcceptCount: 0,
+        claimRate: 0,
+        shareRate: 0,
+      };
+    });
+    mockedGetTenantReportingTrends.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
+        return {
+          tenantId: "tenant_123",
+          filters: {
+            from: input.from ?? null,
+            to: input.to ?? null,
+            badgeTemplateId: input.badgeTemplateId ?? null,
+            orgUnitId: input.orgUnitId ?? null,
+            state: input.state ?? null,
+          },
+          bucket: "day",
+          series: [
+            {
+              bucketStart: "2026-03-01",
+              issuedCount: 5,
+              publicBadgeViewCount: 14,
+              verificationViewCount: 5,
+              shareClickCount: 2,
+              learnerClaimCount: 2,
+              walletAcceptCount: 1,
+            },
+          ],
+          generatedAt: "2026-03-21T12:00:00.000Z",
+        };
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          from: input.from ?? null,
+          to: input.to ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        bucket: "day",
+        series: [],
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedListTenantReportingComparisons.mockImplementation(async (_db, input) => {
+      if (input.groupBy === "orgUnit") {
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:program-cs",
+            issuedCount: 5,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 40,
+            shareRate: 20,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      if (input.orgUnitId === "tenant_123:org:program-cs") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_001",
+            issuedCount: 5,
+            publicBadgeViewCount: 14,
+            verificationViewCount: 5,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 40,
+            shareRate: 20,
+          },
+        ];
+      }
+
+      if (input.orgUnitId === "tenant_123:org:department-history") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_chem",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      return [];
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const html = await response.text();
+    const trendPanel = getReportingPanelArticleMarkup(html, "Trend lines");
+    const templatePanel = getReportingPanelArticleMarkup(html, "Compare by badge template");
+    const orgUnitPanel = getReportingPanelArticleMarkup(html, "Compare by org unit");
+    const hierarchyPanel = getReportingPanelArticleMarkup(html, "Hierarchy drilldown");
+    const performerPanel = getReportingPanelArticleMarkup(html, "Performer panels");
+
+    expect(response.status).toBe(200);
+    expect(trendPanel).toContain('data-reporting-state="sparse"');
+    expect(templatePanel).toContain('data-reporting-state="sparse"');
+    expect(orgUnitPanel).toContain('data-reporting-state="sparse"');
+    expect(hierarchyPanel).toContain('data-reporting-state="sparse"');
+    expect(performerPanel).toContain('data-reporting-state="sparse"');
+    expect(html).toContain(
+      "Only one badge template row is visible in this slice, so the exact row below carries the full comparison detail.",
+    );
+    expect(html).toContain(
+      "Only one org-unit row is visible in this slice, so use the exact row below to read the current context.",
+    );
+    expect(html).toContain("This slice currently resolves to one visible reporting path.");
+    expect(html).toContain(
+      "Rankings stay paused until this slice has more than one comparable hierarchy row.",
+    );
+    expect(html).toContain("Computer Science Program");
+    expect(html).not.toContain("Chemistry Lab");
+    expect(html).not.toContain("History");
+    expect(html).not.toContain("College of Arts");
+  });
+
+  it("keeps empty reporting states scoped to already-visible rows", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
+    mockedListTenantMembershipOrgUnitScopes.mockImplementation(
+      async (_db, input: { tenantId: string; userId?: string | undefined }) => {
+        if (input.userId === "usr_123") {
+          return [
+            sampleTenantMembershipOrgUnitScope({
+              userId: "usr_123",
+              orgUnitId: "tenant_123:org:college-eng",
+              role: "issuer",
+            }),
+          ];
+        }
+
+        return [];
+      },
+    );
+    mockedListTenantOrgUnits.mockResolvedValue([
+      sampleTenantOrgUnit(),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-eng",
+        unitType: "college",
+        slug: "college-eng",
+        displayName: "College of Engineering",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:college-arts",
+        unitType: "college",
+        slug: "college-arts",
+        displayName: "College of Arts",
+        parentOrgUnitId: "tenant_123:org:institution",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-cs",
+        unitType: "department",
+        slug: "department-cs",
+        displayName: "Computer Science",
+        parentOrgUnitId: "tenant_123:org:college-eng",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:program-cs",
+        unitType: "program",
+        slug: "program-cs",
+        displayName: "Computer Science Program",
+        parentOrgUnitId: "tenant_123:org:department-cs",
+      }),
+      sampleTenantOrgUnit({
+        id: "tenant_123:org:department-history",
+        unitType: "department",
+        slug: "department-history",
+        displayName: "History",
+        parentOrgUnitId: "tenant_123:org:college-arts",
+      }),
+    ]);
+    mockedListBadgeTemplates.mockResolvedValue([
+      sampleBadgeTemplate(),
+      sampleBadgeTemplate({
+        id: "badge_template_chem",
+        slug: "chemistry-lab",
+        title: "Chemistry Lab",
+        ownerOrgUnitId: "tenant_123:org:department-history",
+      }),
+    ]);
+    mockedGetTenantReportingOverview.mockResolvedValue({
+      tenantId: "tenant_123",
+      filters: {
+        issuedFrom: null,
+        issuedTo: null,
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      counts: {
+        issued: 0,
+        active: 0,
+        suspended: 0,
+        revoked: 0,
+        pendingReview: 0,
+        claimRate: 0,
+        shareRate: 0,
+      },
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedGetTenantReportingEngagementCounts.mockResolvedValue({
+      issuedCount: 0,
+      publicBadgeViewCount: 0,
+      verificationViewCount: 0,
+      shareClickCount: 0,
+      learnerClaimCount: 0,
+      walletAcceptCount: 0,
+      claimRate: 0,
+      shareRate: 0,
+    });
+    mockedGetTenantReportingTrends.mockResolvedValue({
+      tenantId: "tenant_123",
+      filters: {
+        from: null,
+        to: null,
+        badgeTemplateId: null,
+        orgUnitId: null,
+        state: null,
+      },
+      bucket: "day",
+      series: [],
+      generatedAt: "2026-03-21T12:00:00.000Z",
+    });
+    mockedListTenantReportingComparisons.mockImplementation(async (_db, input) => {
+      if (input.groupBy === "orgUnit") {
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      if (input.orgUnitId === "tenant_123:org:department-history") {
+        return [
+          {
+            groupBy: "badgeTemplate",
+            groupId: "badge_template_chem",
+            issuedCount: 3,
+            publicBadgeViewCount: 6,
+            verificationViewCount: 2,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 33.3,
+            shareRate: 16.7,
+          },
+        ];
+      }
+
+      return [];
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting",
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const html = await response.text();
+    const trendPanel = getReportingPanelArticleMarkup(html, "Trend lines");
+    const templatePanel = getReportingPanelArticleMarkup(html, "Compare by badge template");
+    const orgUnitPanel = getReportingPanelArticleMarkup(html, "Compare by org unit");
+    const hierarchyPanel = getReportingPanelArticleMarkup(html, "Hierarchy drilldown");
+    const performerPanel = getReportingPanelArticleMarkup(html, "Performer panels");
+
+    expect(response.status).toBe(200);
+    expect(trendPanel).toContain('data-reporting-state="empty"');
+    expect(templatePanel).toContain('data-reporting-state="empty"');
+    expect(orgUnitPanel).toContain('data-reporting-state="empty"');
+    expect(hierarchyPanel).toContain('data-reporting-state="empty"');
+    expect(performerPanel).toContain('data-reporting-state="empty"');
+    expect(html).toContain("This reporting slice does not have enough activity to chart yet.");
+    expect(html).toContain("No badge-template rows are visible for this slice yet.");
+    expect(html).toContain("No org-unit rows are visible for this slice yet.");
+    expect(html).toContain(
+      "Hierarchy drilldowns appear here once visible org-unit rows exist for this slice.",
+    );
+    expect(html).toContain(
+      "Performer rankings appear once this slice includes comparable hierarchy rows.",
+    );
+    expect(html).not.toContain("Chemistry Lab");
+    expect(html).not.toContain("History");
+    expect(html).not.toContain("College of Arts");
   });
 
   it("lists tenant org units for issuer roles", async () => {

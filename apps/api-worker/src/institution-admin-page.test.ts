@@ -97,6 +97,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { INSTITUTION_ADMIN_JS } from "./ui/page-assets/content/institution-admin-js";
 
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
@@ -1451,6 +1452,11 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(overviewPanel).toContain('data-reporting-submit-status');
     expect(overviewPanel).toContain(
       "Applying filters refreshes this page with the selected reporting slice.",
+    );
+    expect(INSTITUTION_ADMIN_JS).toContain("reporting-filters-form");
+    expect(INSTITUTION_ADMIN_JS).toContain("reportingFiltersForm.dataset.reportingSubmitState = 'pending'");
+    expect(INSTITUTION_ADMIN_JS).toContain(
+      "Refreshing this page with the selected reporting slice...",
     );
     expect(overviewPanel).not.toContain("Loading dashboard");
   });

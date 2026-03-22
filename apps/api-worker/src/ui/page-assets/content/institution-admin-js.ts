@@ -154,6 +154,8 @@ export const INSTITUTION_ADMIN_JS = `
   const issuedBadgesStatus = document.getElementById('issued-badges-status');
   const issuedBadgesBody = document.getElementById('issued-badges-body');
   const issuedBadgesActionStatus = document.getElementById('issued-badges-action-status');
+  const reportingFiltersForm = document.getElementById('reporting-filters-form');
+  const reportingFiltersStatus = document.getElementById('reporting-filters-status');
   const membershipScopeForm = document.getElementById('membership-scope-form');
   const membershipScopeStatus = document.getElementById('membership-scope-status');
   const membershipScopeBody = document.getElementById('membership-scope-body');
@@ -4893,6 +4895,23 @@ export const INSTITUTION_ADMIN_JS = `
           }
         });
       });
+  }
+
+  if (reportingFiltersForm instanceof HTMLFormElement) {
+    reportingFiltersForm.addEventListener('submit', () => {
+      reportingFiltersForm.dataset.reportingSubmitState = 'pending';
+      reportingFiltersForm.setAttribute('aria-busy', 'true');
+
+      if (reportingFiltersStatus instanceof HTMLElement) {
+        reportingFiltersStatus.textContent = 'Refreshing this page with the selected reporting slice...';
+      }
+
+      Array.from(reportingFiltersForm.querySelectorAll('button[type="submit"]')).forEach((candidate) => {
+        if (candidate instanceof HTMLButtonElement) {
+          candidate.disabled = true;
+        }
+      });
+    });
   }
 
   const reportingBarGroups = Array.from(document.querySelectorAll('[data-reporting-bar-group]')).filter(

@@ -855,6 +855,15 @@ export const INSTITUTION_ADMIN_CSS = `
 [data-reporting-submit-status] {
   margin: 0;
 }
+#reporting-filters-form[data-reporting-submit-state='pending'] {
+  opacity: 0.84;
+}
+#reporting-filters-form[data-reporting-submit-state='pending'] button[type='submit'] {
+  cursor: progress;
+}
+#reporting-filters-form[data-reporting-submit-state='pending'] + [data-reporting-submit-status] {
+  color: var(--ct-theme-text-title);
+}
 .ct-admin__reporting-panel-media {
   display: grid;
   gap: 0.95rem;
