@@ -351,6 +351,22 @@ const renderInstitutionAdminPage = (
       ${noteMarkup}
     </div>`;
   };
+  const renderReportingTrendCallout = (input: {
+    kind: "peak" | "latest";
+    label: string;
+    row: TenantReportingTrendRecord["series"][number];
+  }): string => {
+    return `<article class="ct-admin__reporting-trend-callout" data-reporting-trend-callout="${escapeHtml(input.kind)}">
+      <p class="ct-admin__eyebrow">${escapeHtml(input.label)}</p>
+      <h3>${escapeHtml(formatReportingDateLabel(input.row.bucketStart))}</h3>
+      <p class="ct-admin__meta">${escapeHtml(
+        `${formatReportingCount(input.row.issuedCount)} issued badges`,
+      )}</p>
+      <p class="ct-admin__meta">${escapeHtml(
+        `${formatReportingCount(input.row.publicBadgeViewCount)} public views · ${formatReportingCount(input.row.shareClickCount)} share clicks · ${formatReportingCount(input.row.walletAcceptCount)} wallet accepts`,
+      )}</p>
+    </article>`;
+  };
   const renderReportingCountCell = (value: number): string => {
     return `<span class="ct-admin__reporting-table-number">${escapeHtml(formatReportingCount(value))}</span>`;
   };
@@ -1287,6 +1303,42 @@ const renderInstitutionAdminPage = (
             </tr>`;
           })
           .join("\n");
+  const reportingTrendHeroMarkup =
+    reportingTrends === null || reportingTrends.series.length === 0
+      ? '<div class="ct-admin__empty">No trend data available for the selected filters.</div>'
+      : (() => {
+          const startRow = reportingTrends.series[0];
+          const latestRow = reportingTrends.series[reportingTrends.series.length - 1] ?? startRow;
+          const peakRow =
+            reportingTrends.series.reduce((highestRow, row) => {
+              return row.issuedCount > highestRow.issuedCount ? row : highestRow;
+            }, startRow) ?? latestRow;
+
+          if (startRow === undefined || latestRow === undefined || peakRow === undefined) {
+            return '<div class="ct-admin__empty">No trend data available for the selected filters.</div>';
+          }
+
+          return `<div class="ct-admin__reporting-trend-hero">
+            <div class="ct-admin__reporting-trend-intro ct-stack">
+              <p class="ct-admin__eyebrow">Chart-first read</p>
+              <h3>Read issued badge momentum first</h3>
+              <p>Start with the chart to see how issuance moved across the selected reporting slice, then use the detailed table below for the exact engagement counts behind each day.</p>
+              <div class="ct-admin__reporting-trend-callouts">
+                ${renderReportingTrendCallout({
+                  kind: "peak",
+                  label: "Peak day",
+                  row: peakRow,
+                })}
+                ${renderReportingTrendCallout({
+                  kind: "latest",
+                  label: "Latest day",
+                  row: latestRow,
+                })}
+              </div>
+            </div>
+            ${reportingTrendVisualMarkup}
+          </div>`;
+        })();
   const renderReportingComparisonRows = (
     rows: readonly TenantReportingComparisonRowRecord[],
     emptyLabel: string,
@@ -2832,27 +2884,26 @@ const renderInstitutionAdminPage = (
 
   const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Trend lines</h2>
-    <p>Trend lines combine issuance and supported engagement counts over time for the same reporting filters. Claim actions and wallet accepts remain separate events here.</p>
-    <div class="ct-admin__reporting-panel-media">
-      ${reportingTrendVisualMarkup}
-      <div class="ct-admin__table-wrap">
-        <table class="ct-admin__table">
-          <thead>
-            <tr>
-              <th>Day</th>
-              <th>Issued</th>
-              <th>Public badge views</th>
-              <th>Verification views</th>
-              <th>Share clicks</th>
-              <th>Claim actions</th>
-              <th>Wallet accepts</th>
-            </tr>
-          </thead>
-          <tbody data-reporting-bar-group="trends">
-            ${reportingTrendRowsMarkup}
-          </tbody>
-        </table>
-      </div>
+    <p>Use the chart first to read issuance momentum for the selected reporting slice. The detailed table remains below so each supporting engagement count stays visible and reviewable.</p>
+    ${reportingTrendHeroMarkup}
+    <div class="ct-admin__table-wrap">
+      <h3>Detailed trend table</h3>
+      <table class="ct-admin__table">
+        <thead>
+          <tr>
+            <th>Day</th>
+            <th>Issued</th>
+            <th>Public badge views</th>
+            <th>Verification views</th>
+            <th>Share clicks</th>
+            <th>Claim actions</th>
+            <th>Wallet accepts</th>
+          </tr>
+        </thead>
+        <tbody data-reporting-bar-group="trends">
+          ${reportingTrendRowsMarkup}
+        </tbody>
+      </table>
     </div>
   </article>`;
 

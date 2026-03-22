@@ -245,6 +245,58 @@ const renderTrendGraphic = (
   </svg>`;
 };
 
+const renderTrendContext = (
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+): string => {
+  const startPoint = normalizedSeries[0];
+  const latestPoint = normalizedSeries[normalizedSeries.length - 1] ?? startPoint;
+  const peakPoint =
+    [...normalizedSeries].sort((left, right) => right.value - left.value)[0] ?? latestPoint;
+
+  if (startPoint === undefined || latestPoint === undefined || peakPoint === undefined) {
+    return "";
+  }
+
+  const renderAxisItem = (
+    label: "Start" | "Latest",
+    point: ReportingVisualSeriesPoint,
+  ): string => {
+    return `<div class="ct-reporting-visual__trend-axis-item" data-reporting-trend-point="${slugify(label)}">
+      <span class="ct-reporting-visual__trend-axis-label">${escapeHtml(label)}</span>
+      <strong class="ct-reporting-visual__trend-axis-value">${escapeHtml(point.label)}</strong>
+      <span class="ct-reporting-visual__trend-axis-detail">${escapeHtml(formatValue(point.value))}</span>
+    </div>`;
+  };
+
+  const renderCallout = (
+    label: "Peak" | "Latest",
+    point: ReportingVisualSeriesPoint,
+  ): string => {
+    const detailMarkup =
+      point.detail === undefined || point.detail.trim().length === 0
+        ? ""
+        : `<span class="ct-reporting-visual__trend-callout-detail">${escapeHtml(point.detail)}</span>`;
+
+    return `<li class="ct-reporting-visual__trend-callout" data-reporting-trend-callout="${slugify(label)}">
+      <span class="ct-reporting-visual__trend-callout-label">${escapeHtml(label)}</span>
+      <strong class="ct-reporting-visual__trend-callout-value">${escapeHtml(point.label)}</strong>
+      <span class="ct-reporting-visual__trend-callout-metric">${escapeHtml(formatValue(point.value))}</span>
+      ${detailMarkup}
+    </li>`;
+  };
+
+  return `<div class="ct-reporting-visual__trend-context">
+    <div class="ct-reporting-visual__trend-axis">
+      ${renderAxisItem("Start", startPoint)}
+      ${renderAxisItem("Latest", latestPoint)}
+    </div>
+    <ol class="ct-reporting-visual__trend-callouts">
+      ${renderCallout("Peak", peakPoint)}
+      ${renderCallout("Latest", latestPoint)}
+    </ol>
+  </div>`;
+};
+
 const renderGraphic = (
   input: ReportingVisualProps,
   normalizedSeries: readonly ReportingVisualSeriesPoint[],
@@ -295,6 +347,8 @@ export const renderReporting = (input: ReportingVisualProps): string => {
 
   const summaryText = buildSummaryText(input, normalizedSeries, totalValue);
   const graphicMarkup = renderGraphic(input, normalizedSeries, titleId, descriptionIds);
+  const trendContextMarkup =
+    input.kind === "trend-series" ? renderTrendContext(normalizedSeries) : "";
   const legendMarkup = renderLegend(input, normalizedSeries, totalValue, maxValue);
 
   return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="ready">
@@ -305,6 +359,7 @@ export const renderReporting = (input: ReportingVisualProps): string => {
     <div class="ct-reporting-visual__surface">
       ${graphicMarkup}
     </div>
+    ${trendContextMarkup}
     <p id="${summaryId}" class="ct-reporting-visual__summary">${escapeHtml(summaryText)}</p>
     ${legendMarkup}
   </figure>`;
