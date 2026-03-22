@@ -1,0 +1,306 @@
+import { escapeHtml } from "../utils/display-format";
+
+export type ReportingVisualKind = "comparison-bars" | "stacked-summary" | "trend-series";
+
+export interface ReportingVisualSeriesPoint {
+  label: string;
+  value: number;
+  detail?: string;
+}
+
+export interface ReportingVisualProps {
+  kind: ReportingVisualKind;
+  title: string;
+  description?: string;
+  series: readonly ReportingVisualSeriesPoint[];
+  id?: string;
+  emptyMessage?: string;
+}
+
+const REPORTING_VISUAL_EMPTY_MESSAGE = "No reporting data available for this view yet.";
+const REPORTING_VISUAL_WIDTH = 360;
+const REPORTING_VISUAL_PADDING = 16;
+
+const formatValue = (value: number): string => {
+  const normalizedValue = Number.isFinite(value) ? value : 0;
+
+  if (Number.isInteger(normalizedValue)) {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 0,
+    }).format(normalizedValue);
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(normalizedValue);
+};
+
+const slugify = (value: string): string => {
+  const collapsed = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return collapsed.length > 0 ? collapsed : "reporting-visual";
+};
+
+const normalizeValue = (value: number): number => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return value;
+};
+
+const hasRenderableData = (series: readonly ReportingVisualSeriesPoint[]): boolean => {
+  return series.some((point) => normalizeValue(point.value) > 0);
+};
+
+const buildVisualId = (input: ReportingVisualProps): string => {
+  const explicitId = input.id?.trim();
+
+  if (explicitId !== undefined && explicitId.length > 0) {
+    return slugify(explicitId);
+  }
+
+  return `${input.kind}-${slugify(input.title)}`;
+};
+
+const buildLegendDetail = (
+  input: ReportingVisualProps,
+  point: ReportingVisualSeriesPoint,
+  maxValue: number,
+  totalValue: number,
+): string | null => {
+  if (point.detail !== undefined && point.detail.trim().length > 0) {
+    return point.detail.trim();
+  }
+
+  if (input.kind === "stacked-summary" && totalValue > 0) {
+    return `${((normalizeValue(point.value) / totalValue) * 100).toFixed(1)}% of total`;
+  }
+
+  if (input.kind === "comparison-bars" && maxValue > 0) {
+    return `${((normalizeValue(point.value) / maxValue) * 100).toFixed(1)}% of max`;
+  }
+
+  return null;
+};
+
+const buildSummaryText = (
+  input: ReportingVisualProps,
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  totalValue: number,
+): string => {
+  if (input.kind === "stacked-summary") {
+    return `Total ${formatValue(totalValue)} across ${normalizedSeries.length} segments.`;
+  }
+
+  const sortedSeries = [...normalizedSeries].sort((left, right) => right.value - left.value);
+  const highestPoint = sortedSeries[0];
+
+  if (highestPoint === undefined) {
+    return "No reporting data available for this view yet.";
+  }
+
+  if (input.kind === "trend-series") {
+    const lowestPoint = sortedSeries[sortedSeries.length - 1] ?? highestPoint;
+
+    return `${highestPoint.label} peaks at ${formatValue(highestPoint.value)} while ${lowestPoint.label} sits at ${formatValue(lowestPoint.value)}.`;
+  }
+
+  return `${highestPoint.label} leads at ${formatValue(highestPoint.value)} across ${normalizedSeries.length} comparison points.`;
+};
+
+const renderLegend = (
+  input: ReportingVisualProps,
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  totalValue: number,
+  maxValue: number,
+): string => {
+  const items = normalizedSeries
+    .map((point, index) => {
+      const detail = buildLegendDetail(input, point, maxValue, totalValue);
+      const detailMarkup =
+        detail === null
+          ? ""
+          : `<span class="ct-reporting-visual__legend-detail">${escapeHtml(detail)}</span>`;
+
+      return `<li class="ct-reporting-visual__legend-item">
+        <span class="ct-reporting-visual__swatch ct-reporting-visual__swatch--${String(index % 4)}" aria-hidden="true"></span>
+        <span class="ct-reporting-visual__legend-label">${escapeHtml(point.label)}</span>
+        <strong class="ct-reporting-visual__legend-value">${escapeHtml(formatValue(point.value))}</strong>
+        ${detailMarkup}
+      </li>`;
+    })
+    .join("");
+
+  return `<div class="ct-reporting-visual__legend-block">
+    <p class="ct-reporting-visual__legend-title">Legend</p>
+    <ol class="ct-reporting-visual__legend">${items}</ol>
+  </div>`;
+};
+
+const renderComparisonGraphic = (
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  titleId: string,
+  descriptionIds: string,
+): string => {
+  const maxValue = Math.max(...normalizedSeries.map((point) => normalizeValue(point.value)), 1);
+  const barHeight = 18;
+  const gap = 14;
+  const chartHeight =
+    REPORTING_VISUAL_PADDING * 2 + normalizedSeries.length * barHeight + (normalizedSeries.length - 1) * gap;
+  const availableWidth = REPORTING_VISUAL_WIDTH - REPORTING_VISUAL_PADDING * 2;
+
+  const bars = normalizedSeries
+    .map((point, index) => {
+      const y = REPORTING_VISUAL_PADDING + index * (barHeight + gap);
+      const width = Math.max((normalizeValue(point.value) / maxValue) * availableWidth, 2);
+
+      return `<g class="ct-reporting-visual__bar-row">
+        <rect class="ct-reporting-visual__bar-track" x="${String(REPORTING_VISUAL_PADDING)}" y="${String(y)}" width="${String(availableWidth)}" height="${String(barHeight)}" rx="9"></rect>
+        <rect class="ct-reporting-visual__bar ct-reporting-visual__bar--${String(index % 4)}" x="${String(REPORTING_VISUAL_PADDING)}" y="${String(y)}" width="${width.toFixed(2)}" height="${String(barHeight)}" rx="9"></rect>
+      </g>`;
+    })
+    .join("");
+
+  return `<svg class="ct-reporting-visual__graphic" viewBox="0 0 ${String(REPORTING_VISUAL_WIDTH)} ${String(chartHeight)}" role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionIds}">
+    <desc>Visible labels and numeric values are listed in the legend below.</desc>
+    ${bars}
+  </svg>`;
+};
+
+const renderStackedGraphic = (
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  titleId: string,
+  descriptionIds: string,
+): string => {
+  const totalValue = normalizedSeries.reduce((sum, point) => sum + normalizeValue(point.value), 0);
+  const chartHeight = 68;
+  const availableWidth = REPORTING_VISUAL_WIDTH - REPORTING_VISUAL_PADDING * 2;
+  let x = REPORTING_VISUAL_PADDING;
+
+  const segments = normalizedSeries
+    .map((point, index) => {
+      const width = Math.max((normalizeValue(point.value) / totalValue) * availableWidth, 2);
+      const segment = `<rect class="ct-reporting-visual__segment ct-reporting-visual__segment--${String(index % 4)}" x="${x.toFixed(2)}" y="22" width="${width.toFixed(2)}" height="24" rx="10"></rect>`;
+      x += width;
+      return segment;
+    })
+    .join("");
+
+  return `<svg class="ct-reporting-visual__graphic" viewBox="0 0 ${String(REPORTING_VISUAL_WIDTH)} ${String(chartHeight)}" role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionIds}">
+    <desc>Visible labels and numeric values are listed in the legend below.</desc>
+    <rect class="ct-reporting-visual__segment-track" x="${String(REPORTING_VISUAL_PADDING)}" y="22" width="${String(availableWidth)}" height="24" rx="10"></rect>
+    ${segments}
+  </svg>`;
+};
+
+const renderTrendGraphic = (
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  titleId: string,
+  descriptionIds: string,
+): string => {
+  const maxValue = Math.max(...normalizedSeries.map((point) => normalizeValue(point.value)), 1);
+  const chartHeight = 160;
+  const chartWidth = REPORTING_VISUAL_WIDTH;
+  const baseline = chartHeight - REPORTING_VISUAL_PADDING;
+  const usableHeight = chartHeight - REPORTING_VISUAL_PADDING * 3;
+  const usableWidth = chartWidth - REPORTING_VISUAL_PADDING * 2;
+  const xStep = normalizedSeries.length === 1 ? 0 : usableWidth / (normalizedSeries.length - 1);
+
+  const points = normalizedSeries.map((point, index) => {
+    const x = REPORTING_VISUAL_PADDING + index * xStep;
+    const y = baseline - (normalizeValue(point.value) / maxValue) * usableHeight;
+
+    return {
+      index,
+      x,
+      y,
+      label: point.label,
+    };
+  });
+
+  const polyline = points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const pointMarkup = points
+    .map((point) => {
+      return `<g class="ct-reporting-visual__point-group">
+        <circle class="ct-reporting-visual__point ct-reporting-visual__point--${String(point.index % 4)}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4"></circle>
+      </g>`;
+    })
+    .join("");
+
+  return `<svg class="ct-reporting-visual__graphic" viewBox="0 0 ${String(chartWidth)} ${String(chartHeight)}" role="img" aria-labelledby="${titleId}" aria-describedby="${descriptionIds}">
+    <desc>Visible labels and numeric values are listed in the legend below.</desc>
+    <line class="ct-reporting-visual__baseline" x1="${String(REPORTING_VISUAL_PADDING)}" y1="${String(baseline)}" x2="${String(chartWidth - REPORTING_VISUAL_PADDING)}" y2="${String(baseline)}"></line>
+    <polyline class="ct-reporting-visual__trend-line" points="${polyline}"></polyline>
+    ${pointMarkup}
+  </svg>`;
+};
+
+const renderGraphic = (
+  input: ReportingVisualProps,
+  normalizedSeries: readonly ReportingVisualSeriesPoint[],
+  titleId: string,
+  descriptionIds: string,
+): string => {
+  switch (input.kind) {
+    case "comparison-bars":
+      return renderComparisonGraphic(normalizedSeries, titleId, descriptionIds);
+    case "stacked-summary":
+      return renderStackedGraphic(normalizedSeries, titleId, descriptionIds);
+    case "trend-series":
+      return renderTrendGraphic(normalizedSeries, titleId, descriptionIds);
+  }
+};
+
+export const renderReporting = (input: ReportingVisualProps): string => {
+  const visualId = buildVisualId(input);
+  const titleId = `${visualId}-title`;
+  const descriptionId = `${visualId}-description`;
+  const summaryId = `${visualId}-summary`;
+  const normalizedSeries = input.series.map((point) => ({
+    ...point,
+    value: normalizeValue(point.value),
+  }));
+  const totalValue = normalizedSeries.reduce((sum, point) => sum + point.value, 0);
+  const maxValue = Math.max(...normalizedSeries.map((point) => point.value), 0);
+  const descriptionIds = [input.description !== undefined ? descriptionId : null, summaryId]
+    .filter((value): value is string => value !== null)
+    .join(" ");
+  const descriptionMarkup =
+    input.description === undefined
+      ? ""
+      : `<p id="${descriptionId}" class="ct-reporting-visual__description">${escapeHtml(input.description)}</p>`;
+
+  if (!hasRenderableData(normalizedSeries)) {
+    return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="empty">
+      <figcaption class="ct-reporting-visual__header">
+        <h3 id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</h3>
+        ${descriptionMarkup}
+      </figcaption>
+      <div id="${summaryId}" class="ct-reporting-visual__empty">
+        ${escapeHtml(input.emptyMessage ?? REPORTING_VISUAL_EMPTY_MESSAGE)}
+      </div>
+    </figure>`;
+  }
+
+  const summaryText = buildSummaryText(input, normalizedSeries, totalValue);
+  const graphicMarkup = renderGraphic(input, normalizedSeries, titleId, descriptionIds);
+  const legendMarkup = renderLegend(input, normalizedSeries, totalValue, maxValue);
+
+  return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="ready">
+    <figcaption class="ct-reporting-visual__header">
+      <h3 id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</h3>
+      ${descriptionMarkup}
+    </figcaption>
+    <div class="ct-reporting-visual__surface">
+      ${graphicMarkup}
+    </div>
+    <p id="${summaryId}" class="ct-reporting-visual__summary">${escapeHtml(summaryText)}</p>
+    ${legendMarkup}
+  </figure>`;
+};
