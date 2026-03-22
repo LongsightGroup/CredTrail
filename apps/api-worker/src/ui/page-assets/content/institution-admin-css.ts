@@ -534,6 +534,44 @@ export const INSTITUTION_ADMIN_CSS = `
   flex-wrap: wrap;
   gap: 0.55rem;
 }
+.ct-admin__reporting-visual-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  align-items: start;
+}
+.ct-admin__reporting-visual-shell {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.ct-admin__reporting-visual-note {
+  margin: 0;
+  padding-inline-start: 0.8rem;
+  border-left: 3px solid rgba(15, 95, 166, 0.18);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ct-theme-text-muted);
+}
+.ct-admin__reporting-panel-media {
+  display: grid;
+  gap: 0.95rem;
+  align-items: start;
+}
+.ct-admin__reporting-table-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 1.85rem;
+  padding: 0.15rem 0.58rem;
+  border-radius: var(--ct-radius-pill);
+  border: 1px solid rgba(15, 95, 166, 0.12);
+  background: rgba(15, 95, 166, 0.08);
+  color: var(--ct-theme-text-title);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .ct-admin__reporting-root-link {
   display: inline-flex;
   align-items: center;
@@ -568,9 +606,34 @@ export const INSTITUTION_ADMIN_CSS = `
   gap: 0.85rem;
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
 }
+.ct-admin__panel--nested .ct-reporting-visual {
+  padding: 0.85rem;
+}
+.ct-admin__panel--nested .ct-reporting-visual__surface {
+  padding: 0.75rem;
+}
 .ct-admin__table--compact th,
 .ct-admin__table--compact td {
   padding-block: 0.55rem;
+}
+@media (max-width: 1100px) {
+  .ct-admin__reporting-panel-media,
+  .ct-admin__reporting-visual-grid,
+  .ct-admin__reporting-performer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 768px) {
+  .ct-admin__reporting-focus-section {
+    padding: 0.85rem;
+  }
+  .ct-admin__reporting-visual-note {
+    padding-inline-start: 0.65rem;
+  }
+  .ct-admin__reporting-table-number {
+    min-height: 1.7rem;
+    padding-inline: 0.5rem;
+  }
 }
 .ct-admin__cta-link {
   display: inline-flex;
