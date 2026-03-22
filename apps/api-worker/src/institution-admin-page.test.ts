@@ -943,7 +943,7 @@ describe("GET /tenants/:tenantId/admin/operations/badge-status", () => {
 });
 
 describe("GET /tenants/:tenantId/admin/reporting", () => {
-  it("renders the reporting workspace with engagement trends and comparison sections", async () => {
+  it("renders an executive summary band before the deeper reporting sections", async () => {
     const env = createEnv();
 
     const response = await app.request(
@@ -959,6 +959,12 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("Reporting");
+    expect(body).toContain("Executive Summary");
+    expect(body).toContain('class="ct-admin__reporting-summary-band"');
+    expect(body).toContain('data-reporting-summary-metric="issued"');
+    expect(body).toContain('data-reporting-summary-metric="claim-rate"');
+    expect(body).toContain('data-reporting-summary-metric="share-rate"');
+    expect(body).toContain('data-reporting-summary-metric="public-badge-views"');
     expect(body).toContain("Reporting Overview");
     expect(body).toContain("Engagement Counts");
     expect(body).toContain("Trend lines");
@@ -971,6 +977,8 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("35.7");
     expect(body).toContain('href="/tenants/tenant_123/admin/reporting"');
     expect(body).toContain("14");
+    expect(body.indexOf("Executive Summary")).toBeLessThan(body.indexOf("Reporting Overview"));
+    expect(body.indexOf("Executive Summary")).toBeLessThan(body.indexOf("Engagement Counts"));
     expect(body).not.toContain("Manual Issue Badge");
     expect(body).not.toContain('id="issued-badges-filter-form"');
     expect(mockedGetTenantReportingOverviewDb).toHaveBeenCalledWith(fakeDb, {
@@ -1012,6 +1020,51 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
       orgUnitId: undefined,
       groupBy: "orgUnit",
     });
+  });
+
+  it("keeps the current slice and generated-at context visible at the top of reporting", async () => {
+    const env = createEnv();
+    mockedGetTenantReportingOverviewDb.mockImplementationOnce(async (_db, input) => {
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 14,
+          active: 12,
+          suspended: 1,
+          revoked: 1,
+          pendingReview: 1,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31&badgeTemplateId=badge_template_001&orgUnitId=tenant_123%3Aorg%3Adepartment-cs&state=active",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('class="ct-admin__reporting-summary-context"');
+    expect(body).toContain("Current slice");
+    expect(body).toContain("Mar 1");
+    expect(body).toContain("Mar 31");
+    expect(body).toContain("TypeScript Foundations");
+    expect(body).toContain("Computer Science");
+    expect(body).toContain("active");
+    expect(body).toContain("Generated Mar 21, 2026, 12:00 PM");
   });
 
   it("renders aggregate export links that preserve the current reporting filters", async () => {

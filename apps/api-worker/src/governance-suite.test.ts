@@ -947,6 +947,10 @@ describe("org unit and badge ownership governance endpoints", () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
+    expect(html).toContain("Executive Summary");
+    expect(html).toContain('class="ct-admin__reporting-summary-band"');
+    expect(html).toContain('class="ct-admin__reporting-summary-context"');
+    expect(html).toContain("Current slice");
     expect(html).toContain("Compare by badge template");
     expect(html).toContain("Hierarchy drilldown");
     expect(html).toContain("College of Engineering");
