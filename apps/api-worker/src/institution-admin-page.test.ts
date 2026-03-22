@@ -255,6 +255,27 @@ const sampleReportingOrgUnits = () => {
   ];
 };
 
+const getReportingPanelMarkup = (html: string, heading: string): string => {
+  const headingMarkup = `<h2>${heading}</h2>`;
+  const start = html.indexOf(headingMarkup);
+
+  expect(start).toBeGreaterThan(-1);
+
+  const end = html.indexOf("</article>", start);
+
+  expect(end).toBeGreaterThan(start);
+
+  return html.slice(start, end);
+};
+
+const getReportingPanelVisualMarkup = (panelMarkup: string): string => {
+  const tableWrapStart = panelMarkup.indexOf('<div class="ct-admin__table-wrap">');
+
+  expect(tableWrapStart).toBeGreaterThan(-1);
+
+  return panelMarkup.slice(0, tableWrapStart);
+};
+
 beforeEach(() => {
   mockedCreatePostgresDatabase.mockReset();
   mockedCreatePostgresDatabase.mockReturnValue(fakeDb);
@@ -1204,6 +1225,296 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain('role="img"');
     expect(body).toContain("Visible labels and numeric values are listed in the legend below.");
     expect(body).toContain("Cards below retain the exact lifecycle counts");
+  });
+
+  it("renders ranked comparison modules while keeping the full comparison tables below", async () => {
+    const env = createEnv();
+    mockedListBadgeTemplates.mockResolvedValue([
+      {
+        id: "badge_template_alpha",
+        tenantId: "tenant_123",
+        slug: "applied-analytics",
+        title: "Applied Analytics",
+        description: "Awarded for applied analytics coursework.",
+        criteriaUri: "https://example.edu/criteria/applied-analytics",
+        imageUri: "https://example.edu/badges/applied-analytics.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+      {
+        id: "badge_template_beta",
+        tenantId: "tenant_123",
+        slug: "biotech-lab",
+        title: "Biotech Lab",
+        description: "Awarded for biotech lab completion.",
+        criteriaUri: "https://example.edu/criteria/biotech-lab",
+        imageUri: "https://example.edu/badges/biotech-lab.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+      {
+        id: "badge_template_gamma",
+        tenantId: "tenant_123",
+        slug: "civic-history",
+        title: "Civic History",
+        description: "Awarded for civic history work.",
+        criteriaUri: "https://example.edu/criteria/civic-history",
+        imageUri: "https://example.edu/badges/civic-history.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+      {
+        id: "badge_template_delta",
+        tenantId: "tenant_123",
+        slug: "digital-design",
+        title: "Digital Design",
+        description: "Awarded for digital design work.",
+        criteriaUri: "https://example.edu/criteria/digital-design",
+        imageUri: "https://example.edu/badges/digital-design.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+      {
+        id: "badge_template_epsilon",
+        tenantId: "tenant_123",
+        slug: "ethics-capstone",
+        title: "Ethics Capstone",
+        description: "Awarded for ethics capstone completion.",
+        criteriaUri: "https://example.edu/criteria/ethics-capstone",
+        imageUri: "https://example.edu/badges/ethics-capstone.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+      {
+        id: "badge_template_zeta",
+        tenantId: "tenant_123",
+        slug: "zoology-fieldwork",
+        title: "Zoology Fieldwork",
+        description: "Awarded for zoology fieldwork.",
+        criteriaUri: "https://example.edu/criteria/zoology-fieldwork",
+        imageUri: "https://example.edu/badges/zoology-fieldwork.png",
+        createdByUserId: "usr_admin",
+        ownerOrgUnitId: "tenant_123:org:institution",
+        governanceMetadataJson: null,
+        isArchived: false,
+        createdAt: "2026-02-18T12:00:00.000Z",
+        updatedAt: "2026-02-18T12:00:00.000Z",
+      },
+    ]);
+    mockedGetTenantReportingComparisonsDb.mockImplementation(
+      async (_db, input: { groupBy: "badgeTemplate" | "orgUnit" }) => {
+        if (input.groupBy === "badgeTemplate") {
+          return [
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_beta",
+              issuedCount: 19,
+              publicBadgeViewCount: 40,
+              verificationViewCount: 14,
+              shareClickCount: 6,
+              learnerClaimCount: 8,
+              walletAcceptCount: 4,
+              claimRate: 42.1,
+              shareRate: 31.6,
+            },
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_alpha",
+              issuedCount: 24,
+              publicBadgeViewCount: 51,
+              verificationViewCount: 18,
+              shareClickCount: 8,
+              learnerClaimCount: 11,
+              walletAcceptCount: 6,
+              claimRate: 45.8,
+              shareRate: 33.3,
+            },
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_zeta",
+              issuedCount: 5,
+              publicBadgeViewCount: 11,
+              verificationViewCount: 4,
+              shareClickCount: 1,
+              learnerClaimCount: 1,
+              walletAcceptCount: 0,
+              claimRate: 20,
+              shareRate: 10,
+            },
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_epsilon",
+              issuedCount: 12,
+              publicBadgeViewCount: 25,
+              verificationViewCount: 10,
+              shareClickCount: 4,
+              learnerClaimCount: 5,
+              walletAcceptCount: 2,
+              claimRate: 41.7,
+              shareRate: 33.3,
+            },
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_delta",
+              issuedCount: 9,
+              publicBadgeViewCount: 18,
+              verificationViewCount: 7,
+              shareClickCount: 2,
+              learnerClaimCount: 3,
+              walletAcceptCount: 1,
+              claimRate: 33.3,
+              shareRate: 22.2,
+            },
+            {
+              groupBy: "badgeTemplate",
+              groupId: "badge_template_gamma",
+              issuedCount: 24,
+              publicBadgeViewCount: 47,
+              verificationViewCount: 15,
+              shareClickCount: 7,
+              learnerClaimCount: 10,
+              walletAcceptCount: 5,
+              claimRate: 41.7,
+              shareRate: 29.2,
+            },
+          ];
+        }
+
+        return [
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-cs",
+            issuedCount: 14,
+            publicBadgeViewCount: 30,
+            verificationViewCount: 11,
+            shareClickCount: 5,
+            learnerClaimCount: 6,
+            walletAcceptCount: 3,
+            claimRate: 42.9,
+            shareRate: 35.7,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:college-arts",
+            issuedCount: 17,
+            publicBadgeViewCount: 39,
+            verificationViewCount: 13,
+            shareClickCount: 6,
+            learnerClaimCount: 7,
+            walletAcceptCount: 4,
+            claimRate: 41.2,
+            shareRate: 35.3,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-history",
+            issuedCount: 11,
+            publicBadgeViewCount: 22,
+            verificationViewCount: 8,
+            shareClickCount: 3,
+            learnerClaimCount: 4,
+            walletAcceptCount: 1,
+            claimRate: 36.4,
+            shareRate: 27.3,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:program-design",
+            issuedCount: 4,
+            publicBadgeViewCount: 10,
+            verificationViewCount: 3,
+            shareClickCount: 1,
+            learnerClaimCount: 1,
+            walletAcceptCount: 0,
+            claimRate: 25,
+            shareRate: 25,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:college-eng",
+            issuedCount: 17,
+            publicBadgeViewCount: 42,
+            verificationViewCount: 15,
+            shareClickCount: 7,
+            learnerClaimCount: 8,
+            walletAcceptCount: 4,
+            claimRate: 47.1,
+            shareRate: 41.2,
+          },
+          {
+            groupBy: "orgUnit",
+            groupId: "tenant_123:org:department-math",
+            issuedCount: 8,
+            publicBadgeViewCount: 16,
+            verificationViewCount: 6,
+            shareClickCount: 2,
+            learnerClaimCount: 2,
+            walletAcceptCount: 1,
+            claimRate: 25,
+            shareRate: 25,
+          },
+        ];
+      },
+    );
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+    const templatePanel = getReportingPanelMarkup(body, "Compare by badge template");
+    const orgUnitPanel = getReportingPanelMarkup(body, "Compare by org unit");
+    const templateVisual = getReportingPanelVisualMarkup(templatePanel);
+    const orgUnitVisual = getReportingPanelVisualMarkup(orgUnitPanel);
+
+    expect(response.status).toBe(200);
+    expect(templatePanel).toContain('data-reporting-visual-kind="comparison-ranked"');
+    expect(orgUnitPanel).toContain('data-reporting-visual-kind="comparison-ranked"');
+    expect(templatePanel).toContain(
+      "The table below keeps the full row set with exact counts and rate definitions.",
+    );
+    expect(orgUnitPanel).toContain(
+      "The table below keeps the full row set with exact counts and rate definitions.",
+    );
+    expect(templateVisual).toContain("Top 5 shown here. The exact table below keeps all 6 visible rows.");
+    expect(orgUnitVisual).toContain("Top 5 shown here. The exact table below keeps all 6 visible rows.");
+    expect(templateVisual).toContain("51 public views · 45.8% claim · 33.3% share");
+    expect(orgUnitVisual).toContain("42 public views · 47.1% claim · 41.2% share");
+    expect(templateVisual.indexOf("Applied Analytics")).toBeLessThan(
+      templateVisual.indexOf("Civic History"),
+    );
+    expect(orgUnitVisual.indexOf("College of Arts")).toBeLessThan(
+      orgUnitVisual.indexOf("College of Engineering"),
+    );
+    expect(templateVisual).not.toContain("Zoology Fieldwork");
+    expect(orgUnitVisual).not.toContain("Design Foundations");
+    expect(templatePanel).toContain("Zoology Fieldwork");
+    expect(orgUnitPanel).toContain("Design Foundations");
   });
 
   it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {

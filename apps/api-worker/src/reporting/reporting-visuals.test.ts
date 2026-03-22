@@ -80,6 +80,55 @@ describe("renderReporting", () => {
     expect(html).toContain("8 public views");
   });
 
+  it("renders comparison-ranked visuals with top-five emphasis and adjacent rate detail", () => {
+    const html = renderReporting({
+      kind: "comparison-ranked" as unknown as Parameters<typeof renderReporting>[0]["kind"],
+      title: "Compare by badge template",
+      description: "Issued volume stays primary while rate detail remains visible beside each row.",
+      series: [
+        {
+          label: "Mathematics",
+          value: 22,
+          detail: "28 public views · 50.0% claim · 20.0% share",
+        },
+        {
+          label: "Architecture",
+          value: 22,
+          detail: "31 public views · 47.0% claim · 25.0% share",
+        },
+        {
+          label: "Biology",
+          value: 18,
+          detail: "24 public views · 44.0% claim · 19.0% share",
+        },
+        {
+          label: "Design",
+          value: 14,
+          detail: "19 public views · 39.0% claim · 18.0% share",
+        },
+        {
+          label: "History",
+          value: 9,
+          detail: "12 public views · 35.0% claim · 14.0% share",
+        },
+        {
+          label: "Chemistry",
+          value: 4,
+          detail: "8 public views · 25.0% claim · 10.0% share",
+        },
+      ],
+    });
+
+    expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
+    expect(html).toContain('class="ct-reporting-visual__comparison-ranked-list"');
+    expect(html).toContain('class="ct-reporting-visual__comparison-ranked-detail"');
+    expect(html).toContain('data-reporting-visual-emphasis-count="5"');
+    expect(html).toContain("Top 5 shown here. The exact table below keeps all 6 visible rows.");
+    expect(html).toContain("31 public views · 47.0% claim · 25.0% share");
+    expect(html.indexOf("Architecture")).toBeLessThan(html.indexOf("Mathematics"));
+    expect(html).not.toContain("Chemistry");
+  });
+
   it("emits stable reporting-visual hooks for the chart surface, legend, and visible values", () => {
     const html = renderReporting({
       kind: "comparison-bars",
