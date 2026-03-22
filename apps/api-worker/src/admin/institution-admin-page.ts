@@ -360,6 +360,8 @@ const renderInstitutionAdminPage = (
     kind: "comparison-bars" | "comparison-ranked" | "stacked-summary" | "trend-series";
     note?: string;
     series: readonly ReportingVisualSeriesPoint[];
+    seriesOrder?: "input" | "value-desc";
+    summaryOverride?: string;
     title: string;
   }): string => {
     const noteMarkup =
@@ -1643,9 +1645,28 @@ const renderInstitutionAdminPage = (
     reportingPerformerLevel === null
       ? []
       : (reportingHierarchyRowsByLevel.get(reportingPerformerLevel) ?? []);
+  const reportingPerformerCompareLevelLabel =
+    reportingPerformerLevel === null
+      ? null
+      : formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase();
   const reportingRateEligibleRows = reportingPerformerRows.filter(
     (row) => row.issuedCount >= REPORTING_RATE_MIN_ISSUED,
   );
+  const buildPerformerSummaryOverride = (input: {
+    metricLabel: "claim rate" | "issued volume" | "share rate";
+    rankingIntent: "highest" | "lowest";
+    summaryKind: "rate" | "volume";
+  }): string => {
+    const compareLevelLabel = reportingPerformerCompareLevelLabel ?? "visible";
+    const rankingCopy =
+      input.rankingIntent === "highest" ? "Highest values appear first." : "Lowest values appear first.";
+
+    if (input.summaryKind === "rate") {
+      return `Comparing ${compareLevelLabel} rows by ${input.metricLabel}. Issued totals stay visible beside each ranked rate row. ${rankingCopy}`;
+    }
+
+    return `Comparing ${compareLevelLabel} rows by ${input.metricLabel}. Claim and share rates stay visible beside each ranked row. ${rankingCopy}`;
+  };
   const renderPerformerTableRows = (
     rows: readonly ReportingHierarchyRow[],
     emptyLabel: string,
@@ -1671,17 +1692,32 @@ const renderInstitutionAdminPage = (
     rows: readonly ReportingHierarchyRow[];
     emptyLabel: string;
     barGroup: string;
+    rankingIntent: "highest" | "lowest";
     metric: "claimRate" | "issuedCount" | "shareRate";
   }): string => {
+    const summaryOverride =
+      input.metric === "issuedCount"
+        ? buildPerformerSummaryOverride({
+            metricLabel: "issued volume",
+            rankingIntent: input.rankingIntent,
+            summaryKind: "volume",
+          })
+        : buildPerformerSummaryOverride({
+            metricLabel: input.metric === "claimRate" ? "claim rate" : "share rate",
+            rankingIntent: input.rankingIntent,
+            summaryKind: "rate",
+          });
     const visualMarkup =
       input.rows.length === 0
         ? ""
         : renderReportingVisualModule({
-            kind: "comparison-bars",
+            kind: "comparison-ranked",
             headingLevel: "h4",
             id: `performer-${input.barGroup}`,
             title: input.title,
             description: input.description,
+            seriesOrder: "input",
+            summaryOverride,
             series: input.rows.map((row) => ({
               label: getReportingOrgUnitLabel(row.orgUnitId),
               value:
@@ -1699,7 +1735,7 @@ const renderInstitutionAdminPage = (
                         : `${formatReportingRate(row.claimRate)} claim`
                     }`,
             })),
-            note: "The table below preserves the same rows for detailed comparison.",
+            note: "The exact table below preserves the same rows, issued totals, and rate semantics for detailed comparison.",
           });
 
     return `<article class="ct-admin__panel ct-admin__panel--nested ct-stack">
@@ -1792,6 +1828,21 @@ const renderInstitutionAdminPage = (
       return left.orgUnitId.localeCompare(right.orgUnitId);
     })
     .slice(0, REPORTING_PERFORMER_ROW_LIMIT);
+  const renderPerformerGroup = (input: {
+    title: string;
+    description: string;
+    panels: readonly string[];
+  }): string => {
+    return `<section class="ct-admin__reporting-performer-group ct-stack">
+      <div class="ct-stack">
+        <p class="ct-admin__eyebrow">${escapeHtml(input.title)}</p>
+        <p class="ct-admin__hint">${escapeHtml(input.description)}</p>
+      </div>
+      <div class="ct-admin__reporting-performer-grid">
+        ${input.panels.join("\n")}
+      </div>
+    </section>`;
+  };
   const reportingPerformerPanelsMarkup =
     reportingPerformerLevel === null
       ? `<article class="ct-admin__panel ct-stack">
@@ -1806,66 +1857,84 @@ const renderInstitutionAdminPage = (
             )}</span>
           </div>
           <p>These rankings keep issued volume separate from claim and share rates.</p>
-          <p class="ct-admin__hint">Panels compare ${escapeHtml(
-            formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase(),
-          )} rows in the current visible hierarchy.</p>
-          <p class="ct-admin__hint">Minimum sample for rate panels: ${escapeHtml(
-            formatReportingCount(REPORTING_RATE_MIN_ISSUED),
-          )} issued badges.</p>
-          <div class="ct-admin__reporting-performer-grid">
-            ${renderPerformerPanel({
-              title: "Highest issuance volume",
+          <p class="ct-admin__hint">Compare level: ${escapeHtml(
+            `${reportingPerformerCompareLevelLabel} rows in the current visible hierarchy.`,
+          )}</p>
+          <div class="ct-admin__reporting-performer-groups">
+            ${renderPerformerGroup({
+              title: "Volume rankings",
               description:
-                "Shared visual compares the highest-volume org units without hiding the exact issued totals or rates.",
-              rows: reportingHighestVolumeRows,
-              emptyLabel: "No org units available for volume rankings.",
-              barGroup: "performer-high-volume",
-              metric: "issuedCount",
+                "Issued volume stays primary while claim and share rates remain visible beside each ranked row.",
+              panels: [
+                renderPerformerPanel({
+                  title: "Highest issuance volume",
+                  description:
+                    "Shared ranked visual compares the highest-volume org units without hiding the exact issued totals or rates.",
+                  rows: reportingHighestVolumeRows,
+                  emptyLabel: "No org units available for volume rankings.",
+                  barGroup: "performer-high-volume",
+                  rankingIntent: "highest",
+                  metric: "issuedCount",
+                }),
+                renderPerformerPanel({
+                  title: "Lowest issuance volume",
+                  description:
+                    "Shared ranked visual compares the lowest-volume org units while keeping the same tabular rows underneath.",
+                  rows: reportingLowestVolumeRows,
+                  emptyLabel: "No org units available for volume rankings.",
+                  barGroup: "performer-low-volume",
+                  rankingIntent: "lowest",
+                  metric: "issuedCount",
+                }),
+              ],
             })}
-            ${renderPerformerPanel({
-              title: "Lowest issuance volume",
-              description:
-                "Shared visual compares the lowest-volume org units while keeping the same tabular rows underneath.",
-              rows: reportingLowestVolumeRows,
-              emptyLabel: "No org units available for volume rankings.",
-              barGroup: "performer-low-volume",
-              metric: "issuedCount",
-            })}
-            ${renderPerformerPanel({
-              title: "Highest claim rate",
-              description:
-                "Shared visual compares claim-rate leaders for rows that meet the minimum issued-badge threshold.",
-              rows: reportingHighestClaimRateRows,
-              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
-              barGroup: "performer-high-claim-rate",
-              metric: "claimRate",
-            })}
-            ${renderPerformerPanel({
-              title: "Lowest claim rate",
-              description:
-                "Shared visual compares lower claim-rate rows without changing the minimum-sample rule.",
-              rows: reportingLowestClaimRateRows,
-              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
-              barGroup: "performer-low-claim-rate",
-              metric: "claimRate",
-            })}
-            ${renderPerformerPanel({
-              title: "Highest share rate",
-              description:
-                "Shared visual compares share-rate leaders while keeping issued totals visible in the adjacent table.",
-              rows: reportingHighestShareRateRows,
-              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
-              barGroup: "performer-high-share-rate",
-              metric: "shareRate",
-            })}
-            ${renderPerformerPanel({
-              title: "Lowest share rate",
-              description:
-                "Shared visual compares lower share-rate rows with the same volume threshold applied to the table below.",
-              rows: reportingLowestShareRateRows,
-              emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
-              barGroup: "performer-low-share-rate",
-              metric: "shareRate",
+            ${renderPerformerGroup({
+              title: "Rate rankings",
+              description: `Rate rankings require at least ${formatReportingCount(
+                REPORTING_RATE_MIN_ISSUED,
+              )} issued badges so issued totals stay visible beside every rate callout.`,
+              panels: [
+                renderPerformerPanel({
+                  title: "Highest claim rate",
+                  description:
+                    "Shared ranked visual compares claim-rate leaders for rows that meet the minimum issued-badge threshold.",
+                  rows: reportingHighestClaimRateRows,
+                  emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+                  barGroup: "performer-high-claim-rate",
+                  rankingIntent: "highest",
+                  metric: "claimRate",
+                }),
+                renderPerformerPanel({
+                  title: "Lowest claim rate",
+                  description:
+                    "Shared ranked visual compares lower claim-rate rows without changing the minimum-sample rule.",
+                  rows: reportingLowestClaimRateRows,
+                  emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+                  barGroup: "performer-low-claim-rate",
+                  rankingIntent: "lowest",
+                  metric: "claimRate",
+                }),
+                renderPerformerPanel({
+                  title: "Highest share rate",
+                  description:
+                    "Shared ranked visual compares share-rate leaders while keeping issued totals visible in the adjacent table.",
+                  rows: reportingHighestShareRateRows,
+                  emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+                  barGroup: "performer-high-share-rate",
+                  rankingIntent: "highest",
+                  metric: "shareRate",
+                }),
+                renderPerformerPanel({
+                  title: "Lowest share rate",
+                  description:
+                    "Shared ranked visual compares lower share-rate rows with the same volume threshold applied to the table below.",
+                  rows: reportingLowestShareRateRows,
+                  emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
+                  barGroup: "performer-low-share-rate",
+                  rankingIntent: "lowest",
+                  metric: "shareRate",
+                }),
+              ],
             })}
           </div>
         </article>`;
@@ -3049,6 +3118,14 @@ const renderInstitutionAdminPage = (
     reportingDeferredMetricsMarkup.length === 0
       ? ""
       : `<section class="ct-admin__grid ct-stack">${reportingDeferredMetricsMarkup}</section>`;
+  const reportingLowerStoryMarkup = `<section class="ct-admin__reporting-lower-story" aria-label="Reporting lower-page story">
+    <p class="ct-admin__eyebrow">Lower-page story</p>
+    <p>Move from template comparison into hierarchy context, performer rankings, and org-unit comparison while the exact tables stay adjacent to each shared visual.</p>
+    ${reportingTemplateComparisonPanelMarkup}
+    ${reportingHierarchyPanelMarkup}
+    ${reportingPerformerPanelsMarkup}
+    ${reportingOrgUnitComparisonPanelMarkup}
+  </section>`;
 
   const badgeRulesTableMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Badge Rules (${ruleCount})</h2>
@@ -3225,10 +3302,7 @@ const renderInstitutionAdminPage = (
                         ${reportingExportsPanelMarkup}
                       </aside>
                     </section>
-                    ${reportingTemplateComparisonPanelMarkup}
-                    ${reportingHierarchyPanelMarkup}
-                    ${reportingPerformerPanelsMarkup}
-                    ${reportingOrgUnitComparisonPanelMarkup}
+                    ${reportingLowerStoryMarkup}
                     ${reportingDefinitionsPanelMarkup}
                     ${reportingDeferredPanelMarkup}
                   </section>`

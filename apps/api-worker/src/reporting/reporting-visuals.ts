@@ -21,6 +21,8 @@ export interface ReportingVisualProps {
   id?: string;
   emptyMessage?: string;
   headingLevel?: ReportingVisualHeadingLevel;
+  summaryOverride?: string;
+  seriesOrder?: "input" | "value-desc";
 }
 
 const REPORTING_VISUAL_EMPTY_MESSAGE = "No reporting data available for this view yet.";
@@ -66,8 +68,13 @@ const hasRenderableData = (series: readonly ReportingVisualSeriesPoint[]): boole
 };
 
 const sortComparisonRankedSeries = (
+  input: ReportingVisualProps,
   series: readonly ReportingVisualSeriesPoint[],
 ): ReportingVisualSeriesPoint[] => {
+  if (input.seriesOrder === "input") {
+    return [...series];
+  }
+
   return [...series].sort((left, right) => {
     if (right.value !== left.value) {
       return right.value - left.value;
@@ -131,7 +138,7 @@ const buildSummaryText = (
   }
 
   if (input.kind === "comparison-ranked") {
-    const highestRankedPoint = sortComparisonRankedSeries(normalizedSeries)[0] ?? highestPoint;
+    const highestRankedPoint = sortComparisonRankedSeries(input, normalizedSeries)[0] ?? highestPoint;
 
     return `${highestRankedPoint.label} leads at ${formatValue(highestRankedPoint.value)} across ${normalizedSeries.length} comparison rows.`;
   }
@@ -173,11 +180,12 @@ const renderLegend = (
 };
 
 const renderComparisonRankedGraphic = (
+  input: ReportingVisualProps,
   normalizedSeries: readonly ReportingVisualSeriesPoint[],
   titleId: string,
   descriptionIds: string,
 ): string => {
-  const sortedSeries = sortComparisonRankedSeries(normalizedSeries);
+  const sortedSeries = sortComparisonRankedSeries(input, normalizedSeries);
   const emphasizedSeries = sortedSeries.slice(0, REPORTING_COMPARISON_RANKED_LIMIT);
   const maxValue = Math.max(...emphasizedSeries.map((point) => point.value), 1);
   const items = emphasizedSeries
@@ -377,7 +385,7 @@ const renderGraphic = (
 ): string => {
   switch (input.kind) {
     case "comparison-ranked":
-      return renderComparisonRankedGraphic(normalizedSeries, titleId, descriptionIds);
+      return renderComparisonRankedGraphic(input, normalizedSeries, titleId, descriptionIds);
     case "comparison-bars":
       return renderComparisonGraphic(normalizedSeries, titleId, descriptionIds);
     case "stacked-summary":
@@ -419,7 +427,11 @@ export const renderReporting = (input: ReportingVisualProps): string => {
     </figure>`;
   }
 
-  const summaryText = buildSummaryText(input, normalizedSeries, totalValue);
+  const trimmedSummaryOverride = input.summaryOverride?.trim();
+  const summaryText =
+    trimmedSummaryOverride === undefined || trimmedSummaryOverride.length === 0
+      ? buildSummaryText(input, normalizedSeries, totalValue)
+      : trimmedSummaryOverride;
   const graphicMarkup = renderGraphic(input, normalizedSeries, titleId, descriptionIds);
   const trendContextMarkup =
     input.kind === "trend-series" ? renderTrendContext(normalizedSeries) : "";
