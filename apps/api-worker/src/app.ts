@@ -133,6 +133,7 @@ import { registerOb3Routes } from "./routes/ob3-routes";
 import { registerPresentationRoutes } from "./routes/presentation-routes";
 import { registerPublicBadgeRoutes } from "./routes/public-badge-routes";
 import { registerQueueRoutes } from "./routes/queue-routes";
+import { registerExecutiveRoutes } from "./routes/executive-routes";
 import { registerReportingRoutes } from "./routes/reporting-routes";
 import { registerSigningRoutes } from "./routes/signing-routes";
 import { registerTenantGovernanceRoutes } from "./routes/tenant-governance-routes";
@@ -1167,6 +1168,13 @@ registerReportingRoutes({
   resolveDatabase,
   requireTenantRole,
   ADMIN_ROLES,
+});
+
+registerExecutiveRoutes({
+  app,
+  resolveDatabase,
+  requireTenantRole,
+  TENANT_MEMBER_ROLES,
 });
 
 registerTenantGovernanceRoutes({

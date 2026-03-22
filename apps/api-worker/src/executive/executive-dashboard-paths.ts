@@ -4,15 +4,15 @@ export const buildExecutiveDashboardQueryEntries = (
   query: Partial<TenantExecutiveDashboardQuery>,
 ): ReadonlyArray<readonly [string, string | null | undefined]> => {
   return [
-    ["window", query.window],
-    ["audience", query.audience],
-    ["issuedFrom", query.issuedFrom],
-    ["issuedTo", query.issuedTo],
-    ["badgeTemplateId", query.badgeTemplateId],
-    ["orgUnitId", query.orgUnitId],
-    ["state", query.state],
-    ["focusOrgUnitId", query.focusOrgUnitId],
-    ["comparisonLevel", query.comparisonLevel],
+    ["window", query.window] as const,
+    ["audience", query.audience] as const,
+    ["issuedFrom", query.issuedFrom] as const,
+    ["issuedTo", query.issuedTo] as const,
+    ["badgeTemplateId", query.badgeTemplateId] as const,
+    ["orgUnitId", query.orgUnitId] as const,
+    ["state", query.state] as const,
+    ["focusOrgUnitId", query.focusOrgUnitId] as const,
+    ["comparisonLevel", query.comparisonLevel] as const,
   ].filter((entry) => {
     const value = entry[1];
     return value !== undefined && value !== null && value !== "";
