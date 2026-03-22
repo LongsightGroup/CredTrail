@@ -97,6 +97,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-reporting-fixture";
 import { INSTITUTION_ADMIN_JS } from "./ui/page-assets/content/institution-admin-js";
 
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
@@ -1480,6 +1481,46 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain('role="img"');
     expect(body).toContain("Visible labels and numeric values are listed in the legend below.");
     expect(body).toContain("Cards below retain the exact lifecycle counts");
+  });
+
+  it("can verify a seeded-demo reporting slice on the normal reporting route from the canonical fixture", async () => {
+    const env = createEnv();
+    const seededDemo = getSeededDemoReportingRouteFixture();
+
+    mockedListTenantOrgUnits.mockResolvedValueOnce([...seededDemo.orgUnits]);
+    mockedListBadgeTemplates.mockResolvedValueOnce([...seededDemo.badgeTemplates]);
+    mockedGetTenantReportingOverviewDb.mockResolvedValueOnce(seededDemo.overview);
+    mockedGetTenantReportingEngagementCountsDb.mockResolvedValueOnce(seededDemo.engagementCounts);
+    mockedGetTenantReportingTrendsDb.mockResolvedValueOnce(seededDemo.trends);
+    mockedGetTenantReportingComparisonsDb.mockImplementationOnce(async (_db, input) => {
+      expect(input.groupBy).toBe("badgeTemplate");
+      return [...seededDemo.templateComparisons];
+    });
+    mockedGetTenantReportingComparisonsDb.mockImplementationOnce(async (_db, input) => {
+      expect(input.groupBy).toBe("orgUnit");
+      return [...seededDemo.orgUnitComparisons];
+    });
+
+    const response = await app.request(
+      seededDemo.routePath,
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('href="/tenants/tenant_123/admin/reporting"');
+    expect(body).toContain("TypeScript Foundations");
+    expect(body).toContain("Applied Analytics");
+    expect(body).toContain("Design Systems");
+    expect(body).toContain("Computer Science");
+    expect(body).toContain("Mathematics");
+    expect(body).toContain("History");
+    expect(body).toContain('data-reporting-visual-kind="comparison-ranked"');
   });
 
   it("renders ranked comparison modules while keeping the full comparison tables below", async () => {

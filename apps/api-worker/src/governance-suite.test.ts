@@ -140,6 +140,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-reporting-fixture";
 
 interface ErrorResponse {
   error: string;
@@ -1329,6 +1330,125 @@ describe("org unit and badge ownership governance endpoints", () => {
     expect(html).not.toContain("Chemistry Lab");
     expect(html).not.toContain("History");
     expect(html).not.toContain("College of Arts");
+  });
+
+  it("can verify scoped seeded-demo reporting from the canonical fixture on the normal route", async () => {
+    const env = createEnv();
+    const seededDemo = getSeededDemoReportingRouteFixture();
+    const scopedSlice = seededDemo.scopedOrgContext;
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "issuer" }));
+    mockedListTenantMembershipOrgUnitScopes.mockImplementation(
+      async (_db, input: { tenantId: string; userId?: string | undefined }) => {
+        if (input.userId === "usr_123") {
+          return [
+            sampleTenantMembershipOrgUnitScope({
+              userId: "usr_123",
+              orgUnitId: scopedSlice.rootOrgUnitId,
+              role: "issuer",
+            }),
+          ];
+        }
+
+        return [];
+      },
+    );
+    mockedListTenantOrgUnits.mockResolvedValue([...seededDemo.orgUnits]);
+    mockedListBadgeTemplates.mockResolvedValue([...seededDemo.badgeTemplates]);
+    mockedGetTenantReportingOverview.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === scopedSlice.orgUnitId) {
+        return scopedSlice.overview;
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          issuedFrom: input.issuedFrom ?? null,
+          issuedTo: input.issuedTo ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        counts: {
+          issued: 0,
+          active: 0,
+          suspended: 0,
+          revoked: 0,
+          pendingReview: 0,
+          claimRate: 0,
+          shareRate: 0,
+        },
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedGetTenantReportingEngagementCounts.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === scopedSlice.orgUnitId) {
+        return scopedSlice.engagementCounts;
+      }
+
+      return {
+        issuedCount: 0,
+        publicBadgeViewCount: 0,
+        verificationViewCount: 0,
+        shareClickCount: 0,
+        learnerClaimCount: 0,
+        walletAcceptCount: 0,
+        claimRate: 0,
+        shareRate: 0,
+      };
+    });
+    mockedGetTenantReportingTrends.mockImplementation(async (_db, input) => {
+      if (input.orgUnitId === scopedSlice.orgUnitId) {
+        return scopedSlice.trends;
+      }
+
+      return {
+        tenantId: "tenant_123",
+        filters: {
+          from: input.from ?? null,
+          to: input.to ?? null,
+          badgeTemplateId: input.badgeTemplateId ?? null,
+          orgUnitId: input.orgUnitId ?? null,
+          state: input.state ?? null,
+        },
+        bucket: "day",
+        series: [],
+        generatedAt: "2026-03-21T12:00:00.000Z",
+      };
+    });
+    mockedListTenantReportingComparisons.mockImplementation(async (_db, input) => {
+      if (input.groupBy === "orgUnit") {
+        return [...scopedSlice.rawOrgUnitComparisons];
+      }
+
+      if (input.orgUnitId === scopedSlice.orgUnitId) {
+        return [...scopedSlice.templateComparisons];
+      }
+
+      return [];
+    });
+
+    const response = await app.request(
+      seededDemo.routePath,
+      {
+        method: "GET",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain("Computer Science Program");
+    expect(html).toContain("TypeScript Foundations");
+    expect(html).toContain("14 public views · 40.0% claim · 20.0% share");
+    expect(html).toContain(
+      'href="/tenants/tenant_123/admin/reporting#reporting-hierarchy-focus-tenant_123%3Aorg%3Acollege-eng"',
+    );
+    expect(html).not.toContain("Chemistry Lab");
+    expect(html).not.toContain("History");
   });
 
   it("keeps empty reporting states scoped to already-visible rows", async () => {
