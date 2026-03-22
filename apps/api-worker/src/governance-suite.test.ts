@@ -1441,6 +1441,17 @@ describe("org unit and badge ownership governance endpoints", () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
+    expect(html).toContain('class="ct-admin__reporting-presentation-note');
+    expect(html).toContain("Current tenant view");
+    expect(html).toContain(
+      "This walkthrough stays on the current tenant and selected filters. Keep the first screen, export rail, and exact tables visible so screenshots and live walkthroughs stay honest to the real reporting slice.",
+    );
+    expect(html).toContain('class="ct-admin__reporting-primary-story');
+    expect(html).toContain('class="ct-admin__reporting-secondary-story');
+    expect(html.indexOf("Current tenant view")).toBeLessThan(html.indexOf("Executive Summary"));
+    expect(html.indexOf('class="ct-admin__reporting-supporting-grid')).toBeLessThan(
+      html.indexOf('class="ct-admin__reporting-secondary-story'),
+    );
     expect(html).toContain("Computer Science Program");
     expect(html).toContain("TypeScript Foundations");
     expect(html).toContain("14 public views · 40.0% claim · 20.0% share");
@@ -1449,6 +1460,8 @@ describe("org unit and badge ownership governance endpoints", () => {
     );
     expect(html).not.toContain("Chemistry Lab");
     expect(html).not.toContain("History");
+    expect(html).not.toContain("demo mode");
+    expect(html).not.toContain("presentation-only");
   });
 
   it("keeps empty reporting states scoped to already-visible rows", async () => {

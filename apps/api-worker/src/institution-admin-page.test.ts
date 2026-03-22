@@ -1167,6 +1167,46 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).not.toContain('href="/v1/tenants/tenant_123/assertions/ledger-export.csv"');
   });
 
+  it("adds presentation-fit reporting wrappers without changing the real reporting story", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/reporting?issuedFrom=2026-03-01&issuedTo=2026-03-31",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('class="ct-admin__reporting-presentation-shell');
+    expect(body).toContain('class="ct-admin__reporting-presentation-note');
+    expect(body).toContain("Current tenant view");
+    expect(body).toContain(
+      "This walkthrough stays on the current tenant and selected filters. Keep the first screen, export rail, and exact tables visible so screenshots and live walkthroughs stay honest to the real reporting slice.",
+    );
+    expect(body).toContain('class="ct-admin__reporting-primary-story');
+    expect(body).toContain('class="ct-admin__reporting-secondary-story');
+    expect(body).toContain('class="ct-admin__reporting-first-screen');
+    expect(body).toContain('class="ct-admin__reporting-supporting-grid');
+    expect(body).toContain('class="ct-admin__reporting-lower-story"');
+    expect(body).toContain("Metric Definitions");
+    expect(body.indexOf("Current tenant view")).toBeLessThan(body.indexOf("Executive Summary"));
+    expect(body.indexOf('class="ct-admin__reporting-first-screen')).toBeLessThan(body.indexOf("Trend lines"));
+    expect(body.indexOf("Trend lines")).toBeLessThan(body.indexOf('class="ct-admin__reporting-supporting-grid'));
+    expect(body.indexOf('class="ct-admin__reporting-supporting-grid')).toBeLessThan(
+      body.indexOf('class="ct-admin__reporting-secondary-story'),
+    );
+    expect(body.indexOf('class="ct-admin__reporting-secondary-story')).toBeLessThan(
+      body.indexOf("Metric Definitions"),
+    );
+    expect(body).not.toContain("demo mode");
+    expect(body).not.toContain("presentation-only");
+  });
+
   it("renders shared reporting visuals without losing filter and export affordances", async () => {
     const env = createEnv();
 
