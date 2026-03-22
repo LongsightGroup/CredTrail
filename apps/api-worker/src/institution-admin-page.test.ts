@@ -1088,9 +1088,12 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(response.status).toBe(200);
     expect(body).toContain('class="ct-reporting-visual"');
     expect(body).toContain('data-reporting-visual-kind="comparison-bars"');
+    expect(body).toContain('data-reporting-visual-kind="stacked-summary"');
     expect(body).toContain('data-reporting-visual-kind="trend-series"');
     expect(body).toContain('class="ct-reporting-visual__legend"');
+    expect(body).toContain('class="ct-admin__reporting-panel-media"');
     expect(body).toContain("Legend");
+    expect(body).toContain("Current badge-state mix");
     expect(body).toContain("Public badge views");
     expect(body).toContain("Claim rate");
     expect(body).toContain('form method="get" action="/tenants/tenant_123/admin/reporting"');
@@ -1115,6 +1118,7 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain('<svg class="ct-reporting-visual__graphic"');
     expect(body).toContain('role="img"');
     expect(body).toContain("Visible labels and numeric values are listed in the legend below.");
+    expect(body).toContain("Cards below retain the exact lifecycle counts");
   });
 
   it("renders hierarchy drilldown sections with breadcrumb context and reporting-local drill links", async () => {
