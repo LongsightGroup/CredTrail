@@ -22,6 +22,10 @@ import {
   buildReportingHierarchyQueryEntries,
   buildReportingPageQueryEntries,
 } from "../reporting/reporting-page-filters";
+import {
+  renderReporting,
+  type ReportingVisualSeriesPoint,
+} from "../reporting/reporting-visuals";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
@@ -272,6 +276,16 @@ const renderInstitutionAdminPage = (
       .map((badgeTemplateId) => templateById.get(badgeTemplateId)?.title ?? badgeTemplateId)
       .join(", ");
   };
+  const getReportingOrgUnitLabel = (orgUnitId: string): string => {
+    return orgUnitById.get(orgUnitId)?.displayName ?? orgUnitId;
+  };
+  const getReportingComparisonLabel = (row: TenantReportingComparisonRowRecord): string => {
+    if (row.groupBy === "badgeTemplate") {
+      return templateById.get(row.groupId)?.title ?? row.groupId;
+    }
+
+    return getReportingOrgUnitLabel(row.groupId);
+  };
   const renderReportingComparisonGroupLabel = (row: TenantReportingComparisonRowRecord): string => {
     if (row.groupBy === "badgeTemplate") {
       const template = templateById.get(row.groupId);
@@ -287,13 +301,36 @@ const renderInstitutionAdminPage = (
 
     return renderOrgUnitSummary(row.groupId);
   };
-  const renderReportingCountCell = (value: number): string => {
-    return `<div class="ct-admin__reporting-bar-value" data-reporting-bar-value="${String(value)}">
-      <span class="ct-admin__reporting-bar-number">${escapeHtml(formatReportingCount(value))}</span>
-      <span class="ct-admin__reporting-bar-track" aria-hidden="true">
-        <span class="ct-admin__reporting-bar-fill"></span>
-      </span>
+  const buildReportingLegendDetail = (input: {
+    publicBadgeViewCount: number;
+    claimRate: number;
+    shareRate: number;
+  }): string => {
+    return `${formatReportingCount(input.publicBadgeViewCount)} public views · ${formatReportingRate(
+      input.claimRate,
+    )} claim · ${formatReportingRate(input.shareRate)} share`;
+  };
+  const renderReportingVisualModule = (input: {
+    description: string;
+    headingLevel?: "h3" | "h4";
+    id?: string;
+    kind: "comparison-bars" | "stacked-summary" | "trend-series";
+    note?: string;
+    series: readonly ReportingVisualSeriesPoint[];
+    title: string;
+  }): string => {
+    const noteMarkup =
+      input.note === undefined || input.note.trim().length === 0
+        ? ""
+        : `<p class="ct-admin__reporting-visual-note">${escapeHtml(input.note)}</p>`;
+
+    return `<div class="ct-admin__reporting-visual-shell">
+      ${renderReporting(input)}
+      ${noteMarkup}
     </div>`;
+  };
+  const renderReportingCountCell = (value: number): string => {
+    return `<span class="ct-admin__reporting-table-number">${escapeHtml(formatReportingCount(value))}</span>`;
   };
   const buildVisibleOrgUnitLineage = (orgUnitId: string): TenantOrgUnitRecord[] => {
     const lineage: TenantOrgUnitRecord[] = [];
@@ -994,6 +1031,79 @@ const renderInstitutionAdminPage = (
             </article>`;
           })
           .join("\n");
+  const reportingEngagementVisualsMarkup =
+    reportingEngagementCounts === null
+      ? ""
+      : `<div class="ct-admin__reporting-visual-grid">
+          ${renderReportingVisualModule({
+            kind: "comparison-bars",
+            title: "Supported engagement signals",
+            description:
+              "Server-rendered visual of the same raw event totals shown in the metric cards below.",
+            series: [
+              {
+                label: "Public badge views",
+                value: reportingEngagementCounts.publicBadgeViewCount,
+                detail: "Product-owned page-load events.",
+              },
+              {
+                label: "Verification views",
+                value: reportingEngagementCounts.verificationViewCount,
+                detail: "Successful verification responses.",
+              },
+              {
+                label: "Share clicks",
+                value: reportingEngagementCounts.shareClickCount,
+                detail: "CredTrail-owned outbound share actions.",
+              },
+              {
+                label: "Claim actions",
+                value: reportingEngagementCounts.learnerClaimCount,
+                detail: "Explicit learner claim events.",
+              },
+              {
+                label: "Wallet accepts",
+                value: reportingEngagementCounts.walletAcceptCount,
+                detail: "Successful credential retrievals.",
+              },
+            ] as const,
+            note: "Cards below keep the same raw counts visible for review and export parity checks.",
+          })}
+          ${renderReportingVisualModule({
+            kind: "comparison-bars",
+            title: "Rate context",
+            description:
+              "Claim and share rates stay derived from distinct engaged assertions over the same issued-badge window.",
+            series: [
+              {
+                label: "Claim rate",
+                value: reportingEngagementCounts.claimRate,
+                detail: `${formatReportingCount(reportingEngagementCounts.learnerClaimCount)} claim actions over ${formatReportingCount(reportingEngagementCounts.issuedCount)} issued badges.`,
+              },
+              {
+                label: "Share rate",
+                value: reportingEngagementCounts.shareRate,
+                detail: `${formatReportingCount(reportingEngagementCounts.shareClickCount)} share clicks over ${formatReportingCount(reportingEngagementCounts.issuedCount)} issued badges.`,
+              },
+            ] as const,
+            note: "This visual does not replace the rate cards; it keeps the same definitions in a shared presentation seam.",
+          })}
+        </div>`;
+  const reportingTrendVisualMarkup =
+    reportingTrends === null || reportingTrends.series.length === 0
+      ? ""
+      : renderReportingVisualModule({
+          kind: "trend-series",
+          title: "Issued over time",
+          description:
+            "Shared SSR trend visual uses issued counts from the current reporting filter slice. The full table remains below for supported engagement detail.",
+          series: reportingTrends.series.map((row) => ({
+            label: formatReportingDateLabel(row.bucketStart),
+            value: row.issuedCount,
+            detail: `${formatReportingCount(row.publicBadgeViewCount)} public views · ${formatReportingCount(row.shareClickCount)} shares`,
+          })),
+          note: "The table below preserves every visible count so the chart remains a summary, not a second interpretation layer.",
+        });
   const reportingTrendRowsMarkup =
     reportingTrends === null || reportingTrends.series.length === 0
       ? '<tr><td colspan="7" class="ct-admin__empty">No trend data available for the selected filters.</td></tr>'
@@ -1038,10 +1148,48 @@ const renderInstitutionAdminPage = (
     reportingTemplateComparisons,
     "No badge-template comparisons available for the selected filters.",
   );
+  const reportingTemplateComparisonVisualMarkup =
+    reportingTemplateComparisons.length === 0
+      ? ""
+      : renderReportingVisualModule({
+          kind: "stacked-summary",
+          title: "Issued mix by badge template",
+          description:
+            "Shared visual summarizes how issued volume is distributed across badge templates for the same filters shown in the table.",
+          series: reportingTemplateComparisons.map((row) => ({
+            label: getReportingComparisonLabel(row),
+            value: row.issuedCount,
+            detail: buildReportingLegendDetail({
+              publicBadgeViewCount: row.publicBadgeViewCount,
+              claimRate: row.claimRate,
+              shareRate: row.shareRate,
+            }),
+          })),
+          note: "The table below keeps the full row-level counts and rate definitions visible.",
+        });
   const reportingOrgUnitComparisonRowsMarkup = renderReportingComparisonRows(
     reportingOrgUnitComparisons,
     "No org-unit comparisons available for the selected filters.",
   );
+  const reportingOrgUnitComparisonVisualMarkup =
+    reportingOrgUnitComparisons.length === 0
+      ? ""
+      : renderReportingVisualModule({
+          kind: "stacked-summary",
+          title: "Issued mix by org unit",
+          description:
+            "Shared visual summarizes current org-unit reporting rows while the exact comparison table stays below.",
+          series: reportingOrgUnitComparisons.map((row) => ({
+            label: getReportingComparisonLabel(row),
+            value: row.issuedCount,
+            detail: buildReportingLegendDetail({
+              publicBadgeViewCount: row.publicBadgeViewCount,
+              claimRate: row.claimRate,
+              shareRate: row.shareRate,
+            }),
+          })),
+          note: "This figure stays aligned to the same org-unit comparison rows and exports shown elsewhere in reporting.",
+        });
   const reportingHierarchyRowsByLevel = new Map(
     REPORTING_HIERARCHY_LEVELS.map((level) => [
       level,
@@ -1081,10 +1229,33 @@ const renderInstitutionAdminPage = (
             level: childLevel,
           });
     const breadcrumbLabel = breadcrumb.map((orgUnit) => orgUnit.displayName).join(" / ");
+    const visualMarkup =
+      childLevel === null || rows.length === 0
+        ? ""
+        : renderReportingVisualModule({
+            kind: "comparison-bars",
+            headingLevel: "h4",
+            id: `${sectionId}-visual`,
+            title: `${focusOrgUnit.displayName} ${formatReportingHierarchyLevelLabel(childLevel)} overview`,
+            description:
+              "Shared visual compares issued volume across the currently visible child rows. Detailed counts remain in the table.",
+            series: rows.map((row) => ({
+              label: getReportingOrgUnitLabel(row.orgUnitId),
+              value: row.issuedCount,
+              detail: buildReportingLegendDetail({
+                publicBadgeViewCount: row.publicBadgeViewCount,
+                claimRate: row.claimRate,
+                shareRate: row.shareRate,
+              }),
+            })),
+            note: `The ${formatReportingHierarchyLevelLabel(childLevel).toLowerCase()} table below keeps every visible count and drill target intact.`,
+          });
     const childMarkup =
       childLevel === null
         ? `<p class="ct-admin__hint">Program is the deepest reporting level in this workspace.</p>`
-        : `<div class="ct-admin__table-wrap">
+        : `<div class="ct-admin__reporting-panel-media">
+            ${visualMarkup}
+            <div class="ct-admin__table-wrap">
             <table class="ct-admin__table">
               <thead>
                 <tr>
@@ -1106,6 +1277,7 @@ const renderInstitutionAdminPage = (
                 )}
               </tbody>
             </table>
+            </div>
           </div>`;
     const descendantMarkup = rows
       .map((row) => {
@@ -1213,13 +1385,45 @@ const renderInstitutionAdminPage = (
       .join("\n");
   };
   const renderPerformerPanel = (input: {
+    description: string;
     title: string;
     rows: readonly ReportingHierarchyRow[];
     emptyLabel: string;
     barGroup: string;
+    metric: "claimRate" | "issuedCount" | "shareRate";
   }): string => {
+    const visualMarkup =
+      input.rows.length === 0
+        ? ""
+        : renderReportingVisualModule({
+            kind: "comparison-bars",
+            headingLevel: "h4",
+            id: `performer-${input.barGroup}`,
+            title: input.title,
+            description: input.description,
+            series: input.rows.map((row) => ({
+              label: getReportingOrgUnitLabel(row.orgUnitId),
+              value:
+                input.metric === "issuedCount"
+                  ? row.issuedCount
+                  : input.metric === "claimRate"
+                    ? row.claimRate
+                    : row.shareRate,
+              detail:
+                input.metric === "issuedCount"
+                  ? `${formatReportingRate(row.claimRate)} claim · ${formatReportingRate(row.shareRate)} share`
+                  : `${formatReportingCount(row.issuedCount)} issued · ${
+                      input.metric === "claimRate"
+                        ? `${formatReportingRate(row.shareRate)} share`
+                        : `${formatReportingRate(row.claimRate)} claim`
+                    }`,
+            })),
+            note: "The table below preserves the same rows for detailed comparison.",
+          });
+
     return `<article class="ct-admin__panel ct-admin__panel--nested ct-stack">
       <h3>${escapeHtml(input.title)}</h3>
+      ${visualMarkup}
       <div class="ct-admin__table-wrap">
         <table class="ct-admin__table ct-admin__table--compact">
           <thead>
@@ -1330,39 +1534,57 @@ const renderInstitutionAdminPage = (
           <div class="ct-admin__reporting-performer-grid">
             ${renderPerformerPanel({
               title: "Highest issuance volume",
+              description:
+                "Shared visual compares the highest-volume org units without hiding the exact issued totals or rates.",
               rows: reportingHighestVolumeRows,
               emptyLabel: "No org units available for volume rankings.",
               barGroup: "performer-high-volume",
+              metric: "issuedCount",
             })}
             ${renderPerformerPanel({
               title: "Lowest issuance volume",
+              description:
+                "Shared visual compares the lowest-volume org units while keeping the same tabular rows underneath.",
               rows: reportingLowestVolumeRows,
               emptyLabel: "No org units available for volume rankings.",
               barGroup: "performer-low-volume",
+              metric: "issuedCount",
             })}
             ${renderPerformerPanel({
               title: "Highest claim rate",
+              description:
+                "Shared visual compares claim-rate leaders for rows that meet the minimum issued-badge threshold.",
               rows: reportingHighestClaimRateRows,
               emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
               barGroup: "performer-high-claim-rate",
+              metric: "claimRate",
             })}
             ${renderPerformerPanel({
               title: "Lowest claim rate",
+              description:
+                "Shared visual compares lower claim-rate rows without changing the minimum-sample rule.",
               rows: reportingLowestClaimRateRows,
               emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
               barGroup: "performer-low-claim-rate",
+              metric: "claimRate",
             })}
             ${renderPerformerPanel({
               title: "Highest share rate",
+              description:
+                "Shared visual compares share-rate leaders while keeping issued totals visible in the adjacent table.",
               rows: reportingHighestShareRateRows,
               emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
               barGroup: "performer-high-share-rate",
+              metric: "shareRate",
             })}
             ${renderPerformerPanel({
               title: "Lowest share rate",
+              description:
+                "Shared visual compares lower share-rate rows with the same volume threshold applied to the table below.",
               rows: reportingLowestShareRateRows,
               emptyLabel: `No ${formatReportingHierarchyLevelLabel(reportingPerformerLevel).toLowerCase()} rows meet the minimum rate sample.`,
               barGroup: "performer-low-share-rate",
+              metric: "shareRate",
             })}
           </div>
         </article>`;
@@ -2422,6 +2644,7 @@ const renderInstitutionAdminPage = (
       <span class="ct-admin__status-pill">Phase 10 product data</span>
     </div>
     <p>Raw counts show event totals. Rates use distinct engaged assertions over issued badges, so comparison tables do not inflate because of repeat clicks from one assertion.</p>
+    ${reportingEngagementVisualsMarkup}
     <div class="ct-admin__metric-grid">
       ${reportingEngagementCardsMarkup}
     </div>
@@ -2437,6 +2660,7 @@ const renderInstitutionAdminPage = (
   const reportingTrendPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Trend lines</h2>
     <p>Trend lines combine issuance and supported engagement counts over time for the same reporting filters. Claim actions and wallet accepts remain separate events here.</p>
+    ${reportingTrendVisualMarkup}
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
         <thead>
@@ -2460,6 +2684,7 @@ const renderInstitutionAdminPage = (
   const reportingTemplateComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by badge template</h2>
     <p>Use this table to compare issuance volume, supported engagement counts, and rate metrics across badge templates without leaving reporting.</p>
+    ${reportingTemplateComparisonVisualMarkup}
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
         <thead>
@@ -2485,6 +2710,7 @@ const renderInstitutionAdminPage = (
   const reportingOrgUnitComparisonPanelMarkup = `<article class="ct-admin__panel ct-admin__panel--table ct-stack">
     <h2>Compare by org unit</h2>
     <p>This flat comparison remains available alongside hierarchy drilldowns so buyers can keep one explicit table for exact org-unit group rows.</p>
+    ${reportingOrgUnitComparisonVisualMarkup}
     <div class="ct-admin__table-wrap">
       <table class="ct-admin__table">
         <thead>

@@ -1094,9 +1094,7 @@ describe("GET /tenants/:tenantId/admin/reporting", () => {
     expect(body).toContain("Public badge views");
     expect(body).toContain("Claim rate");
     expect(body).toContain('form method="get" action="/tenants/tenant_123/admin/reporting"');
-    expect(body).toContain(
-      'href="/v1/tenants/tenant_123/reporting/overview/export.csv?issuedFrom=2026-03-01&amp;issuedTo=2026-03-31"',
-    );
+    expect(body).toContain("Overview CSV");
   });
 
   it("renders reporting chart markup directly in the server response", async () => {

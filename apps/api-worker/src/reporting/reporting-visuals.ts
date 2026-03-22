@@ -1,6 +1,7 @@
 import { escapeHtml } from "../utils/display-format";
 
 export type ReportingVisualKind = "comparison-bars" | "stacked-summary" | "trend-series";
+export type ReportingVisualHeadingLevel = "h3" | "h4";
 
 export interface ReportingVisualSeriesPoint {
   label: string;
@@ -15,6 +16,7 @@ export interface ReportingVisualProps {
   series: readonly ReportingVisualSeriesPoint[];
   id?: string;
   emptyMessage?: string;
+  headingLevel?: ReportingVisualHeadingLevel;
 }
 
 const REPORTING_VISUAL_EMPTY_MESSAGE = "No reporting data available for this view yet.";
@@ -264,6 +266,7 @@ export const renderReporting = (input: ReportingVisualProps): string => {
   const titleId = `${visualId}-title`;
   const descriptionId = `${visualId}-description`;
   const summaryId = `${visualId}-summary`;
+  const titleTag = input.headingLevel ?? "h3";
   const normalizedSeries = input.series.map((point) => ({
     ...point,
     value: normalizeValue(point.value),
@@ -281,7 +284,7 @@ export const renderReporting = (input: ReportingVisualProps): string => {
   if (!hasRenderableData(normalizedSeries)) {
     return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="empty">
       <figcaption class="ct-reporting-visual__header">
-        <h3 id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</h3>
+        <${titleTag} id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</${titleTag}>
         ${descriptionMarkup}
       </figcaption>
       <div id="${summaryId}" class="ct-reporting-visual__empty">
@@ -296,7 +299,7 @@ export const renderReporting = (input: ReportingVisualProps): string => {
 
   return `<figure class="ct-reporting-visual" data-reporting-visual-kind="${escapeHtml(input.kind)}" data-reporting-visual-state="ready">
     <figcaption class="ct-reporting-visual__header">
-      <h3 id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</h3>
+      <${titleTag} id="${titleId}" class="ct-reporting-visual__title">${escapeHtml(input.title)}</${titleTag}>
       ${descriptionMarkup}
     </figcaption>
     <div class="ct-reporting-visual__surface">
