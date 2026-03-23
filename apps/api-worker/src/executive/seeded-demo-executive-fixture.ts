@@ -610,33 +610,14 @@ const scopedSlice: TenantExecutiveDashboardRecord = {
     breadcrumbs: [
       createNavigationLink({
         kind: 'drilldown',
-        label: 'Tenant 123 Institution',
-        focusOrgUnitId: 'tenant_123:org:institution',
-        comparisonLevel: 'college',
-        pathState: scopedDefaults.pathState,
-      }),
-      createNavigationLink({
-        kind: 'drilldown',
         label: 'College of Engineering',
         focusOrgUnitId: 'tenant_123:org:college-eng',
         comparisonLevel: 'department',
         pathState: scopedDefaults.pathState,
       }),
     ],
-    parent: createNavigationLink({
-      kind: 'drilldown',
-      label: 'Tenant 123 Institution',
-      focusOrgUnitId: 'tenant_123:org:institution',
-      comparisonLevel: 'college',
-      pathState: scopedDefaults.pathState,
-    }),
-    back: createNavigationLink({
-      kind: 'drilldown',
-      label: 'Tenant 123 Institution',
-      focusOrgUnitId: 'tenant_123:org:institution',
-      comparisonLevel: 'college',
-      pathState: scopedDefaults.pathState,
-    }),
+    parent: null,
+    back: null,
     drilldowns: [
       createNavigationLink({
         kind: 'drilldown',
@@ -660,7 +641,7 @@ const scopedSlice: TenantExecutiveDashboardRecord = {
   kpiCatalog: buildExecutiveKpiCatalog({
     defaults: scopedDefaults,
   }),
-  rollup: rollups.focused,
+  rollup: rollups.scoped,
 };
 
 export interface SeededDemoExecutiveFixture {

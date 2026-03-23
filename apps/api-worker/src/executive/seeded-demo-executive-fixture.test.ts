@@ -34,6 +34,15 @@ describe('seeded demo executive fixture', () => {
     expect(seededDemoExecutiveFixture.slices.scoped.access.scopedOrgUnitIds).toContain(
       'tenant_123:org:college-eng',
     );
+    expect(seededDemoExecutiveFixture.slices.scoped.navigation.breadcrumbs).toMatchObject([
+      {
+        label: 'College of Engineering',
+        focusOrgUnitId: 'tenant_123:org:college-eng',
+        comparisonLevel: 'department',
+      },
+    ]);
+    expect(seededDemoExecutiveFixture.slices.scoped.navigation.parent).toBeNull();
+    expect(seededDemoExecutiveFixture.slices.scoped.navigation.back).toBeNull();
   });
 
   it('stays test-only verification data and is not imported by runtime executive code', async () => {

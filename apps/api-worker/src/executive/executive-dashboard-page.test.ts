@@ -76,7 +76,7 @@ describe("renderExecutiveDashboardPage", () => {
   });
 
   it("renders breadcrumbed drilldown links that stay on the executive route family", () => {
-    const html = renderExecutiveDashboardPage(createSeededDemoExecutiveDashboardSlice("scoped"));
+    const html = renderExecutiveDashboardPage(createSeededDemoExecutiveDashboardSlice("focused"));
 
     expect(html).toContain('aria-label="Executive drilldown path"');
     expect(html).toContain(">Tenant 123 Institution<");
@@ -85,10 +85,22 @@ describe("renderExecutiveDashboardPage", () => {
     expect(html).toContain(">Computer Science<");
     expect(html).toContain(">Mathematics<");
     expect(html).toContain(
-      "/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;comparisonLevel=program",
+      "/tenants/tenant_123/executive?window=last-90-days&amp;audience=system&amp;badgeTemplateId=badge_template_science&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;comparisonLevel=program",
     );
     expect(html).not.toContain("/admin/reporting");
     expect(html).not.toContain("Phase 23 will extend the executive route family");
+  });
+
+  it("keeps scoped executive breadcrumbs rooted in the visible subtree", () => {
+    const html = renderExecutiveDashboardPage(createSeededDemoExecutiveDashboardSlice("scoped"));
+
+    expect(html).toContain('aria-label="Executive drilldown path"');
+    expect(html).toContain(">College of Engineering<");
+    expect(html).not.toContain(">Tenant 123 Institution<");
+    expect(html).not.toContain(">Back to Tenant 123 Institution<");
+    expect(html).toContain(">Computer Science<");
+    expect(html).toContain(">Mathematics<");
+    expect(html).not.toContain("/admin/reporting");
   });
 
   it("keeps sparse executive drilldown states summary-first and honest", () => {
@@ -121,7 +133,7 @@ describe("renderExecutiveDashboardPage", () => {
     expect(html).toContain("This slice stays centered on College of Engineering");
     expect(html).toContain("Visible rows");
     expect(html).toContain(">0<");
-    expect(html).toContain(">Back to Tenant 123 Institution<");
+    expect(html).not.toContain(">Back to Tenant 123 Institution<");
     expect(html).not.toContain(">Computer Science<");
     expect(html).not.toContain(">Mathematics<");
   });

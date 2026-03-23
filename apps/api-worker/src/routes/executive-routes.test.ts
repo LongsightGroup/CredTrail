@@ -185,7 +185,8 @@ describe("executive routes", () => {
     expect(html).toContain("Read-only route");
     expect(html).toContain("Scoped view");
     expect(html).toContain('aria-label="Executive drilldown path"');
-    expect(html).toContain("Back to Tenant 123 Institution");
+    expect(html).not.toContain("Back to Tenant 123 Institution");
+    expect(html).not.toContain("Tenant 123 Institution");
     expect(html).toContain("Computer Science");
     expect(html).toContain('data-reporting-visual-kind="trend-series"');
     expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
@@ -221,7 +222,8 @@ describe("executive routes", () => {
     const html = await response.text();
 
     expect(html).toContain("College of Engineering credential momentum");
-    expect(html).toContain("Back to Tenant 123 Institution");
+    expect(html).not.toContain("Back to Tenant 123 Institution");
+    expect(html).not.toContain("Tenant 123 Institution");
     expect(html).toContain(
       "/v1/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;comparisonLevel=department",
     );
