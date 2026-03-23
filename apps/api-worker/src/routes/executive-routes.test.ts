@@ -108,6 +108,26 @@ const sampleExecutiveDashboard = () => {
         focusOrgUnitId: "tenant_123:org:college-eng",
         level: "department" as const,
       },
+      pathState: {
+        audience: "college" as const,
+        window: "last-90-days" as const,
+        state: "active" as const,
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department" as const,
+      },
+    },
+    navigation: {
+      current: {
+        kind: "drilldown" as const,
+        label: "College of Engineering",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department" as const,
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+      },
+      breadcrumbs: [],
+      parent: null,
+      back: null,
+      drilldowns: [],
     },
     orgUnits: [
       {
@@ -375,9 +395,11 @@ describe("executive routes", () => {
     expect(html).toContain("Compare departments");
     expect(html).toContain('data-reporting-visual-kind="trend-series"');
     expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
-    expect(html).toContain('/v1/tenants/tenant_123/executive?');
-    expect(html).toContain("state=active");
-    expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
+    expect(html).toContain(
+      "/v1/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;comparisonLevel=department",
+    );
+    expect(html).not.toContain("issuedFrom=2025-12-23");
+    expect(html).not.toContain("issuedTo=2026-03-22");
     expect(html).toContain(pageAssetPath("executiveDashboardCss"));
     expect(html).not.toContain("Institution Admin");
     expect(html).not.toContain("Rules and Access");

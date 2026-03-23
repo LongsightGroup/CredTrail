@@ -236,17 +236,7 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
       : isSystemAudience(dashboard)
         ? "This route starts with the system story, then moves into current momentum and the next visible comparison layer."
         : `This route starts with ${dashboard.rollup.focusDisplayName}, then moves into the visible comparison layer leaders can act on next.`;
-  const jsonPath = buildExecutiveApiPath(dashboard.tenantId, {
-    window: dashboard.defaults.window === "custom" ? undefined : dashboard.defaults.window,
-    audience: dashboard.defaults.audience,
-    issuedFrom: dashboard.defaults.reportingFilters.issuedFrom,
-    issuedTo: dashboard.defaults.reportingFilters.issuedTo,
-    badgeTemplateId: dashboard.defaults.reportingFilters.badgeTemplateId,
-    orgUnitId: dashboard.defaults.reportingFilters.orgUnitId,
-    state: dashboard.defaults.reportingFilters.state,
-    focusOrgUnitId: dashboard.defaults.focusOrgUnitId,
-    comparisonLevel: dashboard.defaults.comparisonLevel,
-  });
+  const jsonPath = buildExecutiveApiPath(dashboard.tenantId, dashboard.defaults.pathState);
 
   return renderPageShell(
     "Executive Dashboard",
