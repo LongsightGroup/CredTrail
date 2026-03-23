@@ -37,6 +37,68 @@ const sampleExecutiveDashboard = (
         focusOrgUnitId: "tenant_123:org:college-eng",
         level: "department",
       },
+      pathState: {
+        audience: "college",
+        window: "last-90-days",
+        state: "active",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+      },
+    },
+    navigation: {
+      current: {
+        kind: "drilldown",
+        label: "College of Engineering",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+      },
+      breadcrumbs: [
+        {
+          kind: "drilldown",
+          label: "Tenant 123 Institution",
+          focusOrgUnitId: "tenant_123:org:institution",
+          comparisonLevel: "college",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+        },
+        {
+          kind: "drilldown",
+          label: "College of Engineering",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+        },
+      ],
+      parent: {
+        kind: "drilldown",
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      back: {
+        kind: "drilldown",
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      drilldowns: [
+        {
+          kind: "drilldown",
+          label: "Computer Science",
+          focusOrgUnitId: "tenant_123:org:department-cs",
+          comparisonLevel: "program",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+        },
+        {
+          kind: "drilldown",
+          label: "Mathematics",
+          focusOrgUnitId: "tenant_123:org:department-math",
+          comparisonLevel: "department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-math&comparisonLevel=department",
+        },
+      ],
     },
     orgUnits: [],
     overview: {
@@ -149,6 +211,16 @@ const sampleExecutiveDashboard = (
           groupBy: "orgUnit",
           metricKey: "shareRate",
           ranking: "bottom",
+        },
+        {
+          id: "drilldown",
+          kind: "drilldown",
+          title: "Drill into departments",
+          description: "Carry the current slice into deeper executive review.",
+          audience: "college",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          groupBy: "orgUnit",
         },
       ],
     },
@@ -280,5 +352,21 @@ describe("buildExecutiveDashboardInsights", () => {
       ]),
     );
     expect(firstModule?.visual).toBeUndefined();
+  });
+
+  it("replaces the placeholder drilldown note with real executive route-family links", () => {
+    const insights = buildExecutiveDashboardInsights(sampleExecutiveDashboard());
+    const drilldown = insights.modules.find((module) => module.id === "drilldown");
+
+    expect(drilldown?.note).toContain("Stay inside the executive route family");
+    expect(drilldown?.note).not.toContain("Phase 23 will extend");
+    expect(drilldown?.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Computer Science",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+        }),
+      ]),
+    );
   });
 });

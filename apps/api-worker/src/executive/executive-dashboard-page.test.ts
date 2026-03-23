@@ -36,6 +36,68 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
         focusOrgUnitId: "tenant_123:org:college-eng",
         level: "department",
       },
+      pathState: {
+        audience: "college",
+        window: "last-90-days",
+        state: "active",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+      },
+    },
+    navigation: {
+      current: {
+        kind: "drilldown",
+        label: "College of Engineering",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+      },
+      breadcrumbs: [
+        {
+          kind: "drilldown",
+          label: "Tenant 123 Institution",
+          focusOrgUnitId: "tenant_123:org:institution",
+          comparisonLevel: "college",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+        },
+        {
+          kind: "drilldown",
+          label: "College of Engineering",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+        },
+      ],
+      parent: {
+        kind: "drilldown",
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      back: {
+        kind: "drilldown",
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college",
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      drilldowns: [
+        {
+          kind: "drilldown",
+          label: "Computer Science",
+          focusOrgUnitId: "tenant_123:org:department-cs",
+          comparisonLevel: "program",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+        },
+        {
+          kind: "drilldown",
+          label: "Mathematics",
+          focusOrgUnitId: "tenant_123:org:department-math",
+          comparisonLevel: "department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-math&comparisonLevel=department",
+        },
+      ],
     },
     orgUnits: [],
     overview: {
@@ -125,6 +187,16 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
           comparisonLevel: "department",
           groupBy: "orgUnit",
         },
+        {
+          id: "drilldown",
+          kind: "drilldown",
+          title: "Drill into departments",
+          description: "Carry the current slice into deeper executive review.",
+          audience: "college",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          groupBy: "orgUnit",
+        },
       ],
     },
     rollup: {
@@ -201,9 +273,11 @@ describe("renderExecutiveDashboardPage", () => {
     expect(html).toContain("Issued badges");
     expect(html).toContain("18");
     expect(html).toContain("Compare departments");
-    expect(html).toContain('/v1/tenants/tenant_123/executive?');
-    expect(html).toContain("state=active");
-    expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
+    expect(html).toContain(
+      "/v1/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;comparisonLevel=department",
+    );
+    expect(html).not.toContain("issuedFrom=2025-12-23");
+    expect(html).not.toContain("issuedTo=2026-03-22");
     expect(html.indexOf('aria-label="Executive KPI summary"')).toBeLessThan(
       html.indexOf('data-reporting-visual-kind="trend-series"'),
     );
@@ -244,6 +318,22 @@ describe("renderExecutiveDashboardPage", () => {
     expect(sparseHtml).toContain(
       "This view stays intentionally narrow so leaders can trust the current slice instead of reading invented rankings.",
     );
+  });
+
+  it("renders breadcrumbed drilldown links that stay on the executive route family", () => {
+    const html = renderExecutiveDashboardPage(sampleExecutiveDashboard());
+
+    expect(html).toContain('aria-label="Executive drilldown path"');
+    expect(html).toContain(">Tenant 123 Institution<");
+    expect(html).toContain(">College of Engineering<");
+    expect(html).toContain(">Back to Tenant 123 Institution<");
+    expect(html).toContain(">Computer Science<");
+    expect(html).toContain(">Mathematics<");
+    expect(html).toContain(
+      "/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&amp;comparisonLevel=program",
+    );
+    expect(html).not.toContain("/admin/reporting");
+    expect(html).not.toContain("Phase 23 will extend the executive route family");
   });
 
   it("renders the unavailable state through the same dedicated executive asset shell", () => {
