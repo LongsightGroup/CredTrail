@@ -29,8 +29,8 @@ const sampleExecutiveDashboard = (
         state: "active",
       },
       hierarchyFilters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
+        issuedFrom: "2025-12-23",
+        issuedTo: "2026-03-22",
         badgeTemplateId: undefined,
         orgUnitId: undefined,
         state: "active",
@@ -100,14 +100,18 @@ const sampleExecutiveDashboard = (
           key: "issued",
           label: "Issued badges",
           description: "Issuance volume in the current slice.",
-          valueKind: "count",
+          source: "assertions",
+          available: true,
+          availabilityNote: null,
           emphasis: "primary",
         },
         {
           key: "claimRate",
           label: "Claim rate",
           description: "Claim activity in the current slice.",
-          valueKind: "percentage",
+          source: "assertion_engagement_events + assertions",
+          available: true,
+          availabilityNote: null,
           emphasis: "supporting",
         },
       ],
@@ -265,13 +269,16 @@ describe("buildExecutiveDashboardInsights", () => {
 
     const insights = buildExecutiveDashboardInsights(dashboard);
 
-    expect(insights.modules[0].id).toBe("focus-summary");
-    expect(insights.modules[0].summaryItems).toEqual(
+    const firstModule = insights.modules[0];
+
+    expect(firstModule).toBeDefined();
+    expect(firstModule?.id).toBe("focus-summary");
+    expect(firstModule?.summaryItems).toEqual(
       expect.arrayContaining([
         { label: "Focus", value: "College of Engineering" },
         { label: "Audience", value: "College" },
       ]),
     );
-    expect(insights.modules[0].visual).toBeUndefined();
+    expect(firstModule?.visual).toBeUndefined();
   });
 });

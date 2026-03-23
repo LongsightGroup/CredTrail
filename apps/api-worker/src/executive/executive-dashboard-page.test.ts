@@ -28,8 +28,8 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
         state: "active",
       },
       hierarchyFilters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
+        issuedFrom: "2025-12-23",
+        issuedTo: "2026-03-22",
         badgeTemplateId: undefined,
         orgUnitId: undefined,
         state: "active",
@@ -99,14 +99,18 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
           key: "issued",
           label: "Issued badges",
           description: "Issuance volume in the current slice.",
-          valueKind: "count",
+          source: "assertions",
+          available: true,
+          availabilityNote: null,
           emphasis: "primary",
         },
         {
           key: "claimRate",
           label: "Claim rate",
           description: "Claim activity in the current slice.",
-          valueKind: "percentage",
+          source: "assertion_engagement_events + assertions",
+          available: true,
+          availabilityNote: null,
           emphasis: "supporting",
         },
       ],
@@ -177,8 +181,8 @@ describe("renderExecutiveDashboardPage", () => {
   it("renders a dedicated executive shell with linked assets instead of inline route-local styles", () => {
     const html = renderExecutiveDashboardPage(sampleExecutiveDashboard());
 
-    expect(html).toContain("<h1>Executive Dashboard</h1>");
-    expect(html).toContain("Read-only executive summary");
+    expect(html).toContain("Executive Dashboard</p>");
+    expect(html).toContain("College of Engineering credential momentum");
     expect(html).toContain("Executive snapshot");
     expect(html).toContain('data-reporting-visual-kind="trend-series"');
     expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
@@ -192,12 +196,54 @@ describe("renderExecutiveDashboardPage", () => {
     const html = renderExecutiveDashboardPage(sampleExecutiveDashboard());
 
     expect(html).toContain('data-executive-audience="college"');
+    expect(html).toContain("College executive view");
+    expect(html).toContain("College of Engineering credential momentum");
     expect(html).toContain("Issued badges");
     expect(html).toContain("18");
     expect(html).toContain("Compare departments");
     expect(html).toContain('/v1/tenants/tenant_123/executive?');
     expect(html).toContain("state=active");
     expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
+    expect(html.indexOf('aria-label="Executive KPI summary"')).toBeLessThan(
+      html.indexOf('data-reporting-visual-kind="trend-series"'),
+    );
+    expect(html.indexOf('data-reporting-visual-kind="trend-series"')).toBeLessThan(
+      html.indexOf('data-reporting-visual-kind="comparison-ranked"'),
+    );
+  });
+
+  it("changes hero framing for system slices and keeps sparse slices intentional", () => {
+    const systemDashboard = sampleExecutiveDashboard();
+    systemDashboard.defaults.audience = "system";
+    systemDashboard.defaults.focusUnitType = "institution";
+    systemDashboard.rollup.focusUnitType = "institution";
+    systemDashboard.rollup.focusDisplayName = "Tenant 123 Institution";
+    systemDashboard.rollup.comparisonLevel = "college";
+
+    const sparseDashboard = sampleExecutiveDashboard();
+    sparseDashboard.rollup.rows = [];
+    sparseDashboard.kpiCatalog.modules = [
+      {
+        id: "focus-summary",
+        kind: "focus_summary",
+        title: "Current college summary",
+        description: "Keep the executive story centered on this college.",
+        audience: "college",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "college",
+      },
+    ];
+
+    const systemHtml = renderExecutiveDashboardPage(systemDashboard);
+    const sparseHtml = renderExecutiveDashboardPage(sparseDashboard);
+
+    expect(systemHtml).toContain("System-level executive view");
+    expect(systemHtml).toContain("System credential momentum");
+    expect(sparseHtml).toContain("Focused slice");
+    expect(sparseHtml).toContain("Summary-first view");
+    expect(sparseHtml).toContain(
+      "This view stays intentionally narrow so leaders can trust the current slice instead of reading invented rankings.",
+    );
   });
 
   it("renders the unavailable state through the same dedicated executive asset shell", () => {

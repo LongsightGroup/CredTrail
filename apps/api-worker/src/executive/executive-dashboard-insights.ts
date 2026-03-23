@@ -1,6 +1,6 @@
 import type { ExecutiveDashboardModuleDescriptor } from "./executive-kpi-catalog";
 import type { TenantExecutiveDashboardRecord } from "./executive-rollup-loader";
-import type { ReportingVisualProps, ReportingVisualSeriesPoint } from "../reporting/reporting-visuals";
+import type { ReportingVisualProps } from "../reporting/reporting-visuals";
 
 const MIN_ISSUED_FOR_RATE_COMPARISON = 5;
 
@@ -118,10 +118,12 @@ const buildTrendInsight = (dashboard: TenantExecutiveDashboardRecord): Executive
         };
       }),
       emptyMessage: "No trend buckets are available for this executive slice yet.",
-      sparseMessage:
-        dashboard.trends.series.length <= 1
-          ? "Only one trend bucket is visible, so treat this as a starting point rather than a movement story."
-          : undefined,
+      ...(dashboard.trends.series.length <= 1
+        ? {
+            sparseMessage:
+              "Only one trend bucket is visible, so treat this as a starting point rather than a movement story.",
+          }
+        : {}),
     },
   };
 };
@@ -152,10 +154,12 @@ const buildComparisonSummaryInsight = (
       summaryOverride: `Comparing ${titleCase(
         dashboard.rollup.comparisonLevel,
       ).toLowerCase()} rows by issued badges. Claim and share rates stay visible beside each row.`,
-      sparseMessage:
-        dashboard.rollup.rows.length <= 1
-          ? "Only one visible comparison row is available, so use the exact row values below as the current executive truth."
-          : undefined,
+      ...(dashboard.rollup.rows.length <= 1
+        ? {
+            sparseMessage:
+              "Only one visible comparison row is available, so use the exact row values below as the current executive truth.",
+          }
+        : {}),
     },
   };
 };

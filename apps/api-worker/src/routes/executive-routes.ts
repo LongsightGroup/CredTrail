@@ -10,6 +10,7 @@ import {
 } from "../executive/executive-dashboard-page";
 import {
   loadTenantExecutiveDashboard,
+  type TenantExecutiveDashboardRecord,
 } from "../executive/executive-rollup-loader";
 
 interface RegisterExecutiveRoutesInput {

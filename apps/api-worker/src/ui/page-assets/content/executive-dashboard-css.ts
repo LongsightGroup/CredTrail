@@ -56,6 +56,12 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
   line-height: 0.98;
   letter-spacing: -0.03em;
 }
+.executive-hero-title-context {
+  margin: 0 0 0.55rem;
+  color: rgba(248, 252, 255, 0.9);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
 .executive-subtitle {
   margin: 0.9rem 0 0;
   max-width: 52rem;
@@ -245,6 +251,9 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
   flex-wrap: wrap;
   gap: 0.55rem;
 }
+.executive-chip-row--hero {
+  margin-top: 1rem;
+}
 .executive-chip {
   display: inline-flex;
   align-items: center;
@@ -256,6 +265,18 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
   color: var(--ct-theme-text-title);
   font-size: 0.78rem;
   font-weight: 600;
+}
+.executive-dashboard[data-executive-audience='system'] .executive-hero {
+  background:
+    linear-gradient(130deg, rgba(8, 31, 58, 0.98), rgba(16, 72, 132, 0.95) 56%, rgba(201, 146, 36, 0.92)),
+    var(--ct-executive-shell);
+}
+.executive-dashboard[data-executive-audience='college'] .executive-hero,
+.executive-dashboard[data-executive-audience='department'] .executive-hero,
+.executive-dashboard[data-executive-audience='program'] .executive-hero {
+  background:
+    linear-gradient(135deg, rgba(7, 36, 68, 0.98), rgba(19, 105, 135, 0.94) 55%, rgba(84, 176, 148, 0.88)),
+    var(--ct-executive-shell);
 }
 .executive-microcopy {
   margin: 0;

@@ -37,6 +37,42 @@ const titleCase = (value: string): string => {
     .join(" ");
 };
 
+const isSystemAudience = (dashboard: TenantExecutiveDashboardRecord): boolean => {
+  return (
+    dashboard.defaults.audience === "system" || dashboard.defaults.audience === "institution"
+  );
+};
+
+const buildHeroTitle = (dashboard: TenantExecutiveDashboardRecord): string => {
+  if (dashboard.defaults.audience === "system") {
+    return "System credential momentum";
+  }
+
+  return `${dashboard.rollup.focusDisplayName} credential momentum`;
+};
+
+const buildHeroEyebrow = (dashboard: TenantExecutiveDashboardRecord): string => {
+  if (dashboard.defaults.audience === "system") {
+    return "System-level executive view";
+  }
+
+  return `${titleCase(dashboard.defaults.audience)} executive view`;
+};
+
+const buildHeroSubtitle = (dashboard: TenantExecutiveDashboardRecord): string => {
+  if (dashboard.rollup.rows.length === 0) {
+    return `This slice stays centered on ${dashboard.rollup.focusDisplayName} because no deeper visible comparison level is available right now.`;
+  }
+
+  if (isSystemAudience(dashboard)) {
+    return `Read institution-wide issuance, claim, and share momentum first, then compare the next visible level without crossing into operational admin work.`;
+  }
+
+  return `Read how ${dashboard.rollup.focusDisplayName} is performing first, then compare the next visible ${titleCase(
+    dashboard.rollup.comparisonLevel,
+  ).toLowerCase()} slice without dropping into operational admin work.`;
+};
+
 const buildExecutiveApiPath = (
   tenantId: string,
   query: Parameters<typeof buildExecutiveDashboardQueryEntries>[0],
@@ -156,14 +192,16 @@ const renderStoryCards = (dashboard: TenantExecutiveDashboardRecord): string => 
     {
       label: "Current slice",
       value: titleCase(dashboard.defaults.audience),
-      detail: `Focused on ${dashboard.rollup.focusDisplayName}`,
+      detail: isSystemAudience(dashboard)
+        ? `Focused on ${dashboard.rollup.focusDisplayName} across the visible system slice`
+        : `Focused on ${dashboard.rollup.focusDisplayName}`,
     },
     {
       label: "Compare next",
       value: titleCase(dashboard.rollup.comparisonLevel),
       detail:
         dashboard.rollup.rows.length === 0
-          ? "No deeper visible slice is available yet."
+          ? "No deeper visible slice is available yet, so the dashboard stays summary-first."
           : `${formatCount(dashboard.rollup.rows.length)} visible rows in this slice`,
     },
     {
@@ -186,6 +224,18 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
   const insights = buildExecutiveDashboardInsights(dashboard);
   const primaryModule = insights.modules[0] ?? null;
   const secondaryModules = primaryModule === null ? [] : insights.modules.slice(1);
+  const heroTitle = buildHeroTitle(dashboard);
+  const heroEyebrow = buildHeroEyebrow(dashboard);
+  const heroSubtitle = buildHeroSubtitle(dashboard);
+  const storyKicker = dashboard.rollup.rows.length === 0 ? "Focused slice" : "First read";
+  const storyHeading =
+    dashboard.rollup.rows.length === 0 ? "Summary-first view" : "Executive snapshot";
+  const storyMicrocopy =
+    dashboard.rollup.rows.length === 0
+      ? "This view stays intentionally narrow so leaders can trust the current slice instead of reading invented rankings."
+      : isSystemAudience(dashboard)
+        ? "This route starts with the system story, then moves into current momentum and the next visible comparison layer."
+        : `This route starts with ${dashboard.rollup.focusDisplayName}, then moves into the visible comparison layer leaders can act on next.`;
   const jsonPath = buildExecutiveApiPath(dashboard.tenantId, {
     window: dashboard.defaults.window === "custom" ? undefined : dashboard.defaults.window,
     audience: dashboard.defaults.audience,
@@ -202,9 +252,10 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
     "Executive Dashboard",
     `<section class="executive-dashboard" data-executive-audience="${escapeHtml(dashboard.defaults.audience)}">
       <section class="executive-hero">
-        <p class="executive-eyebrow">Read-only executive summary</p>
-        <h1>Executive Dashboard</h1>
-        <p class="executive-subtitle">System and campus leaders get a summary-first view of issuance, claims, sharing, and hierarchy comparisons without crossing into operational admin work.</p>
+        <p class="executive-eyebrow">${escapeHtml(heroEyebrow)}</p>
+        <p class="executive-hero-title-context">Executive Dashboard</p>
+        <h1>${escapeHtml(heroTitle)}</h1>
+        <p class="executive-subtitle">${escapeHtml(heroSubtitle)}</p>
         <div class="executive-context">
           <article class="executive-context-item">
             <p class="executive-context-label">Audience</p>
@@ -223,6 +274,11 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
             <p class="executive-context-value">${escapeHtml(formatIsoTimestamp(dashboard.rollup.generatedAt))}</p>
           </article>
         </div>
+        <div class="executive-chip-row executive-chip-row--hero">
+          <span class="executive-chip">${escapeHtml(`Window ${titleCase(dashboard.defaults.window)}`)}</span>
+          <span class="executive-chip">${escapeHtml(`State ${titleCase(dashboard.defaults.reportingFilters.state ?? "all")}`)}</span>
+          <span class="executive-chip">${escapeHtml(`Compare ${titleCase(dashboard.rollup.comparisonLevel)}`)}</span>
+        </div>
         <div class="executive-actions">
           <a class="executive-action-link" href="${escapeHtml(jsonPath)}">View JSON payload</a>
         </div>
@@ -232,12 +288,12 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
         <article class="executive-story">
           <div class="executive-section-header">
             <div>
-              <p class="executive-section-kicker">First read</p>
-              <h2>Executive snapshot</h2>
+              <p class="executive-section-kicker">${escapeHtml(storyKicker)}</p>
+              <h2>${escapeHtml(storyHeading)}</h2>
             </div>
             <p class="executive-note">The same filters, focus, and scope flow through the read-only JSON endpoint.</p>
           </div>
-          <p class="executive-microcopy">This route keeps the story simple: what is happening in the current slice, what level is comparable next, and where leaders should look before they open deeper detail.</p>
+          <p class="executive-microcopy">${escapeHtml(storyMicrocopy)}</p>
           <div class="executive-story-grid">
             ${renderStoryCards(dashboard)}
           </div>

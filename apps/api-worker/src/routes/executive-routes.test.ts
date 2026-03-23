@@ -368,8 +368,8 @@ describe("executive routes", () => {
     expect(response.status).toBe(200);
     const html = await response.text();
 
-    expect(html).toContain("<h1>Executive Dashboard</h1>");
-    expect(html).toContain("Read-only executive summary");
+    expect(html).toContain("College executive view");
+    expect(html).toContain("College of Engineering credential momentum");
     expect(html).toContain("Executive snapshot");
     expect(html).toContain("College of Engineering");
     expect(html).toContain("Compare departments");
@@ -382,6 +382,12 @@ describe("executive routes", () => {
     expect(html).not.toContain("Institution Admin");
     expect(html).not.toContain("Rules and Access");
     expect(html).not.toContain(".executive-hero {");
+    expect(html.indexOf('aria-label="Executive KPI summary"')).toBeLessThan(
+      html.indexOf('data-reporting-visual-kind="trend-series"'),
+    );
+    expect(html.indexOf('data-reporting-visual-kind="trend-series"')).toBeLessThan(
+      html.indexOf('data-reporting-visual-kind="comparison-ranked"'),
+    );
   });
 
   it("renders a 403 executive page when the member does not have executive visibility", async () => {
