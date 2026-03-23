@@ -63,6 +63,7 @@ vi.mock("../executive/executive-rollup-loader", async () => {
 import { findTenantMembership } from "@credtrail/db";
 
 import { app } from "../index";
+import { pageAssetPath } from "../ui/page-assets";
 
 const mockedFindTenantMembershipDb = vi.mocked(findTenantMembership);
 
@@ -369,13 +370,16 @@ describe("executive routes", () => {
 
     expect(html).toContain("<h1>Executive Dashboard</h1>");
     expect(html).toContain("Read-only executive summary");
+    expect(html).toContain("Executive snapshot");
     expect(html).toContain("College of Engineering");
     expect(html).toContain("Compare departments");
     expect(html).toContain('/v1/tenants/tenant_123/executive?');
     expect(html).toContain("state=active");
     expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
+    expect(html).toContain(pageAssetPath("executiveDashboardCss"));
     expect(html).not.toContain("Institution Admin");
     expect(html).not.toContain("Rules and Access");
+    expect(html).not.toContain(".executive-hero {");
   });
 
   it("renders a 403 executive page when the member does not have executive visibility", async () => {

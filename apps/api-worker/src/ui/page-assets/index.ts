@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import type { AppEnv } from "../../app";
 import { AUTH_LOGIN_CSS } from "./content/auth-login-css";
 import { AUTH_LOGIN_JS } from "./content/auth-login-js";
+import { EXECUTIVE_DASHBOARD_CSS } from "./content/executive-dashboard-css";
 import { FOUNDATION_CSS } from "./content/foundation-css";
 import { INSTITUTION_ADMIN_CSS } from "./content/institution-admin-css";
 import { INSTITUTION_ADMIN_JS } from "./content/institution-admin-js";
@@ -37,6 +38,12 @@ const PAGE_ASSET_SOURCES = {
     stem: "auth-login",
     body: AUTH_LOGIN_JS,
     contentType: "text/javascript; charset=utf-8",
+  },
+  executiveDashboardCss: {
+    kind: "style",
+    stem: "executive-dashboard",
+    body: EXECUTIVE_DASHBOARD_CSS,
+    contentType: "text/css; charset=utf-8",
   },
   institutionAdminCss: {
     kind: "style",
