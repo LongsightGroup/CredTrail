@@ -309,6 +309,10 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
           <span class="executive-chip">${escapeHtml(`Window ${titleCase(dashboard.defaults.window)}`)}</span>
           <span class="executive-chip">${escapeHtml(`State ${titleCase(dashboard.defaults.reportingFilters.state ?? "all")}`)}</span>
           <span class="executive-chip">${escapeHtml(`Compare ${titleCase(dashboard.rollup.comparisonLevel)}`)}</span>
+          <span class="executive-chip">Read-only route</span>
+          <span class="executive-chip">${escapeHtml(
+            dashboard.access.visibility === "scoped" ? "Scoped view" : "Tenant-wide view",
+          )}</span>
         </div>
         ${renderExecutiveBreadcrumbs(dashboard)}
         <div class="executive-actions">
