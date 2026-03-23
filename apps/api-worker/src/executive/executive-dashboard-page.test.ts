@@ -336,6 +336,41 @@ describe("renderExecutiveDashboardPage", () => {
     expect(html).not.toContain("Phase 23 will extend the executive route family");
   });
 
+  it("keeps sparse executive drilldown states summary-first and honest", () => {
+    const sparseDashboard = sampleExecutiveDashboard();
+    sparseDashboard.rollup.rows = [];
+    sparseDashboard.navigation.drilldowns = [];
+    sparseDashboard.kpiCatalog.modules = [
+      {
+        id: "focus-summary",
+        kind: "focus_summary",
+        title: "Current college summary",
+        description: "Keep the executive story centered on this college.",
+        audience: "college",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+      },
+      {
+        id: "drilldown",
+        kind: "drilldown",
+        title: "Review college detail",
+        description: "Stay with the current executive slice when there is no deeper visible comparison to open.",
+        audience: "college",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+      },
+    ];
+
+    const html = renderExecutiveDashboardPage(sparseDashboard);
+
+    expect(html).toContain("This slice stays centered on College of Engineering");
+    expect(html).toContain("Visible rows");
+    expect(html).toContain(">0<");
+    expect(html).toContain(">Back to Tenant 123 Institution<");
+    expect(html).not.toContain(">Computer Science<");
+    expect(html).not.toContain(">Mathematics<");
+  });
+
   it("renders the unavailable state through the same dedicated executive asset shell", () => {
     const html = renderExecutiveUnavailablePage();
 
