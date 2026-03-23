@@ -718,6 +718,10 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
   }
 }
 @media (max-width: 960px) {
+  .executive-breadcrumb-list,
+  .executive-actions {
+    gap: 0.5rem;
+  }
   .executive-dashboard .ct-reporting-visual {
     padding: 0.9rem;
   }
@@ -733,6 +737,14 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
 @media (max-width: 720px) {
   .executive-dashboard {
     padding: 0.85rem;
+  }
+  .executive-breadcrumb-list,
+  .executive-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .executive-breadcrumb-item {
+    justify-content: space-between;
   }
   .executive-hero,
   .executive-story,
