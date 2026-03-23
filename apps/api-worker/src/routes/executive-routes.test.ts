@@ -124,10 +124,45 @@ const sampleExecutiveDashboard = () => {
         comparisonLevel: "department" as const,
         href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
       },
-      breadcrumbs: [],
-      parent: null,
-      back: null,
-      drilldowns: [],
+      breadcrumbs: [
+        {
+          kind: "drilldown" as const,
+          label: "Tenant 123 Institution",
+          focusOrgUnitId: "tenant_123:org:institution",
+          comparisonLevel: "college" as const,
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+        },
+        {
+          kind: "drilldown" as const,
+          label: "College of Engineering",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department" as const,
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+        },
+      ],
+      parent: {
+        kind: "drilldown" as const,
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college" as const,
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      back: {
+        kind: "drilldown" as const,
+        label: "Tenant 123 Institution",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college" as const,
+        href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Ainstitution&comparisonLevel=college",
+      },
+      drilldowns: [
+        {
+          kind: "drilldown" as const,
+          label: "Computer Science",
+          focusOrgUnitId: "tenant_123:org:department-cs",
+          comparisonLevel: "program" as const,
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+        },
+      ],
     },
     orgUnits: [
       {
@@ -233,6 +268,16 @@ const sampleExecutiveDashboard = () => {
           kind: "comparison_summary" as const,
           title: "Compare departments",
           description: "Compare visible departments.",
+          audience: "college" as const,
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department" as const,
+          groupBy: "orgUnit" as const,
+        },
+        {
+          id: "drilldown",
+          kind: "drilldown" as const,
+          title: "Drill into departments",
+          description: "Carry the current slice into deeper executive review.",
           audience: "college" as const,
           focusOrgUnitId: "tenant_123:org:college-eng",
           comparisonLevel: "department" as const,
@@ -393,6 +438,11 @@ describe("executive routes", () => {
     expect(html).toContain("Executive snapshot");
     expect(html).toContain("College of Engineering");
     expect(html).toContain("Compare departments");
+    expect(html).toContain("Read-only route");
+    expect(html).toContain("Scoped view");
+    expect(html).toContain('aria-label="Executive drilldown path"');
+    expect(html).toContain("Back to Tenant 123 Institution");
+    expect(html).toContain("Computer Science");
     expect(html).toContain('data-reporting-visual-kind="trend-series"');
     expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
     expect(html).toContain(
@@ -410,6 +460,29 @@ describe("executive routes", () => {
     expect(html.indexOf('data-reporting-visual-kind="trend-series"')).toBeLessThan(
       html.indexOf('data-reporting-visual-kind="comparison-ranked"'),
     );
+  });
+
+  it("normalizes scoped deep links into the visible executive slice without echoing hidden focus ids", async () => {
+    const response = await app.request(
+      "/tenants/tenant_123/executive?state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-secret&comparisonLevel=program",
+      {
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+      },
+      createEnv(),
+    );
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+
+    expect(html).toContain("College of Engineering credential momentum");
+    expect(html).toContain("Back to Tenant 123 Institution");
+    expect(html).toContain(
+      "/v1/tenants/tenant_123/executive?window=last-90-days&amp;audience=college&amp;state=active&amp;focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&amp;comparisonLevel=department",
+    );
+    expect(html).not.toContain("tenant_123%3Aorg%3Adepartment-secret");
+    expect(html).not.toContain("/admin/reporting");
   });
 
   it("renders a 403 executive page when the member does not have executive visibility", async () => {
