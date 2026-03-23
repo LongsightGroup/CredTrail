@@ -189,4 +189,33 @@ describe("inferExecutiveDashboardDefaults", () => {
       window: "last-90-days",
     });
   });
+
+  it("normalizes out-of-scope focus and over-deep comparison requests back to the visible slice", () => {
+    expect(
+      inferExecutiveDashboardDefaults({
+        today: "2026-03-22",
+        query: {
+          audience: "system",
+          state: "active",
+          focusOrgUnitId: "tenant_123:org:college-arts",
+          comparisonLevel: "program",
+        },
+        visibility: "scoped",
+        scopedOrgUnitIds: ["tenant_123:org:college-eng"],
+        orgUnits: sampleExecutiveOrgUnits(),
+      }),
+    ).toMatchObject({
+      audience: "college",
+      focusOrgUnitId: "tenant_123:org:college-eng",
+      focusUnitType: "college",
+      comparisonLevel: "department",
+      pathState: {
+        audience: "college",
+        window: "last-90-days",
+        state: "active",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+      },
+    });
+  });
 });

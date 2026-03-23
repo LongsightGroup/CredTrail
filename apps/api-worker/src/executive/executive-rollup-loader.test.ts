@@ -285,6 +285,96 @@ describe("loadTenantExecutiveDashboard", () => {
     });
   });
 
+  it("builds visible breadcrumbs and deeper drilldown targets from the normalized executive slice", async () => {
+    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([sampleScope()]);
+    mockedGetTenantExecutiveRollupDb.mockResolvedValue({
+      tenantId: "tenant_123",
+      focusOrgUnitId: "tenant_123:org:college-eng",
+      focusDisplayName: "College of Engineering",
+      focusParentOrgUnitId: "tenant_123:org:institution",
+      focusUnitType: "college",
+      comparisonLevel: "department",
+      focusLineageOrgUnitIds: ["tenant_123:org:institution", "tenant_123:org:college-eng"],
+      filters: {
+        from: "2025-12-23",
+        to: "2026-03-22",
+        badgeTemplateId: "badge_template_science",
+        orgUnitId: null,
+        state: "active",
+      },
+      rows: [
+        {
+          level: "department",
+          orgUnitId: "tenant_123:org:department-cs",
+          displayName: "Computer Science",
+          parentOrgUnitId: "tenant_123:org:college-eng",
+          issuedCount: 10,
+          publicBadgeViewCount: 16,
+          verificationViewCount: 8,
+          shareClickCount: 5,
+          learnerClaimCount: 4,
+          walletAcceptCount: 2,
+          claimRate: 40,
+          shareRate: 30,
+        },
+      ],
+      generatedAt: "2026-03-22T12:00:00.000Z",
+    });
+
+    const result = await loadTenantExecutiveDashboard({
+      db: fakeDb,
+      tenantId: "tenant_123",
+      userId: "usr_exec",
+      membershipRole: "issuer",
+      query: {
+        state: "active",
+        badgeTemplateId: "badge_template_science",
+        focusOrgUnitId: "tenant_123:org:college-arts",
+        comparisonLevel: "program",
+      },
+      today: "2026-03-22",
+    });
+
+    expect(result).toMatchObject({
+      defaults: {
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
+        pathState: {
+          window: "last-90-days",
+          state: "active",
+          badgeTemplateId: "badge_template_science",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+        },
+      },
+      navigation: {
+        current: {
+          kind: "drilldown",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&state=active&badgeTemplateId=badge_template_science&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+        },
+        breadcrumbs: [
+          {
+            kind: "drilldown",
+            focusOrgUnitId: "tenant_123:org:college-eng",
+            comparisonLevel: "department",
+          },
+        ],
+        parent: null,
+        back: null,
+        drilldowns: [
+          {
+            kind: "drilldown",
+            focusOrgUnitId: "tenant_123:org:department-cs",
+            comparisonLevel: "program",
+            href: "/tenants/tenant_123/executive?window=last-90-days&state=active&badgeTemplateId=badge_template_science&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+          },
+        ],
+      },
+    });
+  });
+
   it("keeps terminal slices honest with focus-summary executive modules", async () => {
     mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([
       sampleScope({
@@ -334,5 +424,13 @@ describe("loadTenantExecutiveDashboard", () => {
       "focus-summary",
       "drilldown",
     ]);
+    expect(result?.navigation).toMatchObject({
+      current: {
+        kind: "focus-summary",
+        focusOrgUnitId: "tenant_123:org:program-cs",
+        comparisonLevel: "program",
+      },
+      drilldowns: [],
+    });
   });
 });

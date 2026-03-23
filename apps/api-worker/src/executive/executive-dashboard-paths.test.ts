@@ -31,6 +31,28 @@ describe("executive dashboard paths", () => {
     );
   });
 
+  it("preserves the current executive filters when drilling deeper into a visible row", () => {
+    expect(
+      buildExecutiveDrilldownPath(
+        "tenant_123",
+        {
+          window: "last-30-days",
+          state: "active",
+          badgeTemplateId: "badge_template_science",
+          orgUnitId: "tenant_123:org:college-eng",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+        },
+        {
+          focusOrgUnitId: "tenant_123:org:department-cs",
+          comparisonLevel: "program",
+        },
+      ),
+    ).toBe(
+      "/tenants/tenant_123/executive?window=last-30-days&state=active&badgeTemplateId=badge_template_science&orgUnitId=tenant_123%3Aorg%3Acollege-eng&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+    );
+  });
+
   it("builds stable query entries for future executive links without leaking into admin routes", () => {
     expect(
       buildExecutiveDashboardQueryEntries({
