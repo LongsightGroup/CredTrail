@@ -102,6 +102,51 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
   gap: 0.7rem;
   margin-top: 1.25rem;
 }
+.executive-breadcrumbs {
+  margin-top: 1rem;
+}
+.executive-breadcrumb-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+}
+.executive-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.executive-breadcrumb-item:not(:last-child)::after {
+  content: "/";
+  color: rgba(248, 252, 255, 0.62);
+  font-size: 0.78rem;
+}
+.executive-breadcrumb-link,
+.executive-breadcrumb-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.executive-breadcrumb-link {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f8fbff;
+  text-decoration: none;
+}
+.executive-breadcrumb-link:hover,
+.executive-breadcrumb-link:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+}
+.executive-breadcrumb-current {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
 .executive-action-link {
   display: inline-flex;
   align-items: center;
@@ -301,6 +346,34 @@ export const EXECUTIVE_DASHBOARD_CSS = String.raw`
 }
 .executive-summary-item strong {
   color: var(--ct-theme-text-title);
+}
+.executive-link-list {
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+}
+.executive-link-item {
+  margin: 0;
+}
+.executive-link-anchor {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(15, 95, 166, 0.16);
+  background: rgba(247, 250, 255, 0.96);
+  color: var(--ct-theme-link);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.executive-link-anchor:hover,
+.executive-link-anchor:focus-visible {
+  background: rgba(237, 244, 252, 0.96);
+  color: var(--ct-theme-link-hover);
 }
 
 .executive-dashboard .ct-reporting-visual {

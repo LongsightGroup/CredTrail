@@ -9,6 +9,11 @@ export interface ExecutiveDashboardInsightSummaryItem {
   value: string;
 }
 
+export interface ExecutiveDashboardInsightLink {
+  label: string;
+  href: string;
+}
+
 export interface ExecutiveDashboardInsight {
   id: string;
   kicker: string;
@@ -17,6 +22,7 @@ export interface ExecutiveDashboardInsight {
   note?: string;
   visual?: ReportingVisualProps;
   summaryItems?: readonly ExecutiveDashboardInsightSummaryItem[];
+  links?: readonly ExecutiveDashboardInsightLink[];
 }
 
 export interface ExecutiveDashboardInsights {
@@ -161,6 +167,16 @@ const buildComparisonSummaryInsight = (
           }
         : {}),
     },
+    ...(dashboard.navigation.drilldowns.length > 0
+      ? {
+          links: dashboard.navigation.drilldowns.map((link) => {
+            return {
+              label: link.label,
+              href: link.href,
+            };
+          }),
+        }
+      : {}),
   };
 };
 
@@ -280,13 +296,32 @@ const buildDrilldownSummaryInsight = (
   dashboard: TenantExecutiveDashboardRecord,
   module: ExecutiveDashboardModuleDescriptor,
 ): ExecutiveDashboardInsight => {
+  const links =
+    dashboard.navigation.drilldowns.length > 0
+      ? dashboard.navigation.drilldowns.map((link) => {
+          return {
+            label: link.label,
+            href: link.href,
+          };
+        })
+      : dashboard.navigation.back === null
+        ? []
+        : [
+            {
+              label: `Back to ${dashboard.navigation.back.label}`,
+              href: dashboard.navigation.back.href,
+            },
+          ];
+
   return {
     id: module.id,
     kicker: "Drilldown",
     title: module.title,
     description: module.description,
     note:
-      "Phase 23 will extend the executive route family for deeper review without dropping leaders into operational admin pages.",
+      links.length === 0
+        ? "No deeper visible slice is available right now, so this route stays anchored to the current executive summary."
+        : "Stay inside the executive route family while moving into the next visible slice.",
     summaryItems: [
       {
         label: "Route family",
@@ -301,6 +336,7 @@ const buildDrilldownSummaryInsight = (
         value: formatCount(dashboard.rollup.rows.length),
       },
     ],
+    ...(links.length > 0 ? { links } : {}),
   };
 };
 

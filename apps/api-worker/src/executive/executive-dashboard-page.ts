@@ -164,6 +164,22 @@ const renderInsightSummaryItems = (insight: ExecutiveDashboardInsight): string =
   </ul>`;
 };
 
+const renderInsightLinks = (insight: ExecutiveDashboardInsight): string => {
+  if (insight.links === undefined || insight.links.length === 0) {
+    return "";
+  }
+
+  return `<ul class="executive-link-list">
+    ${insight.links
+      .map((link) => {
+        return `<li class="executive-link-item">
+          <a class="executive-link-anchor" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>
+        </li>`;
+      })
+      .join("")}
+  </ul>`;
+};
+
 const renderInsightPanel = (
   insight: ExecutiveDashboardInsight,
   input: { fullWidth?: boolean } = {},
@@ -184,7 +200,32 @@ const renderInsightPanel = (
     ${noteMarkup}
     ${visualMarkup}
     ${renderInsightSummaryItems(insight)}
+    ${renderInsightLinks(insight)}
   </article>`;
+};
+
+const renderExecutiveBreadcrumbs = (dashboard: TenantExecutiveDashboardRecord): string => {
+  if (dashboard.navigation.breadcrumbs.length === 0) {
+    return "";
+  }
+
+  const lastIndex = dashboard.navigation.breadcrumbs.length - 1;
+
+  return `<nav class="executive-breadcrumbs" aria-label="Executive drilldown path">
+    <ol class="executive-breadcrumb-list">
+      ${dashboard.navigation.breadcrumbs
+        .map((link, index) => {
+          return `<li class="executive-breadcrumb-item">
+            ${
+              index === lastIndex
+                ? `<span class="executive-breadcrumb-current">${escapeHtml(link.label)}</span>`
+                : `<a class="executive-breadcrumb-link" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`
+            }
+          </li>`;
+        })
+        .join("")}
+    </ol>
+  </nav>`;
 };
 
 const renderStoryCards = (dashboard: TenantExecutiveDashboardRecord): string => {
@@ -269,7 +310,15 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
           <span class="executive-chip">${escapeHtml(`State ${titleCase(dashboard.defaults.reportingFilters.state ?? "all")}`)}</span>
           <span class="executive-chip">${escapeHtml(`Compare ${titleCase(dashboard.rollup.comparisonLevel)}`)}</span>
         </div>
+        ${renderExecutiveBreadcrumbs(dashboard)}
         <div class="executive-actions">
+          ${
+            dashboard.navigation.back === null
+              ? ""
+              : `<a class="executive-action-link" href="${escapeHtml(dashboard.navigation.back.href)}">${escapeHtml(
+                  `Back to ${dashboard.navigation.back.label}`,
+                )}</a>`
+          }
           <a class="executive-action-link" href="${escapeHtml(jsonPath)}">View JSON payload</a>
         </div>
       </section>
