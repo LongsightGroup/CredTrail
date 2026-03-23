@@ -340,9 +340,10 @@ describe("loadTenantExecutiveDashboard", () => {
         focusOrgUnitId: "tenant_123:org:college-eng",
         comparisonLevel: "department",
         pathState: {
+          audience: "college",
           window: "last-90-days",
-          state: "active",
           badgeTemplateId: "badge_template_science",
+          state: "active",
           focusOrgUnitId: "tenant_123:org:college-eng",
           comparisonLevel: "department",
         },
@@ -352,7 +353,7 @@ describe("loadTenantExecutiveDashboard", () => {
           kind: "drilldown",
           focusOrgUnitId: "tenant_123:org:college-eng",
           comparisonLevel: "department",
-          href: "/tenants/tenant_123/executive?window=last-90-days&state=active&badgeTemplateId=badge_template_science&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
+          href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&badgeTemplateId=badge_template_science&state=active&focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng&comparisonLevel=department",
         },
         breadcrumbs: [
           {
@@ -368,7 +369,7 @@ describe("loadTenantExecutiveDashboard", () => {
             kind: "drilldown",
             focusOrgUnitId: "tenant_123:org:department-cs",
             comparisonLevel: "program",
-            href: "/tenants/tenant_123/executive?window=last-90-days&state=active&badgeTemplateId=badge_template_science&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+            href: "/tenants/tenant_123/executive?window=last-90-days&audience=college&badgeTemplateId=badge_template_science&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
           },
         ],
       },

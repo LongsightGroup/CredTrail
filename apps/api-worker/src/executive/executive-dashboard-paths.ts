@@ -54,6 +54,10 @@ export const buildExecutiveDashboardPath = (
 export const buildExecutiveDrilldownPath = (
   tenantId: string,
   query: Partial<TenantExecutiveDashboardQuery>,
+  overrides: Partial<TenantExecutiveDashboardQuery> = {},
 ): string => {
-  return buildExecutiveDashboardPath(tenantId, query);
+  return buildExecutiveDashboardPath(tenantId, {
+    ...query,
+    ...overrides,
+  });
 };

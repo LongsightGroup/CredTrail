@@ -49,7 +49,7 @@ describe("executive dashboard paths", () => {
         },
       ),
     ).toBe(
-      "/tenants/tenant_123/executive?window=last-30-days&state=active&badgeTemplateId=badge_template_science&orgUnitId=tenant_123%3Aorg%3Acollege-eng&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
+      "/tenants/tenant_123/executive?window=last-30-days&badgeTemplateId=badge_template_science&orgUnitId=tenant_123%3Aorg%3Acollege-eng&state=active&focusOrgUnitId=tenant_123%3Aorg%3Adepartment-cs&comparisonLevel=program",
     );
   });
 

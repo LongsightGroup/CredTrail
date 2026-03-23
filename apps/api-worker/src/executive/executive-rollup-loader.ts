@@ -26,13 +26,35 @@ import {
 } from "./executive-kpi-catalog";
 import {
   inferExecutiveDashboardDefaults,
+  resolveExecutiveComparisonLevel,
+  resolveExecutiveVisibleOrgUnitIds,
+  toExecutiveOrgUnitsById,
   type ExecutiveDashboardDefaults,
+  type ExecutiveDashboardPathState,
 } from "./executive-dashboard-contract";
+import { buildExecutiveDrilldownPath } from "./executive-dashboard-paths";
+
+export interface ExecutiveDashboardNavigationLink {
+  kind: "drilldown" | "focus-summary";
+  label: string;
+  focusOrgUnitId: string;
+  comparisonLevel: ExecutiveDashboardDefaults["comparisonLevel"];
+  href: string;
+}
+
+export interface ExecutiveDashboardNavigation {
+  current: ExecutiveDashboardNavigationLink;
+  breadcrumbs: ExecutiveDashboardNavigationLink[];
+  parent: ExecutiveDashboardNavigationLink | null;
+  back: ExecutiveDashboardNavigationLink | null;
+  drilldowns: ExecutiveDashboardNavigationLink[];
+}
 
 export interface TenantExecutiveDashboardRecord {
   tenantId: string;
   access: TenantExecutiveAccessResult;
   defaults: ExecutiveDashboardDefaults;
+  navigation: ExecutiveDashboardNavigation;
   orgUnits: readonly TenantOrgUnitRecord[];
   overview: TenantReportingOverviewRecord;
   trends: TenantReportingTrendRecord;
@@ -51,6 +73,112 @@ export interface LoadTenantExecutiveDashboardInput {
 
 const todayDateKey = (): string => {
   return new Date().toISOString().slice(0, 10);
+};
+
+const buildExecutiveNavigationLink = (input: {
+  tenantId: string;
+  label: string;
+  focusOrgUnitId: string;
+  comparisonLevel: ExecutiveDashboardDefaults["comparisonLevel"];
+  pathState: ExecutiveDashboardPathState;
+  orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>;
+  hasVisibleRows?: boolean | undefined;
+}): ExecutiveDashboardNavigationLink => {
+  const focusUnitType = input.orgUnitsById.get(input.focusOrgUnitId)?.unitType ?? input.comparisonLevel;
+
+  return {
+    kind:
+      input.hasVisibleRows === false || input.comparisonLevel === focusUnitType
+        ? "focus-summary"
+        : "drilldown",
+    label: input.label,
+    focusOrgUnitId: input.focusOrgUnitId,
+    comparisonLevel: input.comparisonLevel,
+    href: buildExecutiveDrilldownPath(input.tenantId, input.pathState, {
+      focusOrgUnitId: input.focusOrgUnitId,
+      comparisonLevel: input.comparisonLevel,
+    }),
+  };
+};
+
+const buildExecutiveDashboardNavigation = (input: {
+  tenantId: string;
+  access: TenantExecutiveAccessResult;
+  defaults: ExecutiveDashboardDefaults;
+  orgUnits: readonly TenantOrgUnitRecord[];
+  rollup: GetTenantExecutiveRollupResult;
+}): ExecutiveDashboardNavigation => {
+  const orgUnitsById = toExecutiveOrgUnitsById(input.orgUnits);
+  const visibleOrgUnitIds = resolveExecutiveVisibleOrgUnitIds({
+    visibility: input.access.visibility,
+    scopedOrgUnitIds: input.access.scopedOrgUnitIds,
+    orgUnitsById,
+  });
+
+  const breadcrumbs = input.rollup.focusLineageOrgUnitIds
+    .filter((orgUnitId) => visibleOrgUnitIds.has(orgUnitId))
+    .map((orgUnitId) => {
+      const orgUnit = orgUnitsById.get(orgUnitId);
+
+      if (orgUnit === undefined) {
+        return null;
+      }
+
+      return buildExecutiveNavigationLink({
+        tenantId: input.tenantId,
+        label: orgUnit.displayName,
+        focusOrgUnitId: orgUnit.id,
+        comparisonLevel: resolveExecutiveComparisonLevel({
+          focusOrgUnitId: orgUnit.id,
+          visibleOrgUnitIds,
+          orgUnitsById,
+        }),
+        pathState: input.defaults.pathState,
+        orgUnitsById,
+      });
+    })
+    .filter((link): link is ExecutiveDashboardNavigationLink => link !== null);
+  const parent = breadcrumbs.at(-2) ?? null;
+
+  const drilldowns = input.rollup.rows
+    .filter((row) => visibleOrgUnitIds.has(row.orgUnitId))
+    .map((row) => {
+      const comparisonLevel = resolveExecutiveComparisonLevel({
+        focusOrgUnitId: row.orgUnitId,
+        visibleOrgUnitIds,
+        orgUnitsById,
+      });
+
+      if (comparisonLevel === row.level) {
+        return null;
+      }
+
+      return buildExecutiveNavigationLink({
+        tenantId: input.tenantId,
+        label: row.displayName,
+        focusOrgUnitId: row.orgUnitId,
+        comparisonLevel,
+        pathState: input.defaults.pathState,
+        orgUnitsById,
+      });
+    })
+    .filter((link): link is ExecutiveDashboardNavigationLink => link !== null);
+
+  return {
+    current: buildExecutiveNavigationLink({
+      tenantId: input.tenantId,
+      label: input.rollup.focusDisplayName,
+      focusOrgUnitId: input.defaults.focusOrgUnitId,
+      comparisonLevel: input.defaults.comparisonLevel,
+      pathState: input.defaults.pathState,
+      orgUnitsById,
+      hasVisibleRows: input.rollup.rows.length > 0,
+    }),
+    breadcrumbs,
+    parent,
+    back: parent,
+    drilldowns,
+  };
 };
 
 export const loadTenantExecutiveDashboard = async (
@@ -107,11 +235,19 @@ export const loadTenantExecutiveDashboard = async (
         access.visibility === "scoped" ? access.scopedOrgUnitIds : undefined,
     }),
   ]);
+  const navigation = buildExecutiveDashboardNavigation({
+    tenantId: input.tenantId,
+    access,
+    defaults,
+    orgUnits,
+    rollup,
+  });
 
   return {
     tenantId: input.tenantId,
     access,
     defaults,
+    navigation,
     orgUnits,
     overview,
     trends,

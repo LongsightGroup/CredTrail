@@ -94,6 +94,12 @@ describe("inferExecutiveDashboardDefaults", () => {
         focusOrgUnitId: "tenant_123:org:institution",
         level: "college",
       },
+      pathState: {
+        audience: "system",
+        window: "last-90-days",
+        focusOrgUnitId: "tenant_123:org:institution",
+        comparisonLevel: "college",
+      },
     });
   });
 
@@ -130,6 +136,14 @@ describe("inferExecutiveDashboardDefaults", () => {
         state: "active",
         focusOrgUnitId: "tenant_123:org:college-eng",
         level: "department",
+      },
+      pathState: {
+        audience: "college",
+        window: "last-30-days",
+        badgeTemplateId: "badge_template_science",
+        state: "active",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "department",
       },
     });
   });

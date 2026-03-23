@@ -43,9 +43,30 @@ export interface ExecutiveDashboardDefaults {
   comparisonGroupBy: "orgUnit";
   reportingFilters: ReportingPageFilters;
   hierarchyFilters: ReportingHierarchyPageFilters;
+  pathState: ExecutiveDashboardPathState;
 }
 
-const toOrgUnitsById = (
+export interface ExecutiveDashboardPathState
+  extends Partial<
+    Pick<
+      TenantExecutiveDashboardQuery,
+      | "window"
+      | "audience"
+      | "issuedFrom"
+      | "issuedTo"
+      | "badgeTemplateId"
+      | "orgUnitId"
+      | "state"
+      | "focusOrgUnitId"
+      | "comparisonLevel"
+    >
+  > {
+  audience: ExecutiveDashboardAudience;
+  focusOrgUnitId: string;
+  comparisonLevel: OrgUnitType;
+}
+
+export const toExecutiveOrgUnitsById = (
   orgUnits: readonly TenantOrgUnitRecord[],
 ): ReadonlyMap<string, TenantOrgUnitRecord> => {
   return new Map(
@@ -109,7 +130,7 @@ const sortOrgUnitIdsByDepthThenId = (
   });
 };
 
-const resolveVisibleOrgUnitIds = (
+export const resolveExecutiveVisibleOrgUnitIds = (
   input: Pick<InferExecutiveDashboardDefaultsInput, "visibility" | "scopedOrgUnitIds"> & {
     orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>;
   },
@@ -222,8 +243,7 @@ const resolveWindowFilters = (
   };
 };
 
-const resolveComparisonLevel = (input: {
-  query: TenantExecutiveDashboardQuery;
+export const resolveExecutiveComparisonLevel = (input: {
   focusOrgUnitId: string;
   visibleOrgUnitIds: ReadonlySet<string>;
   orgUnitsById: ReadonlyMap<string, TenantOrgUnitRecord>;
@@ -232,13 +252,6 @@ const resolveComparisonLevel = (input: {
 
   if (focusOrgUnit === undefined) {
     throw new Error(`Executive focus org unit ${input.focusOrgUnitId} was not found`);
-  }
-
-  if (
-    input.query.comparisonLevel !== undefined &&
-    ORG_UNIT_DEPTH[input.query.comparisonLevel] >= ORG_UNIT_DEPTH[focusOrgUnit.unitType]
-  ) {
-    return input.query.comparisonLevel;
   }
 
   const descendantLevels = [...input.visibleOrgUnitIds]
@@ -289,8 +302,8 @@ const resolveAudience = (input: {
 export const inferExecutiveDashboardDefaults = (
   input: InferExecutiveDashboardDefaultsInput,
 ): ExecutiveDashboardDefaults => {
-  const orgUnitsById = toOrgUnitsById(input.orgUnits);
-  const visibleOrgUnitIds = resolveVisibleOrgUnitIds({
+  const orgUnitsById = toExecutiveOrgUnitsById(input.orgUnits);
+  const visibleOrgUnitIds = resolveExecutiveVisibleOrgUnitIds({
     visibility: input.visibility,
     scopedOrgUnitIds: input.scopedOrgUnitIds,
     orgUnitsById,
@@ -301,8 +314,7 @@ export const inferExecutiveDashboardDefaults = (
     visibleOrgUnitIds,
   });
   const { window, reportingFilters } = resolveWindowFilters(input.today, input.query);
-  const comparisonLevel = resolveComparisonLevel({
-    query: input.query,
+  const comparisonLevel = resolveExecutiveComparisonLevel({
     focusOrgUnitId,
     visibleOrgUnitIds,
     orgUnitsById,
@@ -313,22 +325,54 @@ export const inferExecutiveDashboardDefaults = (
     throw new Error(`Executive focus org unit ${focusOrgUnitId} was not found`);
   }
 
+  const audience = resolveAudience({
+    query: input.query,
+    visibility: input.visibility,
+    focusOrgUnitId,
+    orgUnitsById,
+  });
+  const hierarchyFilters = createReportingHierarchyPageFilters(reportingFilters, {
+    focusOrgUnitId,
+    level: comparisonLevel,
+  });
+  const pathState: ExecutiveDashboardPathState = {
+    audience,
+    focusOrgUnitId,
+    comparisonLevel,
+    ...(reportingFilters.badgeTemplateId === undefined
+      ? {}
+      : {
+          badgeTemplateId: reportingFilters.badgeTemplateId,
+        }),
+    ...(reportingFilters.orgUnitId === undefined
+      ? {}
+      : {
+          orgUnitId: reportingFilters.orgUnitId,
+        }),
+    ...(reportingFilters.state === undefined
+      ? {}
+      : {
+          state: reportingFilters.state,
+        }),
+    ...(window === "custom"
+      ? {
+          issuedFrom: reportingFilters.issuedFrom,
+          issuedTo: reportingFilters.issuedTo,
+        }
+      : {
+          window,
+        }),
+  };
+
   return {
-    audience: resolveAudience({
-      query: input.query,
-      visibility: input.visibility,
-      focusOrgUnitId,
-      orgUnitsById,
-    }),
+    audience,
     window,
     focusOrgUnitId,
     focusUnitType,
     comparisonLevel,
     comparisonGroupBy: "orgUnit",
     reportingFilters,
-    hierarchyFilters: createReportingHierarchyPageFilters(reportingFilters, {
-      focusOrgUnitId,
-      level: comparisonLevel,
-    }),
+    hierarchyFilters,
+    pathState,
   };
 };
