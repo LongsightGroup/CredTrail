@@ -40,6 +40,12 @@ import {
   type TenantOrgUnitRecord,
 } from "@credtrail/db";
 
+import {
+  createSeededDemoExecutiveOrgUnits,
+  createSeededDemoExecutiveRollup,
+  createSeededDemoExecutiveScope,
+  seededDemoExecutiveFixture,
+} from "./seeded-demo-executive-fixture";
 import { loadTenantExecutiveDashboard } from "./executive-rollup-loader";
 
 const mockedGetTenantExecutiveRollupDb = vi.mocked(getTenantExecutiveRollup);
@@ -52,74 +58,6 @@ const fakeDb = {
   prepare: vi.fn(),
 } as unknown as SqlDatabase;
 
-const sampleExecutiveOrgUnits = (): TenantOrgUnitRecord[] => {
-  return [
-    {
-      id: "tenant_123:org:institution",
-      tenantId: "tenant_123",
-      unitType: "institution",
-      slug: "institution",
-      displayName: "Tenant 123 Institution",
-      parentOrgUnitId: null,
-      createdByUserId: "usr_admin",
-      isActive: true,
-      createdAt: "2026-03-21T12:00:00.000Z",
-      updatedAt: "2026-03-21T12:00:00.000Z",
-    },
-    {
-      id: "tenant_123:org:college-eng",
-      tenantId: "tenant_123",
-      unitType: "college",
-      slug: "college-eng",
-      displayName: "College of Engineering",
-      parentOrgUnitId: "tenant_123:org:institution",
-      createdByUserId: "usr_admin",
-      isActive: true,
-      createdAt: "2026-03-21T12:00:00.000Z",
-      updatedAt: "2026-03-21T12:00:00.000Z",
-    },
-    {
-      id: "tenant_123:org:department-cs",
-      tenantId: "tenant_123",
-      unitType: "department",
-      slug: "department-cs",
-      displayName: "Computer Science",
-      parentOrgUnitId: "tenant_123:org:college-eng",
-      createdByUserId: "usr_admin",
-      isActive: true,
-      createdAt: "2026-03-21T12:00:00.000Z",
-      updatedAt: "2026-03-21T12:00:00.000Z",
-    },
-    {
-      id: "tenant_123:org:program-cs",
-      tenantId: "tenant_123",
-      unitType: "program",
-      slug: "program-cs",
-      displayName: "Computer Science Program",
-      parentOrgUnitId: "tenant_123:org:department-cs",
-      createdByUserId: "usr_admin",
-      isActive: true,
-      createdAt: "2026-03-21T12:00:00.000Z",
-      updatedAt: "2026-03-21T12:00:00.000Z",
-    },
-  ];
-};
-
-const sampleScope = (
-  overrides: Partial<TenantMembershipOrgUnitScopeRecord> = {},
-): TenantMembershipOrgUnitScopeRecord => {
-  return {
-    tenantId: "tenant_123",
-    userId: "usr_exec",
-    orgUnitId: "tenant_123:org:college-eng",
-    role: "issuer",
-    createdByUserId: "usr_admin",
-    createdAt: "2026-03-21T12:00:00.000Z",
-    updatedAt: "2026-03-21T12:00:00.000Z",
-    ...overrides,
-  };
-};
-
 beforeEach(() => {
   mockedListTenantMembershipOrgUnitScopesDb.mockReset();
   mockedListTenantOrgUnitsDb.mockReset();
@@ -127,72 +65,14 @@ beforeEach(() => {
   mockedGetTenantReportingTrendsDb.mockReset();
   mockedGetTenantExecutiveRollupDb.mockReset();
 
-  mockedListTenantOrgUnitsDb.mockResolvedValue(sampleExecutiveOrgUnits());
-  mockedGetTenantReportingOverviewDb.mockResolvedValue({
-    tenantId: "tenant_123",
-    filters: {
-      issuedFrom: "2025-12-23",
-      issuedTo: "2026-03-22",
-      badgeTemplateId: null,
-      orgUnitId: null,
-      state: null,
-    },
-    counts: {
-      issued: 14,
-      active: 12,
-      suspended: 1,
-      revoked: 1,
-      pendingReview: 1,
-      claimRate: 0.5,
-      shareRate: 0.25,
-    },
-    generatedAt: "2026-03-22T12:00:00.000Z",
-  });
-  mockedGetTenantReportingTrendsDb.mockResolvedValue({
-    tenantId: "tenant_123",
-    filters: {
-      from: "2025-12-23",
-      to: "2026-03-22",
-      badgeTemplateId: null,
-      orgUnitId: null,
-      state: null,
-    },
-    bucket: "day",
-    series: [
-      {
-        bucketStart: "2026-03-20",
-        issuedCount: 2,
-        publicBadgeViewCount: 3,
-        verificationViewCount: 1,
-        shareClickCount: 1,
-        learnerClaimCount: 1,
-        walletAcceptCount: 0,
-      },
-    ],
-    generatedAt: "2026-03-22T12:00:00.000Z",
-  });
+  mockedListTenantOrgUnitsDb.mockResolvedValue(createSeededDemoExecutiveOrgUnits());
+  mockedGetTenantReportingOverviewDb.mockResolvedValue(seededDemoExecutiveFixture.overview);
+  mockedGetTenantReportingTrendsDb.mockResolvedValue(seededDemoExecutiveFixture.trends);
 });
 
 describe("loadTenantExecutiveDashboard", () => {
   it("builds a tenant-wide system executive payload from current reporting truth", async () => {
-    mockedGetTenantExecutiveRollupDb.mockResolvedValue({
-      tenantId: "tenant_123",
-      focusOrgUnitId: "tenant_123:org:institution",
-      focusDisplayName: "Tenant 123 Institution",
-      focusParentOrgUnitId: null,
-      focusUnitType: "institution",
-      comparisonLevel: "college",
-      focusLineageOrgUnitIds: ["tenant_123:org:institution"],
-      filters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
-        badgeTemplateId: null,
-        orgUnitId: null,
-        state: null,
-      },
-      rows: [],
-      generatedAt: "2026-03-22T12:00:00.000Z",
-    });
+    mockedGetTenantExecutiveRollupDb.mockResolvedValue(createSeededDemoExecutiveRollup("system"));
 
     const result = await loadTenantExecutiveDashboard({
       db: fakeDb,
@@ -232,25 +112,10 @@ describe("loadTenantExecutiveDashboard", () => {
   });
 
   it("keeps scoped executive payloads rooted in the visible subtree", async () => {
-    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([sampleScope()]);
-    mockedGetTenantExecutiveRollupDb.mockResolvedValue({
-      tenantId: "tenant_123",
-      focusOrgUnitId: "tenant_123:org:college-eng",
-      focusDisplayName: "College of Engineering",
-      focusParentOrgUnitId: "tenant_123:org:institution",
-      focusUnitType: "college",
-      comparisonLevel: "department",
-      focusLineageOrgUnitIds: ["tenant_123:org:institution", "tenant_123:org:college-eng"],
-      filters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
-        badgeTemplateId: null,
-        orgUnitId: null,
-        state: null,
-      },
-      rows: [],
-      generatedAt: "2026-03-22T12:00:00.000Z",
-    });
+    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([
+      createSeededDemoExecutiveScope("collegeIssuer"),
+    ]);
+    mockedGetTenantExecutiveRollupDb.mockResolvedValue(createSeededDemoExecutiveRollup("scoped"));
 
     const result = await loadTenantExecutiveDashboard({
       db: fakeDb,
@@ -286,40 +151,10 @@ describe("loadTenantExecutiveDashboard", () => {
   });
 
   it("builds visible breadcrumbs and deeper drilldown targets from the normalized executive slice", async () => {
-    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([sampleScope()]);
-    mockedGetTenantExecutiveRollupDb.mockResolvedValue({
-      tenantId: "tenant_123",
-      focusOrgUnitId: "tenant_123:org:college-eng",
-      focusDisplayName: "College of Engineering",
-      focusParentOrgUnitId: "tenant_123:org:institution",
-      focusUnitType: "college",
-      comparisonLevel: "department",
-      focusLineageOrgUnitIds: ["tenant_123:org:institution", "tenant_123:org:college-eng"],
-      filters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
-        badgeTemplateId: "badge_template_science",
-        orgUnitId: null,
-        state: "active",
-      },
-      rows: [
-        {
-          level: "department",
-          orgUnitId: "tenant_123:org:department-cs",
-          displayName: "Computer Science",
-          parentOrgUnitId: "tenant_123:org:college-eng",
-          issuedCount: 10,
-          publicBadgeViewCount: 16,
-          verificationViewCount: 8,
-          shareClickCount: 5,
-          learnerClaimCount: 4,
-          walletAcceptCount: 2,
-          claimRate: 40,
-          shareRate: 30,
-        },
-      ],
-      generatedAt: "2026-03-22T12:00:00.000Z",
-    });
+    mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([
+      createSeededDemoExecutiveScope("collegeIssuer"),
+    ]);
+    mockedGetTenantExecutiveRollupDb.mockResolvedValue(createSeededDemoExecutiveRollup("focused"));
 
     const result = await loadTenantExecutiveDashboard({
       db: fakeDb,
@@ -378,34 +213,9 @@ describe("loadTenantExecutiveDashboard", () => {
 
   it("keeps terminal slices honest with focus-summary executive modules", async () => {
     mockedListTenantMembershipOrgUnitScopesDb.mockResolvedValue([
-      sampleScope({
-        orgUnitId: "tenant_123:org:program-cs",
-        role: "viewer",
-      }),
+      createSeededDemoExecutiveScope("programViewer"),
     ]);
-    mockedGetTenantExecutiveRollupDb.mockResolvedValue({
-      tenantId: "tenant_123",
-      focusOrgUnitId: "tenant_123:org:program-cs",
-      focusDisplayName: "Computer Science Program",
-      focusParentOrgUnitId: "tenant_123:org:department-cs",
-      focusUnitType: "program",
-      comparisonLevel: "program",
-      focusLineageOrgUnitIds: [
-        "tenant_123:org:institution",
-        "tenant_123:org:college-eng",
-        "tenant_123:org:department-cs",
-        "tenant_123:org:program-cs",
-      ],
-      filters: {
-        from: "2025-12-23",
-        to: "2026-03-22",
-        badgeTemplateId: null,
-        orgUnitId: null,
-        state: null,
-      },
-      rows: [],
-      generatedAt: "2026-03-22T12:00:00.000Z",
-    });
+    mockedGetTenantExecutiveRollupDb.mockResolvedValue(createSeededDemoExecutiveRollup("terminal"));
 
     const result = await loadTenantExecutiveDashboard({
       db: fakeDb,
