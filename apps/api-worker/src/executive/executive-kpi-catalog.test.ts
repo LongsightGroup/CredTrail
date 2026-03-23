@@ -24,6 +24,12 @@ const sampleDefaults = (
       focusOrgUnitId: "tenant_123:org:institution",
       level: "college",
     },
+    pathState: {
+      audience: "system",
+      window: "last-90-days",
+      focusOrgUnitId: "tenant_123:org:institution",
+      comparisonLevel: "college",
+    },
     ...overrides,
   };
 };
