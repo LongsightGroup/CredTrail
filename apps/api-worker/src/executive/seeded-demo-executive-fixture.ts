@@ -13,6 +13,8 @@ import type { TenantExecutiveDashboardRecord } from './executive-rollup-loader';
 
 const GENERATED_AT = '2026-03-22T12:00:00.000Z';
 const TENANT_ID = 'tenant_123';
+export const SEEDED_DEMO_EXECUTIVE_VERIFY_COMMAND =
+  'pnpm exec vitest run apps/api-worker/src/executive/seeded-demo-executive-fixture.test.ts apps/api-worker/src/executive/executive-rollup-loader.test.ts apps/api-worker/src/executive/executive-dashboard-page.test.ts apps/api-worker/src/routes/executive-routes.test.ts';
 
 const createOrgUnit = (input: {
   id: string;
@@ -227,6 +229,53 @@ const rollups = {
       badgeTemplateId: 'badge_template_science',
       orgUnitId: null,
       state: 'active',
+    },
+    rows: [
+      {
+        level: 'department',
+        orgUnitId: 'tenant_123:org:department-cs',
+        displayName: 'Computer Science',
+        parentOrgUnitId: 'tenant_123:org:college-eng',
+        issuedCount: 10,
+        publicBadgeViewCount: 16,
+        verificationViewCount: 8,
+        shareClickCount: 5,
+        learnerClaimCount: 4,
+        walletAcceptCount: 2,
+        claimRate: 40,
+        shareRate: 30,
+      },
+      {
+        level: 'department',
+        orgUnitId: 'tenant_123:org:department-math',
+        displayName: 'Mathematics',
+        parentOrgUnitId: 'tenant_123:org:college-eng',
+        issuedCount: 8,
+        publicBadgeViewCount: 10,
+        verificationViewCount: 4,
+        shareClickCount: 3,
+        learnerClaimCount: 4,
+        walletAcceptCount: 1,
+        claimRate: 50,
+        shareRate: 25,
+      },
+    ],
+    generatedAt: GENERATED_AT,
+  },
+  scoped: {
+    tenantId: TENANT_ID,
+    focusOrgUnitId: 'tenant_123:org:college-eng',
+    focusDisplayName: 'College of Engineering',
+    focusParentOrgUnitId: 'tenant_123:org:institution',
+    focusUnitType: 'college',
+    comparisonLevel: 'department',
+    focusLineageOrgUnitIds: ['tenant_123:org:institution', 'tenant_123:org:college-eng'],
+    filters: {
+      from: '2025-12-23',
+      to: '2026-03-22',
+      badgeTemplateId: null,
+      orgUnitId: null,
+      state: null,
     },
     rows: [
       {
@@ -631,6 +680,7 @@ export interface SeededDemoExecutiveFixture {
   rollups: {
     system: GetTenantExecutiveRollupResult;
     focused: GetTenantExecutiveRollupResult;
+    scoped: GetTenantExecutiveRollupResult;
     terminal: GetTenantExecutiveRollupResult;
   };
   slices: {
@@ -638,6 +688,7 @@ export interface SeededDemoExecutiveFixture {
     focused: TenantExecutiveDashboardRecord;
     scoped: TenantExecutiveDashboardRecord;
   };
+  verificationCommand: string;
 }
 
 export const seededDemoExecutiveFixture: SeededDemoExecutiveFixture = {
@@ -660,6 +711,7 @@ export const seededDemoExecutiveFixture: SeededDemoExecutiveFixture = {
   rollups: {
     system: rollups.system,
     focused: rollups.focused,
+    scoped: rollups.scoped,
     terminal: rollups.terminal,
   },
   slices: {
@@ -667,4 +719,35 @@ export const seededDemoExecutiveFixture: SeededDemoExecutiveFixture = {
     focused: focusedSlice,
     scoped: scopedSlice,
   },
+  verificationCommand: SEEDED_DEMO_EXECUTIVE_VERIFY_COMMAND,
+};
+
+export type SeededDemoExecutiveSliceName = keyof SeededDemoExecutiveFixture['slices'];
+export type SeededDemoExecutiveRollupName = keyof SeededDemoExecutiveFixture['rollups'];
+export type SeededDemoExecutiveScopeName = keyof SeededDemoExecutiveFixture['scopes'];
+
+const cloneValue = <T>(value: T): T => {
+  return structuredClone(value);
+};
+
+export const createSeededDemoExecutiveDashboardSlice = (
+  slice: SeededDemoExecutiveSliceName,
+): TenantExecutiveDashboardRecord => {
+  return cloneValue(seededDemoExecutiveFixture.slices[slice]);
+};
+
+export const createSeededDemoExecutiveRollup = (
+  rollup: SeededDemoExecutiveRollupName,
+): GetTenantExecutiveRollupResult => {
+  return cloneValue(seededDemoExecutiveFixture.rollups[rollup]);
+};
+
+export const createSeededDemoExecutiveOrgUnits = (): TenantOrgUnitRecord[] => {
+  return cloneValue([...seededDemoExecutiveFixture.orgUnits]);
+};
+
+export const createSeededDemoExecutiveScope = (
+  scope: SeededDemoExecutiveScopeName,
+): TenantMembershipOrgUnitScopeRecord => {
+  return cloneValue(seededDemoExecutiveFixture.scopes[scope]);
 };

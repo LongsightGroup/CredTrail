@@ -36,8 +36,6 @@ import {
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
   type SqlDatabase,
-  type TenantMembershipOrgUnitScopeRecord,
-  type TenantOrgUnitRecord,
 } from "@credtrail/db";
 
 import {
