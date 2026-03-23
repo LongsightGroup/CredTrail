@@ -1,7 +1,12 @@
 import { renderPageShell } from "@credtrail/ui-components";
 
+import {
+  buildExecutiveDashboardInsights,
+  type ExecutiveDashboardInsight,
+} from "./executive-dashboard-insights";
 import type { TenantExecutiveDashboardRecord } from "./executive-rollup-loader";
 import { buildExecutiveDashboardQueryEntries } from "./executive-dashboard-paths";
+import { renderReporting } from "../reporting/reporting-visuals";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
@@ -106,36 +111,44 @@ const renderExecutiveMetrics = (dashboard: TenantExecutiveDashboardRecord): stri
     .join("");
 };
 
-const renderExecutiveModules = (dashboard: TenantExecutiveDashboardRecord): string => {
-  return dashboard.kpiCatalog.modules
-    .map((module) => {
-      return `<li class="executive-summary-item">
-        <strong>${escapeHtml(module.title)}</strong>
-        <p>${escapeHtml(module.description)}</p>
-      </li>`;
-    })
-    .join("");
-};
-
-const renderExecutiveRollupRows = (dashboard: TenantExecutiveDashboardRecord): string => {
-  if (dashboard.rollup.rows.length === 0) {
-    return `<li class="executive-summary-item">
-      <strong>No deeper comparison slice is visible</strong>
-      <p>The current executive focus stays at ${escapeHtml(dashboard.rollup.focusDisplayName)} so the dashboard stays summary-first instead of inventing a ranking story.</p>
-    </li>`;
+const renderInsightSummaryItems = (insight: ExecutiveDashboardInsight): string => {
+  if (insight.summaryItems === undefined || insight.summaryItems.length === 0) {
+    return "";
   }
 
-  return dashboard.rollup.rows
-    .slice(0, 5)
-    .map((row) => {
-      return `<li class="executive-summary-item">
-        <strong>${escapeHtml(row.displayName)}</strong>
-        <p>${escapeHtml(
-          `Issued ${formatCount(row.issuedCount)} · Claim ${formatPercent(row.claimRate)}% · Share ${formatPercent(row.shareRate)}%`,
-        )}</p>
-      </li>`;
-    })
-    .join("");
+  return `<ul class="executive-summary-list">
+    ${insight.summaryItems
+      .map((item) => {
+        return `<li class="executive-summary-item">
+          <strong>${escapeHtml(item.label)}</strong>
+          <p>${escapeHtml(item.value)}</p>
+        </li>`;
+      })
+      .join("")}
+  </ul>`;
+};
+
+const renderInsightPanel = (
+  insight: ExecutiveDashboardInsight,
+  input: { fullWidth?: boolean } = {},
+): string => {
+  const panelClass = input.fullWidth === true ? "executive-section executive-panel--full" : "executive-section";
+  const visualMarkup = insight.visual === undefined ? "" : renderReporting(insight.visual);
+  const noteMarkup =
+    insight.note === undefined ? "" : `<p class="executive-note">${escapeHtml(insight.note)}</p>`;
+
+  return `<article class="${panelClass}">
+    <div class="executive-section-header">
+      <div>
+        <p class="executive-section-kicker">${escapeHtml(insight.kicker)}</p>
+        <h2>${escapeHtml(insight.title)}</h2>
+      </div>
+    </div>
+    <p>${escapeHtml(insight.description)}</p>
+    ${noteMarkup}
+    ${visualMarkup}
+    ${renderInsightSummaryItems(insight)}
+  </article>`;
 };
 
 const renderStoryCards = (dashboard: TenantExecutiveDashboardRecord): string => {
@@ -170,6 +183,9 @@ const renderStoryCards = (dashboard: TenantExecutiveDashboardRecord): string => 
 };
 
 export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboardRecord): string => {
+  const insights = buildExecutiveDashboardInsights(dashboard);
+  const primaryModule = insights.modules[0] ?? null;
+  const secondaryModules = primaryModule === null ? [] : insights.modules.slice(1);
   const jsonPath = buildExecutiveApiPath(dashboard.tenantId, {
     window: dashboard.defaults.window === "custom" ? undefined : dashboard.defaults.window,
     audience: dashboard.defaults.audience,
@@ -233,45 +249,15 @@ export const renderExecutiveDashboardPage = (dashboard: TenantExecutiveDashboard
       </section>
 
       <section class="executive-grid">
-        <article class="executive-panel">
-          <div class="executive-section-header">
-            <div>
-              <p class="executive-section-kicker">Compare</p>
-              <h2>Executive modules</h2>
-            </div>
-          </div>
-          <p>The route stays inside an executive-only story: comparison, top-mover, and drilldown modules with no extra tenant setup burden.</p>
-          <ul class="executive-summary-list">
-            ${renderExecutiveModules(dashboard)}
-          </ul>
-        </article>
-
-        <article class="executive-panel">
-          <div class="executive-section-header">
-            <div>
-              <p class="executive-section-kicker">Next phase</p>
-              <h2>Trend signal</h2>
-            </div>
-          </div>
-          <p>Trend visuals land next. This foundation page already carries the same time window, state filter, focus unit, and comparison level the richer dashboard will visualize.</p>
-          <div class="executive-chip-row">
-            <span class="executive-chip">${escapeHtml(`Window ${titleCase(dashboard.defaults.window)}`)}</span>
-            <span class="executive-chip">${escapeHtml(`State ${titleCase(dashboard.defaults.reportingFilters.state ?? "all")}`)}</span>
-          </div>
-        </article>
-
-        <article class="executive-section executive-panel--full">
-          <div class="executive-section-header">
-            <div>
-              <p class="executive-section-kicker">Visible rows</p>
-              <h2>Top comparison rows</h2>
-            </div>
-          </div>
-          <p>These rows prove the dashboard is already grounded in current hierarchy and reporting truth instead of a demo-only executive branch.</p>
-          <ul class="executive-summary-list">
-            ${renderExecutiveRollupRows(dashboard)}
-          </ul>
-        </article>
+        ${renderInsightPanel(insights.trend, { fullWidth: true })}
+        ${
+          primaryModule === null
+            ? ""
+            : renderInsightPanel(primaryModule, {
+                fullWidth: true,
+              })
+        }
+        ${secondaryModules.map((module) => renderInsightPanel(module)).join("")}
       </section>
     </section>`,
     renderPageAssetTags(["foundationCss", "executiveDashboardCss"]),

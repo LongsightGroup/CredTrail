@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { pageAssetPath } from "../ui/page-assets";
-import { renderExecutiveDashboardPage, renderExecutiveUnavailablePage } from "./executive-dashboard-page";
+import { buildExecutiveDashboardInsights } from "./executive-dashboard-insights";
 import type { TenantExecutiveDashboardRecord } from "./executive-rollup-loader";
 
-const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
+const sampleExecutiveDashboard = (
+  overrides?: Partial<TenantExecutiveDashboardRecord["rollup"]>,
+): TenantExecutiveDashboardRecord => {
   return {
     tenantId: "tenant_123",
     access: {
@@ -121,6 +122,30 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
           comparisonLevel: "department",
           groupBy: "orgUnit",
         },
+        {
+          id: "top-movers-claim-rate",
+          kind: "top_movers",
+          title: "Highest claim rate across departments",
+          description: "Surface the strongest claim behavior.",
+          audience: "college",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          groupBy: "orgUnit",
+          metricKey: "claimRate",
+          ranking: "top",
+        },
+        {
+          id: "lagging-share-rate",
+          kind: "laggards",
+          title: "Lowest share rate across departments",
+          description: "Surface the weakest sharing behavior.",
+          audience: "college",
+          focusOrgUnitId: "tenant_123:org:college-eng",
+          comparisonLevel: "department",
+          groupBy: "orgUnit",
+          metricKey: "shareRate",
+          ranking: "bottom",
+        },
       ],
     },
     rollup: {
@@ -167,44 +192,86 @@ const sampleExecutiveDashboard = (): TenantExecutiveDashboardRecord => {
           claimRate: 50,
           shareRate: 25,
         },
+        {
+          level: "department",
+          orgUnitId: "tenant_123:org:department-history",
+          displayName: "History",
+          parentOrgUnitId: "tenant_123:org:college-eng",
+          issuedCount: 2,
+          publicBadgeViewCount: 3,
+          verificationViewCount: 1,
+          shareClickCount: 0,
+          learnerClaimCount: 1,
+          walletAcceptCount: 0,
+          claimRate: 50,
+          shareRate: 0,
+        },
       ],
       generatedAt: "2026-03-22T12:00:00.000Z",
+      ...overrides,
     },
   };
 };
 
-describe("renderExecutiveDashboardPage", () => {
-  it("renders a dedicated executive shell with linked assets instead of inline route-local styles", () => {
-    const html = renderExecutiveDashboardPage(sampleExecutiveDashboard());
+describe("buildExecutiveDashboardInsights", () => {
+  it("derives top-issued comparison stories from current rollup rows", () => {
+    const insights = buildExecutiveDashboardInsights(sampleExecutiveDashboard());
+    const comparison = insights.modules.find((module) => module.id === "comparison-summary");
 
-    expect(html).toContain("<h1>Executive Dashboard</h1>");
-    expect(html).toContain("Read-only executive summary");
-    expect(html).toContain("Executive snapshot");
-    expect(html).toContain('data-reporting-visual-kind="trend-series"');
-    expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
-    expect(html).toContain(pageAssetPath("foundationCss"));
-    expect(html).toContain(pageAssetPath("executiveDashboardCss"));
-    expect(html).not.toContain(".executive-hero {");
-    expect(html).toContain('body data-variant="open"');
+    expect(comparison?.visual?.kind).toBe("comparison-ranked");
+    expect(comparison?.visual?.series[0]).toMatchObject({
+      label: "Computer Science",
+      value: 10,
+    });
+    expect(comparison?.visual?.summaryOverride).toContain("issued badges");
   });
 
-  it("keeps the first screen KPI-first and preserves the executive JSON handoff", () => {
-    const html = renderExecutiveDashboardPage(sampleExecutiveDashboard());
+  it("builds rate leader and laggard stories with minimum-issued protection", () => {
+    const insights = buildExecutiveDashboardInsights(sampleExecutiveDashboard());
+    const claimLeader = insights.modules.find((module) => module.id === "top-movers-claim-rate");
+    const shareLaggard = insights.modules.find((module) => module.id === "lagging-share-rate");
 
-    expect(html).toContain('data-executive-audience="college"');
-    expect(html).toContain("Issued badges");
-    expect(html).toContain("18");
-    expect(html).toContain("Compare departments");
-    expect(html).toContain('/v1/tenants/tenant_123/executive?');
-    expect(html).toContain("state=active");
-    expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
+    expect(claimLeader?.visual?.series[0]).toMatchObject({
+      label: "Mathematics",
+      value: 50,
+    });
+    expect(claimLeader?.visual?.summaryOverride).toContain("claim rate");
+    expect(shareLaggard?.visual?.series[0]).toMatchObject({
+      label: "Mathematics",
+      value: 25,
+    });
+    expect(shareLaggard?.note).toContain("lowest share rates");
+    expect(shareLaggard?.visual?.series.every((series) => series.label !== "History")).toBe(true);
   });
 
-  it("renders the unavailable state through the same dedicated executive asset shell", () => {
-    const html = renderExecutiveUnavailablePage();
+  it("falls back to a focus-summary story when no honest comparison exists", () => {
+    const dashboard = sampleExecutiveDashboard({
+      focusUnitType: "college",
+      comparisonLevel: "college",
+      rows: [],
+    });
 
-    expect(html).toContain("Executive dashboard unavailable");
-    expect(html).toContain(pageAssetPath("executiveDashboardCss"));
-    expect(html).not.toContain("Institution Admin");
+    dashboard.kpiCatalog.modules = [
+      {
+        id: "focus-summary",
+        kind: "focus_summary",
+        title: "Current college summary",
+        description: "Keep the executive story centered on this college.",
+        audience: "college",
+        focusOrgUnitId: "tenant_123:org:college-eng",
+        comparisonLevel: "college",
+      },
+    ];
+
+    const insights = buildExecutiveDashboardInsights(dashboard);
+
+    expect(insights.modules[0].id).toBe("focus-summary");
+    expect(insights.modules[0].summaryItems).toEqual(
+      expect.arrayContaining([
+        { label: "Focus", value: "College of Engineering" },
+        { label: "Audience", value: "College" },
+      ]),
+    );
+    expect(insights.modules[0].visual).toBeUndefined();
   });
 });

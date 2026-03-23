@@ -373,6 +373,8 @@ describe("executive routes", () => {
     expect(html).toContain("Executive snapshot");
     expect(html).toContain("College of Engineering");
     expect(html).toContain("Compare departments");
+    expect(html).toContain('data-reporting-visual-kind="trend-series"');
+    expect(html).toContain('data-reporting-visual-kind="comparison-ranked"');
     expect(html).toContain('/v1/tenants/tenant_123/executive?');
     expect(html).toContain("state=active");
     expect(html).toContain("focusOrgUnitId=tenant_123%3Aorg%3Acollege-eng");
