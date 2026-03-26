@@ -8,6 +8,7 @@ const {
   mockedGetTenantReportingEngagementCounts,
   mockedListTenantAuthProviders,
   mockedListTenantBreakGlassAccounts,
+  mockedListImportLearnerRecordBatchQueueMessages,
   mockedListAccessibleTenantContextsForUser,
   mockedListLearnerRecordAssertionExports,
   mockedListLearnerRecordEntries,
@@ -24,6 +25,7 @@ const {
     mockedGetTenantReportingEngagementCounts: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedListTenantBreakGlassAccounts: vi.fn(),
+    mockedListImportLearnerRecordBatchQueueMessages: vi.fn(),
     mockedListAccessibleTenantContextsForUser: vi.fn(),
     mockedListLearnerRecordAssertionExports: vi.fn(),
     mockedListLearnerRecordEntries: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock("@credtrail/db", async () => {
     getTenantReportingEngagementCounts: mockedGetTenantReportingEngagementCounts,
     getTenantReportingOverview: mockedGetTenantReportingOverview,
     getTenantReportingTrends: mockedGetTenantReportingTrends,
+    listImportLearnerRecordBatchQueueMessages: mockedListImportLearnerRecordBatchQueueMessages,
     listDelegatedIssuingAuthorityGrants: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
     listLearnerRecordAssertionExports: mockedListLearnerRecordAssertionExports,
@@ -99,6 +102,7 @@ import {
   listBadgeIssuanceRules,
   listBadgeIssuanceRuleVersions,
   listBadgeTemplates,
+  listImportLearnerRecordBatchQueueMessages,
   listTenantApiKeys,
   listTenantMembershipOrgUnitScopes,
   listTenantOrgUnits,
@@ -129,6 +133,9 @@ const mockedListDelegatedIssuingAuthorityGrants = vi.mocked(listDelegatedIssuing
 const mockedListBadgeIssuanceRules = vi.mocked(listBadgeIssuanceRules);
 const mockedListBadgeIssuanceRuleVersions = vi.mocked(listBadgeIssuanceRuleVersions);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
+const mockedListImportLearnerRecordBatchQueueMessagesDb = vi.mocked(
+  listImportLearnerRecordBatchQueueMessages,
+);
 const mockedListTenantOrgUnits = vi.mocked(listTenantOrgUnits);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
 const mockedListTenantMembershipOrgUnitScopes = vi.mocked(listTenantMembershipOrgUnitScopes);
@@ -593,6 +600,8 @@ beforeEach(() => {
       membershipRole: "admin",
     },
   ]);
+  mockedListImportLearnerRecordBatchQueueMessagesDb.mockReset();
+  mockedListImportLearnerRecordBatchQueueMessagesDb.mockResolvedValue([]);
   mockedFindLearnerProfileByIdDb.mockReset();
   mockedFindLearnerProfileByIdDb.mockResolvedValue(sampleLearnerProfile());
   mockedFindLearnerProfileByIdentityDb.mockReset();
@@ -992,8 +1001,10 @@ describe("GET /tenants/:tenantId/admin/operations", () => {
     expect(body).toContain(">Operations<");
     expect(body).toContain("Manual Issue Badge");
     expect(body).toContain("Learner Records");
+    expect(body).toContain("Learner Record Imports");
     expect(body).toContain('id="manual-issue-form"');
     expect(body).toContain('href="/tenants/tenant_123/admin/operations/learner-records"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations/learner-record-imports"');
     expect(body).toContain("Review Queue");
     expect(body).toContain("Issued Badges");
     expect(body).toContain("Badge Status");
@@ -1083,6 +1094,72 @@ describe("GET /tenants/:tenantId/admin/operations/learner-records", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("No learner record found");
     expect(body).toContain("No learner profile matched this lookup");
+  });
+});
+
+describe("GET and POST /tenants/:tenantId/admin/operations/learner-record-imports", () => {
+  it("renders a dedicated learner-record import page with template, upload, and progress affordances", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-record-imports",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner Record Imports");
+    expect(body).toContain("Download CSV template");
+    expect(body).toContain('action="/tenants/tenant_123/admin/operations/learner-record-imports/preview"');
+    expect(body).toContain('formaction="/tenants/tenant_123/admin/operations/learner-record-imports/apply"');
+    expect(body).toContain("Current import progress");
+    expect(body).toContain("No learner-record import batches have been queued");
+  });
+
+  it("renders preview results with trust and smart-default explanation on the admin page", async () => {
+    const env = createEnv();
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File(
+        [
+          [
+            "learnerEmail,title,recordType,issuedAt,badgeTemplateSlug,pathwayLabel",
+            "learner@example.edu,Clinical Placement Seminar,course,2026-03-26T12:00:00.000Z,applied-analytics,Clinical readiness",
+          ].join("\n"),
+        ],
+        "learner-records.csv",
+        {
+          type: "text/csv",
+        },
+      ),
+    );
+    formData.set("defaultTrustLevel", "issuer_verified");
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-record-imports/preview",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner-record import preview ready");
+    expect(body).toContain("Clinical Placement Seminar");
+    expect(body).toContain("Pathway hint: Clinical readiness");
+    expect(body).toContain("Review trust classification, smart defaults, and warnings below before queueing the import.");
+    expect(body).toContain('data-learner-record-import-state="preview"');
   });
 });
 

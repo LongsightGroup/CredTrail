@@ -68,6 +68,69 @@ describe("admin learner-record review route", () => {
   });
 });
 
+describe("admin learner-record import route", () => {
+  it("renders the dedicated learner-record import route for admins", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-record-imports",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner Record Imports");
+    expect(body).toContain("Download CSV template");
+    expect(body).toContain("Current import progress");
+  });
+
+  it("keeps learner-record import preview inside the admin operations route family", async () => {
+    const env = createEnv();
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File(
+        [
+          [
+            "learnerEmail,title,recordType,issuedAt,badgeTemplateSlug,pathwayLabel",
+            "learner@example.edu,Clinical Placement Seminar,course,2026-03-26T12:00:00.000Z,migration-foundations,Clinical readiness",
+          ].join("\n"),
+        ],
+        "learner-records.csv",
+        {
+          type: "text/csv",
+        },
+      ),
+    );
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-record-imports/preview",
+      {
+        method: "POST",
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+        body: formData,
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner-record import preview ready");
+    expect(body).toContain('action="/tenants/tenant_123/admin/operations/learner-record-imports/preview"');
+    expect(body).not.toContain("/v1/tenants/tenant_123/learner-record-imports/csv");
+  });
+});
+
 vi.mock("@credtrail/db", async () => {
   const actual = await vi.importActual<typeof import("@credtrail/db")>("@credtrail/db");
 
@@ -101,6 +164,7 @@ vi.mock("@credtrail/db", async () => {
     listBadgeTemplateOwnershipEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrantEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrants: vi.fn(),
+    listImportLearnerRecordBatchQueueMessages: vi.fn(),
     listLearnerRecordAssertionExports: hoistedListLearnerRecordAssertionExports,
     listLearnerRecordEntries: hoistedListLearnerRecordEntries,
     listTenantAuthProviders: vi.fn(),
@@ -171,6 +235,7 @@ import {
   listBadgeTemplateOwnershipEvents,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
+  listImportLearnerRecordBatchQueueMessages,
   listLearnerRecordAssertionExports,
   listLearnerRecordEntries,
   listTenantAuthProviders,
@@ -243,6 +308,9 @@ const mockedListDelegatedIssuingAuthorityGrantEvents = vi.mocked(
   listDelegatedIssuingAuthorityGrantEvents,
 );
 const mockedListDelegatedIssuingAuthorityGrants = vi.mocked(listDelegatedIssuingAuthorityGrants);
+const mockedListImportLearnerRecordBatchQueueMessages = vi.mocked(
+  listImportLearnerRecordBatchQueueMessages,
+);
 const mockedListLearnerRecordAssertionExports = vi.mocked(listLearnerRecordAssertionExports);
 const mockedListLearnerRecordEntries = vi.mocked(listLearnerRecordEntries);
 const mockedListTenantAuthProviders = vi.mocked(listTenantAuthProviders);
@@ -479,6 +547,8 @@ beforeEach(() => {
   mockedListDelegatedIssuingAuthorityGrantEvents.mockResolvedValue([]);
   mockedListDelegatedIssuingAuthorityGrants.mockReset();
   mockedListDelegatedIssuingAuthorityGrants.mockResolvedValue([]);
+  mockedListImportLearnerRecordBatchQueueMessages.mockReset();
+  mockedListImportLearnerRecordBatchQueueMessages.mockResolvedValue([]);
   mockedFindTenantAuthPolicy.mockReset();
   mockedFindTenantAuthPolicy.mockResolvedValue(null);
   mockedGetTenantReportingEngagementCounts.mockReset();

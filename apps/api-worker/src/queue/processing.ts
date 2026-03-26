@@ -18,6 +18,7 @@ import {
   type ProcessQueueRequest,
   type QueueJob,
 } from "@credtrail/validation";
+import { applyLearnerRecordImportQueuePayload } from "../learner-record/learner-record-import";
 
 const DEFAULT_JOB_PROCESS_LIMIT = 10;
 const DEFAULT_JOB_PROCESS_LEASE_SECONDS = 30;
@@ -163,6 +164,23 @@ const processQueuedJob = async <TBindings, TContext extends { env: TBindings }>(
         tenantId: job.tenantId,
         idempotencyKey: job.idempotencyKey,
       });
+      return;
+    case "import_learner_record_batch":
+      await applyLearnerRecordImportQueuePayload(
+        dependencies.resolveDatabase(c.env),
+        job.tenantId,
+        {
+          batchId: job.payload.batchId,
+          rowNumber: job.payload.rowNumber,
+          fileName: job.payload.fileName,
+          format: job.payload.format,
+          requestedAt: job.payload.requestedAt,
+          ...(job.payload.requestedByUserId === undefined
+            ? {}
+            : { requestedByUserId: job.payload.requestedByUserId }),
+          row: job.payload.row,
+        },
+      );
       return;
   }
 };

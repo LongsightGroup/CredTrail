@@ -12,6 +12,7 @@ export const queueJobTypeSchema = z.enum([
   "revoke_badge",
   "rebuild_verification_cache",
   "import_migration_batch",
+  "import_learner_record_batch",
 ]);
 
 export const idempotencyKeySchema = z.string().min(1).max(128);
@@ -229,6 +230,10 @@ export const tenantAuthProviderPathParamsSchema = tenantPathParamsSchema.extend(
 
 export const learnerRecordEntryPathParamsSchema = tenantPathParamsSchema.extend({
   entryId: resourceIdSchema,
+});
+
+export const learnerRecordImportBatchPathParamsSchema = tenantPathParamsSchema.extend({
+  batchId: z.string().trim().min(1).max(128),
 });
 
 export const migrationBatchPathParamsSchema = tenantPathParamsSchema.extend({
@@ -604,6 +609,66 @@ export const learnerRecordProvenanceSchema = z.object({
 });
 
 const learnerRecordDetailsSchema = jsonObjectSchema;
+
+const learnerRecordImportRowBaseSchema = z.object({
+  learnerEmail: z.string().trim().email().max(320),
+  learnerDisplayName: z.string().trim().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(200),
+  recordType: learnerRecordEntryTypeSchema,
+  issuedAt: isoTimestampSchema,
+  trustLevel: learnerRecordTrustLevelSchema.optional(),
+  description: z.string().trim().min(1).max(4000).optional(),
+  issuerName: z.string().trim().min(1).max(200).optional(),
+  orgUnitId: resourceIdSchema.optional(),
+  orgUnitSlug: orgUnitSlugSchema.optional(),
+  badgeTemplateId: resourceIdSchema.optional(),
+  badgeTemplateSlug: badgeTemplateSlugSchema.optional(),
+  pathwayLabel: z.string().trim().min(1).max(200).optional(),
+  sourceRecordId: z.string().trim().min(1).max(200).optional(),
+  evidenceLinks: z.array(z.string().url().max(2048)).max(20).optional(),
+});
+
+export const learnerRecordImportRowSchema = learnerRecordImportRowBaseSchema
+  .superRefine((value, ctx) => {
+    if (
+      value.recordType === "supplemental_artifact" &&
+      value.trustLevel !== undefined &&
+      value.trustLevel !== "learner_supplemental"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["trustLevel"],
+        message: "supplemental_artifact import rows must use learner_supplemental trust",
+      });
+    }
+  });
+
+export const learnerRecordImportBatchDefaultsSchema = z.object({
+  defaultTrustLevel: learnerRecordTrustLevelSchema.default("issuer_verified"),
+  defaultIssuerName: z.string().trim().min(1).max(200).optional(),
+});
+
+const learnerRecordImportPreparedRowSchema = z.object({
+  learnerEmail: z.string().trim().email().max(320),
+  learnerDisplayName: z.string().trim().min(1).max(200).nullable(),
+  title: z.string().trim().min(1).max(200),
+  recordType: learnerRecordEntryTypeSchema,
+  issuedAt: isoTimestampSchema,
+  description: z.string().trim().min(1).max(4000).nullable(),
+  sourceRecordId: z.string().trim().min(1).max(200).nullable(),
+  evidenceLinks: z.array(z.string().url().max(2048)).max(20),
+  effectiveTrustLevel: learnerRecordTrustLevelSchema,
+  effectiveIssuerName: z.string().trim().min(1).max(200),
+  smartContext: z.object({
+    orgUnitId: resourceIdSchema.nullable(),
+    badgeTemplateId: resourceIdSchema.nullable(),
+    pathwayLabel: z.string().trim().min(1).max(200).nullable(),
+    inferredFrom: z
+      .array(z.enum(["row", "badge_template", "org_unit", "none"]))
+      .min(1)
+      .max(4),
+  }),
+});
 
 export const createLearnerRecordEntryRequestSchema = z
   .object({
@@ -1456,6 +1521,24 @@ export const migrationBatchUploadQuerySchema = z.object({
   }, z.boolean()),
 });
 
+export const learnerRecordImportUploadQuerySchema = z.object({
+  dryRun: z.preprocess((input) => {
+    if (input === undefined) {
+      return true;
+    }
+
+    if (input === "true") {
+      return true;
+    }
+
+    if (input === "false") {
+      return false;
+    }
+
+    return input;
+  }, z.boolean()),
+});
+
 export const migrationProgressQuerySchema = z.object({
   source: z.preprocess(
     (input) => {
@@ -1482,8 +1565,27 @@ export const migrationProgressQuerySchema = z.object({
   }, z.number().int().min(1).max(200)),
 });
 
+export const learnerRecordImportProgressQuerySchema = z.object({
+  limit: z.preprocess((input) => {
+    if (input === undefined) {
+      return 25;
+    }
+
+    if (typeof input === "string") {
+      const parsed = Number.parseInt(input, 10);
+      return Number.isFinite(parsed) ? parsed : input;
+    }
+
+    return input;
+  }, z.number().int().min(1).max(200)),
+});
+
 export const migrationBatchRetryRequestSchema = z.object({
   source: z.enum(["file_upload", "credly_export", "parchment_export"]).optional(),
+  rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
+});
+
+export const learnerRecordImportRetryRequestSchema = z.object({
   rowNumbers: z.array(z.number().int().min(1)).max(500).optional(),
 });
 
@@ -1550,11 +1652,29 @@ export const importMigrationBatchQueueJobSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
 });
 
+export const learnerRecordImportQueuePayloadSchema = z.object({
+  batchId: z.string().trim().min(1).max(128),
+  rowNumber: z.number().int().min(1),
+  fileName: z.string().trim().min(1).max(255),
+  format: z.literal("csv"),
+  requestedAt: isoTimestampSchema,
+  requestedByUserId: userIdSchema.optional(),
+  row: learnerRecordImportPreparedRowSchema,
+});
+
+export const learnerRecordImportBatchQueueJobSchema = z.object({
+  jobType: z.literal("import_learner_record_batch"),
+  tenantId: tenantIdSchema,
+  payload: learnerRecordImportQueuePayloadSchema,
+  idempotencyKey: idempotencyKeySchema,
+});
+
 export const queueJobSchema = z.discriminatedUnion("jobType", [
   issueBadgeQueueJobSchema,
   revokeBadgeQueueJobSchema,
   rebuildVerificationCacheQueueJobSchema,
   importMigrationBatchQueueJobSchema,
+  learnerRecordImportBatchQueueJobSchema,
 ]);
 
 export const queueEnvelopeSchema = z.object({
@@ -1593,19 +1713,36 @@ export type LearnerRecordStatus = z.infer<typeof learnerRecordStatusSchema>;
 export type LearnerRecordSourceSystem = z.infer<typeof learnerRecordSourceSystemSchema>;
 export type LearnerRecordType = z.infer<typeof learnerRecordTypeSchema>;
 export type LearnerRecordEntryType = z.infer<typeof learnerRecordEntryTypeSchema>;
+export type LearnerRecordImportRow = z.infer<typeof learnerRecordImportRowSchema>;
+export type LearnerRecordImportBatchDefaults = z.infer<
+  typeof learnerRecordImportBatchDefaultsSchema
+>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProgrammaticIssueBadgeRequest = z.infer<typeof programmaticIssueBadgeRequestSchema>;
 export type ProgrammaticRevokeBadgeRequest = z.infer<typeof programmaticRevokeBadgeRequestSchema>;
 export type ProcessQueueRequest = z.infer<typeof processQueueRequestSchema>;
 export type MigrationBatchUploadQuery = z.infer<typeof migrationBatchUploadQuerySchema>;
+export type LearnerRecordImportUploadQuery = z.infer<typeof learnerRecordImportUploadQuerySchema>;
 export type MigrationProgressQuery = z.infer<typeof migrationProgressQuerySchema>;
+export type LearnerRecordImportProgressQuery = z.infer<
+  typeof learnerRecordImportProgressQuerySchema
+>;
 export type MigrationBatchRetryRequest = z.infer<typeof migrationBatchRetryRequestSchema>;
+export type LearnerRecordImportRetryRequest = z.infer<
+  typeof learnerRecordImportRetryRequestSchema
+>;
 export type Ob2ImportConversionRequest = z.infer<typeof ob2ImportConversionRequestSchema>;
 export type IssueBadgeQueueJob = z.infer<typeof issueBadgeQueueJobSchema>;
 export type RevokeBadgeQueueJob = z.infer<typeof revokeBadgeQueueJobSchema>;
+export type LearnerRecordImportBatchQueueJob = z.infer<
+  typeof learnerRecordImportBatchQueueJobSchema
+>;
 export type ManualIssueBadgeRequest = z.infer<typeof manualIssueBadgeRequestSchema>;
 export type TenantPathParams = z.infer<typeof tenantPathParamsSchema>;
+export type LearnerRecordImportBatchPathParams = z.infer<
+  typeof learnerRecordImportBatchPathParamsSchema
+>;
 export type MigrationBatchPathParams = z.infer<typeof migrationBatchPathParamsSchema>;
 export type BadgeTemplatePathParams = z.infer<typeof badgeTemplatePathParamsSchema>;
 export type CredentialPathParams = z.infer<typeof credentialPathParamsSchema>;
@@ -1991,6 +2128,16 @@ export const parseLearnerRecordEntryListQuery = (input: unknown): LearnerRecordE
   return learnerRecordEntryListQuerySchema.parse(input);
 };
 
+export const parseLearnerRecordImportRow = (input: unknown): LearnerRecordImportRow => {
+  return learnerRecordImportRowSchema.parse(input);
+};
+
+export const parseLearnerRecordImportBatchDefaults = (
+  input: unknown,
+): LearnerRecordImportBatchDefaults => {
+  return learnerRecordImportBatchDefaultsSchema.parse(input);
+};
+
 export const parseAdminLearnerRecordReviewQuery = (
   input: unknown,
 ): AdminLearnerRecordReviewQuery => {
@@ -2001,6 +2148,12 @@ export const parseLearnerRecordEntryPathParams = (
   input: unknown,
 ): LearnerRecordEntryPathParams => {
   return learnerRecordEntryPathParamsSchema.parse(input);
+};
+
+export const parseLearnerRecordImportBatchPathParams = (
+  input: unknown,
+): LearnerRecordImportBatchPathParams => {
+  return learnerRecordImportBatchPathParamsSchema.parse(input);
 };
 
 export const parseLearnerRecordExportPathParams = (
@@ -2029,6 +2182,24 @@ export const parseLearnerRecordStandardsMappingQuery = (
   input: unknown,
 ): LearnerRecordStandardsMappingQuery => {
   return learnerRecordStandardsMappingQuerySchema.parse(input);
+};
+
+export const parseLearnerRecordImportUploadQuery = (
+  input: unknown,
+): LearnerRecordImportUploadQuery => {
+  return learnerRecordImportUploadQuerySchema.parse(input);
+};
+
+export const parseLearnerRecordImportProgressQuery = (
+  input: unknown,
+): LearnerRecordImportProgressQuery => {
+  return learnerRecordImportProgressQuerySchema.parse(input);
+};
+
+export const parseLearnerRecordImportRetryRequest = (
+  input: unknown,
+): LearnerRecordImportRetryRequest => {
+  return learnerRecordImportRetryRequestSchema.parse(input);
 };
 
 export const parseUpsertTenantMembershipOrgUnitScopeRequest = (

@@ -1130,6 +1130,7 @@ registerLearnerRecordRoutes({
   resolveDatabase,
   requireTenantRole,
   ADMIN_ROLES,
+  ISSUER_ROLES,
 });
 
 registerLearnerRecordExportRoutes({

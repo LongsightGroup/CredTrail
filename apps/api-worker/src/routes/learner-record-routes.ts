@@ -1,21 +1,34 @@
 import {
   createLearnerRecordEntry,
   listLearnerRecordEntries,
+  listImportLearnerRecordBatchQueueMessages,
   patchLearnerRecordEntry,
+  retryFailedImportLearnerRecordBatchQueueMessages,
   type SessionRecord,
   type SqlDatabase,
   type TenantMembershipRole,
 } from "@credtrail/db";
 import {
   parseCreateLearnerRecordEntryRequest,
+  parseLearnerRecordImportBatchDefaults,
+  parseLearnerRecordImportBatchPathParams,
   parseLearnerRecordEntryListQuery,
   parseLearnerRecordEntryPathParams,
+  parseLearnerRecordImportProgressQuery,
+  parseLearnerRecordImportRetryRequest,
+  parseLearnerRecordImportUploadQuery,
   parsePatchLearnerRecordEntryRequest,
   parseTenantPathParams,
 } from "@credtrail/validation";
 import type { Hono } from "hono";
 
 import type { AppBindings, AppContext, AppEnv } from "../app";
+import {
+  buildLearnerRecordImportTemplateCsv,
+  enqueueLearnerRecordImportBatch,
+  prepareLearnerRecordImportSubmission,
+  summarizeLearnerRecordImportProgress,
+} from "../learner-record/learner-record-import";
 import { mapLearnerRecordEntryToCanonicalLearnerRecordItem } from "../learner-record/learner-record-contract";
 
 interface RegisterLearnerRecordRoutesInput {
@@ -33,10 +46,333 @@ interface RegisterLearnerRecordRoutesInput {
     | Response
   >;
   ADMIN_ROLES: readonly TenantMembershipRole[];
+  ISSUER_ROLES: readonly TenantMembershipRole[];
 }
 
+const getOptionalFormValue = (formData: FormData, name: string): string | undefined => {
+  const value = formData.get(name);
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+};
+
 export const registerLearnerRecordRoutes = (input: RegisterLearnerRecordRoutesInput): void => {
-  const { app, resolveDatabase, requireTenantRole, ADMIN_ROLES } = input;
+  const { app, resolveDatabase, requireTenantRole, ADMIN_ROLES, ISSUER_ROLES } = input;
+
+  app.get("/v1/tenants/:tenantId/learner-record-imports/template.csv", async (c) => {
+    let pathParams;
+
+    try {
+      pathParams = parseTenantPathParams(c.req.param());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import path",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    c.header("Cache-Control", "no-store");
+    c.header("Content-Type", "text/csv; charset=utf-8");
+    c.header(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(pathParams.tenantId)}-learner-record-import-template.csv"`,
+    );
+
+    return c.body(buildLearnerRecordImportTemplateCsv(), 200);
+  });
+
+  app.post("/v1/tenants/:tenantId/learner-record-imports/csv", async (c) => {
+    let pathParams;
+    let query;
+
+    try {
+      pathParams = parseTenantPathParams(c.req.param());
+      query = parseLearnerRecordImportUploadQuery({
+        dryRun: c.req.query("dryRun"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import request",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
+
+    if (!contentType.includes("multipart/form-data")) {
+      return c.json(
+        {
+          error: 'Learner-record import requires multipart/form-data with a file field named "file"',
+        },
+        415,
+      );
+    }
+
+    const formData = await c.req.formData();
+    const upload = formData.get("file");
+
+    if (!(upload instanceof File)) {
+      return c.json(
+        {
+          error: 'Learner-record import file is required in form field "file"',
+        },
+        400,
+      );
+    }
+
+    const fileContent = await upload.text();
+
+    if (fileContent.trim().length === 0) {
+      return c.json(
+        {
+          error: "Uploaded learner-record CSV is empty",
+        },
+        422,
+      );
+    }
+
+    let defaults;
+
+    try {
+      defaults = parseLearnerRecordImportBatchDefaults({
+        defaultTrustLevel: getOptionalFormValue(formData, "defaultTrustLevel"),
+        defaultIssuerName: getOptionalFormValue(formData, "defaultIssuerName"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import defaults",
+        },
+        400,
+      );
+    }
+
+    const db = resolveDatabase(c.env);
+    let prepared;
+
+    try {
+      prepared = await prepareLearnerRecordImportSubmission(db, {
+        tenantId: pathParams.tenantId,
+        fileName: upload.name,
+        mimeType: upload.type,
+        content: fileContent,
+        defaults,
+        requestedAt: new Date().toISOString(),
+        requestedByUserId: roleCheck.session.userId,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.startsWith("Tenant ")) {
+        return c.json(
+          {
+            error: "Tenant not found",
+          },
+          404,
+        );
+      }
+
+      return c.json(
+        {
+          error: error instanceof Error ? error.message : "Invalid learner-record import file",
+        },
+        422,
+      );
+    }
+
+    const queuedRows = query.dryRun
+      ? 0
+      : await enqueueLearnerRecordImportBatch(db, pathParams.tenantId, prepared.queuePayloads);
+
+    const validRows = prepared.reports.filter((report) => report.status === "valid").length;
+    const invalidRows = prepared.reports.length - validRows;
+
+    c.header("Cache-Control", "no-store");
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        batchId: prepared.batchId,
+        fileName: prepared.fileName,
+        format: prepared.format,
+        dryRun: query.dryRun,
+        defaults: prepared.defaults,
+        totalRows: prepared.reports.length,
+        validRows,
+        invalidRows,
+        queuedRows,
+        rows: prepared.reports,
+      },
+      200,
+    );
+  });
+
+  app.get("/v1/tenants/:tenantId/learner-record-imports/progress", async (c) => {
+    let pathParams;
+    let query;
+
+    try {
+      pathParams = parseTenantPathParams(c.req.param());
+      query = parseLearnerRecordImportProgressQuery({
+        limit: c.req.query("limit"),
+      });
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import progress query",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const messages = await listImportLearnerRecordBatchQueueMessages(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      limit: query.limit,
+    });
+    const progress = summarizeLearnerRecordImportProgress(messages);
+
+    c.header("Cache-Control", "no-store");
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        filters: {
+          limit: query.limit,
+        },
+        totals: progress.totals,
+        batches: progress.batches,
+      },
+      200,
+    );
+  });
+
+  app.post("/v1/tenants/:tenantId/learner-record-imports/:batchId/retry", async (c) => {
+    let pathParams;
+
+    try {
+      pathParams = parseLearnerRecordImportBatchPathParams(c.req.param());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import batch path",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ISSUER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    let rawBody: unknown = {};
+    const contentType = c.req.header("content-type")?.toLowerCase() ?? "";
+
+    if (contentType.includes("application/json")) {
+      const bodyText = await c.req.text();
+
+      if (bodyText.trim().length > 0) {
+        try {
+          rawBody = JSON.parse(bodyText) as unknown;
+        } catch {
+          return c.json(
+            {
+              error: "Invalid learner-record import retry payload",
+            },
+            400,
+          );
+        }
+      }
+    } else if (contentType.length > 0) {
+      try {
+        rawBody = await c.req.json<unknown>();
+      } catch {
+        return c.json(
+          {
+            error: "Invalid learner-record import retry payload",
+          },
+          400,
+        );
+      }
+    }
+
+    let request;
+
+    try {
+      request = parseLearnerRecordImportRetryRequest(rawBody);
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import retry payload",
+        },
+        400,
+      );
+    }
+
+    const retryResult = await retryFailedImportLearnerRecordBatchQueueMessages(
+      resolveDatabase(c.env),
+      {
+        tenantId: pathParams.tenantId,
+        batchId: pathParams.batchId,
+        ...(request.rowNumbers === undefined ? {} : { rowNumbers: request.rowNumbers }),
+      },
+    );
+
+    if (retryResult.matched === 0) {
+      return c.json(
+        {
+          error: "Learner-record import batch was not found for tenant",
+        },
+        404,
+      );
+    }
+
+    const refreshedMessages = await listImportLearnerRecordBatchQueueMessages(resolveDatabase(c.env), {
+      tenantId: pathParams.tenantId,
+      limit: 1000,
+    });
+    const refreshedProgress = summarizeLearnerRecordImportProgress(
+      refreshedMessages.filter((message) => message.batchId === pathParams.batchId),
+    );
+    const batch = refreshedProgress.batches[0] ?? null;
+
+    c.header("Cache-Control", "no-store");
+
+    return c.json(
+      {
+        tenantId: pathParams.tenantId,
+        batchId: pathParams.batchId,
+        retry: retryResult,
+        batch,
+      },
+      200,
+    );
+  });
 
   app.get("/v1/tenants/:tenantId/learner-record-entries", async (c) => {
     let pathParams;

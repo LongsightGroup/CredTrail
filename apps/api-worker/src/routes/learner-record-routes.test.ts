@@ -1,18 +1,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type {
+  BadgeTemplateRecord,
+  ImportLearnerRecordBatchQueueMessageRecord,
+  TenantOrgUnitRecord,
+} from "@credtrail/db";
+
 const {
   mockedCreateLearnerRecordEntry,
+  mockedEnqueueJobQueueMessage,
+  mockedFindTenantById,
   mockedListLearnerRecordEntries,
+  mockedListBadgeTemplates,
+  mockedListImportLearnerRecordBatchQueueMessages,
+  mockedListTenantOrgUnits,
   mockedPatchLearnerRecordEntry,
   mockedFindTenantMembership,
+  mockedRetryFailedImportLearnerRecordBatchQueueMessages,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
 } = vi.hoisted(() => {
   return {
     mockedCreateLearnerRecordEntry: vi.fn(),
+    mockedEnqueueJobQueueMessage: vi.fn(),
+    mockedFindTenantById: vi.fn(),
     mockedListLearnerRecordEntries: vi.fn(),
+    mockedListBadgeTemplates: vi.fn(),
+    mockedListImportLearnerRecordBatchQueueMessages: vi.fn(),
+    mockedListTenantOrgUnits: vi.fn(),
     mockedPatchLearnerRecordEntry: vi.fn(),
     mockedFindTenantMembership: vi.fn(),
+    mockedRetryFailedImportLearnerRecordBatchQueueMessages: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
   };
@@ -24,9 +42,16 @@ vi.mock("@credtrail/db", async () => {
   return {
     ...actual,
     createLearnerRecordEntry: mockedCreateLearnerRecordEntry,
+    enqueueJobQueueMessage: mockedEnqueueJobQueueMessage,
+    findTenantById: mockedFindTenantById,
     listLearnerRecordEntries: mockedListLearnerRecordEntries,
+    listBadgeTemplates: mockedListBadgeTemplates,
+    listImportLearnerRecordBatchQueueMessages: mockedListImportLearnerRecordBatchQueueMessages,
+    listTenantOrgUnits: mockedListTenantOrgUnits,
     patchLearnerRecordEntry: mockedPatchLearnerRecordEntry,
     findTenantMembership: mockedFindTenantMembership,
+    retryFailedImportLearnerRecordBatchQueueMessages:
+      mockedRetryFailedImportLearnerRecordBatchQueueMessages,
   };
 });
 
@@ -92,11 +117,95 @@ const sampleLearnerRecordEntry = () => {
   };
 };
 
+const sampleOrgUnits = (): TenantOrgUnitRecord[] => {
+  return [
+    {
+      id: "tenant_123:org:institution",
+      tenantId: "tenant_123",
+      unitType: "institution",
+      slug: "institution",
+      displayName: "CredTrail University",
+      parentOrgUnitId: null,
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    },
+    {
+      id: "tenant_123:org:department-health",
+      tenantId: "tenant_123",
+      unitType: "department",
+      slug: "department-health",
+      displayName: "Department of Health",
+      parentOrgUnitId: "tenant_123:org:institution",
+      createdByUserId: "usr_admin",
+      isActive: true,
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    },
+  ];
+};
+
+const sampleBadgeTemplates = (): BadgeTemplateRecord[] => {
+  return [
+    {
+      id: "badge_template_001",
+      tenantId: "tenant_123",
+      slug: "clinical-placement-badge",
+      title: "Clinical Placement Badge",
+      description: "Awarded for clinical readiness.",
+      criteriaUri: null,
+      imageUri: null,
+      createdByUserId: "usr_admin",
+      ownerOrgUnitId: "tenant_123:org:department-health",
+      governanceMetadataJson: null,
+      isArchived: false,
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    },
+  ];
+};
+
+const sampleImportQueueMessage = (
+  overrides?: Partial<ImportLearnerRecordBatchQueueMessageRecord>,
+): ImportLearnerRecordBatchQueueMessageRecord => {
+  return {
+    id: "job_lr_123",
+    tenantId: "tenant_123",
+    jobType: "import_learner_record_batch",
+    payloadJson: '{"batchId":"batch_123","rowNumber":1,"fileName":"learner-records.csv","format":"csv"}',
+    idempotencyKey: "learner-record-import:batch_123:1",
+    attemptCount: 0,
+    maxAttempts: 8,
+    availableAt: "2026-03-24T15:00:00.000Z",
+    leasedUntil: null,
+    leaseToken: null,
+    lastError: null,
+    completedAt: null,
+    failedAt: null,
+    status: "pending",
+    createdAt: "2026-03-24T15:00:00.000Z",
+    updatedAt: "2026-03-24T15:00:00.000Z",
+    batchId: "batch_123",
+    rowNumber: 1,
+    fileName: "learner-records.csv",
+    format: "csv",
+    defaultTrustLevel: "issuer_verified",
+    ...overrides,
+  };
+};
+
 beforeEach(() => {
   mockedCreateLearnerRecordEntry.mockReset();
+  mockedEnqueueJobQueueMessage.mockReset();
+  mockedFindTenantById.mockReset();
   mockedListLearnerRecordEntries.mockReset();
+  mockedListBadgeTemplates.mockReset();
+  mockedListImportLearnerRecordBatchQueueMessages.mockReset();
+  mockedListTenantOrgUnits.mockReset();
   mockedPatchLearnerRecordEntry.mockReset();
   mockedFindTenantMembership.mockReset();
+  mockedRetryFailedImportLearnerRecordBatchQueueMessages.mockReset();
   mockedResolveBetterAuthPrincipal.mockReset();
   mockedResolveBetterAuthRequestedTenant.mockReset();
 
@@ -119,8 +228,45 @@ beforeEach(() => {
     authoritative: true,
   });
   mockedCreateLearnerRecordEntry.mockResolvedValue(sampleLearnerRecordEntry());
+  mockedEnqueueJobQueueMessage.mockResolvedValue({
+    id: "job_lr_123",
+    tenantId: "tenant_123",
+    jobType: "import_learner_record_batch",
+    payloadJson: "{}",
+    idempotencyKey: "learner-record-import:batch_123:1",
+    attemptCount: 0,
+    maxAttempts: 8,
+    availableAt: "2026-03-24T15:00:00.000Z",
+    leasedUntil: null,
+    leaseToken: null,
+    lastError: null,
+    completedAt: null,
+    failedAt: null,
+    status: "pending",
+    createdAt: "2026-03-24T15:00:00.000Z",
+    updatedAt: "2026-03-24T15:00:00.000Z",
+  });
+  mockedFindTenantById.mockResolvedValue({
+    id: "tenant_123",
+    slug: "tenant-123",
+    displayName: "CredTrail University",
+    planTier: "enterprise",
+    issuerDomain: "tenant-123.credtrail.test",
+    didWeb: "did:web:credtrail.test:tenant-123",
+    isActive: true,
+    createdAt: "2026-03-24T15:00:00.000Z",
+    updatedAt: "2026-03-24T15:00:00.000Z",
+  });
   mockedListLearnerRecordEntries.mockResolvedValue([sampleLearnerRecordEntry()]);
+  mockedListBadgeTemplates.mockResolvedValue(sampleBadgeTemplates());
+  mockedListImportLearnerRecordBatchQueueMessages.mockResolvedValue([]);
+  mockedListTenantOrgUnits.mockResolvedValue(sampleOrgUnits());
   mockedPatchLearnerRecordEntry.mockResolvedValue(sampleLearnerRecordEntry());
+  mockedRetryFailedImportLearnerRecordBatchQueueMessages.mockResolvedValue({
+    matched: 1,
+    retried: 1,
+    skippedNotFailed: 0,
+  });
 });
 
 describe("learner-record routes", () => {
@@ -343,6 +489,270 @@ describe("learner-record routes", () => {
         entryId: "lre_123",
         description: "Completed with distinction and capstone presentation.",
         status: "revoked",
+      }),
+    );
+  });
+});
+
+describe("learner-record import routes", () => {
+  it("returns a CSV template for issuer-scoped import work", async () => {
+    mockedFindTenantMembership.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      role: "issuer",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    });
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/template.csv",
+      {
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+      },
+      createEnv(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/csv");
+    expect(await response.text()).toContain("learnerEmail,learnerDisplayName,title,recordType,issuedAt");
+  });
+
+  it("supports dry-run CSV preview without mutating queue state", async () => {
+    mockedFindTenantMembership.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      role: "issuer",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    });
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File(
+        [
+          [
+            "learnerEmail,title,recordType,issuedAt,badgeTemplateSlug,pathwayLabel",
+            "learner@example.edu,Clinical Placement Seminar,course,2026-03-26T12:00:00.000Z,clinical-placement-badge,Clinical readiness",
+          ].join("\n"),
+        ],
+        "learner-records.csv",
+        {
+          type: "text/csv",
+        },
+      ),
+    );
+    formData.set("defaultTrustLevel", "issuer_verified");
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/csv?dryRun=true",
+      {
+        method: "POST",
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+        body: formData,
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(true);
+    expect(body.validRows).toBe(1);
+    expect(body.invalidRows).toBe(0);
+    expect(body.queuedRows).toBe(0);
+    expect(mockedEnqueueJobQueueMessage).not.toHaveBeenCalled();
+
+    const rows = body.rows as Array<Record<string, unknown>>;
+    expect(rows[0]?.preview).toEqual(
+      expect.objectContaining({
+        trustLevel: "issuer_verified",
+        smartContext: expect.objectContaining({
+          orgUnitId: "tenant_123:org:department-health",
+          badgeTemplateId: "badge_template_001",
+          pathwayLabel: "Clinical readiness",
+        }),
+      }),
+    );
+  });
+
+  it("queues valid learner-record rows on apply and reports truthful upload errors", async () => {
+    mockedFindTenantMembership.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      role: "issuer",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    });
+    const formData = new FormData();
+    formData.set(
+      "file",
+      new File(
+        [
+          [
+            "learnerEmail,title,recordType,issuedAt",
+            "learner@example.edu,Clinical Placement Seminar,course,2026-03-26T12:00:00.000Z",
+          ].join("\n"),
+        ],
+        "learner-records.csv",
+        {
+          type: "text/csv",
+        },
+      ),
+    );
+
+    const response = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/csv?dryRun=false",
+      {
+        method: "POST",
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+        body: formData,
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.dryRun).toBe(false);
+    expect(body.queuedRows).toBe(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledTimes(1);
+    expect(mockedEnqueueJobQueueMessage).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        jobType: "import_learner_record_batch",
+      }),
+    );
+
+    const invalidResponse = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/csv?dryRun=false",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+        body: JSON.stringify({}),
+      },
+      createEnv(),
+    );
+
+    expect(invalidResponse.status).toBe(415);
+    expect(await invalidResponse.json()).toEqual({
+      error: 'Learner-record import requires multipart/form-data with a file field named "file"',
+    });
+  });
+
+  it("returns progress summaries and targeted retry state for import batches", async () => {
+    mockedFindTenantMembership.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      role: "issuer",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    });
+    mockedListImportLearnerRecordBatchQueueMessages.mockResolvedValueOnce([
+      sampleImportQueueMessage({
+        id: "job_lr_1",
+        batchId: "batch_progress",
+        rowNumber: 1,
+        status: "completed",
+        completedAt: "2026-03-24T15:05:00.000Z",
+      }),
+      sampleImportQueueMessage({
+        id: "job_lr_2",
+        batchId: "batch_progress",
+        rowNumber: 2,
+        status: "failed",
+        lastError: "Learner profile email is invalid",
+        failedAt: "2026-03-24T15:06:00.000Z",
+        updatedAt: "2026-03-24T15:06:00.000Z",
+      }),
+    ]);
+
+    const progressResponse = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/progress?limit=25",
+      {
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+      },
+      createEnv(),
+    );
+    const progressBody = await progressResponse.json<Record<string, unknown>>();
+
+    expect(progressResponse.status).toBe(200);
+    expect(progressBody.totals).toEqual(
+      expect.objectContaining({
+        messages: 2,
+        batches: 1,
+        failedRows: 1,
+      }),
+    );
+    const progressBatches = progressBody.batches as Array<Record<string, unknown>>;
+    expect(progressBatches[0]).toEqual(
+      expect.objectContaining({
+        batchId: "batch_progress",
+        failedRows: 1,
+        retryableRows: 1,
+        latestError: "Learner profile email is invalid",
+      }),
+    );
+
+    mockedFindTenantMembership.mockResolvedValueOnce({
+      tenantId: "tenant_123",
+      userId: "usr_issuer",
+      role: "issuer",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    });
+    mockedListImportLearnerRecordBatchQueueMessages.mockResolvedValueOnce([
+      sampleImportQueueMessage({
+        id: "job_lr_1",
+        batchId: "batch_retry",
+        rowNumber: 1,
+        status: "pending",
+      }),
+    ]);
+
+    const retryResponse = await app.request(
+      "/v1/tenants/tenant_123/learner-record-imports/batch_retry/retry",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+        body: JSON.stringify({
+          rowNumbers: [1],
+        }),
+      },
+      createEnv(),
+    );
+    const retryBody = await retryResponse.json<Record<string, unknown>>();
+
+    expect(retryResponse.status).toBe(200);
+    expect(mockedRetryFailedImportLearnerRecordBatchQueueMessages).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        tenantId: "tenant_123",
+        batchId: "batch_retry",
+        rowNumbers: [1],
+      }),
+    );
+    expect(retryBody.retry).toEqual(
+      expect.objectContaining({
+        retried: 1,
+      }),
+    );
+    expect(retryBody.batch).toEqual(
+      expect.objectContaining({
+        batchId: "batch_retry",
+        pendingRows: 1,
       }),
     );
   });

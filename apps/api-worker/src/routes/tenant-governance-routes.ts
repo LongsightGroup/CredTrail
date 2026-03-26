@@ -19,6 +19,7 @@ import {
   getTenantReportingTrends,
   findUserById,
   listAccessibleTenantContextsForUser,
+  listImportLearnerRecordBatchQueueMessages,
   listTenantAuthProviders,
   findTenantSsoSamlConfiguration,
   listBadgeIssuanceRules,
@@ -35,6 +36,7 @@ import {
   revokeTenantApiKey,
   revokeTenantBreakGlassAccount,
   revokeDelegatedIssuingAuthorityGrant,
+  retryFailedImportLearnerRecordBatchQueueMessages,
   resolveTenantAuthPolicy,
   HOSTED_ENTERPRISE_OIDC_ONLY_ERROR,
   isHostedEnterpriseAuthProviderSupported,
@@ -43,6 +45,7 @@ import {
   upsertTenantAuthPolicy,
   upsertTenantMembershipOrgUnitScope,
   upsertUserByEmail,
+  type LearnerRecordTrustLevel,
   type SessionRecord,
   type SqlDatabase,
   type TenantReportingLifecycleFilter,
@@ -53,6 +56,8 @@ import {
   parseAdminLearnerRecordReviewQuery,
   parseCreateTenantApiKeyRequest,
   parseCreateTenantBreakGlassAccountRequest,
+  parseLearnerRecordImportBatchPathParams,
+  parseLearnerRecordImportBatchDefaults,
   parseTenantAuthProviderPathParams,
   parseCreateDelegatedIssuingAuthorityGrantRequest,
   parseRevokeTenantApiKeyRequest,
@@ -81,6 +86,7 @@ import {
   institutionAdminDashboardPage,
   institutionAdminGovernancePage,
   institutionAdminIssuedBadgesPage,
+  institutionAdminLearnerRecordImportsPage,
   institutionAdminLearnerRecordsPage,
   institutionAdminOperationsReviewQueuePage,
   institutionAdminOperationsPage,
@@ -91,6 +97,11 @@ import {
 import { institutionAdminRuleBuilderPage } from "../admin/institution-admin-rule-builder-page";
 import { buildLocalTwoFactorPath } from "../auth/break-glass-policy";
 import { resolveTenantReportingAccess } from "../auth/tenant-access";
+import {
+  enqueueLearnerRecordImportBatch,
+  prepareLearnerRecordImportSubmission,
+  summarizeLearnerRecordImportProgress,
+} from "../learner-record/learner-record-import";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
 import { createLearnerRecordPresentation } from "../learner-record/learner-record-presentation";
 import { loadLearnerRecordExportBundle } from "../learner-record/learner-record-export";
@@ -146,6 +157,10 @@ export const registerTenantGovernanceRoutes = (
   type InstitutionAdminPageData = Parameters<typeof institutionAdminDashboardPage>[0];
   type ReportingComparisonRow = Awaited<ReturnType<typeof listTenantReportingComparisons>>[number];
   type BadgeTemplateRecord = InstitutionAdminPageData["badgeTemplates"][number];
+  type LearnerRecordImportWorkflowInput = Pick<
+    NonNullable<InstitutionAdminPageData["learnerRecordImportWorkflow"]>,
+    "defaults" | "submission" | "feedback"
+  >;
 
   const requireEnterpriseTenant = async (
     c: AppContext,
@@ -258,6 +273,17 @@ export const registerTenantGovernanceRoutes = (
         </article>
       </section>`,
     );
+  };
+
+  const getOptionalFormValue = (formData: FormData, name: string): string | undefined => {
+    const value = formData.get(name);
+
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
   };
 
   const buildOrgUnitMap = (orgUnits: InstitutionAdminPageData["orgUnits"]) => {
@@ -544,6 +570,50 @@ export const registerTenantGovernanceRoutes = (
     };
   };
 
+  const loadLearnerRecordImportPageData = async (input: {
+    c: AppContext;
+    tenantId: string;
+    sessionUserId: string;
+    membershipRole: TenantMembershipRole;
+    workflow?: LearnerRecordImportWorkflowInput;
+  }): Promise<InstitutionAdminPageData | Response> => {
+    const pageData = await loadInstitutionAdminPageData(
+      input.c,
+      input.tenantId,
+      input.sessionUserId,
+      input.membershipRole,
+    );
+
+    if (pageData instanceof Response) {
+      return pageData;
+    }
+
+    const progress = summarizeLearnerRecordImportProgress(
+      await listImportLearnerRecordBatchQueueMessages(resolveDatabase(input.c.env), {
+        tenantId: input.tenantId,
+        limit: 100,
+      }),
+    );
+
+    return {
+      ...pageData,
+      learnerRecordImportWorkflow: {
+        templatePath: `/v1/tenants/${encodeURIComponent(input.tenantId)}/learner-record-imports/template.csv`,
+        previewPath: `/tenants/${encodeURIComponent(input.tenantId)}/admin/operations/learner-record-imports/preview`,
+        applyPath: `/tenants/${encodeURIComponent(input.tenantId)}/admin/operations/learner-record-imports/apply`,
+        defaults:
+          input.workflow?.defaults ??
+          ({
+            defaultTrustLevel: "issuer_verified" as LearnerRecordTrustLevel,
+            defaultIssuerName: "",
+          }),
+        submission: input.workflow?.submission ?? null,
+        feedback: input.workflow?.feedback ?? null,
+        progress,
+      },
+    };
+  };
+
   const loadReportingPageData = async (input: {
     c: AppContext;
     tenantId: string;
@@ -776,6 +846,209 @@ export const registerTenantGovernanceRoutes = (
     return c.html(renderPage(pageData));
   };
 
+  const renderLearnerRecordImportWorkspace = async (
+    c: AppContext,
+    tenantId: string,
+    sessionUserId: string,
+    membershipRole: TenantMembershipRole,
+    workflow?: LearnerRecordImportWorkflowInput,
+  ): Promise<Response> => {
+    const pageData = await loadLearnerRecordImportPageData({
+      c,
+      tenantId,
+      sessionUserId,
+      membershipRole,
+      ...(workflow === undefined ? {} : { workflow }),
+    });
+
+    if (pageData instanceof Response) {
+      return pageData;
+    }
+
+    c.header("Cache-Control", "no-store");
+    return c.html(institutionAdminLearnerRecordImportsPage(pageData));
+  };
+
+  const handleLearnerRecordImportUpload = async (input: {
+    c: AppContext;
+    tenantId: string;
+    sessionUserId: string;
+    membershipRole: TenantMembershipRole;
+    mode: "preview" | "apply";
+  }): Promise<Response> => {
+    const contentType = input.c.req.header("content-type")?.toLowerCase() ?? "";
+
+    if (!contentType.includes("multipart/form-data")) {
+      return renderLearnerRecordImportWorkspace(
+        input.c,
+        input.tenantId,
+        input.sessionUserId,
+        input.membershipRole,
+        {
+          defaults: {
+            defaultTrustLevel: "issuer_verified",
+            defaultIssuerName: "",
+          },
+          submission: null,
+          feedback: {
+            tone: "warning",
+            title: "Upload requires CSV form data",
+            detail: 'Use multipart form upload with a file field named "file".',
+          },
+        },
+      );
+    }
+
+    const formData = await input.c.req.formData();
+    const upload = formData.get("file");
+    const defaultIssuerName = getOptionalFormValue(formData, "defaultIssuerName") ?? "";
+    let defaults;
+
+    try {
+      defaults = parseLearnerRecordImportBatchDefaults({
+        defaultTrustLevel: getOptionalFormValue(formData, "defaultTrustLevel"),
+        ...(defaultIssuerName.length === 0 ? {} : { defaultIssuerName }),
+      });
+    } catch {
+      return renderLearnerRecordImportWorkspace(
+        input.c,
+        input.tenantId,
+        input.sessionUserId,
+        input.membershipRole,
+        {
+          defaults: {
+            defaultTrustLevel: "issuer_verified",
+            defaultIssuerName,
+          },
+          submission: null,
+          feedback: {
+            tone: "warning",
+            title: "Import defaults are invalid",
+            detail: "Choose a valid batch trust default before previewing or queueing the import.",
+          },
+        },
+      );
+    }
+
+    if (!(upload instanceof File)) {
+      return renderLearnerRecordImportWorkspace(
+        input.c,
+        input.tenantId,
+        input.sessionUserId,
+        input.membershipRole,
+        {
+          defaults: {
+            defaultTrustLevel: defaults.defaultTrustLevel,
+            defaultIssuerName,
+          },
+          submission: null,
+          feedback: {
+            tone: "warning",
+            title: "CSV file is required",
+            detail: 'Attach a CSV file in the "file" field to preview or queue learner-record imports.',
+          },
+        },
+      );
+    }
+
+    const fileContent = await upload.text();
+
+    if (fileContent.trim().length === 0) {
+      return renderLearnerRecordImportWorkspace(
+        input.c,
+        input.tenantId,
+        input.sessionUserId,
+        input.membershipRole,
+        {
+          defaults: {
+            defaultTrustLevel: defaults.defaultTrustLevel,
+            defaultIssuerName,
+          },
+          submission: null,
+          feedback: {
+            tone: "warning",
+            title: "Uploaded CSV is empty",
+            detail: "Add at least one learner-record row before previewing or queueing the batch.",
+          },
+        },
+      );
+    }
+
+    const db = resolveDatabase(input.c.env);
+    let prepared;
+
+    try {
+      prepared = await prepareLearnerRecordImportSubmission(db, {
+        tenantId: input.tenantId,
+        fileName: upload.name,
+        mimeType: upload.type,
+        content: fileContent,
+        defaults,
+        requestedAt: new Date().toISOString(),
+        requestedByUserId: input.sessionUserId,
+      });
+    } catch (error: unknown) {
+      return renderLearnerRecordImportWorkspace(
+        input.c,
+        input.tenantId,
+        input.sessionUserId,
+        input.membershipRole,
+        {
+          defaults: {
+            defaultTrustLevel: defaults.defaultTrustLevel,
+            defaultIssuerName,
+          },
+          submission: null,
+          feedback: {
+            tone: "warning",
+            title: "Import file could not be prepared",
+            detail:
+              error instanceof Error ? error.message : "CredTrail could not parse this learner-record CSV.",
+          },
+        },
+      );
+    }
+
+    const queuedRows =
+      input.mode === "apply"
+        ? await enqueueLearnerRecordImportBatch(db, input.tenantId, prepared.queuePayloads)
+        : 0;
+    const validRows = prepared.reports.filter((report) => report.status === "valid").length;
+    const invalidRows = prepared.reports.length - validRows;
+
+    return renderLearnerRecordImportWorkspace(
+      input.c,
+      input.tenantId,
+      input.sessionUserId,
+      input.membershipRole,
+      {
+        defaults: {
+          defaultTrustLevel: defaults.defaultTrustLevel,
+          defaultIssuerName,
+        },
+        submission: {
+          mode: input.mode,
+          batchId: prepared.batchId,
+          fileName: prepared.fileName,
+          totalRows: prepared.reports.length,
+          validRows,
+          invalidRows,
+          queuedRows,
+          rows: prepared.reports,
+        },
+        feedback: {
+          tone: input.mode === "apply" ? "success" : "warning",
+          title:
+            input.mode === "apply" ? "Learner-record import batch queued" : "Learner-record import preview ready",
+          detail:
+            input.mode === "apply"
+              ? `Queued ${String(queuedRows)} valid rows from ${prepared.fileName}. Invalid rows were kept out of the queue.`
+              : "Review trust classification, smart defaults, and warnings below before queueing the import.",
+        },
+      },
+    );
+  };
+
   app.get("/tenants/:tenantId/admin", async (c) => {
     const pathParams = parseTenantPathParams(c.req.param());
     return renderInstitutionAdminWorkspace(
@@ -793,6 +1066,163 @@ export const registerTenantGovernanceRoutes = (
       pathParams.tenantId,
       `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations`,
       institutionAdminOperationsPage,
+    );
+  });
+
+  app.get("/tenants/:tenantId/admin/operations/learner-record-imports", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/learner-record-imports`,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    return renderLearnerRecordImportWorkspace(
+      c,
+      pathParams.tenantId,
+      roleCheck.session.userId,
+      roleCheck.membershipRole,
+    );
+  });
+
+  app.post("/tenants/:tenantId/admin/operations/learner-record-imports/preview", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/learner-record-imports`,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    return handleLearnerRecordImportUpload({
+      c,
+      tenantId: pathParams.tenantId,
+      sessionUserId: roleCheck.session.userId,
+      membershipRole: roleCheck.membershipRole,
+      mode: "preview",
+    });
+  });
+
+  app.post("/tenants/:tenantId/admin/operations/learner-record-imports/apply", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/learner-record-imports`,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    return handleLearnerRecordImportUpload({
+      c,
+      tenantId: pathParams.tenantId,
+      sessionUserId: roleCheck.session.userId,
+      membershipRole: roleCheck.membershipRole,
+      mode: "apply",
+    });
+  });
+
+  app.post("/tenants/:tenantId/admin/operations/learner-record-imports/:batchId/retry", async (c) => {
+    let pathParams;
+
+    try {
+      pathParams = parseLearnerRecordImportBatchPathParams(c.req.param());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record import batch path",
+        },
+        400,
+      );
+    }
+
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/learner-record-imports`,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    const retryResult = await retryFailedImportLearnerRecordBatchQueueMessages(
+      resolveDatabase(c.env),
+      {
+        tenantId: pathParams.tenantId,
+        batchId: pathParams.batchId,
+      },
+    );
+
+    return renderLearnerRecordImportWorkspace(
+      c,
+      pathParams.tenantId,
+      roleCheck.session.userId,
+      roleCheck.membershipRole,
+      {
+        defaults: {
+          defaultTrustLevel: "issuer_verified",
+          defaultIssuerName: "",
+        },
+        submission: null,
+        feedback:
+          retryResult.matched === 0
+            ? {
+                tone: "warning",
+                title: "Import batch not found",
+                detail: `Batch ${pathParams.batchId} is not available for retry in this tenant.`,
+              }
+            : {
+                tone: "success",
+                title: "Failed rows retried",
+                detail: `Retried ${String(retryResult.retried)} failed rows from batch ${pathParams.batchId}.`,
+              },
+      },
     );
   });
 

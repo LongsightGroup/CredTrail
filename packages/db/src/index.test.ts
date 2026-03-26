@@ -8,13 +8,16 @@ import {
   ASSERTION_ENGAGEMENT_EVENT_TYPES,
   addLearnerIdentityAlias,
   type AccessibleTenantContextRecord,
+  createLearnerRecordImportContext,
   createLearnerRecordEntry,
   createTenantAuthProvider,
   createAuthIdentityLink,
   createLearnerProfile,
   findActiveTenantBreakGlassAccountByEmail,
+  findLearnerRecordImportContextByEntryId,
   listLearnerRecordEntries,
   listLearnerRecordAssertionExports,
+  listImportLearnerRecordBatchQueueMessages,
   findTenantAuthPolicy,
   listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
@@ -29,6 +32,7 @@ import {
   markTenantBreakGlassEnrollmentEmailSent,
   normalizeLearnerIdentityValue,
   patchLearnerRecordEntry,
+  retryFailedImportLearnerRecordBatchQueueMessages,
   revokeTenantBreakGlassAccount,
   resolveTenantAuthPolicy,
   resolveLearnerProfileForIdentity,
@@ -89,6 +93,17 @@ interface FakeLearnerRecordEntryRow {
   revoked_at: string | null;
   evidence_links_json: string;
   details_json: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeLearnerRecordImportContextRow {
+  entry_id: string;
+  tenant_id: string;
+  org_unit_id: string | null;
+  badge_template_id: string | null;
+  pathway_label: string | null;
+  inferred_from_json: string;
   created_at: string;
   updated_at: string;
 }
@@ -198,6 +213,25 @@ interface FakeMembershipRow {
   role: "owner" | "admin" | "issuer" | "viewer";
 }
 
+interface FakeJobQueueMessageRow {
+  id: string;
+  tenant_id: string;
+  job_type: dbModule.JobQueueMessageType;
+  payload_json: string;
+  idempotency_key: string;
+  attempt_count: number;
+  max_attempts: number;
+  available_at: string;
+  leased_until: string | null;
+  lease_token: string | null;
+  last_error: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  status: dbModule.JobQueueMessageStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 class FakeStatement {
   private readonly sql: string;
   private readonly db: FakeSqlDatabase;
@@ -236,8 +270,21 @@ class FakeStatement {
       return Promise.resolve(this.successResult());
     }
 
+    if (normalizedSql.includes("INSERT INTO learner_record_import_context")) {
+      this.upsertLearnerRecordImportContext();
+      return Promise.resolve(this.successResult());
+    }
+
     if (normalizedSql.includes("UPDATE learner_record_entries SET")) {
       this.updateLearnerRecordEntry();
+      return Promise.resolve(this.successResult());
+    }
+
+    if (
+      normalizedSql.includes("UPDATE job_queue_messages") &&
+      normalizedSql.includes("job_type = 'import_learner_record_batch'")
+    ) {
+      this.retryLearnerRecordImportQueueMessages();
       return Promise.resolve(this.successResult());
     }
 
@@ -272,6 +319,13 @@ class FakeStatement {
 
     if (normalizedSql.includes("FROM learner_record_entries WHERE tenant_id = ?") && normalizedSql.includes("AND id = ?")) {
       return Promise.resolve(this.selectLearnerRecordEntryById() as T | null);
+    }
+
+    if (
+      normalizedSql.includes("FROM learner_record_import_context") &&
+      normalizedSql.includes("AND entry_id = ?")
+    ) {
+      return Promise.resolve(this.selectLearnerRecordImportContextByEntryId() as T | null);
     }
 
     throw new Error(`Unsupported first SQL in fake DB: ${normalizedSql}`);
@@ -309,6 +363,17 @@ class FakeStatement {
       normalizedSql.includes("ORDER BY issued_at DESC, created_at DESC")
     ) {
       const rows = this.selectLearnerRecordEntries();
+      return Promise.resolve({
+        ...this.successResult(),
+        results: rows as T[],
+      });
+    }
+
+    if (
+      normalizedSql.includes("FROM job_queue_messages") &&
+      normalizedSql.includes("job_type = 'import_learner_record_batch'")
+    ) {
+      const rows = this.selectLearnerRecordImportQueueMessages();
       return Promise.resolve({
         ...this.successResult(),
         results: rows as T[],
@@ -599,6 +664,90 @@ class FakeStatement {
     entry.updated_at = updatedAt;
   }
 
+  private upsertLearnerRecordImportContext(): void {
+    const [
+      entryId,
+      tenantId,
+      orgUnitId,
+      badgeTemplateId,
+      pathwayLabel,
+      inferredFromJson,
+      createdAt,
+      updatedAt,
+    ] = this.boundParams;
+
+    if (
+      typeof entryId !== "string" ||
+      typeof tenantId !== "string" ||
+      (orgUnitId !== null && typeof orgUnitId !== "string") ||
+      (badgeTemplateId !== null && typeof badgeTemplateId !== "string") ||
+      (pathwayLabel !== null && typeof pathwayLabel !== "string") ||
+      typeof inferredFromJson !== "string" ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
+    ) {
+      throw new Error("Invalid bound parameters for learner-record import context upsert");
+    }
+
+    const existing = this.db.learnerRecordImportContexts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.entry_id === entryId;
+    });
+
+    if (existing !== undefined) {
+      existing.org_unit_id = orgUnitId;
+      existing.badge_template_id = badgeTemplateId;
+      existing.pathway_label = pathwayLabel;
+      existing.inferred_from_json = inferredFromJson;
+      existing.updated_at = updatedAt;
+      return;
+    }
+
+    this.db.learnerRecordImportContexts.push({
+      entry_id: entryId,
+      tenant_id: tenantId,
+      org_unit_id: orgUnitId,
+      badge_template_id: badgeTemplateId,
+      pathway_label: pathwayLabel,
+      inferred_from_json: inferredFromJson,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    });
+  }
+
+  private retryLearnerRecordImportQueueMessages(): void {
+    const [availableAt, updatedAt, messageId, tenantId] = this.boundParams;
+
+    if (
+      typeof availableAt !== "string" ||
+      typeof updatedAt !== "string" ||
+      typeof messageId !== "string" ||
+      typeof tenantId !== "string"
+    ) {
+      throw new Error("Invalid bound parameters for learner-record import queue retry");
+    }
+
+    const row = this.db.jobQueueMessages.find((candidate) => {
+      return (
+        candidate.id === messageId &&
+        candidate.tenant_id === tenantId &&
+        candidate.job_type === "import_learner_record_batch"
+      );
+    });
+
+    if (row === undefined) {
+      return;
+    }
+
+    row.status = "pending";
+    row.attempt_count = 0;
+    row.available_at = availableAt;
+    row.leased_until = null;
+    row.lease_token = null;
+    row.last_error = null;
+    row.failed_at = null;
+    row.updated_at = updatedAt;
+  }
+
   private selectLearnerProfileById(): Record<string, unknown> | null {
     const [tenantId, learnerProfileId] = this.boundParams;
 
@@ -749,6 +898,33 @@ class FakeStatement {
     return row === undefined ? null : this.mapLearnerRecordEntryRow(row);
   }
 
+  private selectLearnerRecordImportContextByEntryId(): Record<string, unknown> | null {
+    const [tenantId, entryId] = this.boundParams;
+
+    if (typeof tenantId !== "string" || typeof entryId !== "string") {
+      throw new Error("Invalid bound parameters for learner-record import context select");
+    }
+
+    const row = this.db.learnerRecordImportContexts.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.entry_id === entryId;
+    });
+
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      entryId: row.entry_id,
+      tenantId: row.tenant_id,
+      orgUnitId: row.org_unit_id,
+      badgeTemplateId: row.badge_template_id,
+      pathwayLabel: row.pathway_label,
+      inferredFromJson: row.inferred_from_json,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private selectLearnerIdentitiesByProfile(): Record<string, unknown>[] {
     const [tenantId, learnerProfileId] = this.boundParams;
 
@@ -841,6 +1017,43 @@ class FakeStatement {
         return right.created_at.localeCompare(left.created_at);
       })
       .map((row) => this.mapLearnerRecordEntryRow(row));
+  }
+
+  private selectLearnerRecordImportQueueMessages(): Record<string, unknown>[] {
+    const [tenantId] = this.boundParams;
+
+    if (typeof tenantId !== "string") {
+      throw new Error("Invalid bound parameters for learner-record import queue list");
+    }
+
+    return this.db.jobQueueMessages
+      .filter((candidate) => {
+        return (
+          candidate.tenant_id === tenantId &&
+          candidate.job_type === "import_learner_record_batch"
+        );
+      })
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .map((row) => {
+        return {
+          id: row.id,
+          tenantId: row.tenant_id,
+          jobType: row.job_type,
+          payloadJson: row.payload_json,
+          idempotencyKey: row.idempotency_key,
+          attemptCount: row.attempt_count,
+          maxAttempts: row.max_attempts,
+          availableAt: row.available_at,
+          leasedUntil: row.leased_until,
+          leaseToken: row.lease_token,
+          lastError: row.last_error,
+          completedAt: row.completed_at,
+          failedAt: row.failed_at,
+          status: row.status,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      });
   }
 
   private selectLearnerRecordAssertionExports(): Record<string, unknown>[] {
@@ -1000,9 +1213,11 @@ class FakeSqlDatabase {
   learnerProfiles: FakeLearnerProfileRow[] = [];
   learnerIdentities: FakeLearnerIdentityRow[] = [];
   learnerRecordEntries: FakeLearnerRecordEntryRow[] = [];
+  learnerRecordImportContexts: FakeLearnerRecordImportContextRow[] = [];
   tenants: FakeTenantRow[] = [];
   badgeTemplates: FakeBadgeTemplateRow[] = [];
   assertions: FakeAssertionRow[] = [];
+  jobQueueMessages: FakeJobQueueMessageRow[] = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -2378,6 +2593,147 @@ describe("learner-record entries", () => {
   });
 });
 
+describe("learner-record import context", () => {
+  it("persists queryable smart-default context separately from learner-record details", async () => {
+    const db = createFakeDb();
+    const profile = await createLearnerProfile(db, {
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
+      primaryIdentityVerified: true,
+    });
+    const entry = await createLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "issuer_verified",
+      recordType: "course",
+      title: "Clinical Placement Seminar",
+      issuerName: "University of Michigan",
+      sourceSystem: "csv_import",
+      issuedAt: "2026-03-26T15:00:00.000Z",
+      evidenceLinks: [],
+    });
+
+    const createdContext = await createLearnerRecordImportContext(db, {
+      tenantId: "tenant_umich",
+      entryId: entry.id,
+      orgUnitId: "tenant_umich:org:department-health",
+      badgeTemplateId: "badge_template_001",
+      pathwayLabel: "Clinical readiness",
+      inferredFrom: ["row", "badge_template"],
+    });
+
+    expect(createdContext).toMatchObject({
+      entryId: entry.id,
+      tenantId: "tenant_umich",
+      orgUnitId: "tenant_umich:org:department-health",
+      badgeTemplateId: "badge_template_001",
+      pathwayLabel: "Clinical readiness",
+      inferredFromJson: '["row","badge_template"]',
+    });
+
+    const loadedContext = await findLearnerRecordImportContextByEntryId(
+      db,
+      "tenant_umich",
+      entry.id,
+    );
+
+    expect(loadedContext).toEqual(createdContext);
+  });
+});
+
+describe("learner-record import queue helpers", () => {
+  it("lists and retries learner-record import queue messages by batch", async () => {
+    const db = createFakeDb() as unknown as FakeSqlDatabase;
+
+    db.jobQueueMessages.push(
+      {
+        id: "job_import_001",
+        tenant_id: "tenant_umich",
+        job_type: "import_learner_record_batch",
+        payload_json: JSON.stringify({
+          batchId: "batch_123",
+          rowNumber: 1,
+          fileName: "learner-records.csv",
+          format: "csv",
+          row: {
+            effectiveTrustLevel: "issuer_verified",
+          },
+        }),
+        idempotency_key: "idem_import_001",
+        attempt_count: 3,
+        max_attempts: 8,
+        available_at: "2026-03-26T15:00:00.000Z",
+        leased_until: null,
+        lease_token: null,
+        last_error: "Temporary downstream failure",
+        completed_at: null,
+        failed_at: "2026-03-26T15:05:00.000Z",
+        status: "failed",
+        created_at: "2026-03-26T15:00:00.000Z",
+        updated_at: "2026-03-26T15:05:00.000Z",
+      },
+      {
+        id: "job_import_002",
+        tenant_id: "tenant_umich",
+        job_type: "import_learner_record_batch",
+        payload_json: JSON.stringify({
+          batchId: "batch_123",
+          rowNumber: 2,
+          fileName: "learner-records.csv",
+          format: "csv",
+          row: {
+            effectiveTrustLevel: "learner_supplemental",
+          },
+        }),
+        idempotency_key: "idem_import_002",
+        attempt_count: 1,
+        max_attempts: 8,
+        available_at: "2026-03-26T15:00:00.000Z",
+        leased_until: null,
+        lease_token: null,
+        last_error: null,
+        completed_at: "2026-03-26T15:04:00.000Z",
+        failed_at: null,
+        status: "completed",
+        created_at: "2026-03-26T15:01:00.000Z",
+        updated_at: "2026-03-26T15:04:00.000Z",
+      },
+    );
+
+    const listed = await listImportLearnerRecordBatchQueueMessages(db, {
+      tenantId: "tenant_umich",
+    });
+
+    expect(listed).toHaveLength(2);
+    expect(listed[0]).toMatchObject({
+      batchId: "batch_123",
+      rowNumber: 2,
+      defaultTrustLevel: "learner_supplemental",
+    });
+
+    const retry = await retryFailedImportLearnerRecordBatchQueueMessages(db, {
+      tenantId: "tenant_umich",
+      batchId: "batch_123",
+      rowNumbers: [1],
+      nowIso: "2026-03-26T15:10:00.000Z",
+    });
+
+    expect(retry).toEqual({
+      matched: 1,
+      retried: 1,
+      skippedNotFailed: 0,
+    });
+    expect(db.jobQueueMessages[0]).toMatchObject({
+      status: "pending",
+      attempt_count: 0,
+      last_error: null,
+      failed_at: null,
+      available_at: "2026-03-26T15:10:00.000Z",
+    });
+  });
+});
+
 describe("learner-record exports", () => {
   it("lists badge assertion exports for a learner profile with email alias fallback", async () => {
     const db = createFakeDb();
@@ -2501,6 +2857,19 @@ describe("learner-record foundation", () => {
     expect(sql).toContain("FOREIGN KEY (tenant_id, learner_profile_id)");
     expect(sql).toContain("idx_learner_record_entries_tenant_profile_issued");
     expect(sql).toContain("idx_learner_record_entries_tenant_trust_status");
+  });
+
+  it("adds a learner-record import-context migration with queryable org-unit and badge-template indexes", () => {
+    const sql = readFileSync(
+      new URL("../migrations/0036_learner_record_import_context.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS learner_record_import_context");
+    expect(sql).toContain("entry_id TEXT PRIMARY KEY");
+    expect(sql).toContain("inferred_from_json TEXT NOT NULL DEFAULT '[\"none\"]'");
+    expect(sql).toContain("idx_learner_record_import_context_tenant_org_unit");
+    expect(sql).toContain("idx_learner_record_import_context_tenant_badge_template");
   });
 });
 

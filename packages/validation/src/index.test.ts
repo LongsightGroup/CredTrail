@@ -42,6 +42,12 @@ import {
   parseBadgeTemplatePathParams,
   parseCredentialPathParams,
   parseCreateBadgeTemplateRequest,
+  parseLearnerRecordImportBatchDefaults,
+  parseLearnerRecordImportBatchPathParams,
+  parseLearnerRecordImportProgressQuery,
+  parseLearnerRecordImportRetryRequest,
+  parseLearnerRecordImportRow,
+  parseLearnerRecordImportUploadQuery,
   parseCreateLearnerRecordEntryRequest,
   parseCreateTenantOrgUnitRequest,
   parseLearnerRecordExportPathParams,
@@ -370,6 +376,89 @@ describe("migration batch upload query parser", () => {
         dryRun: "nope",
       });
     }).toThrowError();
+  });
+});
+
+describe("learner-record import parsers", () => {
+  it("accepts a minimal learner-record import row with bounded batch defaults", () => {
+    const row = parseLearnerRecordImportRow({
+      learnerEmail: "learner@example.edu",
+      title: "Clinical Placement Seminar",
+      recordType: "course",
+      issuedAt: "2026-03-26T12:00:00.000Z",
+    });
+    const defaults = parseLearnerRecordImportBatchDefaults({});
+
+    expect(row.learnerEmail).toBe("learner@example.edu");
+    expect(defaults.defaultTrustLevel).toBe("issuer_verified");
+  });
+
+  it("rejects supplemental artifacts that try to override trust to issuer verified", () => {
+    expect(() => {
+      parseLearnerRecordImportRow({
+        learnerEmail: "learner@example.edu",
+        title: "Portfolio Reflection",
+        recordType: "supplemental_artifact",
+        trustLevel: "issuer_verified",
+        issuedAt: "2026-03-26T12:00:00.000Z",
+      });
+    }).toThrowError();
+  });
+
+  it("parses learner-record import upload, progress, retry, and batch path inputs", () => {
+    const upload = parseLearnerRecordImportUploadQuery({
+      dryRun: "false",
+    });
+    const progress = parseLearnerRecordImportProgressQuery({
+      limit: "10",
+    });
+    const retry = parseLearnerRecordImportRetryRequest({
+      rowNumbers: [2, 4, 6],
+    });
+    const pathParams = parseLearnerRecordImportBatchPathParams({
+      tenantId: "tenant_123",
+      batchId: "batch_123",
+    });
+
+    expect(upload.dryRun).toBe(false);
+    expect(progress.limit).toBe(10);
+    expect(retry.rowNumbers).toEqual([2, 4, 6]);
+    expect(pathParams.batchId).toBe("batch_123");
+  });
+
+  it("accepts learner-record import queue jobs", () => {
+    const job = parseQueueJob({
+      jobType: "import_learner_record_batch",
+      tenantId: "tenant_123",
+      payload: {
+        batchId: "batch_123",
+        rowNumber: 1,
+        fileName: "learner-records.csv",
+        format: "csv",
+        requestedAt: "2026-03-26T12:00:00.000Z",
+        row: {
+          learnerEmail: "learner@example.edu",
+          learnerDisplayName: null,
+          title: "Clinical Placement Seminar",
+          recordType: "course",
+          issuedAt: "2026-03-26T12:00:00.000Z",
+          description: null,
+          sourceRecordId: null,
+          evidenceLinks: [],
+          effectiveTrustLevel: "issuer_verified",
+          effectiveIssuerName: "CredTrail University",
+          smartContext: {
+            orgUnitId: "tenant_123:org:department-health",
+            badgeTemplateId: null,
+            pathwayLabel: "Clinical readiness",
+            inferredFrom: ["row", "org_unit"],
+          },
+        },
+      },
+      idempotencyKey: "idem_import_123",
+    });
+
+    expect(job.jobType).toBe("import_learner_record_batch");
   });
 });
 

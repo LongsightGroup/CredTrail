@@ -1174,6 +1174,23 @@ export interface LearnerRecordEntryRecord {
   updatedAt: string;
 }
 
+export type LearnerRecordImportContextInferenceSource =
+  | "row"
+  | "badge_template"
+  | "org_unit"
+  | "none";
+
+export interface LearnerRecordImportContextRecord {
+  entryId: string;
+  tenantId: string;
+  orgUnitId: string | null;
+  badgeTemplateId: string | null;
+  pathwayLabel: string | null;
+  inferredFromJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateLearnerRecordEntryInput {
   tenantId: string;
   learnerProfileId: string;
@@ -1191,6 +1208,15 @@ export interface CreateLearnerRecordEntryInput {
   revokedAt?: string | null | undefined;
   evidenceLinks: readonly string[];
   detailsJson?: string | null | undefined;
+}
+
+export interface CreateLearnerRecordImportContextInput {
+  tenantId: string;
+  entryId: string;
+  orgUnitId?: string | null | undefined;
+  badgeTemplateId?: string | null | undefined;
+  pathwayLabel?: string | null | undefined;
+  inferredFrom: readonly LearnerRecordImportContextInferenceSource[];
 }
 
 export interface ListLearnerRecordEntriesInput {
@@ -1560,7 +1586,8 @@ export type JobQueueMessageType =
   | "issue_badge"
   | "revoke_badge"
   | "rebuild_verification_cache"
-  | "import_migration_batch";
+  | "import_migration_batch"
+  | "import_learner_record_batch";
 
 export type JobQueueMessageStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -1621,6 +1648,14 @@ export interface ImportMigrationBatchQueueMessageRecord extends JobQueueMessageR
   format: string | null;
 }
 
+export interface ImportLearnerRecordBatchQueueMessageRecord extends JobQueueMessageRecord {
+  batchId: string;
+  rowNumber: number | null;
+  fileName: string | null;
+  format: string | null;
+  defaultTrustLevel: LearnerRecordTrustLevel | null;
+}
+
 export interface ListImportMigrationBatchQueueMessagesInput {
   tenantId: string;
   source?: Exclude<MigrationBatchSource, "unknown"> | undefined;
@@ -1636,6 +1671,24 @@ export interface RetryFailedImportMigrationBatchQueueMessagesInput {
 }
 
 export interface RetryFailedImportMigrationBatchQueueMessagesResult {
+  matched: number;
+  retried: number;
+  skippedNotFailed: number;
+}
+
+export interface ListImportLearnerRecordBatchQueueMessagesInput {
+  tenantId: string;
+  limit?: number | undefined;
+}
+
+export interface RetryFailedImportLearnerRecordBatchQueueMessagesInput {
+  tenantId: string;
+  batchId: string;
+  rowNumbers?: readonly number[] | undefined;
+  nowIso?: string | undefined;
+}
+
+export interface RetryFailedImportLearnerRecordBatchQueueMessagesResult {
   matched: number;
   retried: number;
   skippedNotFailed: number;
@@ -4254,6 +4307,17 @@ interface LearnerRecordEntryRow {
   updatedAt: string;
 }
 
+interface LearnerRecordImportContextRow {
+  entryId: string;
+  tenantId: string;
+  orgUnitId: string | null;
+  badgeTemplateId: string | null;
+  pathwayLabel: string | null;
+  inferredFromJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface LearnerIdentityLinkProofRow {
   id: string;
   tenantId: string;
@@ -4444,6 +4508,29 @@ const normalizeLearnerRecordDetailsJson = (detailsJson: string | null | undefine
   }
 
   return JSON.stringify(parsed);
+};
+
+const normalizeLearnerRecordImportInferredFromJson = (
+  inferredFrom: readonly LearnerRecordImportContextInferenceSource[],
+): string => {
+  const normalized = Array.from(new Set(inferredFrom));
+
+  if (normalized.length === 0) {
+    throw new Error("Learner-record import context must include at least one inference source");
+  }
+
+  for (const entry of normalized) {
+    if (
+      entry !== "row" &&
+      entry !== "badge_template" &&
+      entry !== "org_unit" &&
+      entry !== "none"
+    ) {
+      throw new Error("Unsupported learner-record import inference source");
+    }
+  }
+
+  return JSON.stringify(normalized);
 };
 
 const assertValidIsoTimestamp = (timestamp: string, fieldName: string): number => {
@@ -6222,6 +6309,89 @@ export const patchLearnerRecordEntry = async (
     .run();
 
   return findLearnerRecordEntryById(db, input.tenantId, input.entryId);
+};
+
+export const findLearnerRecordImportContextByEntryId = async (
+  db: SqlDatabase,
+  tenantId: string,
+  entryId: string,
+): Promise<LearnerRecordImportContextRecord | null> => {
+  const row = await db
+    .prepare(
+      `
+      SELECT
+        entry_id AS entryId,
+        tenant_id AS tenantId,
+        org_unit_id AS orgUnitId,
+        badge_template_id AS badgeTemplateId,
+        pathway_label AS pathwayLabel,
+        inferred_from_json AS inferredFromJson,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM learner_record_import_context
+      WHERE tenant_id = ?
+        AND entry_id = ?
+      LIMIT 1
+    `,
+    )
+    .bind(tenantId, entryId)
+    .first<LearnerRecordImportContextRow>();
+
+  return row === null ? null : mapLearnerRecordImportContextRow(row);
+};
+
+export const createLearnerRecordImportContext = async (
+  db: SqlDatabase,
+  input: CreateLearnerRecordImportContextInput,
+): Promise<LearnerRecordImportContextRecord> => {
+  const nowIso = new Date().toISOString();
+  const orgUnitId = input.orgUnitId ?? null;
+  const badgeTemplateId = input.badgeTemplateId ?? null;
+  const pathwayLabel = normalizeOptionalLearnerRecordText(input.pathwayLabel);
+  const inferredFromJson = normalizeLearnerRecordImportInferredFromJson(input.inferredFrom);
+
+  await db
+    .prepare(
+      `
+      INSERT INTO learner_record_import_context (
+        entry_id,
+        tenant_id,
+        org_unit_id,
+        badge_template_id,
+        pathway_label,
+        inferred_from_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(entry_id) DO UPDATE SET
+        tenant_id = excluded.tenant_id,
+        org_unit_id = excluded.org_unit_id,
+        badge_template_id = excluded.badge_template_id,
+        pathway_label = excluded.pathway_label,
+        inferred_from_json = excluded.inferred_from_json,
+        updated_at = excluded.updated_at
+    `,
+    )
+    .bind(
+      input.entryId,
+      input.tenantId,
+      orgUnitId,
+      badgeTemplateId,
+      pathwayLabel,
+      inferredFromJson,
+      nowIso,
+      nowIso,
+    )
+    .run();
+
+  const context = await findLearnerRecordImportContextByEntryId(db, input.tenantId, input.entryId);
+
+  if (context === null) {
+    throw new Error(`Failed to create learner-record import context for entry "${input.entryId}"`);
+  }
+
+  return context;
 };
 
 export const ensureTenantMembership = async (
@@ -8599,6 +8769,21 @@ const mapLearnerRecordEntryRow = (row: LearnerRecordEntryRow): LearnerRecordEntr
     revokedAt: row.revokedAt,
     evidenceLinksJson: row.evidenceLinksJson,
     detailsJson: row.detailsJson,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
+
+const mapLearnerRecordImportContextRow = (
+  row: LearnerRecordImportContextRow,
+): LearnerRecordImportContextRecord => {
+  return {
+    entryId: row.entryId,
+    tenantId: row.tenantId,
+    orgUnitId: row.orgUnitId,
+    badgeTemplateId: row.badgeTemplateId,
+    pathwayLabel: row.pathwayLabel,
+    inferredFromJson: row.inferredFromJson,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -16038,6 +16223,81 @@ const migrationBatchPayloadFromJson = (
   };
 };
 
+const learnerRecordImportBatchPayloadFromJson = (
+  payloadJson: string,
+): {
+  batchId: string;
+  rowNumber: number | null;
+  fileName: string | null;
+  format: string | null;
+  defaultTrustLevel: LearnerRecordTrustLevel | null;
+} | null => {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(payloadJson) as unknown;
+  } catch {
+    return null;
+  }
+
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+
+  const payload = parsed as Record<string, unknown>;
+  const rawBatchId = payload.batchId;
+
+  if (typeof rawBatchId !== "string") {
+    return null;
+  }
+
+  const batchId = rawBatchId.trim();
+
+  if (batchId.length === 0) {
+    return null;
+  }
+
+  const rowNumberRaw = payload.rowNumber;
+  const rowNumber =
+    typeof rowNumberRaw === "number" && Number.isInteger(rowNumberRaw) && rowNumberRaw > 0
+      ? rowNumberRaw
+      : null;
+  const fileName =
+    typeof payload.fileName === "string" && payload.fileName.trim().length > 0
+      ? payload.fileName.trim()
+      : null;
+  const format =
+    typeof payload.format === "string" && payload.format.trim().length > 0
+      ? payload.format.trim()
+      : null;
+
+  let defaultTrustLevel: LearnerRecordTrustLevel | null = null;
+
+  if (
+    payload.row !== null &&
+    typeof payload.row === "object" &&
+    !Array.isArray(payload.row) &&
+    (payload.row as Record<string, unknown>).effectiveTrustLevel !== undefined
+  ) {
+    const effectiveTrustLevel = (payload.row as Record<string, unknown>).effectiveTrustLevel;
+
+    if (
+      effectiveTrustLevel === "issuer_verified" ||
+      effectiveTrustLevel === "learner_supplemental"
+    ) {
+      defaultTrustLevel = effectiveTrustLevel;
+    }
+  }
+
+  return {
+    batchId,
+    rowNumber,
+    fileName,
+    format,
+    defaultTrustLevel,
+  };
+};
+
 export const enqueueJobQueueMessage = async (
   db: SqlDatabase,
   input: EnqueueJobQueueMessageInput,
@@ -16353,6 +16613,125 @@ export const retryFailedImportMigrationBatchQueueMessages = async (
         WHERE id = ?
           AND tenant_id = ?
           AND job_type = 'import_migration_batch'
+      `,
+      )
+      .bind(nowIso, nowIso, row.id, input.tenantId)
+      .run();
+    retried += 1;
+  }
+
+  return {
+    matched,
+    retried,
+    skippedNotFailed,
+  };
+};
+
+export const listImportLearnerRecordBatchQueueMessages = async (
+  db: SqlDatabase,
+  input: ListImportLearnerRecordBatchQueueMessagesInput,
+): Promise<ImportLearnerRecordBatchQueueMessageRecord[]> => {
+  const limit = input.limit ?? 200;
+  const boundedLimit = Math.max(1, Math.min(limit, 1000));
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        id,
+        tenant_id AS tenantId,
+        job_type AS jobType,
+        payload_json AS payloadJson,
+        idempotency_key AS idempotencyKey,
+        attempt_count AS attemptCount,
+        max_attempts AS maxAttempts,
+        available_at AS availableAt,
+        leased_until AS leasedUntil,
+        lease_token AS leaseToken,
+        last_error AS lastError,
+        completed_at AS completedAt,
+        failed_at AS failedAt,
+        status,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM job_queue_messages
+      WHERE tenant_id = ?
+        AND job_type = 'import_learner_record_batch'
+      ORDER BY created_at DESC
+      LIMIT ?
+    `,
+    )
+    .bind(input.tenantId, boundedLimit)
+    .all<JobQueueMessageRow>();
+  const parsedMessages: ImportLearnerRecordBatchQueueMessageRecord[] = [];
+
+  for (const row of result.results) {
+    const payload = learnerRecordImportBatchPayloadFromJson(row.payloadJson);
+
+    if (payload === null) {
+      continue;
+    }
+
+    parsedMessages.push({
+      ...mapJobQueueMessageRow(row),
+      batchId: payload.batchId,
+      rowNumber: payload.rowNumber,
+      fileName: payload.fileName,
+      format: payload.format,
+      defaultTrustLevel: payload.defaultTrustLevel,
+    });
+  }
+
+  return parsedMessages;
+};
+
+export const retryFailedImportLearnerRecordBatchQueueMessages = async (
+  db: SqlDatabase,
+  input: RetryFailedImportLearnerRecordBatchQueueMessagesInput,
+): Promise<RetryFailedImportLearnerRecordBatchQueueMessagesResult> => {
+  const nowIso = input.nowIso ?? new Date().toISOString();
+  const rowNumberFilter = input.rowNumbers === undefined ? null : new Set<number>(input.rowNumbers);
+  const candidateRows = await listImportLearnerRecordBatchQueueMessages(db, {
+    tenantId: input.tenantId,
+    limit: 1000,
+  });
+  let matched = 0;
+  let retried = 0;
+  let skippedNotFailed = 0;
+
+  for (const row of candidateRows) {
+    if (row.batchId !== input.batchId) {
+      continue;
+    }
+
+    if (
+      rowNumberFilter !== null &&
+      (row.rowNumber === null || !rowNumberFilter.has(row.rowNumber))
+    ) {
+      continue;
+    }
+
+    matched += 1;
+
+    if (row.status !== "failed") {
+      skippedNotFailed += 1;
+      continue;
+    }
+
+    await db
+      .prepare(
+        `
+        UPDATE job_queue_messages
+        SET status = 'pending',
+            attempt_count = 0,
+            available_at = ?,
+            leased_until = NULL,
+            lease_token = NULL,
+            last_error = NULL,
+            failed_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND tenant_id = ?
+          AND job_type = 'import_learner_record_batch'
       `,
       )
       .bind(nowIso, nowIso, row.id, input.tenantId)

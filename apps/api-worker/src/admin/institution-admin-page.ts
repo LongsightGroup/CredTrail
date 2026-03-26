@@ -3,6 +3,7 @@ import type {
   BadgeIssuanceRuleVersionRecord,
   BadgeTemplateRecord,
   DelegatedIssuingAuthorityGrantRecord,
+  LearnerRecordTrustLevel,
   TenantBreakGlassAccountRecord,
   TenantApiKeyRecord,
   TenantAuthPolicyRecord,
@@ -26,6 +27,10 @@ import {
   renderReporting,
   type ReportingVisualSeriesPoint,
 } from "../reporting/reporting-visuals";
+import type {
+  LearnerRecordImportBatchProgressSummary,
+  LearnerRecordImportRowReport,
+} from "../learner-record/learner-record-import";
 import type { LearnerRecordPresentationModel } from "../learner-record/learner-record-presentation";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
@@ -223,6 +228,7 @@ type InstitutionAdminView =
   | "home"
   | "operations"
   | "operationsLearnerRecords"
+  | "operationsLearnerRecordImports"
   | "operationsReviewQueue"
   | "operationsIssuedBadges"
   | "operationsBadgeStatus"
@@ -249,6 +255,42 @@ interface InstitutionAdminLearnerRecordReview {
   lookupState: "idle" | "unresolved" | "loaded";
 }
 
+interface InstitutionAdminLearnerRecordImportWorkflow {
+  templatePath: string;
+  previewPath: string;
+  applyPath: string;
+  defaults: {
+    defaultTrustLevel: LearnerRecordTrustLevel;
+    defaultIssuerName: string;
+  };
+  submission: {
+    mode: "preview" | "apply";
+    batchId: string;
+    fileName: string;
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+    queuedRows: number;
+    rows: readonly LearnerRecordImportRowReport[];
+  } | null;
+  feedback: {
+    tone: "success" | "warning";
+    title: string;
+    detail: string;
+  } | null;
+  progress: {
+    totals: {
+      messages: number;
+      batches: number;
+      pendingRows: number;
+      processingRows: number;
+      completedRows: number;
+      failedRows: number;
+    };
+    batches: readonly LearnerRecordImportBatchProgressSummary[];
+  };
+}
+
 interface InstitutionAdminPageInput {
   tenant: TenantRecord;
   userId: string;
@@ -272,6 +314,7 @@ interface InstitutionAdminPageInput {
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
   breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
   learnerRecordReview?: InstitutionAdminLearnerRecordReview;
+  learnerRecordImportWorkflow?: InstitutionAdminLearnerRecordImportWorkflow;
   switchOrganizationPath?: string | null;
 }
 
@@ -285,6 +328,7 @@ const renderInstitutionAdminPage = (
   const tenantAdminPath = `/tenants/${encodeURIComponent(input.tenant.id)}/admin`;
   const operationsPath = `${tenantAdminPath}/operations`;
   const operationsLearnerRecordsPath = `${operationsPath}/learner-records`;
+  const operationsLearnerRecordImportsPath = `${operationsPath}/learner-record-imports`;
   const operationsReviewQueuePath = `${operationsPath}/review-queue`;
   const operationsIssuedBadgesPath = `${operationsPath}/issued-badges`;
   const operationsBadgeStatusPath = `${operationsPath}/badge-status`;
@@ -310,6 +354,28 @@ const renderInstitutionAdminPage = (
     exportPath: null,
     standardsMappingPath: null,
     lookupState: "idle" as const,
+  };
+  const learnerRecordImportWorkflow = input.learnerRecordImportWorkflow ?? {
+    templatePath: `/v1/tenants/${encodeURIComponent(input.tenant.id)}/learner-record-imports/template.csv`,
+    previewPath: operationsLearnerRecordImportsPath,
+    applyPath: operationsLearnerRecordImportsPath,
+    defaults: {
+      defaultTrustLevel: "issuer_verified" as const,
+      defaultIssuerName: "",
+    },
+    submission: null,
+    feedback: null,
+    progress: {
+      totals: {
+        messages: 0,
+        batches: 0,
+        pendingRows: 0,
+        processingRows: 0,
+        completedRows: 0,
+        failedRows: 0,
+      },
+      batches: [],
+    },
   };
   const reportingEngagementCounts = input.reportingEngagementCounts ?? null;
   const reportingOverview = input.reportingOverview ?? null;
@@ -2450,6 +2516,7 @@ const renderInstitutionAdminPage = (
         <p class="ct-admin-sidebar__section-label">Operations</p>
         ${sidebarLink(operationsPath, "Overview", view === "operations")}
         ${sidebarLink(operationsLearnerRecordsPath, "Learner Records", view === "operationsLearnerRecords", "ct-admin-sidebar__link--sub")}
+        ${sidebarLink(operationsLearnerRecordImportsPath, "Learner Record Imports", view === "operationsLearnerRecordImports", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsReviewQueuePath, "Review Queue", view === "operationsReviewQueue", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsIssuedBadgesPath, "Issued Badges", view === "operationsIssuedBadges", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsBadgeStatusPath, "Badge Status", view === "operationsBadgeStatus", "ct-admin-sidebar__link--sub")}
@@ -3603,6 +3670,232 @@ const renderInstitutionAdminPage = (
     </form>
   </article>`;
 
+  const renderLearnerRecordImportRowReport = (
+    report: LearnerRecordImportRowReport,
+  ): string => {
+    const preview = report.preview;
+    const contextSummary =
+      preview === null
+        ? "No preview"
+        : [
+            preview.smartContext.orgUnitLabel === null
+              ? "No org-unit default"
+              : `Org unit: ${preview.smartContext.orgUnitLabel}`,
+            preview.smartContext.badgeTemplateLabel === null
+              ? "No badge-template default"
+              : `Badge template: ${preview.smartContext.badgeTemplateLabel}`,
+            preview.smartContext.pathwayLabel === null
+              ? "No pathway hint"
+              : `Pathway hint: ${preview.smartContext.pathwayLabel}`,
+          ].join(" · ");
+    const notes = [...report.errors, ...report.warnings];
+
+    return `<tr>
+      <td>${report.rowNumber}</td>
+      <td><span class="ct-admin__status-pill">${escapeHtml(report.status)}</span></td>
+      <td>${escapeHtml(
+        preview === null
+          ? "No import preview available"
+          : `${preview.learner.email} · ${preview.record.title}`,
+      )}</td>
+      <td>${escapeHtml(
+        preview === null
+          ? "Unavailable"
+          : `${preview.trustLevel} · ${preview.issuerName}`,
+      )}</td>
+      <td>${escapeHtml(contextSummary)}</td>
+      <td>${escapeHtml(notes.length === 0 ? "Ready to apply." : notes.join(" "))}</td>
+    </tr>`;
+  };
+
+  const learnerRecordImportFeedbackMarkup =
+    learnerRecordImportWorkflow.feedback === null
+      ? ""
+      : `<article class="ct-admin__panel ct-stack" data-learner-record-import-feedback="${escapeHtml(
+          learnerRecordImportWorkflow.feedback.tone,
+        )}">
+          <h2>${escapeHtml(learnerRecordImportWorkflow.feedback.title)}</h2>
+          <p>${escapeHtml(learnerRecordImportWorkflow.feedback.detail)}</p>
+        </article>`;
+
+  const learnerRecordImportSubmissionMarkup =
+    learnerRecordImportWorkflow.submission === null
+      ? `<article class="ct-admin__panel ct-stack" data-learner-record-import-state="idle">
+          <h2>No batch loaded yet</h2>
+          <p>Upload a CSV to preview trust classification, inferred org-unit or badge-template context, and any pathway hints before you queue the batch.</p>
+        </article>`
+      : `<article class="ct-admin__panel ct-stack" data-learner-record-import-state="${escapeHtml(
+          learnerRecordImportWorkflow.submission.mode,
+        )}">
+          <h2>${learnerRecordImportWorkflow.submission.mode === "apply" ? "Queued batch" : "Preview batch"}</h2>
+          <p>${escapeHtml(learnerRecordImportWorkflow.submission.fileName)} · batch ${escapeHtml(
+            learnerRecordImportWorkflow.submission.batchId,
+          )}</p>
+          <section class="ct-admin__metric-grid">
+            <article class="ct-admin__metric-card">
+              <p class="ct-admin__meta">Total rows</p>
+              <p class="ct-admin__metric-value">${formatReportingCount(
+                learnerRecordImportWorkflow.submission.totalRows,
+              )}</p>
+            </article>
+            <article class="ct-admin__metric-card">
+              <p class="ct-admin__meta">Valid rows</p>
+              <p class="ct-admin__metric-value">${formatReportingCount(
+                learnerRecordImportWorkflow.submission.validRows,
+              )}</p>
+            </article>
+            <article class="ct-admin__metric-card">
+              <p class="ct-admin__meta">Invalid rows</p>
+              <p class="ct-admin__metric-value">${formatReportingCount(
+                learnerRecordImportWorkflow.submission.invalidRows,
+              )}</p>
+            </article>
+            <article class="ct-admin__metric-card">
+              <p class="ct-admin__meta">Queued rows</p>
+              <p class="ct-admin__metric-value">${formatReportingCount(
+                learnerRecordImportWorkflow.submission.queuedRows,
+              )}</p>
+            </article>
+          </section>
+          <div class="ct-admin__table-shell">
+            <table class="ct-admin__table">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Status</th>
+                  <th>Learner and record</th>
+                  <th>Trust</th>
+                  <th>Smart defaults</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${learnerRecordImportWorkflow.submission.rows
+                  .map((report) => renderLearnerRecordImportRowReport(report))
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        </article>`;
+
+  const learnerRecordImportProgressMarkup = `<article class="ct-admin__panel ct-stack">
+    <h2>Current import progress</h2>
+    <p>These batch states come from the real learner-record import queue. Failed rows can be retried without replaying the whole upload.</p>
+    <section class="ct-admin__metric-grid">
+      <article class="ct-admin__metric-card">
+        <p class="ct-admin__meta">Batches</p>
+        <p class="ct-admin__metric-value">${formatReportingCount(
+          learnerRecordImportWorkflow.progress.totals.batches,
+        )}</p>
+      </article>
+      <article class="ct-admin__metric-card">
+        <p class="ct-admin__meta">Pending rows</p>
+        <p class="ct-admin__metric-value">${formatReportingCount(
+          learnerRecordImportWorkflow.progress.totals.pendingRows,
+        )}</p>
+      </article>
+      <article class="ct-admin__metric-card">
+        <p class="ct-admin__meta">Completed rows</p>
+        <p class="ct-admin__metric-value">${formatReportingCount(
+          learnerRecordImportWorkflow.progress.totals.completedRows,
+        )}</p>
+      </article>
+      <article class="ct-admin__metric-card">
+        <p class="ct-admin__meta">Failed rows</p>
+        <p class="ct-admin__metric-value">${formatReportingCount(
+          learnerRecordImportWorkflow.progress.totals.failedRows,
+        )}</p>
+      </article>
+    </section>
+    ${
+      learnerRecordImportWorkflow.progress.batches.length === 0
+        ? `<p class="ct-admin__hint">No learner-record import batches have been queued for this tenant yet.</p>`
+        : `<section class="ct-admin__metric-grid">
+            ${learnerRecordImportWorkflow.progress.batches
+              .map((batch) => {
+                const retryMarkup =
+                  batch.failedRows === 0
+                    ? ""
+                    : `<form method="post" action="${escapeHtml(
+                        `${operationsLearnerRecordImportsPath}/${encodeURIComponent(batch.batchId)}/retry`,
+                      )}" class="ct-stack">
+                        <button type="submit">Retry failed rows</button>
+                      </form>`;
+
+                return `<article class="ct-admin__metric-card ct-stack" data-learner-record-import-batch="${escapeHtml(
+                  batch.batchId,
+                )}">
+                  <div class="ct-stack">
+                    <p class="ct-admin__meta">${escapeHtml(batch.fileName ?? "CSV import")}</p>
+                    <h3>${escapeHtml(batch.batchId)}</h3>
+                    <p class="ct-admin__meta">Pending ${formatReportingCount(
+                      batch.pendingRows,
+                    )} · Processing ${formatReportingCount(
+                      batch.processingRows,
+                    )} · Completed ${formatReportingCount(
+                      batch.completedRows,
+                    )} · Failed ${formatReportingCount(batch.failedRows)}</p>
+                    <p class="ct-admin__meta">Updated ${escapeHtml(formatIsoTimestamp(batch.lastUpdatedAt))}</p>
+                    ${
+                      batch.latestError === null
+                        ? ""
+                        : `<p class="ct-admin__status" data-tone="warning">${escapeHtml(batch.latestError)}</p>`
+                    }
+                  </div>
+                  ${retryMarkup}
+                </article>`;
+              })
+              .join("")}
+          </section>`
+    }
+  </article>`;
+
+  const learnerRecordImportPanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <h2>Learner record import</h2>
+    <p>Upload one CSV, choose the default trust classification once, and let CredTrail infer matching org-unit and badge-template context when the current tenant data supports it. Pathway labels stay explicit imported metadata.</p>
+    <div class="ct-admin__workspace-actions">
+      <a class="ct-admin__cta-link" href="${escapeHtml(
+        learnerRecordImportWorkflow.templatePath,
+      )}">Download CSV template</a>
+    </div>
+    <form method="post" enctype="multipart/form-data" action="${escapeHtml(
+      learnerRecordImportWorkflow.previewPath,
+    )}" class="ct-admin__form ct-stack">
+      <label>
+        Batch default trust level
+        <select name="defaultTrustLevel">
+          <option value="issuer_verified"${
+            learnerRecordImportWorkflow.defaults.defaultTrustLevel === "issuer_verified"
+              ? " selected"
+              : ""
+          }>issuer verified</option>
+          <option value="learner_supplemental"${
+            learnerRecordImportWorkflow.defaults.defaultTrustLevel === "learner_supplemental"
+              ? " selected"
+              : ""
+          }>learner supplemental</option>
+        </select>
+      </label>
+      <label>
+        Default issuer name
+        <input name="defaultIssuerName" type="text" value="${escapeHtml(
+          learnerRecordImportWorkflow.defaults.defaultIssuerName,
+        )}" placeholder="${escapeHtml(input.tenant.displayName)}" />
+      </label>
+      <label>
+        CSV file
+        <input name="file" type="file" accept=".csv,text/csv" />
+      </label>
+      <p class="ct-admin__hint">Smart defaults only infer from the current org-unit tree and live badge-template ownership. Missing context stays explicit instead of being fabricated.</p>
+      <div class="ct-admin__workspace-actions">
+        <button type="submit">Preview import</button>
+        <button type="submit" formaction="${escapeHtml(
+          learnerRecordImportWorkflow.applyPath,
+        )}">Queue import</button>
+      </div>
+    </form>
+  </article>`;
+
   const pageTitle =
     view === "home"
       ? `Institution Admin · ${input.tenant.displayName}`
@@ -3610,6 +3903,8 @@ const renderInstitutionAdminPage = (
         ? `Operations · Institution Admin · ${input.tenant.displayName}`
         : view === "operationsLearnerRecords"
           ? `Learner Records · Institution Admin · ${input.tenant.displayName}`
+        : view === "operationsLearnerRecordImports"
+          ? `Learner Record Imports · Institution Admin · ${input.tenant.displayName}`
         : view === "operationsReviewQueue"
           ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
           : view === "operationsIssuedBadges"
@@ -3644,7 +3939,7 @@ const renderInstitutionAdminPage = (
       : view === "operations"
         ? `${renderPageHeader(
             "Operations",
-            "Issue badges here, then use dedicated pages for learner records, review queue, issued badges, and badge status.",
+            "Issue badges here, then use dedicated pages for learner records, imports, review queue, issued badges, and badge status.",
           )}
           <section class="ct-admin ct-stack">
             ${manualIssuePanelMarkup}
@@ -3657,6 +3952,17 @@ const renderInstitutionAdminPage = (
             <section class="ct-admin ct-stack">
               ${learnerRecordReviewPanelMarkup}
               ${renderLearnerRecordReviewSections()}
+            </section>`
+        : view === "operationsLearnerRecordImports"
+          ? `${renderPageHeader(
+              "Learner Record Imports",
+              "Import learner-record CSVs with one trust default, honest smart defaults, and queue-backed progress.",
+            )}
+            <section class="ct-admin ct-stack">
+              ${learnerRecordImportPanelMarkup}
+              ${learnerRecordImportFeedbackMarkup}
+              ${learnerRecordImportSubmissionMarkup}
+              ${learnerRecordImportProgressMarkup}
             </section>`
         : view === "operationsReviewQueue"
           ? `${renderPageHeader(
@@ -3814,6 +4120,12 @@ export const institutionAdminOperationsPage = (input: InstitutionAdminPageInput)
 
 export const institutionAdminLearnerRecordsPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, "operationsLearnerRecords");
+};
+
+export const institutionAdminLearnerRecordImportsPage = (
+  input: InstitutionAdminPageInput,
+): string => {
+  return renderInstitutionAdminPage(input, "operationsLearnerRecordImports");
 };
 
 export const institutionAdminOperationsReviewQueuePage = (
