@@ -127,6 +127,7 @@ import { registerBadgeRuleRoutes } from "./routes/badge-rule-routes";
 import { registerCredentialRoutes } from "./routes/credential-routes";
 import { registerDidRoutes } from "./routes/did-routes";
 import { registerLearnerRoutes } from "./routes/learner-routes";
+import { registerLearnerRecordRoutes } from "./routes/learner-record-routes";
 import { registerLtiRoutes } from "./routes/lti-routes";
 import { registerMigrationRoutes } from "./routes/migration-routes";
 import { registerOb3Routes } from "./routes/ob3-routes";
@@ -1111,6 +1112,13 @@ registerLearnerRoutes({
   LEARNER_IDENTITY_LINK_TTL_SECONDS,
   learnerDidSettingsNoticeFromQuery,
   learnerDashboardPage,
+});
+
+registerLearnerRecordRoutes({
+  app,
+  resolveDatabase,
+  requireTenantRole,
+  ADMIN_ROLES,
 });
 
 registerLtiRoutes({

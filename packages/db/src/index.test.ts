@@ -8,10 +8,12 @@ import {
   ASSERTION_ENGAGEMENT_EVENT_TYPES,
   addLearnerIdentityAlias,
   type AccessibleTenantContextRecord,
+  createLearnerRecordEntry,
   createTenantAuthProvider,
   createAuthIdentityLink,
   createLearnerProfile,
   findActiveTenantBreakGlassAccountByEmail,
+  listLearnerRecordEntries,
   findTenantAuthPolicy,
   listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
@@ -25,6 +27,7 @@ import {
   markTenantBreakGlassAccountUsed,
   markTenantBreakGlassEnrollmentEmailSent,
   normalizeLearnerIdentityValue,
+  patchLearnerRecordEntry,
   revokeTenantBreakGlassAccount,
   resolveTenantAuthPolicy,
   resolveLearnerProfileForIdentity,
@@ -63,6 +66,28 @@ interface FakeLearnerIdentityRow {
   identity_value: string;
   is_primary: number;
   is_verified: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface FakeLearnerRecordEntryRow {
+  id: string;
+  tenant_id: string;
+  learner_profile_id: string;
+  trust_level: dbModule.LearnerRecordTrustLevel;
+  record_type: dbModule.LearnerRecordEntryType;
+  status: dbModule.LearnerRecordStatus;
+  title: string;
+  description: string | null;
+  issuer_name: string;
+  issuer_user_id: string | null;
+  source_system: dbModule.LearnerRecordSourceSystem;
+  source_record_id: string | null;
+  issued_at: string;
+  revised_at: string | null;
+  revoked_at: string | null;
+  evidence_links_json: string;
+  details_json: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +203,16 @@ class FakeStatement {
       return Promise.resolve(this.successResult());
     }
 
+    if (normalizedSql.includes("INSERT INTO learner_record_entries")) {
+      this.insertLearnerRecordEntry();
+      return Promise.resolve(this.successResult());
+    }
+
+    if (normalizedSql.includes("UPDATE learner_record_entries SET")) {
+      this.updateLearnerRecordEntry();
+      return Promise.resolve(this.successResult());
+    }
+
     throw new Error(`Unsupported run SQL in fake DB: ${normalizedSql}`);
   }
 
@@ -207,6 +242,10 @@ class FakeStatement {
       return Promise.resolve(this.selectLearnerProfileByIdentity() as T | null);
     }
 
+    if (normalizedSql.includes("FROM learner_record_entries WHERE tenant_id = ?") && normalizedSql.includes("AND id = ?")) {
+      return Promise.resolve(this.selectLearnerRecordEntryById() as T | null);
+    }
+
     throw new Error(`Unsupported first SQL in fake DB: ${normalizedSql}`);
   }
 
@@ -218,6 +257,18 @@ class FakeStatement {
       normalizedSql.includes("learner_profile_id = ?")
     ) {
       const rows = this.selectLearnerIdentitiesByProfile();
+      return Promise.resolve({
+        ...this.successResult(),
+        results: rows as T[],
+      });
+    }
+
+    if (
+      normalizedSql.includes("FROM learner_record_entries") &&
+      normalizedSql.includes("learner_profile_id = ?") &&
+      normalizedSql.includes("ORDER BY issued_at DESC, created_at DESC")
+    ) {
+      const rows = this.selectLearnerRecordEntries();
       return Promise.resolve({
         ...this.successResult(),
         results: rows as T[],
@@ -362,6 +413,152 @@ class FakeStatement {
     });
   }
 
+  private insertLearnerRecordEntry(): void {
+    const [
+      id,
+      tenantId,
+      learnerProfileId,
+      trustLevel,
+      recordType,
+      status,
+      title,
+      description,
+      issuerName,
+      issuerUserId,
+      sourceSystem,
+      sourceRecordId,
+      issuedAt,
+      revisedAt,
+      revokedAt,
+      evidenceLinksJson,
+      detailsJson,
+      createdAt,
+      updatedAt,
+    ] = this.boundParams;
+
+    if (
+      typeof id !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof learnerProfileId !== "string" ||
+      !this.isLearnerRecordTrustLevel(trustLevel) ||
+      !this.isLearnerRecordType(recordType) ||
+      !this.isLearnerRecordStatus(status) ||
+      typeof title !== "string" ||
+      (description !== null && typeof description !== "string") ||
+      typeof issuerName !== "string" ||
+      (issuerUserId !== null && typeof issuerUserId !== "string") ||
+      !this.isLearnerRecordSourceSystem(sourceSystem) ||
+      (sourceRecordId !== null && typeof sourceRecordId !== "string") ||
+      typeof issuedAt !== "string" ||
+      (revisedAt !== null && typeof revisedAt !== "string") ||
+      (revokedAt !== null && typeof revokedAt !== "string") ||
+      typeof evidenceLinksJson !== "string" ||
+      (detailsJson !== null && typeof detailsJson !== "string") ||
+      typeof createdAt !== "string" ||
+      typeof updatedAt !== "string"
+    ) {
+      throw new Error("Invalid bound parameters for learner-record entry insert");
+    }
+
+    const profileExists = this.db.learnerProfiles.some((row) => {
+      return row.tenant_id === tenantId && row.id === learnerProfileId;
+    });
+
+    if (!profileExists) {
+      throw new Error("FOREIGN KEY constraint failed");
+    }
+
+    this.db.learnerRecordEntries.push({
+      id,
+      tenant_id: tenantId,
+      learner_profile_id: learnerProfileId,
+      trust_level: trustLevel,
+      record_type: recordType,
+      status,
+      title,
+      description,
+      issuer_name: issuerName,
+      issuer_user_id: issuerUserId,
+      source_system: sourceSystem,
+      source_record_id: sourceRecordId,
+      issued_at: issuedAt,
+      revised_at: revisedAt,
+      revoked_at: revokedAt,
+      evidence_links_json: evidenceLinksJson,
+      details_json: detailsJson,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    });
+  }
+
+  private updateLearnerRecordEntry(): void {
+    const [
+      trustLevel,
+      recordType,
+      status,
+      title,
+      description,
+      issuerName,
+      issuerUserId,
+      sourceSystem,
+      sourceRecordId,
+      issuedAt,
+      revisedAt,
+      revokedAt,
+      evidenceLinksJson,
+      detailsJson,
+      updatedAt,
+      tenantId,
+      entryId,
+    ] = this.boundParams;
+
+    if (
+      !this.isLearnerRecordTrustLevel(trustLevel) ||
+      !this.isLearnerRecordType(recordType) ||
+      !this.isLearnerRecordStatus(status) ||
+      typeof title !== "string" ||
+      (description !== null && typeof description !== "string") ||
+      typeof issuerName !== "string" ||
+      (issuerUserId !== null && typeof issuerUserId !== "string") ||
+      !this.isLearnerRecordSourceSystem(sourceSystem) ||
+      (sourceRecordId !== null && typeof sourceRecordId !== "string") ||
+      typeof issuedAt !== "string" ||
+      (revisedAt !== null && typeof revisedAt !== "string") ||
+      (revokedAt !== null && typeof revokedAt !== "string") ||
+      typeof evidenceLinksJson !== "string" ||
+      (detailsJson !== null && typeof detailsJson !== "string") ||
+      typeof updatedAt !== "string" ||
+      typeof tenantId !== "string" ||
+      typeof entryId !== "string"
+    ) {
+      throw new Error("Invalid bound parameters for learner-record entry update");
+    }
+
+    const entry = this.db.learnerRecordEntries.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.id === entryId;
+    });
+
+    if (entry === undefined) {
+      return;
+    }
+
+    entry.trust_level = trustLevel;
+    entry.record_type = recordType;
+    entry.status = status;
+    entry.title = title;
+    entry.description = description;
+    entry.issuer_name = issuerName;
+    entry.issuer_user_id = issuerUserId;
+    entry.source_system = sourceSystem;
+    entry.source_record_id = sourceRecordId;
+    entry.issued_at = issuedAt;
+    entry.revised_at = revisedAt;
+    entry.revoked_at = revokedAt;
+    entry.evidence_links_json = evidenceLinksJson;
+    entry.details_json = detailsJson;
+    entry.updated_at = updatedAt;
+  }
+
   private selectLearnerProfileById(): Record<string, unknown> | null {
     const [tenantId, learnerProfileId] = this.boundParams;
 
@@ -498,6 +695,20 @@ class FakeStatement {
     };
   }
 
+  private selectLearnerRecordEntryById(): Record<string, unknown> | null {
+    const [tenantId, entryId] = this.boundParams;
+
+    if (typeof tenantId !== "string" || typeof entryId !== "string") {
+      throw new Error("Invalid bound parameters for learner-record entry select by id");
+    }
+
+    const row = this.db.learnerRecordEntries.find((candidate) => {
+      return candidate.tenant_id === tenantId && candidate.id === entryId;
+    });
+
+    return row === undefined ? null : this.mapLearnerRecordEntryRow(row);
+  }
+
   private selectLearnerIdentitiesByProfile(): Record<string, unknown>[] {
     const [tenantId, learnerProfileId] = this.boundParams;
 
@@ -533,6 +744,65 @@ class FakeStatement {
       });
   }
 
+  private selectLearnerRecordEntries(): Record<string, unknown>[] {
+    const [tenantId, learnerProfileId, thirdParam, fourthParam] = this.boundParams;
+
+    if (typeof tenantId !== "string" || typeof learnerProfileId !== "string") {
+      throw new Error("Invalid bound parameters for learner-record entry list");
+    }
+
+    let trustLevel: dbModule.LearnerRecordTrustLevel | undefined;
+    let status: dbModule.LearnerRecordStatus | undefined;
+
+    if (thirdParam !== undefined) {
+      if (this.isLearnerRecordTrustLevel(thirdParam)) {
+        trustLevel = thirdParam;
+      } else if (this.isLearnerRecordStatus(thirdParam)) {
+        status = thirdParam;
+      } else {
+        throw new Error("Invalid optional bound parameter for learner-record entry list");
+      }
+    }
+
+    if (fourthParam !== undefined) {
+      if (!this.isLearnerRecordStatus(fourthParam)) {
+        throw new Error("Invalid status bound parameter for learner-record entry list");
+      }
+
+      status = fourthParam;
+    }
+
+    return this.db.learnerRecordEntries
+      .filter((candidate) => {
+        if (
+          candidate.tenant_id !== tenantId ||
+          candidate.learner_profile_id !== learnerProfileId
+        ) {
+          return false;
+        }
+
+        if (trustLevel !== undefined && candidate.trust_level !== trustLevel) {
+          return false;
+        }
+
+        if (status !== undefined && candidate.status !== status) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((left, right) => {
+        const issuedComparison = right.issued_at.localeCompare(left.issued_at);
+
+        if (issuedComparison !== 0) {
+          return issuedComparison;
+        }
+
+        return right.created_at.localeCompare(left.created_at);
+      })
+      .map((row) => this.mapLearnerRecordEntryRow(row));
+  }
+
   private isLearnerIdentityType(value: unknown): value is LearnerIdentityType {
     return (
       value === "email" ||
@@ -541,6 +811,65 @@ class FakeStatement {
       value === "url" ||
       value === "saml_subject"
     );
+  }
+
+  private isLearnerRecordTrustLevel(value: unknown): value is dbModule.LearnerRecordTrustLevel {
+    return value === "issuer_verified" || value === "learner_supplemental";
+  }
+
+  private isLearnerRecordStatus(value: unknown): value is dbModule.LearnerRecordStatus {
+    return value === "active" || value === "revoked" || value === "expired";
+  }
+
+  private isLearnerRecordType(value: unknown): value is dbModule.LearnerRecordEntryType {
+    return (
+      value === "course" ||
+      value === "certificate" ||
+      value === "license" ||
+      value === "competency" ||
+      value === "work_based_learning" ||
+      value === "experience" ||
+      value === "membership" ||
+      value === "supplemental_artifact" ||
+      value === "custom"
+    );
+  }
+
+  private isLearnerRecordSourceSystem(
+    value: unknown,
+  ): value is dbModule.LearnerRecordSourceSystem {
+    return (
+      value === "credtrail_admin" ||
+      value === "csv_import" ||
+      value === "api" ||
+      value === "migration" ||
+      value === "badge_assertion" ||
+      value === "learner_self_reported"
+    );
+  }
+
+  private mapLearnerRecordEntryRow(row: FakeLearnerRecordEntryRow): Record<string, unknown> {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      learnerProfileId: row.learner_profile_id,
+      trustLevel: row.trust_level,
+      recordType: row.record_type,
+      status: row.status,
+      title: row.title,
+      description: row.description,
+      issuerName: row.issuer_name,
+      issuerUserId: row.issuer_user_id,
+      sourceSystem: row.source_system,
+      sourceRecordId: row.source_record_id,
+      issuedAt: row.issued_at,
+      revisedAt: row.revised_at,
+      revokedAt: row.revoked_at,
+      evidenceLinksJson: row.evidence_links_json,
+      detailsJson: row.details_json,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   private successResult(): SqlRunResult {
@@ -554,6 +883,7 @@ class FakeStatement {
 class FakeSqlDatabase {
   learnerProfiles: FakeLearnerProfileRow[] = [];
   learnerIdentities: FakeLearnerIdentityRow[] = [];
+  learnerRecordEntries: FakeLearnerRecordEntryRow[] = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -1793,6 +2123,156 @@ describe("resolveLearnerProfileFromSaml", () => {
         tenantId: "tenant_umich",
       }),
     ).rejects.toThrow("Cannot resolve learner profile without SAML subject or email");
+  });
+});
+
+describe("learner-record entries", () => {
+  it("creates and lists non-badge learner-record entries for a learner profile", async () => {
+    const db = createFakeDb();
+    const profile = await createLearnerProfile(db, {
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
+      primaryIdentityVerified: true,
+    });
+
+    const createdEntry = await createLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "issuer_verified",
+      recordType: "course",
+      title: "Clinical Placement Seminar",
+      description: "Completed with distinction.",
+      issuerName: "University of Michigan",
+      issuerUserId: "usr_admin",
+      sourceSystem: "credtrail_admin",
+      issuedAt: "2026-03-24T15:00:00.000Z",
+      evidenceLinks: ["https://credtrail.example.edu/evidence/clinical-placement-seminar"],
+      detailsJson: '{"grade":"A","credits":3}',
+    });
+
+    expect(createdEntry.id.startsWith("lre_")).toBe(true);
+    expect(createdEntry.title).toBe("Clinical Placement Seminar");
+    expect(createdEntry.evidenceLinksJson).toBe(
+      '["https://credtrail.example.edu/evidence/clinical-placement-seminar"]',
+    );
+
+    const listedEntries = await listLearnerRecordEntries(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+    });
+
+    expect(listedEntries).toEqual([createdEntry]);
+  });
+
+  it("filters learner-record entries by trust and status", async () => {
+    const db = createFakeDb();
+    const profile = await createLearnerProfile(db, {
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
+      primaryIdentityVerified: true,
+    });
+
+    await createLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "issuer_verified",
+      recordType: "course",
+      title: "Applied Statistics",
+      issuerName: "University of Michigan",
+      sourceSystem: "credtrail_admin",
+      issuedAt: "2026-03-20T15:00:00.000Z",
+      evidenceLinks: [],
+    });
+    const supplemental = await createLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "learner_supplemental",
+      recordType: "supplemental_artifact",
+      title: "Portfolio Reflection",
+      issuerName: "Learner Portfolio",
+      sourceSystem: "learner_self_reported",
+      issuedAt: "2026-03-25T15:00:00.000Z",
+      evidenceLinks: [],
+      status: "expired",
+    });
+
+    const filtered = await listLearnerRecordEntries(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "learner_supplemental",
+      status: "expired",
+    });
+
+    expect(filtered).toEqual([supplemental]);
+  });
+
+  it("patches learner-record provenance and revoke state without mutating badge assertions", async () => {
+    const db = createFakeDb();
+    const profile = await createLearnerProfile(db, {
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
+      primaryIdentityVerified: true,
+    });
+    const createdEntry = await createLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      trustLevel: "issuer_verified",
+      recordType: "certificate",
+      title: "Instructional Design Certificate",
+      issuerName: "University of Michigan",
+      sourceSystem: "csv_import",
+      sourceRecordId: "legacy-cert-123",
+      issuedAt: "2026-03-18T15:00:00.000Z",
+      evidenceLinks: ["https://credtrail.example.edu/evidence/instructional-design"],
+    });
+
+    const updatedEntry = await patchLearnerRecordEntry(db, {
+      tenantId: "tenant_umich",
+      entryId: createdEntry.id,
+      description: "Revoked after academic integrity review.",
+      status: "revoked",
+      detailsJson: '{"reviewedBy":"Academic Affairs"}',
+      revisedAt: "2026-03-25T12:00:00.000Z",
+      revokedAt: "2026-03-25T15:00:00.000Z",
+      issuerName: "University of Michigan Academic Affairs",
+      sourceSystem: "api",
+      sourceRecordId: "revocation-456",
+      evidenceLinks: ["https://credtrail.example.edu/reviews/instructional-design"],
+    });
+
+    expect(updatedEntry).not.toBeNull();
+    expect(updatedEntry).toMatchObject({
+      id: createdEntry.id,
+      status: "revoked",
+      description: "Revoked after academic integrity review.",
+      issuerName: "University of Michigan Academic Affairs",
+      sourceSystem: "api",
+      sourceRecordId: "revocation-456",
+      revisedAt: "2026-03-25T12:00:00.000Z",
+      revokedAt: "2026-03-25T15:00:00.000Z",
+      detailsJson: '{"reviewedBy":"Academic Affairs"}',
+      evidenceLinksJson: '["https://credtrail.example.edu/reviews/instructional-design"]',
+    });
+  });
+});
+
+describe("learner-record foundation", () => {
+  it("adds a learner-record migration with provenance and tenant/profile indexes", () => {
+    const sql = readFileSync(
+      new URL("../migrations/0035_learner_record_entries.sql", import.meta.url),
+      "utf8",
+    );
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS learner_record_entries");
+    expect(sql).toContain("trust_level TEXT NOT NULL CHECK");
+    expect(sql).toContain("source_system TEXT NOT NULL CHECK");
+    expect(sql).toContain("evidence_links_json TEXT NOT NULL DEFAULT '[]'");
+    expect(sql).toContain("FOREIGN KEY (tenant_id, learner_profile_id)");
+    expect(sql).toContain("idx_learner_record_entries_tenant_profile_issued");
+    expect(sql).toContain("idx_learner_record_entries_tenant_trust_status");
   });
 });
 

@@ -328,6 +328,44 @@ describe("GET /", () => {
     expect(comparisonsResponse.status).toBe(401);
     expect(hierarchyResponse.status).toBe(401);
   });
+
+  it("registers the learner-record management routes in the composition root", async () => {
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders({
+      betterAuthPrincipal: null,
+      betterAuthRequestedTenant: null,
+    });
+
+    const listResponse = await isolatedApp.request(
+      "/v1/tenants/tenant_123/learner-record-entries?learnerProfileId=lpr_123",
+      undefined,
+      createEnv(),
+    );
+    const createResponse = await isolatedApp.request(
+      "/v1/tenants/tenant_123/learner-record-entries",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          learnerProfileId: "lpr_123",
+          trustLevel: "issuer_verified",
+          recordType: "course",
+          title: "Clinical Placement Seminar",
+          provenance: {
+            issuerName: "CredTrail University",
+            sourceSystem: "credtrail_admin",
+            issuedAt: "2026-03-24T15:00:00.000Z",
+            evidenceLinks: [],
+          },
+        }),
+      },
+      createEnv(),
+    );
+
+    expect(listResponse.status).toBe(401);
+    expect(createResponse.status).toBe(401);
+  });
 });
 
 describe("PUT /v1/admin/tenants/:tenantId", () => {

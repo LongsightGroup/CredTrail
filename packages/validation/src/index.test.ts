@@ -41,7 +41,10 @@ import {
   parseBadgeTemplatePathParams,
   parseCredentialPathParams,
   parseCreateBadgeTemplateRequest,
+  parseCreateLearnerRecordEntryRequest,
   parseCreateTenantOrgUnitRequest,
+  parseLearnerRecordEntryListQuery,
+  parseLearnerRecordEntryPathParams,
   parseUpsertTenantMembershipOrgUnitScopeRequest,
   parseIssueBadgeRequest,
   parseManualIssueBadgeRequest,
@@ -76,6 +79,7 @@ import {
   parseTransferBadgeTemplateOwnershipRequest,
   parseTenantReportingComparisonQuery,
   parseTenantExecutiveDashboardQuery,
+  parsePatchLearnerRecordEntryRequest,
   parseTenantReportingHierarchyQuery,
   parseTenantReportingTrendQuery,
 } from "./index";
@@ -584,6 +588,113 @@ describe("assertion lifecycle parsers", () => {
 
     expect(pathParams.tenantId).toBe("tenant_123");
     expect(pathParams.assertionId).toBe("tenant_123:assertion_456");
+  });
+});
+
+describe("learner-record parsers", () => {
+  it("accepts a valid issuer-verified learner-record entry payload", () => {
+    const payload = parseCreateLearnerRecordEntryRequest({
+      learnerProfileId: "lpr_123",
+      trustLevel: "issuer_verified",
+      recordType: "course",
+      title: "Intro to Cybersecurity",
+      description: "Completed with distinction.",
+      status: "active",
+      provenance: {
+        issuerName: "CredTrail University",
+        sourceSystem: "credtrail_admin",
+        issuedAt: "2026-03-24T15:00:00.000Z",
+        evidenceLinks: ["https://credtrail.example.edu/evidence/intro-cybersecurity/project"],
+      },
+      details: {
+        grade: "A",
+      },
+    });
+
+    expect(payload.trustLevel).toBe("issuer_verified");
+    expect(payload.recordType).toBe("course");
+    expect(payload.provenance.evidenceLinks).toHaveLength(1);
+  });
+
+  it("rejects ambiguous supplemental trust and revoked-state payloads without provenance", () => {
+    expect(() => {
+      parseCreateLearnerRecordEntryRequest({
+        learnerProfileId: "lpr_123",
+        trustLevel: "issuer_verified",
+        recordType: "supplemental_artifact",
+        title: "Supplemental portfolio",
+        provenance: {
+          issuerName: "Learner upload",
+          sourceSystem: "learner_self_reported",
+          issuedAt: "2026-03-24T15:00:00.000Z",
+          evidenceLinks: ["https://portfolio.example.edu/work"],
+        },
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseCreateLearnerRecordEntryRequest({
+        learnerProfileId: "lpr_123",
+        trustLevel: "learner_supplemental",
+        recordType: "experience",
+        title: "Community leadership",
+        status: "revoked",
+        provenance: {
+          issuerName: "Learner self report",
+          sourceSystem: "learner_self_reported",
+          issuedAt: "2026-03-24T15:00:00.000Z",
+          evidenceLinks: [],
+        },
+      });
+    }).toThrowError();
+  });
+
+  it("parses learner-record path params, filters, and patch payloads", () => {
+    expect(
+      parseLearnerRecordEntryPathParams({
+        tenantId: "tenant_123",
+        entryId: "lre_123",
+      }),
+    ).toEqual({
+      tenantId: "tenant_123",
+      entryId: "lre_123",
+    });
+
+    expect(
+      parseLearnerRecordEntryListQuery({
+        learnerProfileId: "lpr_123",
+        trustLevel: "issuer_verified",
+        status: "active",
+      }),
+    ).toEqual({
+      learnerProfileId: "lpr_123",
+      trustLevel: "issuer_verified",
+      status: "active",
+    });
+
+    expect(
+      parsePatchLearnerRecordEntryRequest({
+        description: "Completed with distinction and capstone presentation.",
+        status: "revoked",
+        provenance: {
+          issuerName: "CredTrail University",
+          sourceSystem: "credtrail_admin",
+          issuedAt: "2026-03-24T15:00:00.000Z",
+          revokedAt: "2026-03-25T15:00:00.000Z",
+          evidenceLinks: ["https://credtrail.example.edu/evidence/intro-cybersecurity/project"],
+        },
+      }),
+    ).toEqual({
+      description: "Completed with distinction and capstone presentation.",
+      status: "revoked",
+      provenance: {
+        issuerName: "CredTrail University",
+        sourceSystem: "credtrail_admin",
+        issuedAt: "2026-03-24T15:00:00.000Z",
+        revokedAt: "2026-03-25T15:00:00.000Z",
+        evidenceLinks: ["https://credtrail.example.edu/evidence/intro-cybersecurity/project"],
+      },
+    });
   });
 });
 

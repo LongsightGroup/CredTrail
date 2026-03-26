@@ -118,6 +118,39 @@ export const tenantLoginModeSchema = z.enum(["local", "hybrid", "sso_required"])
 export const tenantAuthPolicyEnforceForRolesSchema = z.enum(["all_users", "admins_only"]);
 export const tenantAuthProviderProtocolSchema = z.enum(["oidc", "saml"]);
 export const recipientIdentityTypeSchema = z.enum(["email", "email_sha256", "did", "url"]);
+export const learnerRecordTrustLevelSchema = z.enum(["issuer_verified", "learner_supplemental"]);
+export const learnerRecordStatusSchema = z.enum(["active", "revoked", "expired"]);
+export const learnerRecordSourceSystemSchema = z.enum([
+  "credtrail_admin",
+  "csv_import",
+  "api",
+  "migration",
+  "badge_assertion",
+  "learner_self_reported",
+]);
+export const learnerRecordTypeSchema = z.enum([
+  "badge",
+  "course",
+  "certificate",
+  "license",
+  "competency",
+  "work_based_learning",
+  "experience",
+  "membership",
+  "supplemental_artifact",
+  "custom",
+]);
+export const learnerRecordEntryTypeSchema = z.enum([
+  "course",
+  "certificate",
+  "license",
+  "competency",
+  "work_based_learning",
+  "experience",
+  "membership",
+  "supplemental_artifact",
+  "custom",
+]);
 export const recipientIdentifierTypeSchema = z.enum([
   "emailAddress",
   "sourcedId",
@@ -192,6 +225,10 @@ export const tenantApiKeyPathParamsSchema = tenantPathParamsSchema.extend({
 
 export const tenantAuthProviderPathParamsSchema = tenantPathParamsSchema.extend({
   providerId: resourceIdSchema,
+});
+
+export const learnerRecordEntryPathParamsSchema = tenantPathParamsSchema.extend({
+  entryId: resourceIdSchema,
 });
 
 export const migrationBatchPathParamsSchema = tenantPathParamsSchema.extend({
@@ -309,6 +346,12 @@ export const tenantApiKeyListQuerySchema = z.object({
 
     return input;
   }, z.boolean()),
+});
+
+export const learnerRecordEntryListQuerySchema = z.object({
+  learnerProfileId: resourceIdSchema,
+  trustLevel: learnerRecordTrustLevelSchema.optional(),
+  status: learnerRecordStatusSchema.optional(),
 });
 
 export const tenantAssertionListQuerySchema = z.object({
@@ -489,6 +532,138 @@ export const createTenantOrgUnitRequestSchema = z.object({
   displayName: orgUnitDisplayNameSchema,
   parentOrgUnitId: resourceIdSchema.optional(),
 });
+
+export const learnerRecordProvenanceSchema = z.object({
+  issuerName: z.string().trim().min(1).max(200),
+  issuerUserId: userIdSchema.optional(),
+  sourceSystem: learnerRecordSourceSystemSchema,
+  sourceRecordId: resourceIdSchema.optional(),
+  issuedAt: isoTimestampSchema,
+  revisedAt: isoTimestampSchema.nullable().optional(),
+  revokedAt: isoTimestampSchema.nullable().optional(),
+  evidenceLinks: z.array(z.string().url().max(2048)).max(20),
+});
+
+const learnerRecordDetailsSchema = jsonObjectSchema;
+
+export const createLearnerRecordEntryRequestSchema = z
+  .object({
+    learnerProfileId: resourceIdSchema,
+    trustLevel: learnerRecordTrustLevelSchema,
+    recordType: learnerRecordEntryTypeSchema,
+    title: z.string().trim().min(1).max(200),
+    description: z.string().trim().min(1).max(4000).optional(),
+    status: learnerRecordStatusSchema.default("active"),
+    provenance: learnerRecordProvenanceSchema,
+    details: learnerRecordDetailsSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.trustLevel === "issuer_verified" &&
+      value.provenance.sourceSystem === "learner_self_reported"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provenance", "sourceSystem"],
+        message: "issuer-verified entries cannot use learner_self_reported as the sourceSystem",
+      });
+    }
+
+    if (
+      value.recordType === "supplemental_artifact" &&
+      value.trustLevel !== "learner_supplemental"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["trustLevel"],
+        message: "supplemental_artifact entries must use learner_supplemental trust",
+      });
+    }
+
+    if (
+      value.status === "revoked" &&
+      (value.provenance.revokedAt === undefined || value.provenance.revokedAt === null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provenance", "revokedAt"],
+        message: "revoked entries must include provenance.revokedAt",
+      });
+    }
+  });
+
+export const patchLearnerRecordEntryRequestSchema = z
+  .object({
+    trustLevel: learnerRecordTrustLevelSchema.optional(),
+    recordType: learnerRecordEntryTypeSchema.optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().min(1).max(4000).nullable().optional(),
+    status: learnerRecordStatusSchema.optional(),
+    provenance: learnerRecordProvenanceSchema.optional(),
+    details: learnerRecordDetailsSchema.optional(),
+  })
+  .refine(
+    (payload) =>
+      payload.trustLevel !== undefined ||
+      payload.recordType !== undefined ||
+      payload.title !== undefined ||
+      payload.description !== undefined ||
+      payload.status !== undefined ||
+      payload.provenance !== undefined ||
+      payload.details !== undefined,
+    {
+      message: "At least one learner-record field must be provided",
+    },
+  )
+  .superRefine((value, ctx) => {
+    const effectiveTrustLevel = value.trustLevel;
+    const effectiveRecordType = value.recordType;
+    const effectiveStatus = value.status;
+    const provenance = value.provenance;
+
+    if (
+      effectiveTrustLevel === "issuer_verified" &&
+      provenance !== undefined &&
+      provenance.sourceSystem === "learner_self_reported"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provenance", "sourceSystem"],
+        message: "issuer-verified entries cannot use learner_self_reported as the sourceSystem",
+      });
+    }
+
+    if (
+      effectiveRecordType === "supplemental_artifact" &&
+      effectiveTrustLevel === "issuer_verified"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["trustLevel"],
+        message: "supplemental_artifact entries must use learner_supplemental trust",
+      });
+    }
+
+    if (effectiveStatus === "revoked" && provenance === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provenance"],
+        message: "revoked entries must include provenance with revokedAt",
+      });
+    }
+
+    if (
+      effectiveStatus === "revoked" &&
+      provenance !== undefined &&
+      (provenance.revokedAt === undefined || provenance.revokedAt === null)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provenance", "revokedAt"],
+        message: "revoked entries must include provenance.revokedAt",
+      });
+    }
+  });
 
 export const upsertTenantMembershipOrgUnitScopeRequestSchema = z.object({
   role: tenantMembershipOrgUnitScopeRoleSchema,
@@ -1354,6 +1529,11 @@ export type AssertionLifecycleTransitionSource = z.infer<
   typeof assertionLifecycleTransitionSourceSchema
 >;
 export type RecipientIdentityType = z.infer<typeof recipientIdentityTypeSchema>;
+export type LearnerRecordTrustLevel = z.infer<typeof learnerRecordTrustLevelSchema>;
+export type LearnerRecordStatus = z.infer<typeof learnerRecordStatusSchema>;
+export type LearnerRecordSourceSystem = z.infer<typeof learnerRecordSourceSystemSchema>;
+export type LearnerRecordType = z.infer<typeof learnerRecordTypeSchema>;
+export type LearnerRecordEntryType = z.infer<typeof learnerRecordEntryTypeSchema>;
 export type IssueBadgeRequest = z.infer<typeof issueBadgeRequestSchema>;
 export type RevokeBadgeRequest = z.infer<typeof revokeBadgeRequestSchema>;
 export type ProgrammaticIssueBadgeRequest = z.infer<typeof programmaticIssueBadgeRequestSchema>;
@@ -1377,9 +1557,14 @@ export type TenantUserDelegatedGrantPathParams = z.infer<
 >;
 export type TenantApiKeyPathParams = z.infer<typeof tenantApiKeyPathParamsSchema>;
 export type TenantAuthProviderPathParams = z.infer<typeof tenantAuthProviderPathParamsSchema>;
+export type LearnerRecordEntryPathParams = z.infer<typeof learnerRecordEntryPathParamsSchema>;
 export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
   typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
 >;
+export type LearnerRecordEntryListQuery = z.infer<typeof learnerRecordEntryListQuerySchema>;
+export type LearnerRecordProvenance = z.infer<typeof learnerRecordProvenanceSchema>;
+export type CreateLearnerRecordEntryRequest = z.infer<typeof createLearnerRecordEntryRequestSchema>;
+export type PatchLearnerRecordEntryRequest = z.infer<typeof patchLearnerRecordEntryRequestSchema>;
 export type BadgeIssuanceRulePathParams = z.infer<typeof badgeIssuanceRulePathParamsSchema>;
 export type BadgeIssuanceRuleVersionPathParams = z.infer<
   typeof badgeIssuanceRuleVersionPathParamsSchema
@@ -1731,6 +1916,28 @@ export const parseCreateBadgeTemplateRequest = (input: unknown): CreateBadgeTemp
 
 export const parseCreateTenantOrgUnitRequest = (input: unknown): CreateTenantOrgUnitRequest => {
   return createTenantOrgUnitRequestSchema.parse(input);
+};
+
+export const parseLearnerRecordEntryListQuery = (input: unknown): LearnerRecordEntryListQuery => {
+  return learnerRecordEntryListQuerySchema.parse(input);
+};
+
+export const parseLearnerRecordEntryPathParams = (
+  input: unknown,
+): LearnerRecordEntryPathParams => {
+  return learnerRecordEntryPathParamsSchema.parse(input);
+};
+
+export const parseCreateLearnerRecordEntryRequest = (
+  input: unknown,
+): CreateLearnerRecordEntryRequest => {
+  return createLearnerRecordEntryRequestSchema.parse(input);
+};
+
+export const parsePatchLearnerRecordEntryRequest = (
+  input: unknown,
+): PatchLearnerRecordEntryRequest => {
+  return patchLearnerRecordEntryRequestSchema.parse(input);
 };
 
 export const parseUpsertTenantMembershipOrgUnitScopeRequest = (
