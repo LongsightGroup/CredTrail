@@ -1,17 +1,71 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  hoistedFindLearnerProfileById,
+  hoistedFindLearnerProfileByIdentity,
+  hoistedListLearnerRecordAssertionExports,
+  hoistedListLearnerRecordEntries,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
   mockedFindActiveSessionByHash,
   mockedTouchSession,
 } = vi.hoisted(() => {
   return {
+    hoistedFindLearnerProfileById: vi.fn(),
+    hoistedFindLearnerProfileByIdentity: vi.fn(),
+    hoistedListLearnerRecordAssertionExports: vi.fn(),
+    hoistedListLearnerRecordEntries: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
     mockedResolveBetterAuthRequestedTenant: vi.fn(),
     mockedFindActiveSessionByHash: vi.fn(),
     mockedTouchSession: vi.fn(),
   };
+});
+
+describe("admin learner-record review route", () => {
+  it("renders the bounded learner-record review route for admins", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-records?learnerProfileId=lpr_123",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner Records");
+    expect(body).toContain("Load learner record");
+    expect(body).toContain("Download native portable export");
+    expect(body).toContain("Open standards mapping");
+    expect(mockedFindLearnerProfileById).toHaveBeenCalledWith(fakeDb, "tenant_123", "lpr_123");
+  });
+
+  it("rejects ambiguous learner-record review queries", async () => {
+    const env = createEnv();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-records?learnerProfileId=lpr_123&email=learner%40example.edu",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid learner-record review query");
+  });
 });
 
 vi.mock("@credtrail/db", async () => {
@@ -28,6 +82,8 @@ vi.mock("@credtrail/db", async () => {
     findActiveSessionByHash: mockedFindActiveSessionByHash,
     findBadgeTemplateById: vi.fn(),
     findDelegatedIssuingAuthorityGrantById: vi.fn(),
+    findLearnerProfileById: hoistedFindLearnerProfileById,
+    findLearnerProfileByIdentity: hoistedFindLearnerProfileByIdentity,
     findTenantAuthPolicy: vi.fn(),
     findTenantMembership: vi.fn(),
     findTenantById: vi.fn(),
@@ -45,6 +101,8 @@ vi.mock("@credtrail/db", async () => {
     listBadgeTemplateOwnershipEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrantEvents: vi.fn(),
     listDelegatedIssuingAuthorityGrants: vi.fn(),
+    listLearnerRecordAssertionExports: hoistedListLearnerRecordAssertionExports,
+    listLearnerRecordEntries: hoistedListLearnerRecordEntries,
     listTenantAuthProviders: vi.fn(),
     listTenantMembershipOrgUnitScopes: vi.fn(),
     listTenantOrgUnits: vi.fn(),
@@ -94,6 +152,8 @@ import {
   findActiveDelegatedIssuingAuthorityGrantForAction,
   findBadgeTemplateById,
   findDelegatedIssuingAuthorityGrantById,
+  findLearnerProfileById,
+  findLearnerProfileByIdentity,
   findTenantAuthPolicy,
   findTenantMembership,
   findTenantById,
@@ -111,6 +171,8 @@ import {
   listBadgeTemplateOwnershipEvents,
   listDelegatedIssuingAuthorityGrantEvents,
   listDelegatedIssuingAuthorityGrants,
+  listLearnerRecordAssertionExports,
+  listLearnerRecordEntries,
   listTenantAuthProviders,
   listTenantApiKeys,
   listTenantBreakGlassAccounts,
@@ -158,6 +220,8 @@ const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindDelegatedIssuingAuthorityGrantById = vi.mocked(
   findDelegatedIssuingAuthorityGrantById,
 );
+const mockedFindLearnerProfileById = vi.mocked(findLearnerProfileById);
+const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantAuthPolicy = vi.mocked(findTenantAuthPolicy);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
@@ -179,6 +243,8 @@ const mockedListDelegatedIssuingAuthorityGrantEvents = vi.mocked(
   listDelegatedIssuingAuthorityGrantEvents,
 );
 const mockedListDelegatedIssuingAuthorityGrants = vi.mocked(listDelegatedIssuingAuthorityGrants);
+const mockedListLearnerRecordAssertionExports = vi.mocked(listLearnerRecordAssertionExports);
+const mockedListLearnerRecordEntries = vi.mocked(listLearnerRecordEntries);
 const mockedListTenantAuthProviders = vi.mocked(listTenantAuthProviders);
 const mockedListTenantApiKeys = vi.mocked(listTenantApiKeys);
 const mockedListTenantBreakGlassAccounts = vi.mocked(listTenantBreakGlassAccounts);
@@ -314,6 +380,74 @@ beforeEach(() => {
   mockedHasTenantMembershipOrgUnitScopeAssignments.mockResolvedValue(false);
   mockedListAccessibleTenantContextsForUser.mockReset();
   mockedListAccessibleTenantContextsForUser.mockResolvedValue([]);
+  mockedFindLearnerProfileById.mockReset();
+  mockedFindLearnerProfileById.mockResolvedValue({
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
+    displayName: "Learner One",
+    createdAt: "2026-03-25T12:00:00.000Z",
+    updatedAt: "2026-03-25T12:00:00.000Z",
+  });
+  mockedFindLearnerProfileByIdentity.mockReset();
+  mockedFindLearnerProfileByIdentity.mockResolvedValue({
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
+    displayName: "Learner One",
+    createdAt: "2026-03-25T12:00:00.000Z",
+    updatedAt: "2026-03-25T12:00:00.000Z",
+  });
+  mockedListLearnerRecordAssertionExports.mockReset();
+  mockedListLearnerRecordAssertionExports.mockResolvedValue([
+    {
+      assertionId: "tenant_123:assertion_456",
+      assertionPublicId: "public_assertion_456",
+      tenantId: "tenant_123",
+      learnerProfileId: "lpr_123",
+      badgeTemplateId: "badge_template_001",
+      badgeTitle: "Applied Analytics Badge",
+      badgeDescription: "Awarded for applied analytics work.",
+      badgeCriteriaUri: "https://credtrail.example.edu/badges/applied-analytics/criteria",
+      badgeImageUri: "https://credtrail.example.edu/badges/applied-analytics/image.png",
+      recipientIdentity: "learner@example.edu",
+      recipientIdentityType: "email",
+      vcR2Key: "tenants/tenant_123/assertions/assertion_456.jsonld",
+      statusListIndex: 12,
+      idempotencyKey: "idem_123",
+      issuedAt: "2026-03-24T15:00:00.000Z",
+      issuedByUserId: "usr_admin",
+      revokedAt: null,
+      issuerName: "CredTrail University",
+      createdAt: "2026-03-24T15:00:00.000Z",
+      updatedAt: "2026-03-24T15:00:00.000Z",
+    },
+  ]);
+  mockedListLearnerRecordEntries.mockReset();
+  mockedListLearnerRecordEntries.mockResolvedValue([
+    {
+      id: "lre_123",
+      tenantId: "tenant_123",
+      learnerProfileId: "lpr_123",
+      trustLevel: "issuer_verified",
+      recordType: "course",
+      status: "active",
+      title: "Clinical Placement Seminar",
+      description: "Completed with distinction.",
+      issuerName: "CredTrail University",
+      issuerUserId: "usr_admin",
+      sourceSystem: "credtrail_admin",
+      sourceRecordId: null,
+      issuedAt: "2026-03-23T15:00:00.000Z",
+      revisedAt: null,
+      revokedAt: null,
+      evidenceLinksJson:
+        '["https://credtrail.example.edu/evidence/clinical-placement-seminar"]',
+      detailsJson: '{"grade":"A"}',
+      createdAt: "2026-03-23T15:00:00.000Z",
+      updatedAt: "2026-03-23T15:00:00.000Z",
+    },
+  ]);
   mockedListBadgeIssuanceRules.mockReset();
   mockedListBadgeIssuanceRules.mockResolvedValue([]);
   mockedListBadgeIssuanceRuleVersions.mockReset();

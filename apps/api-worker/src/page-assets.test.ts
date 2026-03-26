@@ -26,6 +26,7 @@ describe("GET /assets/ui/:assetFilename", () => {
       "executiveDashboardCss",
       "institutionAdminCss",
       "institutionAdminJs",
+      "learnerRecordCss",
       "ltiPagesCss",
     ];
 

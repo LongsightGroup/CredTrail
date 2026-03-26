@@ -9,6 +9,8 @@ import {
   deleteTenantSsoSamlConfiguration,
   findActiveTenantBreakGlassAccountByUserId,
   findDelegatedIssuingAuthorityGrantById,
+  findLearnerProfileById,
+  findLearnerProfileByIdentity,
   findTenantAuthPolicy,
   findTenantAuthProviderById,
   findTenantById,
@@ -48,6 +50,7 @@ import {
 } from "@credtrail/db";
 import type { Hono } from "hono";
 import {
+  parseAdminLearnerRecordReviewQuery,
   parseCreateTenantApiKeyRequest,
   parseCreateTenantBreakGlassAccountRequest,
   parseTenantAuthProviderPathParams,
@@ -78,6 +81,7 @@ import {
   institutionAdminDashboardPage,
   institutionAdminGovernancePage,
   institutionAdminIssuedBadgesPage,
+  institutionAdminLearnerRecordsPage,
   institutionAdminOperationsReviewQueuePage,
   institutionAdminOperationsPage,
   institutionAdminOrgUnitsPage,
@@ -88,6 +92,8 @@ import { institutionAdminRuleBuilderPage } from "../admin/institution-admin-rule
 import { buildLocalTwoFactorPath } from "../auth/break-glass-policy";
 import { resolveTenantReportingAccess } from "../auth/tenant-access";
 import { buildReportingMetricEntries } from "../reporting/metric-definitions";
+import { createLearnerRecordPresentation } from "../learner-record/learner-record-presentation";
+import { loadLearnerRecordExportBundle } from "../learner-record/learner-record-export";
 import {
   toReportingComparisonFilters,
   toReportingEngagementFilters,
@@ -428,6 +434,116 @@ export const registerTenantGovernanceRoutes = (
     };
   };
 
+  const loadLearnerRecordReviewPageData = async (input: {
+    c: AppContext;
+    tenantId: string;
+    sessionUserId: string;
+    membershipRole: TenantMembershipRole;
+    learnerProfileId?: string;
+    email?: string;
+  }): Promise<InstitutionAdminPageData | Response> => {
+    const pageData = await loadInstitutionAdminPageData(
+      input.c,
+      input.tenantId,
+      input.sessionUserId,
+      input.membershipRole,
+    );
+
+    if (pageData instanceof Response) {
+      return pageData;
+    }
+
+    if (input.learnerProfileId === undefined && input.email === undefined) {
+      return {
+        ...pageData,
+        learnerRecordReview: {
+          lookup: {},
+          learnerProfile: null,
+          presentation: null,
+          exportPath: null,
+          standardsMappingPath: null,
+          lookupState: "idle",
+        },
+      };
+    }
+
+    const db = resolveDatabase(input.c.env);
+    const learnerProfile =
+      input.learnerProfileId !== undefined
+        ? await findLearnerProfileById(db, input.tenantId, input.learnerProfileId)
+        : await findLearnerProfileByIdentity(db, {
+            tenantId: input.tenantId,
+            identityType: "email",
+            identityValue: input.email!,
+          });
+
+    if (learnerProfile === null) {
+      return {
+        ...pageData,
+        learnerRecordReview: {
+          lookup: {
+            ...(input.learnerProfileId === undefined
+              ? {}
+              : { learnerProfileId: input.learnerProfileId }),
+            ...(input.email === undefined ? {} : { email: input.email }),
+          },
+          learnerProfile: null,
+          presentation: null,
+          exportPath: null,
+          standardsMappingPath: null,
+          lookupState: "unresolved",
+        },
+      };
+    }
+
+    const bundle = await loadLearnerRecordExportBundle(db, {
+      tenantId: input.tenantId,
+      learnerProfileId: learnerProfile.id,
+    });
+
+    if (bundle === null) {
+      return {
+        ...pageData,
+        learnerRecordReview: {
+          lookup: {
+            ...(input.learnerProfileId === undefined
+              ? {}
+              : { learnerProfileId: input.learnerProfileId }),
+            ...(input.email === undefined ? {} : { email: input.email }),
+          },
+          learnerProfile: null,
+          presentation: null,
+          exportPath: null,
+          standardsMappingPath: null,
+          lookupState: "unresolved",
+        },
+      };
+    }
+
+    const encodedLearnerProfileId = encodeURIComponent(learnerProfile.id);
+
+    return {
+      ...pageData,
+      learnerRecordReview: {
+        lookup: {
+          ...(input.learnerProfileId === undefined
+            ? {}
+            : { learnerProfileId: input.learnerProfileId }),
+          ...(input.email === undefined ? {} : { email: input.email }),
+        },
+        learnerProfile: {
+          id: learnerProfile.id,
+          displayName: learnerProfile.displayName,
+          subjectId: learnerProfile.subjectId,
+        },
+        presentation: createLearnerRecordPresentation(bundle),
+        exportPath: `/v1/tenants/${encodeURIComponent(input.tenantId)}/learner-records/${encodedLearnerProfileId}/export?profile=native_portable_json`,
+        standardsMappingPath: `/v1/tenants/${encodeURIComponent(input.tenantId)}/learner-records/${encodedLearnerProfileId}/standards-mapping?profile=clr_alignment_json`,
+        lookupState: "loaded",
+      },
+    };
+  };
+
   const loadReportingPageData = async (input: {
     c: AppContext;
     tenantId: string;
@@ -678,6 +794,59 @@ export const registerTenantGovernanceRoutes = (
       `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations`,
       institutionAdminOperationsPage,
     );
+  });
+
+  app.get("/tenants/:tenantId/admin/operations/learner-records", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, ADMIN_ROLES);
+
+    if (roleCheck instanceof Response) {
+      if (roleCheck.status === 401) {
+        return redirectToTenantLogin(
+          c,
+          pathParams.tenantId,
+          `/tenants/${encodeURIComponent(pathParams.tenantId)}/admin/operations/learner-records`,
+        );
+      }
+
+      if (roleCheck.status === 403) {
+        c.header("Cache-Control", "no-store");
+        return c.html(adminRoleRequiredPage(pathParams.tenantId), 403);
+      }
+
+      return roleCheck;
+    }
+
+    let reviewQuery;
+
+    try {
+      reviewQuery = parseAdminLearnerRecordReviewQuery(c.req.query());
+    } catch {
+      return c.json(
+        {
+          error: "Invalid learner-record review query",
+        },
+        400,
+      );
+    }
+
+    const pageData = await loadLearnerRecordReviewPageData({
+      c,
+      tenantId: pathParams.tenantId,
+      sessionUserId: roleCheck.session.userId,
+      membershipRole: roleCheck.membershipRole,
+      ...(reviewQuery.learnerProfileId
+        ? { learnerProfileId: reviewQuery.learnerProfileId }
+        : {}),
+      ...(reviewQuery.email ? { email: reviewQuery.email } : {}),
+    });
+
+    if (pageData instanceof Response) {
+      return pageData;
+    }
+
+    c.header("Cache-Control", "no-store");
+    return c.html(institutionAdminLearnerRecordsPage(pageData));
   });
 
   app.get("/tenants/:tenantId/admin/operations/review-queue", async (c) => {

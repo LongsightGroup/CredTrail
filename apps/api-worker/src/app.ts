@@ -112,7 +112,11 @@ import {
   validateLtiStateToken as validateLtiStateTokenHelper,
   type LtiIssuerRegistry,
 } from "./lti/lti-helpers";
-import { createLearnerDashboardPage, learnerDidSettingsNoticeFromQuery } from "./learner/pages";
+import {
+  createLearnerDashboardPage,
+  learnerDidSettingsNoticeFromQuery,
+} from "./learner/pages";
+import { createLearnerRecordPage } from "./learner/learner-record-page";
 import {
   sendIssuanceEmailNotification,
   type SendIssuanceEmailNotificationInput,
@@ -812,6 +816,11 @@ const learnerDashboardPage = createLearnerDashboardPage({
   formatIsoTimestamp,
 });
 
+const learnerRecordPage = createLearnerRecordPage({
+  escapeHtml,
+  formatIsoTimestamp,
+});
+
 const walletCredentialOfferPayload = (
   requestUrl: string,
   model: VerificationViewModel,
@@ -1113,6 +1122,7 @@ registerLearnerRoutes({
   LEARNER_IDENTITY_LINK_TTL_SECONDS,
   learnerDidSettingsNoticeFromQuery,
   learnerDashboardPage,
+  learnerRecordPage,
 });
 
 registerLearnerRecordRoutes({

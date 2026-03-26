@@ -1,24 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  mockedFindLearnerProfileById,
+  mockedFindLearnerProfileByIdentity,
   mockedFindTenantAuthPolicy,
   mockedGetTenantReportingComparisons,
   mockedGetTenantReportingEngagementCounts,
   mockedListTenantAuthProviders,
   mockedListTenantBreakGlassAccounts,
   mockedListAccessibleTenantContextsForUser,
+  mockedListLearnerRecordAssertionExports,
+  mockedListLearnerRecordEntries,
   mockedGetTenantReportingOverview,
   mockedGetTenantReportingTrends,
   mockedResolveBetterAuthPrincipal,
   mockedResolveBetterAuthRequestedTenant,
 } = vi.hoisted(() => {
   return {
+    mockedFindLearnerProfileById: vi.fn(),
+    mockedFindLearnerProfileByIdentity: vi.fn(),
     mockedFindTenantAuthPolicy: vi.fn(),
     mockedGetTenantReportingComparisons: vi.fn(),
     mockedGetTenantReportingEngagementCounts: vi.fn(),
     mockedListTenantAuthProviders: vi.fn(),
     mockedListTenantBreakGlassAccounts: vi.fn(),
     mockedListAccessibleTenantContextsForUser: vi.fn(),
+    mockedListLearnerRecordAssertionExports: vi.fn(),
+    mockedListLearnerRecordEntries: vi.fn(),
     mockedGetTenantReportingOverview: vi.fn(),
     mockedGetTenantReportingTrends: vi.fn(),
     mockedResolveBetterAuthPrincipal: vi.fn(),
@@ -31,6 +39,8 @@ vi.mock("@credtrail/db", async () => {
 
   return {
     ...actual,
+    findLearnerProfileById: mockedFindLearnerProfileById,
+    findLearnerProfileByIdentity: mockedFindLearnerProfileByIdentity,
     findTenantAuthPolicy: mockedFindTenantAuthPolicy,
     findTenantById: vi.fn(),
     findTenantMembership: vi.fn(),
@@ -40,6 +50,8 @@ vi.mock("@credtrail/db", async () => {
     getTenantReportingTrends: mockedGetTenantReportingTrends,
     listDelegatedIssuingAuthorityGrants: vi.fn(),
     listAccessibleTenantContextsForUser: mockedListAccessibleTenantContextsForUser,
+    listLearnerRecordAssertionExports: mockedListLearnerRecordAssertionExports,
+    listLearnerRecordEntries: mockedListLearnerRecordEntries,
     listBadgeIssuanceRules: vi.fn(),
     listBadgeIssuanceRuleVersions: vi.fn(),
     listTenantReportingComparisons: mockedGetTenantReportingComparisons,
@@ -77,6 +89,8 @@ vi.mock("./auth/better-auth-adapter", async () => {
 });
 
 import {
+  findLearnerProfileById,
+  findLearnerProfileByIdentity,
   findTenantById,
   findTenantMembership,
   findUserById,
@@ -90,7 +104,12 @@ import {
   listTenantOrgUnits,
   getTenantReportingOverview,
   getTenantReportingTrends,
+  listLearnerRecordAssertionExports,
+  listLearnerRecordEntries,
   listTenantReportingComparisons,
+  type LearnerProfileRecord,
+  type LearnerRecordAssertionExportRecord,
+  type LearnerRecordEntryRecord,
   type SqlDatabase,
   type TenantMembershipRecord,
 } from "@credtrail/db";
@@ -101,6 +120,8 @@ import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-repo
 import { INSTITUTION_ADMIN_CSS } from "./ui/page-assets/content/institution-admin-css";
 import { INSTITUTION_ADMIN_JS } from "./ui/page-assets/content/institution-admin-js";
 
+const mockedFindLearnerProfileByIdDb = vi.mocked(findLearnerProfileById);
+const mockedFindLearnerProfileByIdentityDb = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindTenantMembership = vi.mocked(findTenantMembership);
 const mockedFindTenantById = vi.mocked(findTenantById);
 const mockedFindUserById = vi.mocked(findUserById);
@@ -115,6 +136,8 @@ const mockedGetTenantReportingComparisonsDb = vi.mocked(listTenantReportingCompa
 const mockedGetTenantReportingEngagementCountsDb = vi.mocked(getTenantReportingEngagementCounts);
 const mockedGetTenantReportingOverviewDb = vi.mocked(getTenantReportingOverview);
 const mockedGetTenantReportingTrendsDb = vi.mocked(getTenantReportingTrends);
+const mockedListLearnerRecordAssertionExportsDb = vi.mocked(listLearnerRecordAssertionExports);
+const mockedListLearnerRecordEntriesDb = vi.mocked(listLearnerRecordEntries);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
 const fakeDb = {
   prepare: vi.fn(),
@@ -142,6 +165,76 @@ const sampleMembership = (role: TenantMembershipRecord["role"]): TenantMembershi
     role,
     createdAt: "2026-02-18T12:00:00.000Z",
     updatedAt: "2026-02-18T12:00:00.000Z",
+  };
+};
+
+const sampleLearnerProfile = (
+  overrides?: Partial<LearnerProfileRecord>,
+): LearnerProfileRecord => {
+  return {
+    id: "lpr_123",
+    tenantId: "tenant_123",
+    subjectId: "urn:credtrail:learner:tenant_123:lpr_123",
+    displayName: "Learner One",
+    createdAt: "2026-03-25T12:00:00.000Z",
+    updatedAt: "2026-03-25T12:00:00.000Z",
+    ...overrides,
+  };
+};
+
+const sampleLearnerRecordAssertionExport = (
+  overrides?: Partial<LearnerRecordAssertionExportRecord>,
+): LearnerRecordAssertionExportRecord => {
+  return {
+    assertionId: "tenant_123:assertion_456",
+    assertionPublicId: "public_assertion_456",
+    tenantId: "tenant_123",
+    learnerProfileId: "lpr_123",
+    badgeTemplateId: "badge_template_001",
+    badgeTitle: "Applied Analytics Badge",
+    badgeDescription: "Awarded for applied analytics work.",
+    badgeCriteriaUri: "https://credtrail.example.edu/badges/applied-analytics/criteria",
+    badgeImageUri: "https://credtrail.example.edu/badges/applied-analytics/image.png",
+    recipientIdentity: "learner@example.edu",
+    recipientIdentityType: "email",
+    vcR2Key: "tenants/tenant_123/assertions/assertion_456.jsonld",
+    statusListIndex: 12,
+    idempotencyKey: "idem_123",
+    issuedAt: "2026-03-24T15:00:00.000Z",
+    issuedByUserId: "usr_admin",
+    revokedAt: null,
+    issuerName: "CredTrail University",
+    createdAt: "2026-03-24T15:00:00.000Z",
+    updatedAt: "2026-03-24T15:00:00.000Z",
+    ...overrides,
+  };
+};
+
+const sampleLearnerRecordEntry = (
+  overrides?: Partial<LearnerRecordEntryRecord>,
+): LearnerRecordEntryRecord => {
+  return {
+    id: "lre_123",
+    tenantId: "tenant_123",
+    learnerProfileId: "lpr_123",
+    trustLevel: "issuer_verified",
+    recordType: "course",
+    status: "active",
+    title: "Clinical Placement Seminar",
+    description: "Completed with distinction.",
+    issuerName: "CredTrail University",
+    issuerUserId: "usr_admin",
+    sourceSystem: "credtrail_admin",
+    sourceRecordId: null,
+    issuedAt: "2026-03-23T15:00:00.000Z",
+    revisedAt: null,
+    revokedAt: null,
+    evidenceLinksJson:
+      '["https://credtrail.example.edu/evidence/clinical-placement-seminar"]',
+    detailsJson: '{"grade":"A"}',
+    createdAt: "2026-03-23T15:00:00.000Z",
+    updatedAt: "2026-03-23T15:00:00.000Z",
+    ...overrides,
   };
 };
 
@@ -499,6 +592,40 @@ beforeEach(() => {
       tenantPlanTier: "team",
       membershipRole: "admin",
     },
+  ]);
+  mockedFindLearnerProfileByIdDb.mockReset();
+  mockedFindLearnerProfileByIdDb.mockResolvedValue(sampleLearnerProfile());
+  mockedFindLearnerProfileByIdentityDb.mockReset();
+  mockedFindLearnerProfileByIdentityDb.mockResolvedValue(sampleLearnerProfile());
+  mockedListLearnerRecordAssertionExportsDb.mockReset();
+  mockedListLearnerRecordAssertionExportsDb.mockResolvedValue([
+    sampleLearnerRecordAssertionExport(),
+  ]);
+  mockedListLearnerRecordEntriesDb.mockReset();
+  mockedListLearnerRecordEntriesDb.mockResolvedValue([
+    sampleLearnerRecordEntry(),
+    sampleLearnerRecordEntry({
+      id: "lre_supp_001",
+      trustLevel: "learner_supplemental",
+      recordType: "supplemental_artifact",
+      title: "Portfolio Reflection",
+      description: "Learner-supplied capstone reflection.",
+      issuerName: "Learner self report",
+      issuerUserId: null,
+      sourceSystem: "learner_self_reported",
+      sourceRecordId: null,
+      evidenceLinksJson: '["https://portfolio.example.edu/learner-one"]',
+      detailsJson: '{"portfolioUrl":"https://portfolio.example.edu/learner-one"}',
+    }),
+    sampleLearnerRecordEntry({
+      id: "lre_revoked_001",
+      recordType: "membership",
+      title: "Membership Standing",
+      status: "revoked",
+      sourceSystem: "csv_import",
+      sourceRecordId: "legacy:membership:001",
+      revokedAt: "2026-03-22T15:00:00.000Z",
+    }),
   ]);
   mockedGetTenantReportingOverviewDb.mockReset();
   mockedGetTenantReportingOverviewDb.mockResolvedValue({
@@ -864,7 +991,9 @@ describe("GET /tenants/:tenantId/admin/operations", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body).toContain(">Operations<");
     expect(body).toContain("Manual Issue Badge");
+    expect(body).toContain("Learner Records");
     expect(body).toContain('id="manual-issue-form"');
+    expect(body).toContain('href="/tenants/tenant_123/admin/operations/learner-records"');
     expect(body).toContain("Review Queue");
     expect(body).toContain("Issued Badges");
     expect(body).toContain("Badge Status");
@@ -876,6 +1005,84 @@ describe("GET /tenants/:tenantId/admin/operations", () => {
     expect(body).not.toContain('id="issued-badges-filter-form"');
     expect(body).not.toContain("Create Tenant API Key");
     expect(body).not.toContain("Rule Value Lists");
+  });
+});
+
+describe("GET /tenants/:tenantId/admin/operations/learner-records", () => {
+  it("renders a bounded learner-record review page with truthful idle state", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-records",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner Records");
+    expect(body).toContain("Load learner record");
+    expect(body).toContain('name="learnerProfileId"');
+    expect(body).toContain('name="email"');
+    expect(body).toContain("Choose one learner");
+    expect(body).not.toContain("No learner record found");
+  });
+
+  it("renders one learner review with real export and standards-mapping links", async () => {
+    const env = createEnv();
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-records?learnerProfileId=lpr_123",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner overview");
+    expect(body).toContain("Learner One");
+    expect(body).toContain("Institution-verified record");
+    expect(body).toContain("Learner-supplemental record");
+    expect(body).toContain("Historical record");
+    expect(body).toContain("Applied Analytics Badge");
+    expect(body).toContain("Clinical Placement Seminar");
+    expect(body).toContain("Portfolio Reflection");
+    expect(body).toContain("Membership Standing");
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/learner-records/lpr_123/export?profile=native_portable_json"',
+    );
+    expect(body).toContain(
+      'href="/v1/tenants/tenant_123/learner-records/lpr_123/standards-mapping?profile=clr_alignment_json"',
+    );
+    expect(mockedFindLearnerProfileByIdDb).toHaveBeenCalledWith(fakeDb, "tenant_123", "lpr_123");
+  });
+
+  it("renders a truthful unresolved state for missing learner lookups", async () => {
+    const env = createEnv();
+    mockedFindLearnerProfileByIdentityDb.mockResolvedValueOnce(null);
+
+    const response = await app.request(
+      "/tenants/tenant_123/admin/operations/learner-records?email=missing%40example.edu",
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("No learner record found");
+    expect(body).toContain("No learner profile matched this lookup");
   });
 });
 

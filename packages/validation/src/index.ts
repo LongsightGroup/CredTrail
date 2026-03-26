@@ -354,6 +354,42 @@ export const learnerRecordEntryListQuerySchema = z.object({
   status: learnerRecordStatusSchema.optional(),
 });
 
+export const adminLearnerRecordReviewQuerySchema = z
+  .object({
+    learnerProfileId: z
+      .preprocess((input) => {
+        if (typeof input !== "string") {
+          return input;
+        }
+
+        const trimmed = input.trim();
+        return trimmed.length === 0 ? undefined : trimmed;
+      }, resourceIdSchema)
+      .optional(),
+    email: z
+      .preprocess((input) => {
+        if (typeof input !== "string") {
+          return input;
+        }
+
+        const trimmed = input.trim();
+        return trimmed.length === 0 ? undefined : trimmed;
+      }, z.string().email().max(320))
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.learnerProfileId !== undefined && value.email !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["learnerProfileId"],
+        message: "Provide learnerProfileId or email, not both",
+      });
+    }
+    if (value.learnerProfileId === undefined && value.email === undefined) {
+      return;
+    }
+  });
+
 export const learnerRecordExportProfileSchema = z.enum([
   "native_portable_json",
   "clr_alignment_json",
@@ -1586,6 +1622,7 @@ export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
   typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
 >;
 export type LearnerRecordEntryListQuery = z.infer<typeof learnerRecordEntryListQuerySchema>;
+export type AdminLearnerRecordReviewQuery = z.infer<typeof adminLearnerRecordReviewQuerySchema>;
 export type LearnerRecordExportProfile = z.infer<typeof learnerRecordExportProfileSchema>;
 export type LearnerRecordStandardsSupportStatus = z.infer<
   typeof learnerRecordStandardsSupportStatusSchema
@@ -1952,6 +1989,12 @@ export const parseCreateTenantOrgUnitRequest = (input: unknown): CreateTenantOrg
 
 export const parseLearnerRecordEntryListQuery = (input: unknown): LearnerRecordEntryListQuery => {
   return learnerRecordEntryListQuerySchema.parse(input);
+};
+
+export const parseAdminLearnerRecordReviewQuery = (
+  input: unknown,
+): AdminLearnerRecordReviewQuery => {
+  return adminLearnerRecordReviewQuerySchema.parse(input);
 };
 
 export const parseLearnerRecordEntryPathParams = (

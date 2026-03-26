@@ -6,6 +6,7 @@ import { EXECUTIVE_DASHBOARD_CSS } from "./content/executive-dashboard-css";
 import { FOUNDATION_CSS } from "./content/foundation-css";
 import { INSTITUTION_ADMIN_CSS } from "./content/institution-admin-css";
 import { INSTITUTION_ADMIN_JS } from "./content/institution-admin-js";
+import { LEARNER_RECORD_CSS } from "./content/learner-record-css";
 import { LTI_PAGES_CSS } from "./content/lti-pages-css";
 
 type PageAssetKind = "style" | "script";
@@ -56,6 +57,12 @@ const PAGE_ASSET_SOURCES = {
     stem: "institution-admin",
     body: INSTITUTION_ADMIN_JS,
     contentType: "text/javascript; charset=utf-8",
+  },
+  learnerRecordCss: {
+    kind: "style",
+    stem: "learner-record",
+    body: LEARNER_RECORD_CSS,
+    contentType: "text/css; charset=utf-8",
   },
   ltiPagesCss: {
     kind: "style",

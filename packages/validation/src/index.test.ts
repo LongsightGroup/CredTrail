@@ -16,6 +16,7 @@ import {
   parseUpsertTenantSsoSamlConfigurationRequest,
   parseUpsertTenantCanvasGradebookIntegrationRequest,
   parseAdminCanvasOAuthAuthorizeUrlRequest,
+  parseAdminLearnerRecordReviewQuery,
   parseAdminCanvasOAuthExchangeRequest,
   parseTenantCanvasGradebookSnapshotQuery,
   parseCreateBadgeIssuanceRuleRequest,
@@ -734,6 +735,41 @@ describe("learner-record parsers", () => {
     expect(() => {
       parseLearnerRecordStandardsMappingQuery({
         profile: "opaque_vendor_dump",
+      });
+    }).toThrowError();
+  });
+
+  it("parses bounded admin learner-record review queries", () => {
+    expect(
+      parseAdminLearnerRecordReviewQuery({
+        learnerProfileId: "lpr_123",
+      }),
+    ).toEqual({
+      learnerProfileId: "lpr_123",
+    });
+
+    expect(
+      parseAdminLearnerRecordReviewQuery({
+        email: "learner@example.edu",
+      }),
+    ).toEqual({
+      email: "learner@example.edu",
+    });
+
+    expect(parseAdminLearnerRecordReviewQuery({})).toEqual({});
+  });
+
+  it("rejects ambiguous admin learner-record review queries", () => {
+    expect(() => {
+      parseAdminLearnerRecordReviewQuery({
+        learnerProfileId: "lpr_123",
+        email: "learner@example.edu",
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseAdminLearnerRecordReviewQuery({
+        email: "not-an-email",
       });
     }).toThrowError();
   });

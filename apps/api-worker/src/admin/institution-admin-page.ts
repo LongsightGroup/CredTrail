@@ -26,6 +26,7 @@ import {
   renderReporting,
   type ReportingVisualSeriesPoint,
 } from "../reporting/reporting-visuals";
+import type { LearnerRecordPresentationModel } from "../learner-record/learner-record-presentation";
 import { renderPageAssetTags } from "../ui/page-assets";
 import { escapeHtml, formatIsoTimestamp } from "../utils/display-format";
 
@@ -221,6 +222,7 @@ const buildPathWithQuery = (
 type InstitutionAdminView =
   | "home"
   | "operations"
+  | "operationsLearnerRecords"
   | "operationsReviewQueue"
   | "operationsIssuedBadges"
   | "operationsBadgeStatus"
@@ -230,6 +232,22 @@ type InstitutionAdminView =
   | "accessGovernance"
   | "accessApiKeys"
   | "accessOrgUnits";
+
+interface InstitutionAdminLearnerRecordReview {
+  lookup: {
+    learnerProfileId?: string;
+    email?: string;
+  };
+  learnerProfile: {
+    id: string;
+    displayName: string | null;
+    subjectId: string;
+  } | null;
+  presentation: LearnerRecordPresentationModel | null;
+  exportPath: string | null;
+  standardsMappingPath: string | null;
+  lookupState: "idle" | "unresolved" | "loaded";
+}
 
 interface InstitutionAdminPageInput {
   tenant: TenantRecord;
@@ -253,6 +271,7 @@ interface InstitutionAdminPageInput {
   enterpriseAuthPolicy?: TenantAuthPolicyRecord | null;
   enterpriseAuthProviders?: readonly TenantAuthProviderRecord[];
   breakGlassAccounts?: readonly TenantBreakGlassAccountRecord[];
+  learnerRecordReview?: InstitutionAdminLearnerRecordReview;
   switchOrganizationPath?: string | null;
 }
 
@@ -265,6 +284,7 @@ const renderInstitutionAdminPage = (
   const versionsByRuleId = new Map<string, BadgeIssuanceRuleVersionRecord[]>();
   const tenantAdminPath = `/tenants/${encodeURIComponent(input.tenant.id)}/admin`;
   const operationsPath = `${tenantAdminPath}/operations`;
+  const operationsLearnerRecordsPath = `${operationsPath}/learner-records`;
   const operationsReviewQueuePath = `${operationsPath}/review-queue`;
   const operationsIssuedBadgesPath = `${operationsPath}/issued-badges`;
   const operationsBadgeStatusPath = `${operationsPath}/badge-status`;
@@ -283,6 +303,14 @@ const renderInstitutionAdminPage = (
   const scopedRoleCount = String(input.membershipOrgUnitScopes.length);
   const userLabel = input.userEmail ?? input.userId;
   const switchOrganizationPath = input.switchOrganizationPath?.trim() ?? "";
+  const learnerRecordReview = input.learnerRecordReview ?? {
+    lookup: {},
+    learnerProfile: null,
+    presentation: null,
+    exportPath: null,
+    standardsMappingPath: null,
+    lookupState: "idle" as const,
+  };
   const reportingEngagementCounts = input.reportingEngagementCounts ?? null;
   const reportingOverview = input.reportingOverview ?? null;
   const reportingMetrics = input.reportingMetrics ?? [];
@@ -2421,6 +2449,7 @@ const renderInstitutionAdminPage = (
 
         <p class="ct-admin-sidebar__section-label">Operations</p>
         ${sidebarLink(operationsPath, "Overview", view === "operations")}
+        ${sidebarLink(operationsLearnerRecordsPath, "Learner Records", view === "operationsLearnerRecords", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsReviewQueuePath, "Review Queue", view === "operationsReviewQueue", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsIssuedBadgesPath, "Issued Badges", view === "operationsIssuedBadges", "ct-admin-sidebar__link--sub")}
         ${sidebarLink(operationsBadgeStatusPath, "Badge Status", view === "operationsBadgeStatus", "ct-admin-sidebar__link--sub")}
@@ -3381,11 +3410,206 @@ const renderInstitutionAdminPage = (
     <p id="api-key-revoke-status" class="ct-admin__status"></p>
   </article>`;
 
+  const formatLearnerRecordReviewDetailValue = (label: string, value: string): string => {
+    if (label === "Issued" || label === "Revised" || label === "Revoked") {
+      return `${formatIsoTimestamp(value)} UTC`;
+    }
+
+    return value;
+  };
+
+  const renderLearnerRecordReviewItem = (
+    item: NonNullable<InstitutionAdminLearnerRecordReview["presentation"]>["sections"][number]["items"][number],
+  ): string => {
+    const descriptionMarkup =
+      item.description === null ? "" : `<p>${escapeHtml(item.description)}</p>`;
+    const detailsMarkup =
+      item.details.length === 0
+        ? '<p class="ct-admin__meta">No additional record details are attached to this item.</p>'
+        : `<dl class="ct-stack">
+            ${item.details
+              .map((row) => {
+                return `<div>
+                  <dt class="ct-admin__meta">${escapeHtml(row.label)}</dt>
+                  <dd>${escapeHtml(row.value)}</dd>
+                </div>`;
+              })
+              .join("")}
+          </dl>`;
+    const provenanceMarkup = `<dl class="ct-stack">
+      ${item.provenanceDetails
+        .map((row) => {
+          return `<div>
+            <dt class="ct-admin__meta">${escapeHtml(row.label)}</dt>
+            <dd>${escapeHtml(formatLearnerRecordReviewDetailValue(row.label, row.value))}</dd>
+          </div>`;
+        })
+        .join("")}
+    </dl>`;
+    const evidenceMarkup =
+      item.evidenceLinks.length === 0
+        ? ""
+        : `<div class="ct-stack">
+            <p class="ct-admin__meta">Evidence</p>
+            <ul class="ct-stack">
+              ${item.evidenceLinks
+                .map((href) => {
+                  return `<li><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                    href,
+                  )}</a></li>`;
+                })
+                .join("")}
+            </ul>
+          </div>`;
+    const publicBadgeMarkup =
+      item.publicBadgePath === null
+        ? ""
+        : `<a class="ct-admin__cta-link" href="${escapeHtml(item.publicBadgePath)}">Open public badge</a>`;
+
+    return `<article class="ct-admin__metric-card ct-stack">
+      <div class="ct-stack">
+        <p class="ct-admin__meta">${escapeHtml(item.recordTypeLabel)}</p>
+        <h3>${escapeHtml(item.title)}</h3>
+        ${descriptionMarkup}
+        <p class="ct-admin__meta">${escapeHtml(item.trustLabel)} · ${escapeHtml(item.statusLabel)}</p>
+        <p class="ct-admin__meta">${escapeHtml(item.provenanceSummary)}</p>
+      </div>
+      <div class="ct-stack">
+        <section class="ct-stack">
+          <h4>Record details</h4>
+          ${detailsMarkup}
+        </section>
+        <section class="ct-stack">
+          <h4>Provenance</h4>
+          ${provenanceMarkup}
+        </section>
+        ${evidenceMarkup}
+      </div>
+      ${publicBadgeMarkup}
+    </article>`;
+  };
+
+  const renderLearnerRecordReviewSections = (): string => {
+    if (learnerRecordReview.lookupState === "idle") {
+      return `<article class="ct-admin__panel ct-stack">
+        <h2>Choose one learner</h2>
+        <p>Use a learner profile ID or learner email already associated with this tenant to review one unified learner record. This page is intentionally bounded and does not try to be a full learner-search or ingest workspace.</p>
+      </article>`;
+    }
+
+    if (learnerRecordReview.lookupState === "unresolved") {
+      return `<article class="ct-admin__panel ct-stack">
+        <h2>No learner record found</h2>
+        <p class="ct-admin__status" data-tone="warning">No learner profile matched this lookup. Check the learner profile ID or email and try again.</p>
+      </article>`;
+    }
+
+    const presentation = learnerRecordReview.presentation;
+
+    if (presentation === null || learnerRecordReview.learnerProfile === null) {
+      return "";
+    }
+
+    const exportLinksMarkup = `<article class="ct-admin__panel ct-stack">
+      <h2>Export and standards mapping</h2>
+      <p>These links point to the real Phase 27 runtime endpoints for the selected learner. They do not imply transcript exchange or full CLR conformance.</p>
+      <div class="ct-admin__workspace-actions">
+        ${
+          learnerRecordReview.exportPath === null
+            ? ""
+            : `<a class="ct-admin__cta-link" href="${escapeHtml(learnerRecordReview.exportPath)}">Download native portable export</a>`
+        }
+        ${
+          learnerRecordReview.standardsMappingPath === null
+            ? ""
+            : `<a class="ct-admin__cta-link" href="${escapeHtml(learnerRecordReview.standardsMappingPath)}">Open standards mapping</a>`
+        }
+      </div>
+    </article>`;
+
+    return `<section class="ct-stack">
+      <article class="ct-admin__panel ct-stack">
+        <h2>Learner overview</h2>
+        <p>Reviewing <strong>${escapeHtml(
+          learnerRecordReview.learnerProfile.displayName ?? learnerRecordReview.learnerProfile.id,
+        )}</strong>.</p>
+        <p class="ct-admin__meta">Learner profile ID: ${escapeHtml(
+          learnerRecordReview.learnerProfile.id,
+        )}</p>
+        <p class="ct-admin__meta">Subject ID: ${escapeHtml(
+          learnerRecordReview.learnerProfile.subjectId,
+        )}</p>
+        <section class="ct-admin__metric-grid">
+          <article class="ct-admin__metric-card">
+            <p class="ct-admin__meta">Total items</p>
+            <p class="ct-admin__metric-value">${presentation.summary.total}</p>
+          </article>
+          <article class="ct-admin__metric-card">
+            <p class="ct-admin__meta">Issuer verified</p>
+            <p class="ct-admin__metric-value">${presentation.summary.issuerVerified}</p>
+          </article>
+          <article class="ct-admin__metric-card">
+            <p class="ct-admin__meta">Learner supplemental</p>
+            <p class="ct-admin__metric-value">${presentation.summary.supplemental}</p>
+          </article>
+          <article class="ct-admin__metric-card">
+            <p class="ct-admin__meta">Historical</p>
+            <p class="ct-admin__metric-value">${presentation.summary.historical}</p>
+          </article>
+        </section>
+      </article>
+      ${exportLinksMarkup}
+      ${presentation.sections
+        .map((section) => {
+          return `<article class="ct-admin__panel ct-stack">
+            <h2>${escapeHtml(section.title)}</h2>
+            <p>${escapeHtml(section.description)}</p>
+            <p class="ct-admin__meta">${escapeHtml(section.itemCountLabel)}</p>
+            <section class="ct-admin__metric-grid">
+              ${section.items.map((item) => renderLearnerRecordReviewItem(item)).join("")}
+            </section>
+          </article>`;
+        })
+        .join("")}
+    </section>`;
+  };
+
+  const learnerRecordReviewPanelMarkup = `<article class="ct-admin__panel ct-stack">
+    <h2>Learner record review</h2>
+    <p>Open one learner’s unified record by learner profile ID or learner email already associated with this tenant. This page is review-only and intentionally stops short of broader ingest or transcript workflow claims.</p>
+    <form method="get" action="${escapeHtml(operationsLearnerRecordsPath)}" class="ct-admin__form ct-stack">
+      <label>
+        Learner profile ID
+        <input
+          name="learnerProfileId"
+          type="text"
+          value="${escapeHtml(learnerRecordReview.lookup.learnerProfileId ?? "")}"
+          placeholder="lpr_123"
+        />
+      </label>
+      <label>
+        Learner email
+        <input
+          name="email"
+          type="email"
+          value="${escapeHtml(learnerRecordReview.lookup.email ?? "")}"
+          placeholder="learner@example.edu"
+        />
+      </label>
+      <div class="ct-admin__workspace-actions">
+        <button type="submit">Load learner record</button>
+        <a class="ct-admin__cta-link" href="${escapeHtml(operationsLearnerRecordsPath)}">Clear lookup</a>
+      </div>
+    </form>
+  </article>`;
+
   const pageTitle =
     view === "home"
       ? `Institution Admin · ${input.tenant.displayName}`
       : view === "operations"
         ? `Operations · Institution Admin · ${input.tenant.displayName}`
+        : view === "operationsLearnerRecords"
+          ? `Learner Records · Institution Admin · ${input.tenant.displayName}`
         : view === "operationsReviewQueue"
           ? `Rule Review Queue · Institution Admin · ${input.tenant.displayName}`
           : view === "operationsIssuedBadges"
@@ -3420,11 +3644,20 @@ const renderInstitutionAdminPage = (
       : view === "operations"
         ? `${renderPageHeader(
             "Operations",
-            "Issue badges here, then use dedicated pages for review queue, issued badges, and badge status.",
+            "Issue badges here, then use dedicated pages for learner records, review queue, issued badges, and badge status.",
           )}
           <section class="ct-admin ct-stack">
             ${manualIssuePanelMarkup}
           </section>`
+        : view === "operationsLearnerRecords"
+          ? `${renderPageHeader(
+              "Learner Records",
+              "Review one learner’s unified record without overloading operations with a broader learner-search or ingest surface.",
+            )}
+            <section class="ct-admin ct-stack">
+              ${learnerRecordReviewPanelMarkup}
+              ${renderLearnerRecordReviewSections()}
+            </section>`
         : view === "operationsReviewQueue"
           ? `${renderPageHeader(
               "Rule Review Queue",
@@ -3577,6 +3810,10 @@ export const institutionAdminDashboardPage = (input: InstitutionAdminPageInput):
 
 export const institutionAdminOperationsPage = (input: InstitutionAdminPageInput): string => {
   return renderInstitutionAdminPage(input, "operations");
+};
+
+export const institutionAdminLearnerRecordsPage = (input: InstitutionAdminPageInput): string => {
+  return renderInstitutionAdminPage(input, "operationsLearnerRecords");
 };
 
 export const institutionAdminOperationsReviewQueuePage = (

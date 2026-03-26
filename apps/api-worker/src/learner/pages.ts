@@ -52,6 +52,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
     didNotice: LearnerDidSettingsNotice | null,
     claimNotice: string | null,
     switchOrganizationPath?: string | null,
+    learnerRecordPath?: string | null,
   ): string => {
     const normalizedClaimNotice = normalizeLearnerClaimStatusNotice(claimNotice);
     const totalBadges = badges.length;
@@ -124,6 +125,14 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
         ? ""
         : `<p class="learner-dashboard__hero-note learner-dashboard__hero-note--switch">
             <a class="learner-dashboard__switch-link" href="${escapeHtml(switchOrganizationPath)}">Switch organization</a>
+          </p>`;
+    const learnerRecordMarkup =
+      learnerRecordPath === undefined ||
+      learnerRecordPath === null ||
+      learnerRecordPath.trim().length === 0
+        ? ""
+        : `<p class="learner-dashboard__hero-note learner-dashboard__hero-note--record">
+            <a class="learner-dashboard__record-link" href="${escapeHtml(learnerRecordPath)}">Open full learner record</a>
           </p>`;
     const didSettingsSection = `<section class="learner-dashboard__profile" aria-labelledby="learner-profile-settings">
       <div class="learner-dashboard__section-heading learner-dashboard__section-heading--compact">
@@ -338,6 +347,10 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           margin-top: 0.95rem;
         }
 
+        .learner-dashboard__hero-note--record {
+          margin-top: 0.95rem;
+        }
+
         .learner-dashboard__hero-chips {
           display: flex;
           flex-wrap: wrap;
@@ -370,7 +383,21 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
           text-decoration: none;
         }
 
+        .learner-dashboard__record-link {
+          display: inline-flex;
+          align-items: center;
+          min-height: 2.4rem;
+          padding: 0.2rem 0;
+          color: #f8fcff;
+          font-weight: 700;
+          text-decoration: none;
+        }
+
         .learner-dashboard__switch-link:hover {
+          text-decoration: underline;
+        }
+
+        .learner-dashboard__record-link:hover {
           text-decoration: underline;
         }
 
@@ -771,6 +798,7 @@ export const createLearnerDashboardPage = (input: CreateLearnerDashboardPageInpu
               <li class="learner-dashboard__hero-chip">Public verification ready</li>
               <li class="learner-dashboard__hero-chip">${learnerDid === null ? "Optional DID available" : "Learner DID configured"}</li>
             </ul>
+            ${learnerRecordMarkup}
             ${switchOrganizationMarkup}
           </div>
           <div class="learner-dashboard__hero-card">

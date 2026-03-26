@@ -28,6 +28,8 @@ import type { AppBindings, AppContext, AppEnv } from "../app";
 import type { AuthenticatedPrincipal, RequestedTenantContext } from "../auth/auth-context";
 import { buildOrganizationsPath } from "../auth/tenant-context-selection";
 import type { LearnerDashboardBadge } from "../learner/pages";
+import { loadLearnerRecordExportBundle } from "../learner-record/learner-record-export";
+import { createLearnerRecordPresentation } from "../learner-record/learner-record-presentation";
 
 interface RegisterLearnerRoutesInput<DidNotice> {
   app: Hono<AppEnv>;
@@ -58,6 +60,14 @@ interface RegisterLearnerRoutesInput<DidNotice> {
     didNotice: DidNotice,
     claimNotice: string | null,
     switchOrganizationPath?: string | null,
+    learnerRecordPath?: string | null,
+  ) => string;
+  learnerRecordPage: (
+    tenantId: string,
+    presentation: ReturnType<typeof createLearnerRecordPresentation>,
+    options?: {
+      switchOrganizationPath?: string | null;
+    },
   ) => string;
 }
 
@@ -102,6 +112,7 @@ export const registerLearnerRoutes = <DidNotice>(
     LEARNER_IDENTITY_LINK_TTL_SECONDS,
     learnerDidSettingsNoticeFromQuery,
     learnerDashboardPage,
+    learnerRecordPage,
   } = input;
 
   app.get("/tenants/:tenantId/learner/dashboard", async (c) => {
@@ -164,6 +175,7 @@ export const registerLearnerRoutes = <DidNotice>(
       accessibleTenantContexts.length > 1
         ? buildOrganizationsPath(`${requestUrl.pathname}${requestUrl.search}`)
         : null;
+    const learnerRecordPath = `/tenants/${encodeURIComponent(pathParams.tenantId)}/learner/record`;
 
     c.header("Cache-Control", "no-store");
     return c.html(
@@ -175,6 +187,68 @@ export const registerLearnerRoutes = <DidNotice>(
         didNotice,
         claimNotice,
         switchOrganizationPath,
+        learnerRecordPath,
+      ),
+    );
+  });
+
+  app.get("/tenants/:tenantId/learner/record", async (c) => {
+    const pathParams = parseTenantPathParams(c.req.param());
+    const roleCheck = await requireTenantRole(c, pathParams.tenantId, TENANT_MEMBER_ROLES);
+
+    if (roleCheck instanceof Response) {
+      return roleCheck;
+    }
+
+    const db = resolveDatabase(c.env);
+    const user = await findUserById(db, roleCheck.principal.userId);
+
+    if (user === null) {
+      return c.json(
+        {
+          error: "Authenticated user not found",
+        },
+        404,
+      );
+    }
+
+    const learnerProfile = await resolveLearnerProfileForIdentity(db, {
+      tenantId: pathParams.tenantId,
+      identityType: "email",
+      identityValue: user.email,
+    });
+    const bundle = await loadLearnerRecordExportBundle(db, {
+      tenantId: pathParams.tenantId,
+      learnerProfileId: learnerProfile.id,
+    });
+
+    if (bundle === null) {
+      return c.json(
+        {
+          error: "Learner profile not found",
+        },
+        404,
+      );
+    }
+
+    const accessibleTenantContexts = await listAccessibleTenantContextsForUser(
+      db,
+      roleCheck.principal.userId,
+    );
+    const requestUrl = new URL(c.req.url);
+    const switchOrganizationPath =
+      accessibleTenantContexts.length > 1
+        ? buildOrganizationsPath(`${requestUrl.pathname}${requestUrl.search}`)
+        : null;
+
+    c.header("Cache-Control", "no-store");
+    return c.html(
+      learnerRecordPage(
+        pathParams.tenantId,
+        createLearnerRecordPresentation(bundle),
+        {
+          switchOrganizationPath,
+        },
       ),
     );
   });
