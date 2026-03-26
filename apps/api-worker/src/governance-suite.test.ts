@@ -47,6 +47,34 @@ describe("admin learner-record review route", () => {
     expect(mockedFindLearnerProfileById).toHaveBeenCalledWith(fakeDb, "tenant_123", "lpr_123");
   });
 
+  it("can verify the canonical seeded-demo learner-record review route for admins", async () => {
+    const env = createEnv();
+    const seededDemo = getSeededDemoLearnerRecordFixture();
+
+    mockedFindTenantMembership.mockResolvedValue(sampleTenantMembership({ role: "admin" }));
+    mockedFindLearnerProfileById.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedListLearnerRecordAssertionExports.mockResolvedValueOnce([...seededDemo.assertionExports]);
+    mockedListLearnerRecordEntries.mockResolvedValueOnce([...seededDemo.recordEntries]);
+
+    const response = await app.request(
+      seededDemo.routeFamily.adminReview,
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner Records");
+    expect(body).toContain("Portfolio Reflection");
+    expect(body).toContain("Leadership Society Membership");
+    expect(body).toContain(`href="${seededDemo.routeFamily.nativeExport}"`);
+    expect(body).toContain(`href="${seededDemo.routeFamily.standardsMapping}"`);
+  });
+
   it("rejects ambiguous learner-record review queries", async () => {
     const env = createEnv();
 
@@ -267,6 +295,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { getSeededDemoLearnerRecordFixture } from "./learner-record/seeded-demo-learner-record-fixture";
 import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-reporting-fixture";
 
 interface ErrorResponse {

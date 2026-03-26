@@ -120,6 +120,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { getSeededDemoLearnerRecordFixture } from "./learner-record/seeded-demo-learner-record-fixture";
 import { getSeededDemoReportingRouteFixture } from "./reporting/seeded-demo-reporting-fixture";
 import { INSTITUTION_ADMIN_CSS } from "./ui/page-assets/content/institution-admin-css";
 import { INSTITUTION_ADMIN_JS } from "./ui/page-assets/content/institution-admin-js";
@@ -1074,6 +1075,34 @@ describe("GET /tenants/:tenantId/admin/operations/learner-records", () => {
       'href="/v1/tenants/tenant_123/learner-records/lpr_123/standards-mapping?profile=clr_alignment_json"',
     );
     expect(mockedFindLearnerProfileByIdDb).toHaveBeenCalledWith(fakeDb, "tenant_123", "lpr_123");
+  });
+
+  it("can verify a seeded-demo learner review on the normal admin operations route", async () => {
+    const seededDemo = getSeededDemoLearnerRecordFixture();
+
+    mockedFindLearnerProfileByIdDb.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedListLearnerRecordAssertionExportsDb.mockResolvedValueOnce([...seededDemo.assertionExports]);
+    mockedListLearnerRecordEntriesDb.mockResolvedValueOnce([...seededDemo.recordEntries]);
+
+    const response = await app.request(
+      seededDemo.routeFamily.adminReview,
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Learner overview");
+    expect(body).toContain("Applied Analytics Badge");
+    expect(body).toContain("Clinical Placement Seminar");
+    expect(body).toContain("Portfolio Reflection");
+    expect(body).toContain("Leadership Society Membership");
+    expect(body).toContain(`href="${seededDemo.routeFamily.nativeExport}"`);
+    expect(body).toContain(`href="${seededDemo.routeFamily.standardsMapping}"`);
   });
 
   it("renders a truthful unresolved state for missing learner lookups", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LearnerRecordPresentationModel } from "../learner-record/learner-record-presentation";
+import { getSeededDemoLearnerRecordFixture } from "../learner-record/seeded-demo-learner-record-fixture";
 import { pageAssetPath } from "../ui/page-assets";
 import { createLearnerRecordPage } from "./learner-record-page";
 
@@ -10,81 +11,7 @@ const learnerRecordPage = createLearnerRecordPage({
 });
 
 const samplePresentation = (): LearnerRecordPresentationModel => {
-  return {
-    tenantId: "tenant_123",
-    learnerProfileId: "lpr_123",
-    learnerDisplayName: "Learner One",
-    learnerSubjectId: "urn:credtrail:learner:tenant_123:lpr_123",
-    generatedAt: "2026-03-26T12:00:00.000Z",
-    summary: {
-      total: 3,
-      issuerVerified: 2,
-      supplemental: 1,
-      active: 2,
-      historical: 1,
-      badgeAssertions: 1,
-      recordEntries: 2,
-    },
-    sections: [
-      {
-        key: "issuerVerifiedActive",
-        title: "Institution-verified record",
-        description: "Verified entries.",
-        itemCountLabel: "2 items",
-        items: [
-          {
-            id: "assertion_123",
-            kind: "badge_assertion",
-            recordType: "badge",
-            recordTypeLabel: "Badge",
-            title: "Applied Analytics Badge",
-            description: "Awarded for applied analytics work.",
-            trustLevel: "issuer_verified",
-            trustLabel: "Issuer verified",
-            status: "active",
-            statusLabel: "Active",
-            editable: false,
-            publicBadgePath: "/badges/public_assertion_123",
-            evidenceLinks: [],
-            details: [],
-            provenanceSummary: "CredTrail University · Badge assertion",
-            provenanceDetails: [
-              {
-                label: "Issued",
-                value: "2026-03-24T15:00:00.000Z",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        key: "supplementalActive",
-        title: "Learner-supplemental record",
-        description: "Supplemental entries.",
-        itemCountLabel: "1 item",
-        items: [
-          {
-            id: "entry_123",
-            kind: "record_entry",
-            recordType: "supplemental_artifact",
-            recordTypeLabel: "Supplemental artifact",
-            title: "Portfolio Reflection",
-            description: "Learner-supplied capstone reflection.",
-            trustLevel: "learner_supplemental",
-            trustLabel: "Learner supplemental",
-            status: "active",
-            statusLabel: "Active",
-            editable: true,
-            publicBadgePath: null,
-            evidenceLinks: ["https://portfolio.example.edu/learner-one"],
-            details: [],
-            provenanceSummary: "Learner self report · Learner self-reported",
-            provenanceDetails: [],
-          },
-        ],
-      },
-    ],
-  };
+  return getSeededDemoLearnerRecordFixture().presentation;
 };
 
 describe("createLearnerRecordPage", () => {
@@ -96,9 +23,12 @@ describe("createLearnerRecordPage", () => {
     expect(html).toContain("Unified learner record");
     expect(html).toContain("Institution-verified record");
     expect(html).toContain("Learner-supplemental record");
+    expect(html).toContain("Historical record");
     expect(html).toContain("Applied Analytics Badge");
+    expect(html).toContain("Clinical Placement Seminar");
     expect(html).toContain("Portfolio Reflection");
-    expect(html).toContain("/badges/public_assertion_123");
+    expect(html).toContain("Leadership Society Membership");
+    expect(html).toContain("/badges/public_assertion_456");
     expect(html).toContain("Return to learner dashboard");
     expect(html).toContain("Switch organization");
     expect(html).not.toContain("standards mapping");

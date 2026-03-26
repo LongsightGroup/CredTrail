@@ -63,6 +63,7 @@ import type {
 } from "@credtrail/db";
 
 import { app } from "../index";
+import { getSeededDemoLearnerRecordFixture } from "../learner-record/seeded-demo-learner-record-fixture";
 
 const createEnv = () => {
   return {
@@ -211,6 +212,34 @@ describe("learner-record export routes", () => {
     });
   });
 
+  it("can verify the seeded-demo learner-record export bundle on the normal route", async () => {
+    const seededDemo = getSeededDemoLearnerRecordFixture();
+    mockedFindLearnerProfileById.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedListLearnerRecordAssertionExports.mockResolvedValueOnce([...seededDemo.assertionExports]);
+    mockedListLearnerRecordEntries.mockResolvedValueOnce([...seededDemo.recordEntries]);
+
+    const response = await app.request(
+      seededDemo.routeFamily.nativeExport,
+      {
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual(
+      expect.objectContaining({
+        profile: "native_portable_json",
+        learnerProfileId: seededDemo.learnerProfileId,
+        counts: seededDemo.nativePortableExport.counts,
+      }),
+    );
+    expect(Array.isArray(body.items)).toBe(true);
+  });
+
   it("returns standards mapping output with native, mapped, and unavailable support states", async () => {
     const response = await app.request(
       "/v1/tenants/tenant_123/learner-records/lpr_123/standards-mapping",
@@ -246,6 +275,28 @@ describe("learner-record export routes", () => {
       }),
     );
     expect(Array.isArray((ob3 as { fields?: unknown[] } | undefined)?.fields)).toBe(true);
+  });
+
+  it("can verify the seeded-demo standards-mapping output on the normal route", async () => {
+    const seededDemo = getSeededDemoLearnerRecordFixture();
+    mockedFindLearnerProfileById.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedListLearnerRecordAssertionExports.mockResolvedValueOnce([...seededDemo.assertionExports]);
+    mockedListLearnerRecordEntries.mockResolvedValueOnce([...seededDemo.recordEntries]);
+
+    const response = await app.request(
+      seededDemo.routeFamily.standardsMapping,
+      {
+        headers: {
+          cookie: "better-auth.session_token=better-auth-test",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.json<Record<string, unknown>>();
+
+    expect(response.status).toBe(200);
+    expect(body.profile).toBe("clr_alignment_json");
+    expect(body.itemCounts).toEqual(seededDemo.standardsMappingResponse.itemCounts);
   });
 
   it("rejects non-admin access to learner-record export routes", async () => {

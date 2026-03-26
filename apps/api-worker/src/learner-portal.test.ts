@@ -81,6 +81,7 @@ import {
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
+import { getSeededDemoLearnerRecordFixture } from "./learner-record/seeded-demo-learner-record-fixture";
 
 interface ErrorResponse {
   error: string;
@@ -773,6 +774,36 @@ describe("GET /tenants/:tenantId/learner/record", () => {
       identityValue: "learner@example.edu",
     });
     expect(mockedFindLearnerProfileById).toHaveBeenCalledWith(fakeDb, "tenant_123", "lpr_123");
+  });
+
+  it("can verify a seeded-demo learner-record slice on the normal learner route from the canonical fixture", async () => {
+    const seededDemo = getSeededDemoLearnerRecordFixture();
+
+    mockedResolveLearnerProfileForIdentity.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedFindLearnerProfileById.mockResolvedValueOnce(seededDemo.learnerProfile);
+    mockedListLearnerRecordAssertionExports.mockResolvedValueOnce([...seededDemo.assertionExports]);
+    mockedListLearnerRecordEntries.mockResolvedValueOnce([...seededDemo.recordEntries]);
+
+    const response = await app.request(
+      seededDemo.routeFamily.learnerRecord,
+      {
+        headers: {
+          Cookie: "better-auth.session_token=session-token",
+        },
+      },
+      createEnv(),
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Unified learner record");
+    expect(body).toContain("Applied Analytics Badge");
+    expect(body).toContain("Clinical Placement Seminar");
+    expect(body).toContain("Portfolio Reflection");
+    expect(body).toContain("Leadership Society Membership");
+    expect(body).toContain("Issuer verified");
+    expect(body).toContain("Learner supplemental");
+    expect(body).not.toContain("Download export");
   });
 });
 
