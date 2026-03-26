@@ -366,6 +366,27 @@ describe("GET /", () => {
     expect(listResponse.status).toBe(401);
     expect(createResponse.status).toBe(401);
   });
+
+  it("registers the learner-record export routes in the composition root", async () => {
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders({
+      betterAuthPrincipal: null,
+      betterAuthRequestedTenant: null,
+    });
+
+    const exportResponse = await isolatedApp.request(
+      "/v1/tenants/tenant_123/learner-records/lpr_123/export",
+      undefined,
+      createEnv(),
+    );
+    const mappingResponse = await isolatedApp.request(
+      "/v1/tenants/tenant_123/learner-records/lpr_123/standards-mapping",
+      undefined,
+      createEnv(),
+    );
+
+    expect(exportResponse.status).toBe(401);
+    expect(mappingResponse.status).toBe(401);
+  });
 });
 
 describe("PUT /v1/admin/tenants/:tenantId", () => {

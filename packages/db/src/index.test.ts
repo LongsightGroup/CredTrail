@@ -14,6 +14,7 @@ import {
   createLearnerProfile,
   findActiveTenantBreakGlassAccountByEmail,
   listLearnerRecordEntries,
+  listLearnerRecordAssertionExports,
   findTenantAuthPolicy,
   listAccessibleTenantContextsForUser,
   listTenantAuthProviders,
@@ -164,6 +165,33 @@ interface FakeTenantRow {
   is_active: number;
 }
 
+interface FakeBadgeTemplateRow {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description: string | null;
+  criteria_uri: string | null;
+  image_uri: string | null;
+}
+
+interface FakeAssertionRow {
+  id: string;
+  tenant_id: string;
+  public_id: string | null;
+  learner_profile_id: string | null;
+  badge_template_id: string;
+  recipient_identity: string;
+  recipient_identity_type: "email" | "email_sha256" | "did" | "url";
+  vc_r2_key: string;
+  status_list_index: number | null;
+  idempotency_key: string;
+  issued_at: string;
+  issued_by_user_id: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface FakeMembershipRow {
   tenant_id: string;
   user_id: string;
@@ -257,6 +285,18 @@ class FakeStatement {
       normalizedSql.includes("learner_profile_id = ?")
     ) {
       const rows = this.selectLearnerIdentitiesByProfile();
+      return Promise.resolve({
+        ...this.successResult(),
+        results: rows as T[],
+      });
+    }
+
+    if (
+      normalizedSql.includes("FROM assertions") &&
+      normalizedSql.includes("badge_templates.criteria_uri AS badgeCriteriaUri") &&
+      normalizedSql.includes("tenants.display_name AS issuerName")
+    ) {
+      const rows = this.selectLearnerRecordAssertionExports();
       return Promise.resolve({
         ...this.successResult(),
         results: rows as T[],
@@ -803,6 +843,82 @@ class FakeStatement {
       .map((row) => this.mapLearnerRecordEntryRow(row));
   }
 
+  private selectLearnerRecordAssertionExports(): Record<string, unknown>[] {
+    const [tenantId, learnerProfileId, ...emailAliases] = this.boundParams;
+
+    if (typeof tenantId !== "string" || typeof learnerProfileId !== "string") {
+      throw new Error("Invalid bound parameters for learner-record assertion export list");
+    }
+
+    return this.db.assertions
+      .filter((candidate) => {
+        if (candidate.tenant_id !== tenantId) {
+          return false;
+        }
+
+        if (candidate.learner_profile_id === learnerProfileId) {
+          return true;
+        }
+
+        if (
+          candidate.recipient_identity_type === "email" &&
+          emailAliases.some(
+            (alias) =>
+              typeof alias === "string" &&
+              candidate.recipient_identity.toLowerCase() === alias.toLowerCase(),
+          )
+        ) {
+          return true;
+        }
+
+        return false;
+      })
+      .sort((left, right) => {
+        const issuedComparison = right.issued_at.localeCompare(left.issued_at);
+
+        if (issuedComparison !== 0) {
+          return issuedComparison;
+        }
+
+        return right.id.localeCompare(left.id);
+      })
+      .map((row) => {
+        const badgeTemplate = this.db.badgeTemplates.find((candidate) => {
+          return (
+            candidate.tenant_id === row.tenant_id && candidate.id === row.badge_template_id
+          );
+        });
+        const tenant = this.db.tenants.find((candidate) => candidate.id === row.tenant_id);
+
+        if (badgeTemplate === undefined || tenant === undefined) {
+          throw new Error("Missing tenant or badge template for learner-record assertion export");
+        }
+
+        return {
+          assertionId: row.id,
+          assertionPublicId: row.public_id,
+          tenantId: row.tenant_id,
+          learnerProfileId: row.learner_profile_id,
+          badgeTemplateId: row.badge_template_id,
+          badgeTitle: badgeTemplate.title,
+          badgeDescription: badgeTemplate.description,
+          badgeCriteriaUri: badgeTemplate.criteria_uri,
+          badgeImageUri: badgeTemplate.image_uri,
+          recipientIdentity: row.recipient_identity,
+          recipientIdentityType: row.recipient_identity_type,
+          vcR2Key: row.vc_r2_key,
+          statusListIndex: row.status_list_index,
+          idempotencyKey: row.idempotency_key,
+          issuedAt: row.issued_at,
+          issuedByUserId: row.issued_by_user_id,
+          revokedAt: row.revoked_at,
+          issuerName: tenant.display_name,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        };
+      });
+  }
+
   private isLearnerIdentityType(value: unknown): value is LearnerIdentityType {
     return (
       value === "email" ||
@@ -884,6 +1000,9 @@ class FakeSqlDatabase {
   learnerProfiles: FakeLearnerProfileRow[] = [];
   learnerIdentities: FakeLearnerIdentityRow[] = [];
   learnerRecordEntries: FakeLearnerRecordEntryRow[] = [];
+  tenants: FakeTenantRow[] = [];
+  badgeTemplates: FakeBadgeTemplateRow[] = [];
+  assertions: FakeAssertionRow[] = [];
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(this, sql);
@@ -2255,6 +2374,115 @@ describe("learner-record entries", () => {
       revokedAt: "2026-03-25T15:00:00.000Z",
       detailsJson: '{"reviewedBy":"Academic Affairs"}',
       evidenceLinksJson: '["https://credtrail.example.edu/reviews/instructional-design"]',
+    });
+  });
+});
+
+describe("learner-record exports", () => {
+  it("lists badge assertion exports for a learner profile with email alias fallback", async () => {
+    const db = createFakeDb();
+    const fakeDb = db as unknown as FakeSqlDatabase;
+    const profile = await createLearnerProfile(db, {
+      tenantId: "tenant_umich",
+      primaryIdentityType: "email",
+      primaryIdentityValue: "student@umich.edu",
+      primaryIdentityVerified: true,
+    });
+
+    await addLearnerIdentityAlias(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+      identityType: "email",
+      identityValue: "student.alias@umich.edu",
+      isVerified: true,
+    });
+
+    fakeDb.tenants.push({
+      id: "tenant_umich",
+      slug: "umich",
+      display_name: "University of Michigan",
+      plan_tier: "institution",
+      is_active: 1,
+    });
+    fakeDb.badgeTemplates.push({
+      id: "badge_template_001",
+      tenant_id: "tenant_umich",
+      title: "Clinical Hours Badge",
+      description: "Awarded for completing clinical hours.",
+      criteria_uri: "https://credtrail.example.edu/badges/clinical-hours/criteria",
+      image_uri: "https://credtrail.example.edu/badges/clinical-hours/image.png",
+    });
+    fakeDb.assertions.push(
+      {
+        id: "assertion_primary",
+        tenant_id: "tenant_umich",
+        public_id: "public_primary",
+        learner_profile_id: profile.id,
+        badge_template_id: "badge_template_001",
+        recipient_identity: "student@umich.edu",
+        recipient_identity_type: "email",
+        vc_r2_key: "tenants/tenant_umich/assertions/assertion_primary.jsonld",
+        status_list_index: 1,
+        idempotency_key: "idem_primary",
+        issued_at: "2026-03-24T15:00:00.000Z",
+        issued_by_user_id: "usr_admin",
+        revoked_at: null,
+        created_at: "2026-03-24T15:00:00.000Z",
+        updated_at: "2026-03-24T15:00:00.000Z",
+      },
+      {
+        id: "assertion_alias",
+        tenant_id: "tenant_umich",
+        public_id: "public_alias",
+        learner_profile_id: null,
+        badge_template_id: "badge_template_001",
+        recipient_identity: "student.alias@umich.edu",
+        recipient_identity_type: "email",
+        vc_r2_key: "tenants/tenant_umich/assertions/assertion_alias.jsonld",
+        status_list_index: 2,
+        idempotency_key: "idem_alias",
+        issued_at: "2026-03-25T15:00:00.000Z",
+        issued_by_user_id: "usr_admin",
+        revoked_at: null,
+        created_at: "2026-03-25T15:00:00.000Z",
+        updated_at: "2026-03-25T15:00:00.000Z",
+      },
+      {
+        id: "assertion_other",
+        tenant_id: "tenant_umich",
+        public_id: "public_other",
+        learner_profile_id: null,
+        badge_template_id: "badge_template_001",
+        recipient_identity: "someone-else@umich.edu",
+        recipient_identity_type: "email",
+        vc_r2_key: "tenants/tenant_umich/assertions/assertion_other.jsonld",
+        status_list_index: 3,
+        idempotency_key: "idem_other",
+        issued_at: "2026-03-26T15:00:00.000Z",
+        issued_by_user_id: "usr_admin",
+        revoked_at: null,
+        created_at: "2026-03-26T15:00:00.000Z",
+        updated_at: "2026-03-26T15:00:00.000Z",
+      },
+    );
+
+    const exported = await listLearnerRecordAssertionExports(db, {
+      tenantId: "tenant_umich",
+      learnerProfileId: profile.id,
+    });
+
+    expect(exported.map((row) => row.assertionId)).toEqual([
+      "assertion_alias",
+      "assertion_primary",
+    ]);
+    expect(exported[0]).toMatchObject({
+      tenantId: "tenant_umich",
+      learnerProfileId: null,
+      badgeTemplateId: "badge_template_001",
+      badgeTitle: "Clinical Hours Badge",
+      badgeCriteriaUri: "https://credtrail.example.edu/badges/clinical-hours/criteria",
+      issuerName: "University of Michigan",
+      recipientIdentity: "student.alias@umich.edu",
     });
   });
 });

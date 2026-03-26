@@ -354,6 +354,29 @@ export const learnerRecordEntryListQuerySchema = z.object({
   status: learnerRecordStatusSchema.optional(),
 });
 
+export const learnerRecordExportProfileSchema = z.enum([
+  "native_portable_json",
+  "clr_alignment_json",
+]);
+
+export const learnerRecordStandardsSupportStatusSchema = z.enum([
+  "native",
+  "mapped",
+  "unavailable",
+]);
+
+export const learnerRecordExportPathParamsSchema = tenantPathParamsSchema.extend({
+  learnerProfileId: resourceIdSchema,
+});
+
+export const learnerRecordExportQuerySchema = z.object({
+  profile: learnerRecordExportProfileSchema.default("native_portable_json"),
+});
+
+export const learnerRecordStandardsMappingQuerySchema = z.object({
+  profile: learnerRecordExportProfileSchema.default("clr_alignment_json"),
+});
+
 export const tenantAssertionListQuerySchema = z.object({
   badgeTemplateId: resourceIdSchema.optional(),
   recipientQuery: z.string().trim().min(1).max(320).optional(),
@@ -1558,10 +1581,19 @@ export type TenantUserDelegatedGrantPathParams = z.infer<
 export type TenantApiKeyPathParams = z.infer<typeof tenantApiKeyPathParamsSchema>;
 export type TenantAuthProviderPathParams = z.infer<typeof tenantAuthProviderPathParamsSchema>;
 export type LearnerRecordEntryPathParams = z.infer<typeof learnerRecordEntryPathParamsSchema>;
+export type LearnerRecordExportPathParams = z.infer<typeof learnerRecordExportPathParamsSchema>;
 export type TenantDedicatedDbProvisioningRequestPathParams = z.infer<
   typeof tenantDedicatedDbProvisioningRequestPathParamsSchema
 >;
 export type LearnerRecordEntryListQuery = z.infer<typeof learnerRecordEntryListQuerySchema>;
+export type LearnerRecordExportProfile = z.infer<typeof learnerRecordExportProfileSchema>;
+export type LearnerRecordStandardsSupportStatus = z.infer<
+  typeof learnerRecordStandardsSupportStatusSchema
+>;
+export type LearnerRecordExportQuery = z.infer<typeof learnerRecordExportQuerySchema>;
+export type LearnerRecordStandardsMappingQuery = z.infer<
+  typeof learnerRecordStandardsMappingQuerySchema
+>;
 export type LearnerRecordProvenance = z.infer<typeof learnerRecordProvenanceSchema>;
 export type CreateLearnerRecordEntryRequest = z.infer<typeof createLearnerRecordEntryRequestSchema>;
 export type PatchLearnerRecordEntryRequest = z.infer<typeof patchLearnerRecordEntryRequestSchema>;
@@ -1928,6 +1960,12 @@ export const parseLearnerRecordEntryPathParams = (
   return learnerRecordEntryPathParamsSchema.parse(input);
 };
 
+export const parseLearnerRecordExportPathParams = (
+  input: unknown,
+): LearnerRecordExportPathParams => {
+  return learnerRecordExportPathParamsSchema.parse(input);
+};
+
 export const parseCreateLearnerRecordEntryRequest = (
   input: unknown,
 ): CreateLearnerRecordEntryRequest => {
@@ -1938,6 +1976,16 @@ export const parsePatchLearnerRecordEntryRequest = (
   input: unknown,
 ): PatchLearnerRecordEntryRequest => {
   return patchLearnerRecordEntryRequestSchema.parse(input);
+};
+
+export const parseLearnerRecordExportQuery = (input: unknown): LearnerRecordExportQuery => {
+  return learnerRecordExportQuerySchema.parse(input);
+};
+
+export const parseLearnerRecordStandardsMappingQuery = (
+  input: unknown,
+): LearnerRecordStandardsMappingQuery => {
+  return learnerRecordStandardsMappingQuerySchema.parse(input);
 };
 
 export const parseUpsertTenantMembershipOrgUnitScopeRequest = (

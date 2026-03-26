@@ -1420,6 +1420,34 @@ export interface AssertionRecord {
   updatedAt: string;
 }
 
+export interface LearnerRecordAssertionExportRecord {
+  assertionId: string;
+  assertionPublicId: string | null;
+  tenantId: string;
+  learnerProfileId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeDescription: string | null;
+  badgeCriteriaUri: string | null;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
+  vcR2Key: string;
+  statusListIndex: number | null;
+  idempotencyKey: string;
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  issuerName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListLearnerRecordAssertionExportsInput {
+  tenantId: string;
+  learnerProfileId: string;
+}
+
 export type AssertionLifecycleState = "active" | "suspended" | "revoked" | "expired";
 
 export type AssertionLifecycleTransitionSource = "manual" | "automation";
@@ -4099,6 +4127,29 @@ interface LearnerBadgeSummaryRow {
   badgeDescription: string | null;
   issuedAt: string;
   revokedAt: string | null;
+}
+
+interface LearnerRecordAssertionExportRow {
+  assertionId: string;
+  assertionPublicId: string | null;
+  tenantId: string;
+  learnerProfileId: string | null;
+  badgeTemplateId: string;
+  badgeTitle: string;
+  badgeDescription: string | null;
+  badgeCriteriaUri: string | null;
+  badgeImageUri: string | null;
+  recipientIdentity: string;
+  recipientIdentityType: "email" | "email_sha256" | "did" | "url";
+  vcR2Key: string;
+  statusListIndex: number | null;
+  idempotencyKey: string;
+  issuedAt: string;
+  issuedByUserId: string | null;
+  revokedAt: string | null;
+  issuerName: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface TenantAssertionSummaryRow {
@@ -8640,6 +8691,33 @@ const mapLearnerBadgeSummaryRow = (row: LearnerBadgeSummaryRow): LearnerBadgeSum
     badgeDescription: row.badgeDescription,
     issuedAt: row.issuedAt,
     revokedAt: row.revokedAt,
+  };
+};
+
+const mapLearnerRecordAssertionExportRow = (
+  row: LearnerRecordAssertionExportRow,
+): LearnerRecordAssertionExportRecord => {
+  return {
+    assertionId: row.assertionId,
+    assertionPublicId: row.assertionPublicId,
+    tenantId: row.tenantId,
+    learnerProfileId: row.learnerProfileId,
+    badgeTemplateId: row.badgeTemplateId,
+    badgeTitle: row.badgeTitle,
+    badgeDescription: row.badgeDescription,
+    badgeCriteriaUri: row.badgeCriteriaUri,
+    badgeImageUri: row.badgeImageUri,
+    recipientIdentity: row.recipientIdentity,
+    recipientIdentityType: row.recipientIdentityType,
+    vcR2Key: row.vcR2Key,
+    statusListIndex: row.statusListIndex,
+    idempotencyKey: row.idempotencyKey,
+    issuedAt: row.issuedAt,
+    issuedByUserId: row.issuedByUserId,
+    revokedAt: row.revokedAt,
+    issuerName: row.issuerName,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 };
 
@@ -14524,6 +14602,72 @@ export const listLearnerBadgeSummaries = async (
     .all<LearnerBadgeSummaryRow>();
 
   return result.results.map((row) => mapLearnerBadgeSummaryRow(row));
+};
+
+export const listLearnerRecordAssertionExports = async (
+  db: SqlDatabase,
+  input: ListLearnerRecordAssertionExportsInput,
+): Promise<LearnerRecordAssertionExportRecord[]> => {
+  const identities = await listLearnerIdentitiesByProfile(db, input.tenantId, input.learnerProfileId);
+  const emailAliases = Array.from(
+    new Set(
+      identities
+        .filter((identity) => identity.identityType === "email")
+        .map((identity) => normalizeEmail(identity.identityValue)),
+    ),
+  );
+  const emailAliasClause =
+    emailAliases.length === 0
+      ? ""
+      : `
+          OR (
+            assertions.recipient_identity_type = 'email'
+            AND LOWER(assertions.recipient_identity) IN (${emailAliases.map(() => "?").join(", ")})
+          )
+        `;
+  const params: unknown[] = [input.tenantId, input.learnerProfileId, ...emailAliases];
+  const result = await db
+    .prepare(
+      `
+      SELECT
+        assertions.id AS assertionId,
+        assertions.public_id AS assertionPublicId,
+        assertions.tenant_id AS tenantId,
+        assertions.learner_profile_id AS learnerProfileId,
+        assertions.badge_template_id AS badgeTemplateId,
+        badge_templates.title AS badgeTitle,
+        badge_templates.description AS badgeDescription,
+        badge_templates.criteria_uri AS badgeCriteriaUri,
+        badge_templates.image_uri AS badgeImageUri,
+        assertions.recipient_identity AS recipientIdentity,
+        assertions.recipient_identity_type AS recipientIdentityType,
+        assertions.vc_r2_key AS vcR2Key,
+        assertions.status_list_index AS statusListIndex,
+        assertions.idempotency_key AS idempotencyKey,
+        assertions.issued_at AS issuedAt,
+        assertions.issued_by_user_id AS issuedByUserId,
+        assertions.revoked_at AS revokedAt,
+        tenants.display_name AS issuerName,
+        assertions.created_at AS createdAt,
+        assertions.updated_at AS updatedAt
+      FROM assertions
+      INNER JOIN badge_templates
+        ON badge_templates.tenant_id = assertions.tenant_id
+        AND badge_templates.id = assertions.badge_template_id
+      INNER JOIN tenants
+        ON tenants.id = assertions.tenant_id
+      WHERE assertions.tenant_id = ?
+        AND (
+          assertions.learner_profile_id = ?
+          ${emailAliasClause}
+        )
+      ORDER BY assertions.issued_at DESC, assertions.id DESC
+    `,
+    )
+    .bind(...params)
+    .all<LearnerRecordAssertionExportRow>();
+
+  return result.results.map((row) => mapLearnerRecordAssertionExportRow(row));
 };
 
 export const listTenantAssertions = async (

@@ -127,6 +127,7 @@ import { registerBadgeRuleRoutes } from "./routes/badge-rule-routes";
 import { registerCredentialRoutes } from "./routes/credential-routes";
 import { registerDidRoutes } from "./routes/did-routes";
 import { registerLearnerRoutes } from "./routes/learner-routes";
+import { registerLearnerRecordExportRoutes } from "./routes/learner-record-export-routes";
 import { registerLearnerRecordRoutes } from "./routes/learner-record-routes";
 import { registerLtiRoutes } from "./routes/lti-routes";
 import { registerMigrationRoutes } from "./routes/migration-routes";
@@ -1115,6 +1116,13 @@ registerLearnerRoutes({
 });
 
 registerLearnerRecordRoutes({
+  app,
+  resolveDatabase,
+  requireTenantRole,
+  ADMIN_ROLES,
+});
+
+registerLearnerRecordExportRoutes({
   app,
   resolveDatabase,
   requireTenantRole,

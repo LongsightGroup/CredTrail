@@ -43,8 +43,11 @@ import {
   parseCreateBadgeTemplateRequest,
   parseCreateLearnerRecordEntryRequest,
   parseCreateTenantOrgUnitRequest,
+  parseLearnerRecordExportPathParams,
+  parseLearnerRecordExportQuery,
   parseLearnerRecordEntryListQuery,
   parseLearnerRecordEntryPathParams,
+  parseLearnerRecordStandardsMappingQuery,
   parseUpsertTenantMembershipOrgUnitScopeRequest,
   parseIssueBadgeRequest,
   parseManualIssueBadgeRequest,
@@ -695,6 +698,44 @@ describe("learner-record parsers", () => {
         evidenceLinks: ["https://credtrail.example.edu/evidence/intro-cybersecurity/project"],
       },
     });
+  });
+
+  it("parses learner-record export path params and export profiles", () => {
+    expect(
+      parseLearnerRecordExportPathParams({
+        tenantId: "tenant_123",
+        learnerProfileId: "lpr_123",
+      }),
+    ).toEqual({
+      tenantId: "tenant_123",
+      learnerProfileId: "lpr_123",
+    });
+
+    expect(
+      parseLearnerRecordExportQuery({
+        profile: "clr_alignment_json",
+      }),
+    ).toEqual({
+      profile: "clr_alignment_json",
+    });
+
+    expect(parseLearnerRecordStandardsMappingQuery({})).toEqual({
+      profile: "clr_alignment_json",
+    });
+  });
+
+  it("rejects invalid learner-record export profile values", () => {
+    expect(() => {
+      parseLearnerRecordExportQuery({
+        profile: "full_clr_conformance",
+      });
+    }).toThrowError();
+
+    expect(() => {
+      parseLearnerRecordStandardsMappingQuery({
+        profile: "opaque_vendor_dump",
+      });
+    }).toThrowError();
   });
 });
 
