@@ -9,6 +9,8 @@ test('bootstrap admin can create and delete LTI issuer registration', async ({ p
   const tenantSlug = `tenant-e2e-${uniqueSuffix}`;
   const clientId = `client-${uniqueSuffix}`;
   const authorizationEndpoint = `https://issuer-${uniqueSuffix}.example/oauth2/authorize`;
+  const platformJwksEndpoint = `https://issuer-${uniqueSuffix}.example/.well-known/jwks.json`;
+  const tokenEndpoint = `https://issuer-${uniqueSuffix}.example/oauth2/token`;
   const tenantResponse = await request.put(`/v1/admin/tenants/${encodeURIComponent(tenantId)}`, {
     headers: {
       authorization: `Bearer ${adminToken}`,
@@ -31,7 +33,8 @@ test('bootstrap admin can create and delete LTI issuer registration', async ({ p
   await page.getByLabel('Tenant ID').fill(tenantId);
   await page.getByLabel('Client ID').fill(clientId);
   await page.getByLabel('Authorization endpoint').fill(authorizationEndpoint);
-  await page.getByLabel('Allow unsigned id_token (test-mode only)').check();
+  await page.getByLabel('Platform JWKS endpoint').fill(platformJwksEndpoint);
+  await page.getByLabel('Token endpoint').fill(tokenEndpoint);
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -43,7 +46,8 @@ test('bootstrap admin can create and delete LTI issuer registration', async ({ p
   const createdRow = page.locator('tr', { hasText: issuer });
   await expect(createdRow).toContainText(tenantId, { timeout: 15_000 });
   await expect(createdRow).toContainText(clientId);
-  await expect(createdRow).toContainText('true');
+  await expect(createdRow).toContainText(platformJwksEndpoint);
+  await expect(createdRow).toContainText(tokenEndpoint);
 
   await createdRow.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('tr', { hasText: issuer })).toHaveCount(0);
