@@ -162,9 +162,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: registration.tenantId,
       authorizationEndpoint: registration.authorizationEndpoint,
       clientId: registration.clientId,
+      platformJwksEndpoint: registration.platformJwksEndpoint,
       tokenEndpoint: registration.tokenEndpoint,
-      hasClientSecret: registration.clientSecret !== null && registration.clientSecret.length > 0,
-      allowUnsignedIdToken: registration.allowUnsignedIdToken,
       createdAt: registration.createdAt,
       updatedAt: registration.updatedAt,
     };
@@ -1161,9 +1160,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: request.tenantId,
       authorizationEndpoint: request.authorizationEndpoint,
       clientId: request.clientId,
+      platformJwksEndpoint: request.platformJwksEndpoint,
       tokenEndpoint: request.tokenEndpoint,
-      clientSecret: request.clientSecret,
-      allowUnsignedIdToken: request.allowUnsignedIdToken,
     });
 
     await createAuditLog(resolveDatabase(c.env), {
@@ -1176,9 +1174,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: registration.tenantId,
         clientId: registration.clientId,
         authorizationEndpoint: registration.authorizationEndpoint,
+        platformJwksEndpoint: registration.platformJwksEndpoint,
         tokenEndpoint: registration.tokenEndpoint,
-        hasClientSecret: registration.clientSecret !== null,
-        allowUnsignedIdToken: registration.allowUnsignedIdToken,
       },
     });
 
@@ -1286,12 +1283,11 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: formData.get("tenantId") ?? "",
       authorizationEndpoint: formData.get("authorizationEndpoint") ?? "",
       clientId: formData.get("clientId") ?? "",
+      platformJwksEndpoint: formData.get("platformJwksEndpoint") ?? "",
       tokenEndpoint: formData.get("tokenEndpoint") ?? "",
-      clientSecret: formData.get("clientSecret") ?? "",
-      allowUnsignedIdToken: formData.get("allowUnsignedIdToken") !== null,
     };
+    const parsedPlatformJwksEndpoint = formState.platformJwksEndpoint?.trim() ?? "";
     const parsedTokenEndpoint = formState.tokenEndpoint?.trim() ?? "";
-    const parsedClientSecret = formState.clientSecret?.trim() ?? "";
 
     let request;
 
@@ -1301,9 +1297,10 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: formState.tenantId,
         authorizationEndpoint: formState.authorizationEndpoint,
         clientId: formState.clientId,
+        ...(parsedPlatformJwksEndpoint.length === 0
+          ? {}
+          : { platformJwksEndpoint: parsedPlatformJwksEndpoint }),
         ...(parsedTokenEndpoint.length === 0 ? {} : { tokenEndpoint: parsedTokenEndpoint }),
-        ...(parsedClientSecret.length === 0 ? {} : { clientSecret: parsedClientSecret }),
-        allowUnsignedIdToken: formState.allowUnsignedIdToken,
       });
     } catch (error) {
       return ltiIssuerRegistrationAdminPageResponse(c, {
@@ -1320,9 +1317,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
       tenantId: request.tenantId,
       authorizationEndpoint: request.authorizationEndpoint,
       clientId: request.clientId,
+      platformJwksEndpoint: request.platformJwksEndpoint,
       tokenEndpoint: request.tokenEndpoint,
-      clientSecret: request.clientSecret,
-      allowUnsignedIdToken: request.allowUnsignedIdToken,
     });
 
     await createAuditLog(resolveDatabase(c.env), {
@@ -1335,9 +1331,8 @@ export const registerAdminRoutes = (input: RegisterAdminRoutesInput): void => {
         tenantId: registration.tenantId,
         clientId: registration.clientId,
         authorizationEndpoint: registration.authorizationEndpoint,
+        platformJwksEndpoint: registration.platformJwksEndpoint,
         tokenEndpoint: registration.tokenEndpoint,
-        hasClientSecret: registration.clientSecret !== null,
-        allowUnsignedIdToken: registration.allowUnsignedIdToken,
       },
     });
 

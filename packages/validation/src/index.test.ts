@@ -871,16 +871,14 @@ describe("admin LTI issuer registration parsers", () => {
       tenantId: "tenant_123",
       authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
       clientId: "canvas-client-123",
+      platformJwksEndpoint: "https://canvas.example.edu/api/lti/security/jwks",
       tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
-      clientSecret: "canvas-client-secret",
-      allowUnsignedIdToken: true,
     });
 
     expect(request.issuer).toBe("https://canvas.example.edu");
     expect(request.tenantId).toBe("tenant_123");
+    expect(request.platformJwksEndpoint).toBe("https://canvas.example.edu/api/lti/security/jwks");
     expect(request.tokenEndpoint).toBe("https://canvas.example.edu/login/oauth2/token");
-    expect(request.clientSecret).toBe("canvas-client-secret");
-    expect(request.allowUnsignedIdToken).toBe(true);
   });
 
   it("accepts a valid delete payload", () => {

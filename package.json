@@ -36,5 +36,10 @@
   },
   "dependencies": {
     "better-auth": "1.5.5"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@lti-tool/core@1.1.0": "patches/@lti-tool__core@1.1.0.patch"
+    }
   }
 }

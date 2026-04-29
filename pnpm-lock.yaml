@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@lti-tool/core@1.1.0':
+    hash: dc255b213ef9f4248518041a56c9ff28b9ca3b1e2f87aa619a7bf393e8594b10
+    path: patches/@lti-tool__core@1.1.0.patch
+
 importers:
 
   .:
@@ -75,6 +80,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.9(hono@4.11.9)
+      '@lti-tool/core':
+        specifier: 1.1.0
+        version: 1.1.0(patch_hash=dc255b213ef9f4248518041a56c9ff28b9ca3b1e2f87aa619a7bf393e8594b10)
       csv-stringify:
         specifier: ^6.7.0
         version: 6.7.0
@@ -102,6 +110,9 @@ importers:
 
   packages/lti:
     dependencies:
+      '@lti-tool/core':
+        specifier: 1.1.0
+        version: 1.1.0(patch_hash=dc255b213ef9f4248518041a56c9ff28b9ca3b1e2f87aa619a7bf393e8594b10)
       zod:
         specifier: ^3.24.2
         version: 3.25.76
@@ -729,6 +740,14 @@ packages:
     resolution: {integrity: sha512-DHXdNs0SydSqC5f0oRJPpTcNfnpRojgBqMCFupQFv6WgeZAjU3DBx+A7JtaGPP3dHrP2Odi2N8Vf+uAm/8ynCQ==}
     peerDependencies:
       '@js-joda/core': '>=1.11.0'
+
+  '@lti-tool/core@1.1.0':
+    resolution: {integrity: sha512-8IFqnX5IBUk2Aa99KMM7JhzMSuBDjZk8hiV9Yw6dbYeXtIQVaJAsz0iK5Y3nDtQwH28Xnds7DKBHtdxHM4UuQg==}
+    peerDependencies:
+      pino: ^9.11.0
+    peerDependenciesMeta:
+      pino:
+        optional: true
 
   '@mongodb-js/saslprep@1.4.6':
     resolution: {integrity: sha512-y+x3H1xBZd38n10NZF/rEBlvDOOMQ6LKUTHqr8R9VkJ+mmQOYtJFxIlkkK8fZrtOiL6VixbOBWMbZGBdal3Z1g==}
@@ -1389,6 +1408,7 @@ packages:
 
   '@sphereon/kmp-mdoc-core@0.2.0-SNAPSHOT.26':
     resolution: {integrity: sha512-QXJ6R8ENiZV2rPMbn06cw5JKwqUYN1kzVRbYfONqE1PEXx1noQ4md7uxr2zSczi0ubKkNcbyYDNtIMTZIhGzmQ==}
+    bundledDependencies: []
 
   '@sphereon/oid4vc-common@0.20.1':
     resolution: {integrity: sha512-Q4ssp/P5eZERI4NOEZSbjV9TGdsNZxre2Lv3gzMS4n1ByZK6aFLmtA39hiP7DhTO1Wta0j8uiv4adWua4XtOoA==}
@@ -2950,6 +2970,11 @@ snapshots:
   '@js-joda/timezone@2.3.0(@js-joda/core@5.6.3)':
     dependencies:
       '@js-joda/core': 5.6.3
+
+  '@lti-tool/core@1.1.0(patch_hash=dc255b213ef9f4248518041a56c9ff28b9ca3b1e2f87aa619a7bf393e8594b10)':
+    dependencies:
+      jose: 6.2.1
+      zod: 4.3.6
 
   '@mongodb-js/saslprep@1.4.6':
     dependencies:

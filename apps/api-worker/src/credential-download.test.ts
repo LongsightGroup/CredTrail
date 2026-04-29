@@ -9,6 +9,7 @@ vi.mock("@credtrail/db", async () => {
     resolveAssertionLifecycleState: vi.fn(),
     findUserById: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
+    upsertLtiDeployment: vi.fn(),
   };
 });
 
@@ -25,6 +26,26 @@ vi.mock("@credtrail/core-domain", async () => {
 vi.mock("@credtrail/db/postgres", () => {
   return {
     createPostgresDatabase: vi.fn(),
+  };
+});
+
+vi.mock("./lti/credtrail-lti-tool", () => {
+  return {
+    createCredTrailLtiTool: vi.fn(async () => ({
+      handleLogin: vi.fn(async (input: Record<string, unknown>) => {
+        const issuer = String(input.iss);
+        const redirectUrl = new URL(`${issuer}/api/lti/authorize_redirect`);
+        redirectUrl.searchParams.set("scope", "openid");
+        redirectUrl.searchParams.set("response_type", "id_token");
+        redirectUrl.searchParams.set("response_mode", "form_post");
+        redirectUrl.searchParams.set("prompt", "none");
+        redirectUrl.searchParams.set("client_id", String(input.client_id));
+        redirectUrl.searchParams.set("redirect_uri", "http://localhost/v1/lti/launch");
+        redirectUrl.searchParams.set("state", "mock-lti-state");
+        redirectUrl.searchParams.set("nonce", "mock-lti-nonce");
+        return redirectUrl.toString();
+      }),
+    })),
   };
 });
 
@@ -100,6 +121,7 @@ const sampleLtiIssuerRegistration = (
     tenantId: "tenant_123",
     authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
     clientId: "canvas-client-123",
+    platformJwksEndpoint: null,
     tokenEndpoint: null,
     clientSecret: null,
     allowUnsignedIdToken: false,
@@ -203,7 +225,8 @@ describe("GET /credentials/v1/:credentialId/download", () => {
           issuer: oldIssuer,
           clientId: "canvas-old-client",
           authorizationEndpoint: "https://canvas-old.example.edu/api/lti/authorize_redirect",
-          allowUnsignedIdToken: true,
+          platformJwksEndpoint: "https://canvas-old.example.edu/api/lti/security/jwks",
+          tokenEndpoint: "https://canvas-old.example.edu/login/oauth2/token",
         }),
       ])
       .mockResolvedValueOnce([
@@ -211,7 +234,8 @@ describe("GET /credentials/v1/:credentialId/download", () => {
           issuer: newIssuer,
           clientId: "canvas-new-client",
           authorizationEndpoint: "https://canvas-new.example.edu/api/lti/authorize_redirect",
-          allowUnsignedIdToken: true,
+          platformJwksEndpoint: "https://canvas-new.example.edu/api/lti/security/jwks",
+          tokenEndpoint: "https://canvas-new.example.edu/login/oauth2/token",
         }),
       ]);
 

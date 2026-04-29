@@ -108,8 +108,6 @@ import { ob3ServiceDescriptionDocument as ob3ServiceDescriptionDocumentFromReque
 import {
   ltiIssuerRegistryFromStoredRows,
   parseLtiIssuerRegistryFromEnv,
-  signLtiStatePayload as signLtiStatePayloadHelper,
-  validateLtiStateToken as validateLtiStateTokenHelper,
   type LtiIssuerRegistry,
 } from "./lti/lti-helpers";
 import {
@@ -1144,14 +1142,6 @@ registerLtiRoutes({
   app,
   resolveLtiIssuerRegistry,
   observabilityContext,
-  generateOpaqueToken,
-  signLtiStatePayload: (payload, secret) => {
-    return signLtiStatePayloadHelper(payload, secret, sha256Base64Url);
-  },
-  addSecondsToIso,
-  validateLtiStateToken: (stateToken, secret, nowIso) => {
-    return validateLtiStateTokenHelper(stateToken, secret, nowIso, sha256Base64Url);
-  },
   resolveDatabase,
   upsertTenantMembershipRole,
   sha256Hex,

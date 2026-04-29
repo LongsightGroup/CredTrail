@@ -11,11 +11,14 @@ vi.mock("@credtrail/db", async () => {
     ensureTenantMembership: vi.fn(),
     findAuthIdentityLinkByAuthUserId: vi.fn(),
     findAuthIdentityLinkByCredtrailUserId: vi.fn(),
+    findBadgeTemplateById: vi.fn(),
     findLearnerProfileByIdentity: vi.fn(),
     findUserById: vi.fn(),
     listBadgeTemplates: vi.fn(),
     listLtiIssuerRegistrations: vi.fn(),
+    upsertLtiDeployment: vi.fn(),
     resolveLearnerProfileForIdentity: vi.fn(),
+    upsertLtiResourceLinkPlacement: vi.fn(),
     upsertTenantMembershipRole: vi.fn(),
     upsertUserByEmail: vi.fn(),
   };
@@ -33,11 +36,13 @@ import {
   ensureTenantMembership,
   findAuthIdentityLinkByAuthUserId,
   findAuthIdentityLinkByCredtrailUserId,
+  findBadgeTemplateById,
   findLearnerProfileByIdentity,
   findUserById,
   listBadgeTemplates,
   listLtiIssuerRegistrations,
   resolveLearnerProfileForIdentity,
+  upsertLtiResourceLinkPlacement,
   upsertTenantMembershipRole,
   upsertUserByEmail,
   type LearnerProfileRecord,
@@ -45,6 +50,7 @@ import {
   type SqlDatabase,
   type TenantMembershipRecord,
 } from "@credtrail/db";
+import type { LTISession } from "@lti-tool/core";
 import { createPostgresDatabase } from "@credtrail/db/postgres";
 
 import { app } from "./index";
@@ -60,11 +66,13 @@ const mockedFindAuthIdentityLinkByAuthUserId = vi.mocked(findAuthIdentityLinkByA
 const mockedFindAuthIdentityLinkByCredtrailUserId = vi.mocked(
   findAuthIdentityLinkByCredtrailUserId,
 );
+const mockedFindBadgeTemplateById = vi.mocked(findBadgeTemplateById);
 const mockedFindLearnerProfileByIdentity = vi.mocked(findLearnerProfileByIdentity);
 const mockedFindUserById = vi.mocked(findUserById);
 const mockedListBadgeTemplates = vi.mocked(listBadgeTemplates);
 const mockedListLtiIssuerRegistrations = vi.mocked(listLtiIssuerRegistrations);
 const mockedResolveLearnerProfileForIdentity = vi.mocked(resolveLearnerProfileForIdentity);
+const mockedUpsertLtiResourceLinkPlacement = vi.mocked(upsertLtiResourceLinkPlacement);
 const mockedUpsertTenantMembershipRole = vi.mocked(upsertTenantMembershipRole);
 const mockedUpsertUserByEmail = vi.mocked(upsertUserByEmail);
 const mockedCreatePostgresDatabase = vi.mocked(createPostgresDatabase);
@@ -241,6 +249,7 @@ const sampleLtiIssuerRegistration = (
     tenantId: "tenant_123",
     authorizationEndpoint: "https://canvas.example.edu/api/lti/authorize_redirect",
     clientId: "canvas-client-123",
+    platformJwksEndpoint: null,
     tokenEndpoint: null,
     clientSecret: null,
     allowUnsignedIdToken: false,
@@ -284,7 +293,9 @@ interface MockedInternalAuthProvider {
   revokeCurrentSession: ReturnType<typeof vi.fn>;
 }
 
-const loadAppWithMockedAuthProviders = async (): Promise<{
+const loadAppWithMockedAuthProviders = async (
+  beforeImport?: () => void,
+): Promise<{
   app: typeof app;
   betterAuthProvider: MockedInternalAuthProvider;
 }> => {
@@ -322,6 +333,8 @@ const loadAppWithMockedAuthProviders = async (): Promise<{
       createBetterAuthProvider: vi.fn(() => betterAuthProvider),
     };
   });
+
+  beforeImport?.();
 
   const { app: isolatedApp } = await import("./index");
 
@@ -390,6 +403,18 @@ const compactJwsForTest = (input: {
   return `${headerSegment}.${payloadSegment}.signature`;
 };
 
+const ltiClaim = {
+  context: "https://purl.imsglobal.org/spec/lti/claim/context",
+  custom: "https://purl.imsglobal.org/spec/lti/claim/custom",
+  deepLinkingSettings: "https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings",
+  deploymentId: "https://purl.imsglobal.org/spec/lti/claim/deployment_id",
+  messageType: "https://purl.imsglobal.org/spec/lti/claim/message_type",
+  namesRoleService: "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice",
+  resourceLink: "https://purl.imsglobal.org/spec/lti/claim/resource_link",
+  roles: "https://purl.imsglobal.org/spec/lti/claim/roles",
+  targetLinkUri: "https://purl.imsglobal.org/spec/lti/claim/target_link_uri",
+} as const;
+
 const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unknown> => {
   const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
   const padded = `${normalized}${"=".repeat((4 - (normalized.length % 4)) % 4)}`;
@@ -398,13 +423,30 @@ const parseBase64UrlJsonSegmentForTest = (segment: string): Record<string, unkno
   return JSON.parse(decoded) as Record<string, unknown>;
 };
 
+const parseCompactJwtPayloadForTest = (compactJwt: string): Record<string, unknown> => {
+  const [, payloadSegment] = compactJwt.split(".");
+
+  if (payloadSegment === undefined) {
+    throw new Error("Test JWT is missing payload segment");
+  }
+
+  return parseBase64UrlJsonSegmentForTest(payloadSegment);
+};
+
+const stringClaimForTest = (value: unknown, fallback: string): string => {
+  return typeof value === "string" ? value : fallback;
+};
+
 afterEach(() => {
   vi.doUnmock("./auth/better-auth-adapter");
+  vi.doUnmock("./lti/credtrail-lti-tool");
 });
 
 describe("LTI 1.3 core launch flow", () => {
   const issuer = "https://canvas.example.edu";
   const authorizationEndpoint = "https://canvas.example.edu/api/lti/authorize_redirect";
+  const platformJwksEndpoint = "https://canvas.example.edu/api/lti/security/jwks";
+  const tokenEndpoint = "https://canvas.example.edu/login/oauth2/token";
   const clientId = "canvas-client-123";
   const tenantId = "tenant_123";
   const targetLinkUri = "https://tool.example.edu/v1/lti/launch";
@@ -461,6 +503,22 @@ describe("LTI 1.3 core launch flow", () => {
     );
     mockedListBadgeTemplates.mockReset();
     mockedListBadgeTemplates.mockResolvedValue([sampleBadgeTemplate()]);
+    mockedFindBadgeTemplateById.mockReset();
+    mockedFindBadgeTemplateById.mockResolvedValue(sampleBadgeTemplate());
+    mockedUpsertLtiResourceLinkPlacement.mockReset();
+    mockedUpsertLtiResourceLinkPlacement.mockResolvedValue({
+      id: "lti_place_123",
+      tenantId,
+      issuer,
+      clientId,
+      deploymentId,
+      contextId: "course-123",
+      resourceLinkId: "resource-link-123",
+      badgeTemplateId: "badge_template_001",
+      createdByUserId: linkedUserId,
+      createdAt: "2026-02-10T22:00:00.000Z",
+      updatedAt: "2026-02-10T22:00:00.000Z",
+    });
     mockedResolveLearnerProfileForIdentity.mockReset();
     mockedResolveLearnerProfileForIdentity.mockResolvedValue(sampleLearnerProfile());
     mockedFindLearnerProfileByIdentity.mockReset();
@@ -499,24 +557,161 @@ describe("LTI 1.3 core launch flow", () => {
     });
   });
 
-  const createLtiEnv = (options?: {
-    allowUnsignedIdToken?: boolean;
-  }): ReturnType<typeof createEnv> => {
+  const createLtiEnv = (): ReturnType<typeof createEnv> => {
     const env = createEnv();
     env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
       [issuer]: {
         authorizationEndpoint,
         clientId,
         tenantId,
-        allowUnsignedIdToken: options?.allowUnsignedIdToken ?? true,
+        platformJwksEndpoint,
+        tokenEndpoint,
       },
     });
     env.LTI_STATE_SIGNING_SECRET = "test-lti-state-secret";
     return env;
   };
 
+  const createUnsignedOnlyLtiEnv = (): ReturnType<typeof createEnv> => {
+    const env = createEnv();
+    env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
+      [issuer]: {
+        authorizationEndpoint,
+        clientId,
+        tenantId,
+      },
+    });
+    env.LTI_STATE_SIGNING_SECRET = "test-lti-state-secret";
+    return env;
+  };
+
+  const ltiSessionFromClaims = (claims: Record<string, unknown>): LTISession => {
+    const context = claims[ltiClaim.context] as Record<string, unknown> | undefined;
+    const roles = Array.isArray(claims[ltiClaim.roles])
+      ? (claims[ltiClaim.roles] as string[])
+      : [];
+    const normalizedRoles = roles.map((role) => role.toLowerCase());
+    const isInstructor = normalizedRoles.some((role) => role.includes("#instructor"));
+    const isStudent = normalizedRoles.some(
+      (role) => role.includes("#learner") || role.includes("#student"),
+    );
+    const nrpsClaim = claims[ltiClaim.namesRoleService] as Record<string, unknown> | undefined;
+    const deepLinkingSettings = claims[ltiClaim.deepLinkingSettings] as
+      | Record<string, unknown>
+      | undefined;
+    const userName = typeof claims.name === "string" ? claims.name : undefined;
+    const userEmail = typeof claims.email === "string" ? claims.email : undefined;
+    const contextId = typeof context?.id === "string" ? context.id : undefined;
+    const contextLabel = typeof context?.label === "string" ? context.label : undefined;
+    const contextTitle = typeof context?.title === "string" ? context.title : undefined;
+    const deepLinkingData =
+      typeof deepLinkingSettings?.data === "string" ? deepLinkingSettings.data : undefined;
+
+    return {
+      jwtPayload: claims,
+      id: "lti-session-test",
+      user: {
+        id: stringClaimForTest(claims.sub, "lti-user"),
+        ...(userName === undefined ? {} : { name: userName }),
+        ...(userEmail === undefined ? {} : { email: userEmail }),
+        roles,
+      },
+      context: {
+        id: contextId ?? "",
+        label: contextLabel ?? "",
+        title: contextTitle ?? "",
+      },
+      platform: {
+        issuer,
+        clientId,
+        deploymentId: stringClaimForTest(claims[ltiClaim.deploymentId], deploymentId),
+        name: "Canvas",
+      },
+      launch: {
+        target: stringClaimForTest(claims[ltiClaim.targetLinkUri], targetLinkUri),
+      },
+      services: {
+        ...(nrpsClaim === undefined
+          ? {}
+          : {
+              nrps: {
+                membershipUrl: stringClaimForTest(nrpsClaim.context_memberships_url, ""),
+                versions: Array.isArray(nrpsClaim.service_versions)
+                  ? (nrpsClaim.service_versions as string[])
+                  : [],
+              },
+            }),
+        ...(deepLinkingSettings === undefined
+          ? {}
+          : {
+              deepLinking: {
+                returnUrl: stringClaimForTest(deepLinkingSettings.deep_link_return_url, ""),
+                acceptTypes: Array.isArray(deepLinkingSettings.accept_types)
+                  ? (deepLinkingSettings.accept_types as string[])
+                  : [],
+                acceptPresentationDocumentTargets: [],
+                acceptMultiple: false,
+                autoCreate: false,
+                ...(deepLinkingData === undefined ? {} : { data: deepLinkingData }),
+              },
+            }),
+      },
+      customParameters: {},
+      isAdmin: false,
+      isInstructor,
+      isStudent,
+      isAssignmentAndGradesAvailable: false,
+      isDeepLinkingAvailable: deepLinkingSettings !== undefined,
+      isNameAndRolesAvailable: nrpsClaim !== undefined,
+    } satisfies LTISession;
+  };
+
+  const loadAppWithMockedSignedLtiTool = async (options?: {
+    authorizationEndpoint?: string;
+    getMembers?: ReturnType<typeof vi.fn>;
+  }): Promise<
+    Awaited<ReturnType<typeof loadAppWithMockedAuthProviders>> & {
+      ltiTool: {
+        handleLogin: ReturnType<typeof vi.fn>;
+        verifyLaunch: ReturnType<typeof vi.fn>;
+        createSession: ReturnType<typeof vi.fn>;
+        getMembers: ReturnType<typeof vi.fn>;
+      };
+    }
+  > => {
+    const ltiTool = {
+      handleLogin: vi.fn(async (input: Record<string, unknown>) => {
+        const redirectUrl = new URL(options?.authorizationEndpoint ?? authorizationEndpoint);
+        redirectUrl.searchParams.set("scope", "openid");
+        redirectUrl.searchParams.set("response_type", "id_token");
+        redirectUrl.searchParams.set("response_mode", "form_post");
+        redirectUrl.searchParams.set("prompt", "none");
+        redirectUrl.searchParams.set("client_id", stringClaimForTest(input.client_id, clientId));
+        redirectUrl.searchParams.set("redirect_uri", "http://localhost/v1/lti/launch");
+        redirectUrl.searchParams.set("state", "mock-lti-state");
+        redirectUrl.searchParams.set("nonce", "mock-lti-nonce");
+        return redirectUrl.toString();
+      }),
+      verifyLaunch: vi.fn(async (idToken: string) => parseCompactJwtPayloadForTest(idToken)),
+      createSession: vi.fn(async (claims: Record<string, unknown>) => ltiSessionFromClaims(claims)),
+      getMembers: options?.getMembers ?? vi.fn().mockResolvedValue([]),
+    };
+    const result = await loadAppWithMockedAuthProviders(() => {
+      vi.doMock("./lti/credtrail-lti-tool", () => {
+        return {
+          createCredTrailLtiTool: vi.fn(async () => ltiTool),
+        };
+      });
+    });
+
+    return {
+      ...result,
+      ltiTool,
+    };
+  };
+
   it("establishes a Better Auth browser session for LTI launches without legacy session writes", async () => {
-    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedAuthProviders();
+    const { app: isolatedApp, betterAuthProvider } = await loadAppWithMockedSignedLtiTool();
     const env = createLtiEnv();
     const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
@@ -593,7 +788,8 @@ describe("LTI 1.3 core launch flow", () => {
 
   it("redirects OIDC login initiation to issuer authorization endpoint with required parameters", async () => {
     const env = createLtiEnv();
-    const response = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const response = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
@@ -622,17 +818,19 @@ describe("LTI 1.3 core launch flow", () => {
   it("uses DB-backed issuer registrations when env registry is not configured", async () => {
     const env = createEnv();
     env.LTI_STATE_SIGNING_SECRET = "test-lti-state-secret";
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
     mockedListLtiIssuerRegistrations.mockResolvedValue([
       sampleLtiIssuerRegistration({
         issuer,
         tenantId,
         clientId,
         authorizationEndpoint,
-        allowUnsignedIdToken: true,
+        platformJwksEndpoint,
+        tokenEndpoint,
       }),
     ]);
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
@@ -653,12 +851,16 @@ describe("LTI 1.3 core launch flow", () => {
     const dbClientId = "db-client-777";
     const dbAuthorizationEndpoint = "https://canvas.example.edu/db/authorize_redirect";
     const env = createLtiEnv();
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool({
+      authorizationEndpoint: dbAuthorizationEndpoint,
+    });
     env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
       [issuer]: {
         authorizationEndpoint: "https://canvas.example.edu/env/authorize_redirect",
         clientId: "env-client-123",
         tenantId,
-        allowUnsignedIdToken: true,
+        platformJwksEndpoint,
+        tokenEndpoint,
       },
     });
     mockedListLtiIssuerRegistrations.mockResolvedValue([
@@ -667,11 +869,12 @@ describe("LTI 1.3 core launch flow", () => {
         tenantId,
         clientId: dbClientId,
         authorizationEndpoint: dbAuthorizationEndpoint,
-        allowUnsignedIdToken: true,
+        platformJwksEndpoint,
+        tokenEndpoint,
       }),
     ]);
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&client_id=${encodeURIComponent(dbClientId)}`,
@@ -690,7 +893,8 @@ describe("LTI 1.3 core launch flow", () => {
 
   it("accepts an instructor launch and renders launch completion page", async () => {
     const env = createLtiEnv();
-    const loginResponse = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
@@ -723,13 +927,21 @@ describe("LTI 1.3 core launch flow", () => {
         "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
           id: "resource-link-123",
         },
+        "https://purl.imsglobal.org/spec/lti/claim/context": {
+          id: "course-123",
+          label: "TS101",
+          title: "TypeScript 101",
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/custom": {
+          badgeTemplateId: "badge_template_001",
+        },
         "https://purl.imsglobal.org/spec/lti/claim/roles": [
           "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
       },
     });
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       "/v1/lti/launch",
       {
         method: "POST",
@@ -770,154 +982,311 @@ describe("LTI 1.3 core launch flow", () => {
       userId: linkedUserId,
       role: "issuer",
     });
+    expect(mockedUpsertLtiResourceLinkPlacement).toHaveBeenCalledWith(fakeDb, {
+      tenantId,
+      issuer,
+      clientId,
+      deploymentId,
+      contextId: "course-123",
+      resourceLinkId: "resource-link-123",
+      badgeTemplateId: "badge_template_001",
+      createdByUserId: linkedUserId,
+    });
+  });
+
+  it("rejects resource-link placement when badge template is not tenant-owned and active", async () => {
+    mockedFindBadgeTemplateById.mockResolvedValue(null);
+    const env = createLtiEnv();
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        "opaque-login-hint",
+      )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+        deploymentId,
+      )}`,
+      undefined,
+      env,
+    );
+    const loginUrl = new URL(loginResponse.headers.get("location") ?? "");
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: "RS256",
+        typ: "JWT",
+      },
+      payload: {
+        iss: issuer,
+        sub: "user-tenant-cross",
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce: loginUrl.searchParams.get("nonce") ?? "",
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-cross-tenant",
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/custom": {
+          badgeTemplateId: "badge_template_other_tenant",
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+        ],
+      },
+    });
+
+    const response = await isolatedApp.request(
+      "/v1/lti/launch",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state: loginUrl.searchParams.get("state") ?? "",
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("badge template is not available");
+    expect(mockedFindBadgeTemplateById).toHaveBeenCalledWith(
+      fakeDb,
+      tenantId,
+      "badge_template_other_tenant",
+    );
+    expect(mockedUpsertLtiResourceLinkPlacement).not.toHaveBeenCalled();
+    expect(mockedResolveLearnerProfileForIdentity).not.toHaveBeenCalled();
   });
 
   it("pulls NRPS roster for instructor launch and renders bulk issuance view", async () => {
     const env = createLtiEnv();
     const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
+    const getMembers = vi.fn().mockResolvedValue([
+      {
+        userId: "learner-001",
+        name: "Learner One",
+        email: "learner-one@example.edu",
+        lisPersonSourcedId: "sourced-learner-001",
+        roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"],
+        status: "Active",
+      },
+      {
+        userId: "teacher-001",
+        name: "Instructor One",
+        roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"],
+        status: "Active",
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool({ getMembers });
+    const loginResponse = await isolatedApp.request(
+      `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
+        "opaque-login-hint",
+      )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
+        deploymentId,
+      )}`,
+      undefined,
+      env,
+    );
+    const loginLocation = loginResponse.headers.get("location");
+    const loginUrl = new URL(loginLocation ?? "");
+    const state = loginUrl.searchParams.get("state") ?? "";
+    const nonce = loginUrl.searchParams.get("nonce") ?? "";
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const idToken = compactJwsForTest({
+      header: {
+        alg: "RS256",
+        typ: "JWT",
+      },
+      payload: {
+        iss: issuer,
+        sub: "instructor-001",
+        aud: clientId,
+        exp: nowEpochSeconds + 300,
+        iat: nowEpochSeconds - 10,
+        nonce,
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+        "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+        "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+        "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": rosterTargetLinkUri,
+        "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+          id: "resource-link-nrps-1",
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/context": {
+          id: "course-42",
+          title: "Course 42",
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/roles": [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+        ],
+        "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
+          context_memberships_url:
+            "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
+          service_versions: ["2.0"],
+        },
+      },
+    });
+
+    const response = await isolatedApp.request(
+      "/v1/lti/launch",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          id_token: idToken,
+          state,
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("Bulk issuance view");
+    expect(body).toContain("Loaded 1 learner members from LMS NRPS roster.");
+    expect(body).toContain("badge_template_001");
+    expect(body).toContain("learner-one@example.edu");
+    expect(getMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts signed launch payloads with multiple audiences and normalizes service session client id", async () => {
+    const env = createLtiEnv();
     env.LTI_ISSUER_REGISTRY_JSON = JSON.stringify({
       [issuer]: {
         authorizationEndpoint,
         clientId,
         tenantId,
+        platformJwksEndpoint: "https://canvas.example.edu/api/lti/security/jwks",
         tokenEndpoint: "https://canvas.example.edu/login/oauth2/token",
-        clientSecret: "canvas-secret",
-        allowUnsignedIdToken: true,
       },
     });
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            access_token: "nrps-access-token",
-            token_type: "Bearer",
-          }),
-          {
-            status: 200,
-            headers: {
-              "content-type": "application/json",
-            },
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: "membership-container-001",
-            context: {
-              id: "course-42",
-            },
-            members: [
-              {
-                user_id: "learner-001",
-                name: "Learner One",
-                email: "learner-one@example.edu",
-                lis_person_sourcedid: "sourced-learner-001",
-                roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"],
-                status: "Active",
-              },
-              {
-                user_id: "teacher-001",
-                name: "Instructor One",
-                roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"],
-              },
-            ],
-          }),
-          {
-            status: 200,
-            headers: {
-              "content-type": "application/json",
-            },
-          },
-        ),
-      );
-    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
-
-    try {
-      const loginResponse = await app.request(
-        `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
-          "opaque-login-hint",
-        )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
-          deploymentId,
-        )}`,
-        undefined,
-        env,
-      );
-      const loginLocation = loginResponse.headers.get("location");
-      const loginUrl = new URL(loginLocation ?? "");
-      const state = loginUrl.searchParams.get("state") ?? "";
-      const nonce = loginUrl.searchParams.get("nonce") ?? "";
-      const nowEpochSeconds = Math.floor(Date.now() / 1000);
-      const idToken = compactJwsForTest({
-        header: {
-          alg: "RS256",
-          typ: "JWT",
+    const nowEpochSeconds = Math.floor(Date.now() / 1000);
+    const launchPayload = {
+      iss: issuer,
+      sub: "instructor-multi-aud",
+      aud: ["other-client", clientId],
+      exp: nowEpochSeconds + 300,
+      iat: nowEpochSeconds - 10,
+      nonce: "signed-nonce",
+      "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
+      "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
+      "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
+      "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": targetLinkUri,
+      "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
+        id: "resource-link-signed-multi-aud",
+      },
+      "https://purl.imsglobal.org/spec/lti/claim/roles": [
+        "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
+      ],
+      "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
+        context_memberships_url: "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
+        service_versions: ["2.0"],
+      },
+    };
+    const idToken = compactJwsForTest({
+      header: {
+        alg: "RS256",
+        typ: "JWT",
+      },
+      payload: launchPayload,
+    });
+    const createSession = vi.fn().mockResolvedValue({
+      jwtPayload: launchPayload,
+      id: "lti-session-multi-aud",
+      user: {
+        id: "instructor-multi-aud",
+        roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"],
+      },
+      context: {
+        id: "course-42",
+        label: "TS101",
+        title: "TypeScript 101",
+      },
+      platform: {
+        issuer,
+        clientId: "other-client",
+        deploymentId,
+        name: "Canvas",
+      },
+      launch: {
+        target: targetLinkUri,
+      },
+      services: {
+        nrps: {
+          membershipUrl: "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
+          versions: ["2.0"],
         },
-        payload: {
-          iss: issuer,
-          sub: "instructor-001",
-          aud: clientId,
-          exp: nowEpochSeconds + 300,
-          iat: nowEpochSeconds - 10,
-          nonce,
-          "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
-          "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
-          "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
-          "https://purl.imsglobal.org/spec/lti/claim/target_link_uri": rosterTargetLinkUri,
-          "https://purl.imsglobal.org/spec/lti/claim/resource_link": {
-            id: "resource-link-nrps-1",
-          },
-          "https://purl.imsglobal.org/spec/lti/claim/context": {
-            id: "course-42",
-            title: "Course 42",
-          },
-          "https://purl.imsglobal.org/spec/lti/claim/roles": [
-            "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
-          ],
-          "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
-            context_memberships_url:
-              "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
-            service_versions: ["2.0"],
-          },
-        },
+      },
+      customParameters: {},
+      isAdmin: false,
+      isInstructor: true,
+      isStudent: false,
+      isAssignmentAndGradesAvailable: false,
+      isDeepLinkingAvailable: false,
+      isNameAndRolesAvailable: true,
+    } satisfies LTISession);
+    const getMembers = vi.fn().mockResolvedValue([
+      {
+        userId: "learner-001",
+        name: "Learner One",
+        email: "learner-one@example.edu",
+        lisPersonSourcedId: "sourced-learner-001",
+        roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"],
+        status: "Active",
+      },
+    ]);
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders(() => {
+      vi.doMock("./lti/credtrail-lti-tool", () => {
+        return {
+          createCredTrailLtiTool: vi.fn(async () => ({
+            verifyLaunch: vi.fn().mockResolvedValue(launchPayload),
+            createSession,
+            getMembers,
+          })),
+        };
       });
+    });
 
-      const response = await app.request(
-        "/v1/lti/launch",
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            id_token: idToken,
-            state,
-          }).toString(),
+    const response = await isolatedApp.request(
+      "/v1/lti/launch",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
         },
-        env,
-      );
-      const body = await response.text();
+        body: new URLSearchParams({
+          id_token: idToken,
+          state: "opaque-core-state",
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.text();
 
-      expect(response.status).toBe(200);
-      expect(body).toContain("Bulk issuance view");
-      expect(body).toContain("Loaded 1 learner members from LMS NRPS roster.");
-      expect(body).toContain("badge_template_001");
-      expect(body).toContain("learner-one@example.edu");
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(fetchMock.mock.calls[0]?.[0]).toBe("https://canvas.example.edu/login/oauth2/token");
-      expect(fetchMock.mock.calls[1]?.[0]).toBe(
-        "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
-      );
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    expect(response.status).toBe(200);
+    expect(body).toContain("Loaded 1 learner members from LMS NRPS roster.");
+    expect(createSession).toHaveBeenCalledWith(launchPayload);
+    expect(getMembers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: expect.objectContaining({
+          clientId,
+        }),
+      }),
+    );
   });
 
-  it("renders unavailable NRPS state when issuer token settings are missing", async () => {
+  it("renders unavailable NRPS state when launch omits the service claim", async () => {
     const env = createLtiEnv();
     const rosterTargetLinkUri = `${targetLinkUri}?badgeTemplateId=badge_template_001`;
-    const loginResponse = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(rosterTargetLinkUri)}&lti_deployment_id=${encodeURIComponent(
@@ -953,14 +1322,10 @@ describe("LTI 1.3 core launch flow", () => {
         "https://purl.imsglobal.org/spec/lti/claim/roles": [
           "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor",
         ],
-        "https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice": {
-          context_memberships_url: "https://canvas.example.edu/api/lti/courses/42/names_and_roles",
-          service_versions: ["2.0"],
-        },
       },
     });
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       "/v1/lti/launch",
       {
         method: "POST",
@@ -978,14 +1343,13 @@ describe("LTI 1.3 core launch flow", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("Bulk issuance view");
-    expect(body).toContain(
-      "NRPS roster unavailable: issuer registration is missing token endpoint and client secret.",
-    );
+    expect(body).toContain("LMS launch did not include NRPS names/roles service claim details.");
   });
 
   it("accepts a learner launch and links local account session with email claim", async () => {
     const env = createLtiEnv();
-    const loginResponse = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
@@ -1026,7 +1390,7 @@ describe("LTI 1.3 core launch flow", () => {
       },
     });
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       "/v1/lti/launch",
       {
         method: "POST",
@@ -1061,7 +1425,8 @@ describe("LTI 1.3 core launch flow", () => {
   it("accepts instructor deep linking launch and renders badge template placement forms", async () => {
     const env = createLtiEnv();
     const deepLinkReturnUrl = "https://canvas.example.edu/api/lti/deep_link_return";
-    const loginResponse = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}&lti_deployment_id=${encodeURIComponent(
@@ -1102,7 +1467,7 @@ describe("LTI 1.3 core launch flow", () => {
       },
     });
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       "/v1/lti/launch",
       {
         method: "POST",
@@ -1123,31 +1488,111 @@ describe("LTI 1.3 core launch flow", () => {
     expect(response.headers.get("set-cookie")).toContain("better-auth.session_token=");
     expect(body).toContain("Select badge template placement");
     expect(body).toContain(deepLinkReturnUrl);
-    expect(body).toContain('name="JWT"');
+    expect(body).toContain('name="lti_session_id"');
+    expect(body).toContain('name="badge_template_id"');
     expect(body).toContain("TypeScript Foundations");
     expect(body).toContain("badgeTemplateId=badge_template_001");
     expect(body).toContain("/assets/ui/foundation.");
     expect(body).toContain("/assets/ui/lti-pages.");
-    const jwtMatch = /name="JWT" value="([^"]+)"/.exec(body);
-    expect(jwtMatch).not.toBeNull();
-    const jwtValue = jwtMatch?.[1] ?? "";
-    const jwtSegments = jwtValue.split(".");
-    expect(jwtSegments).toHaveLength(3);
-    const header = parseBase64UrlJsonSegmentForTest(jwtSegments[0] ?? "");
-    const payload = parseBase64UrlJsonSegmentForTest(jwtSegments[1] ?? "");
-    expect(header.alg).toBe("none");
-    expect(payload["https://purl.imsglobal.org/spec/lti/claim/message_type"]).toBe(
-      "LtiDeepLinkingResponse",
-    );
     expect(mockedListBadgeTemplates).toHaveBeenCalledWith(fakeDb, {
       tenantId,
       includeArchived: false,
     });
   });
 
+  it("returns a signed Deep Linking response for selected templates through lti-tool core", async () => {
+    const env = createLtiEnv();
+    const deepLinkReturnUrl = "https://canvas.example.edu/api/lti/deep_link_return";
+    const ltiSession: LTISession = {
+      jwtPayload: {},
+      id: "lti-session-123",
+      user: {
+        id: "user-999",
+        roles: ["http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"],
+      },
+      context: {
+        id: "course-123",
+        label: "TS101",
+        title: "TypeScript 101",
+      },
+      platform: {
+        issuer,
+        clientId,
+        deploymentId,
+        name: "Canvas",
+      },
+      launch: {
+        target: targetLinkUri,
+      },
+      services: {
+        deepLinking: {
+          returnUrl: deepLinkReturnUrl,
+          acceptTypes: ["ltiResourceLink"],
+          acceptPresentationDocumentTargets: [],
+          acceptMultiple: false,
+          autoCreate: false,
+          data: "opaque-deep-link-state",
+        },
+      },
+      customParameters: {},
+      isAdmin: false,
+      isInstructor: true,
+      isStudent: false,
+      isAssignmentAndGradesAvailable: false,
+      isDeepLinkingAvailable: true,
+      isNameAndRolesAvailable: false,
+    };
+    const getSession = vi.fn().mockResolvedValue(ltiSession);
+    const createDeepLinkingResponse = vi
+      .fn()
+      .mockResolvedValue("<!DOCTYPE html><html><body>signed deep link</body></html>");
+    const { app: isolatedApp } = await loadAppWithMockedAuthProviders(() => {
+      vi.doMock("./lti/credtrail-lti-tool", () => {
+        return {
+          createCredTrailLtiTool: vi.fn(async () => ({
+            getSession,
+            createDeepLinkingResponse,
+          })),
+        };
+      });
+    });
+
+    const response = await isolatedApp.request(
+      "/v1/lti/deep-linking/select",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          lti_session_id: ltiSession.id,
+          badge_template_id: "badge_template_001",
+        }).toString(),
+      },
+      env,
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toContain("signed deep link");
+    expect(getSession).toHaveBeenCalledWith(ltiSession.id);
+    expect(createDeepLinkingResponse).toHaveBeenCalledWith(ltiSession, [
+      expect.objectContaining({
+        type: "ltiResourceLink",
+        title: "TypeScript Foundations",
+        url: "https://tool.example.edu/v1/lti/launch?badgeTemplateId=badge_template_001",
+        custom: {
+          badgeTemplateId: "badge_template_001",
+        },
+      }),
+    ]);
+  });
+
   it("rejects deep linking launch for learner role", async () => {
     const env = createLtiEnv();
-    const loginResponse = await app.request(
+    const { app: isolatedApp } = await loadAppWithMockedSignedLtiTool();
+    const loginResponse = await isolatedApp.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
@@ -1184,7 +1629,7 @@ describe("LTI 1.3 core launch flow", () => {
       },
     });
 
-    const response = await app.request(
+    const response = await isolatedApp.request(
       "/v1/lti/launch",
       {
         method: "POST",
@@ -1205,21 +1650,23 @@ describe("LTI 1.3 core launch flow", () => {
     expect(mockedListBadgeTemplates).not.toHaveBeenCalled();
   });
 
-  it("rejects launch when unsigned-id-token mode is disabled for issuer config", async () => {
-    const env = createLtiEnv({
-      allowUnsignedIdToken: false,
-    });
-    const loginResponse = await app.request(
+  it("rejects OIDC login when issuer is missing signed launch configuration", async () => {
+    const env = createUnsignedOnlyLtiEnv();
+    const response = await app.request(
       `/v1/lti/oidc/login?iss=${encodeURIComponent(issuer)}&login_hint=${encodeURIComponent(
         "opaque-login-hint",
       )}&target_link_uri=${encodeURIComponent(targetLinkUri)}`,
       undefined,
       env,
     );
-    const loginLocation = loginResponse.headers.get("location");
-    const loginUrl = new URL(loginLocation ?? "");
-    const state = loginUrl.searchParams.get("state") ?? "";
-    const nonce = loginUrl.searchParams.get("nonce") ?? "";
+    const body = await response.json<ErrorResponse>();
+
+    expect(response.status).toBe(501);
+    expect(body.error).toContain("requires platform JWKS and token endpoint");
+  });
+
+  it("rejects launch when issuer is missing signed launch configuration", async () => {
+    const env = createUnsignedOnlyLtiEnv();
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
     const idToken = compactJwsForTest({
       header: {
@@ -1231,7 +1678,7 @@ describe("LTI 1.3 core launch flow", () => {
         aud: clientId,
         exp: nowEpochSeconds + 300,
         iat: nowEpochSeconds - 10,
-        nonce,
+        nonce: "mock-lti-nonce",
         "https://purl.imsglobal.org/spec/lti/claim/deployment_id": deploymentId,
         "https://purl.imsglobal.org/spec/lti/claim/message_type": "LtiResourceLinkRequest",
         "https://purl.imsglobal.org/spec/lti/claim/version": "1.3.0",
@@ -1251,7 +1698,7 @@ describe("LTI 1.3 core launch flow", () => {
         },
         body: new URLSearchParams({
           id_token: idToken,
-          state,
+          state: "mock-lti-state",
         }).toString(),
       },
       env,
@@ -1259,6 +1706,6 @@ describe("LTI 1.3 core launch flow", () => {
     const body = await response.json<ErrorResponse>();
 
     expect(response.status).toBe(501);
-    expect(body.error).toContain("requires signature verification");
+    expect(body.error).toContain("requires platform JWKS and token endpoint");
   });
 });

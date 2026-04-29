@@ -47,6 +47,31 @@ export interface LtiBulkIssuanceView {
   members: readonly LtiBulkIssuanceRosterMember[];
 }
 
+interface LtiDeepLinkSelectionBaseInput {
+  tenantId: string;
+  userId: string;
+  membershipRole: TenantMembershipRole;
+  issuer: string;
+  deploymentId: string;
+  deepLinkReturnUrl: string;
+  targetLinkUri: string;
+}
+
+interface LtiDeepLinkSelectionOption {
+  badgeTemplateId: string;
+  title: string;
+  description: string | null;
+  launchUrl: string;
+}
+
+export type LtiDeepLinkSelectionPageInput =
+  LtiDeepLinkSelectionBaseInput & {
+    mode: "signed";
+    signedSelectionActionUrl: string;
+    ltiSessionId: string;
+    options: readonly LtiDeepLinkSelectionOption[];
+  };
+
 export const ltiLaunchResultPage = (input: {
   roleKind: LtiRoleKind;
   tenantId: string;
@@ -178,34 +203,14 @@ export const ltiLaunchResultPage = (input: {
   );
 };
 
-export const ltiDeepLinkSelectionPage = (input: {
-  tenantId: string;
-  userId: string;
-  membershipRole: TenantMembershipRole;
-  issuer: string;
-  deploymentId: string;
-  deepLinkReturnUrl: string;
-  targetLinkUri: string;
-  isUnsignedResponseJwt: boolean;
-  options: readonly {
-    badgeTemplateId: string;
-    title: string;
-    description: string | null;
-    launchUrl: string;
-    deepLinkResponseJwt: string;
-  }[];
-}): string => {
-  const optionRows =
-    input.options.length === 0
-      ? '<p class="lti-deep-link__empty">No active badge templates are available for this tenant.</p>'
-      : input.options
-          .map((option) => {
-            const description =
-              option.description === null
-                ? '<p class="lti-deep-link__description">No template description provided.</p>'
-                : `<p class="lti-deep-link__description">${escapeHtml(option.description)}</p>`;
+export const ltiDeepLinkSelectionPage = (input: LtiDeepLinkSelectionPageInput): string => {
+  const renderOption = (option: LtiDeepLinkSelectionOption, form: string): string => {
+    const description =
+      option.description === null
+        ? '<p class="lti-deep-link__description">No template description provided.</p>'
+        : `<p class="lti-deep-link__description">${escapeHtml(option.description)}</p>`;
 
-            return `<article class="lti-deep-link__option">
+    return `<article class="lti-deep-link__option">
               <h2>${escapeHtml(option.title)}</h2>
               <p class="lti-deep-link__meta">Template ID: ${escapeHtml(option.badgeTemplateId)}</p>
               ${description}
@@ -213,12 +218,24 @@ export const ltiDeepLinkSelectionPage = (input: {
                 Launch URL:
                 <a href="${escapeHtml(option.launchUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(option.launchUrl)}</a>
               </p>
-              <form method="post" action="${escapeHtml(input.deepLinkReturnUrl)}" class="lti-deep-link__form">
-                <input type="hidden" name="JWT" value="${escapeHtml(option.deepLinkResponseJwt)}" />
-                <button type="submit">Place Template in LMS</button>
-              </form>
+              ${form}
             </article>`;
-          })
+  };
+
+  const optionRows =
+    input.options.length === 0
+      ? '<p class="lti-deep-link__empty">No active badge templates are available for this tenant.</p>'
+      : input.options
+          .map((option) =>
+            renderOption(
+              option,
+              `<form method="post" action="${escapeHtml(input.signedSelectionActionUrl)}" class="lti-deep-link__form">
+                <input type="hidden" name="lti_session_id" value="${escapeHtml(input.ltiSessionId)}" />
+                <input type="hidden" name="badge_template_id" value="${escapeHtml(option.badgeTemplateId)}" />
+                <button type="submit">Place Template in LMS</button>
+              </form>`,
+            ),
+          )
           .join("\n");
 
   return renderPageShell(
@@ -246,11 +263,6 @@ export const ltiDeepLinkSelectionPage = (input: {
           <dd>${escapeHtml(input.targetLinkUri)}</dd>
         </dl>
       </article>
-      ${
-        input.isUnsignedResponseJwt
-          ? '<p class="lti-deep-link__notice">This environment is returning unsigned JWT responses (alg=none). Use signed launch/response verification before production LMS rollout.</p>'
-          : ""
-      }
       <section class="lti-deep-link__options">
         ${optionRows}
       </section>
@@ -264,9 +276,8 @@ export interface LtiIssuerRegistrationFormState {
   tenantId?: string;
   authorizationEndpoint?: string;
   clientId?: string;
+  platformJwksEndpoint?: string;
   tokenEndpoint?: string;
-  clientSecret?: string;
-  allowUnsignedIdToken?: boolean;
 }
 
 export const ltiIssuerRegistrationAdminPage = (input: {
@@ -277,22 +288,25 @@ export const ltiIssuerRegistrationAdminPage = (input: {
 }): string => {
   const registrationRows =
     input.registrations.length === 0
-      ? '<tr><td colspan="8" class="lti-registration__empty">No LTI issuer registrations configured.</td></tr>'
+      ? '<tr><td colspan="7" class="lti-registration__empty">No LTI issuer registrations configured.</td></tr>'
       : input.registrations
           .map((registration) => {
             const tokenEndpointCell =
               registration.tokenEndpoint === null
                 ? "Not configured"
                 : escapeHtml(registration.tokenEndpoint);
+            const jwksEndpointCell =
+              registration.platformJwksEndpoint === null
+                ? "Not configured"
+                : escapeHtml(registration.platformJwksEndpoint);
 
             return `<tr>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.issuer)}</td>
       <td>${escapeHtml(registration.tenantId)}</td>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.clientId)}</td>
       <td class="lti-registration__wrap-anywhere">${escapeHtml(registration.authorizationEndpoint)}</td>
+      <td class="lti-registration__wrap-anywhere">${jwksEndpointCell}</td>
       <td class="lti-registration__wrap-anywhere">${tokenEndpointCell}</td>
-      <td>${registration.clientSecret === null ? "Not set" : "Configured"}</td>
-      <td>${registration.allowUnsignedIdToken ? "true" : "false"}</td>
       <td>
         <form method="post" action="/admin/lti/issuer-registrations/delete">
           <input type="hidden" name="token" value="${escapeHtml(input.token)}" />
@@ -337,18 +351,12 @@ export const ltiIssuerRegistrationAdminPage = (input: {
           <input name="authorizationEndpoint" type="url" required value="${escapeHtml(input.formState?.authorizationEndpoint ?? "")}" />
         </label>
         <label class="lti-registration__field">
-          <span>Token endpoint (required for NRPS roster pull)</span>
-          <input name="tokenEndpoint" type="url" value="${escapeHtml(input.formState?.tokenEndpoint ?? "")}" />
+          <span>Platform JWKS endpoint</span>
+          <input name="platformJwksEndpoint" type="url" value="${escapeHtml(input.formState?.platformJwksEndpoint ?? "")}" />
         </label>
         <label class="lti-registration__field">
-          <span>Client secret (required for NRPS roster pull)</span>
-          <input name="clientSecret" type="password" value="" autocomplete="off" />
-        </label>
-        <label class="lti-registration__checkbox">
-          <input name="allowUnsignedIdToken" type="checkbox" ${
-            input.formState?.allowUnsignedIdToken === true ? "checked" : ""
-          } />
-          <span>Allow unsigned id_token (test-mode only)</span>
+          <span>Token endpoint</span>
+          <input name="tokenEndpoint" type="url" value="${escapeHtml(input.formState?.tokenEndpoint ?? "")}" />
         </label>
         <div class="lti-registration__actions">
           <button type="submit">Save registration</button>
@@ -362,9 +370,8 @@ export const ltiIssuerRegistrationAdminPage = (input: {
               <th>Tenant</th>
               <th>Client ID</th>
               <th>Authorization endpoint</th>
+              <th>Platform JWKS endpoint</th>
               <th>Token endpoint</th>
-              <th>NRPS client secret</th>
-              <th>Unsigned test mode</th>
               <th>Actions</th>
             </tr>
           </thead>
