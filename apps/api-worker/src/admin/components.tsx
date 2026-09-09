@@ -577,16 +577,25 @@ export const AdminFieldset = ({
   );
 };
 
+/** Renders admin feedback, with optional polite announcements for client-side updates. */
 export const AdminStatus = ({
   id,
   tone,
+  live = false,
   children,
 }: PropsWithChildren<{
   id?: string;
   tone?: "info" | "success" | "warning" | "error";
+  live?: boolean;
 }>): HonoElement => {
   return (
-    <p id={id} class="ct-admin__status" data-tone={tone}>
+    <p
+      id={id}
+      class="ct-admin__status"
+      data-tone={tone}
+      role={live ? "status" : undefined}
+      aria-live={live ? "polite" : undefined}
+    >
       {children}
     </p>
   );

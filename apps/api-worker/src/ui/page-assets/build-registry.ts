@@ -1,5 +1,5 @@
 import type { StylePageAssetSource } from "./assemble-style-asset";
-import { renderBadgeTemplateUploadPreviewScript } from "../../admin/badge-template-upload-preview";
+import { renderBadgeTemplateUploadPreviewScript } from "./badge-template-upload-preview";
 import {
   ADMIN_STATUS_PILL_CLASS_SCRIPT_SOURCE,
   type ScriptPageAssetSource,

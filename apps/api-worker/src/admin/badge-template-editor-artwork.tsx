@@ -2,6 +2,7 @@
 import type { BadgeTemplateRecord } from "@credtrail/db";
 import type { HtmlEscapedString } from "hono/utils/html";
 import type { BadgeTemplateArtworkReadiness } from "../badges/badge-achievement-snapshot";
+import { BADGE_TEMPLATE_IMAGE_GUIDANCE } from "../badges/badge-template-image-guidance";
 import { adminStatusPillClass } from "./admin-status-pill-class";
 import { AdminButton, AdminField, AdminForm, AdminStatus } from "./components";
 import { CtFieldHint, CtInput, CtSelect } from "../ui/forms";
@@ -223,7 +224,7 @@ export const BadgeTemplateEditorArtworkActions = ({
                     name="file"
                     type="file"
                     required
-                    accept="image/png,image/jpeg,image/webp"
+                    accept={BADGE_TEMPLATE_IMAGE_GUIDANCE.allowedMimeTypes.join(",")}
                     describedBy={[
                       "badge-template-upload-guidance",
                       "badge-template-upload-effect",
@@ -231,8 +232,7 @@ export const BadgeTemplateEditorArtworkActions = ({
                     ]}
                   />
                   <CtFieldHint id="badge-template-upload-guidance">
-                    PNG, JPEG or WebP, up to 2 MB. We recommend a square image at least 512 × 512
-                    pixels. Leave space around the artwork and avoid small text.
+                    {BADGE_TEMPLATE_IMAGE_GUIDANCE.fieldHint}
                   </CtFieldHint>
                 </AdminField>
               </div>
@@ -261,12 +261,7 @@ export const BadgeTemplateEditorArtworkActions = ({
                 </button>
               </div>
             </AdminForm>
-            <p
-              id="badge-template-image-upload-status"
-              class="ct-admin__status"
-              role="status"
-              aria-live="polite"
-            ></p>
+            <AdminStatus id="badge-template-image-upload-status" live />
           </div>
         </section>
         <section class="ct-admin__template-editor-artwork-option">

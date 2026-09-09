@@ -11,6 +11,7 @@ import type { AppBindings, AppContext } from "../app/types";
 import { canonicalAppUrl } from "../http/canonical-app-url";
 import { buildBadgeTemplateImageUriChange } from "./badge-template-audit-metadata";
 import { recordBadgeTemplateImageRevisionIfChanged } from "./badge-template-image-revision-recording";
+import { BADGE_TEMPLATE_IMAGE_GUIDANCE } from "./badge-template-image-guidance";
 import {
   BADGE_TEMPLATE_IMAGE_MAX_BYTES,
   badgeTemplateImageMimeTypeFromBytes,
@@ -54,13 +55,13 @@ export const uploadBadgeTemplateImage = async (input: {
   }
 
   if (input.file.size < 1) {
-    return { status: 422, message: "This file is empty. Choose an image with content." };
+    return { status: 422, message: BADGE_TEMPLATE_IMAGE_GUIDANCE.emptyFile };
   }
 
   if (input.file.size > BADGE_TEMPLATE_IMAGE_MAX_BYTES) {
     return {
       status: 413,
-      message: "Choose an image that is 2 MB or smaller.",
+      message: BADGE_TEMPLATE_IMAGE_GUIDANCE.tooLarge,
     };
   }
 
@@ -69,7 +70,7 @@ export const uploadBadgeTemplateImage = async (input: {
   if (declaredMimeType === null) {
     return {
       status: 422,
-      message: "Choose a PNG, JPEG or WebP image.",
+      message: BADGE_TEMPLATE_IMAGE_GUIDANCE.unsupportedFormat,
     };
   }
 
@@ -79,8 +80,7 @@ export const uploadBadgeTemplateImage = async (input: {
   if (detectedMimeType === null || detectedMimeType !== declaredMimeType) {
     return {
       status: 422,
-      message:
-        "This file does not match its image format. Export it as PNG, JPEG or WebP and upload it again.",
+      message: BADGE_TEMPLATE_IMAGE_GUIDANCE.formatMismatch,
     };
   }
 

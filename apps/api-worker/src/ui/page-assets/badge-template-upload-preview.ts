@@ -1,11 +1,9 @@
-import {
-  BADGE_TEMPLATE_IMAGE_ALLOWED_MIME_TYPES,
-  BADGE_TEMPLATE_IMAGE_MAX_BYTES,
-} from "../badges/template-image-storage";
+import { BADGE_TEMPLATE_IMAGE_GUIDANCE } from "../../badges/badge-template-image-guidance";
 
 /** Builds the local file preview enhancement; the upload remains a native form submission. */
 export const renderBadgeTemplateUploadPreviewScript = (): string => `
 (() => {
+  const guidance = ${JSON.stringify(BADGE_TEMPLATE_IMAGE_GUIDANCE)};
   const form = document.getElementById("badge-template-image-upload-form");
   const input = form?.querySelector('input[type="file"]');
   const preview = document.getElementById("badge-template-upload-preview");
@@ -25,8 +23,7 @@ export const renderBadgeTemplateUploadPreviewScript = (): string => `
     preview.hidden = true;
     image.removeAttribute("src");
     caption.textContent = "";
-    status.textContent = "";
-    status.dataset.tone = "info";
+    setStatus(status, "", false);
     clear.hidden = true;
     input.setCustomValidity("");
     input.removeAttribute("aria-invalid");
@@ -34,20 +31,19 @@ export const renderBadgeTemplateUploadPreviewScript = (): string => `
   const showError = (message) => {
     input.setCustomValidity(message);
     input.setAttribute("aria-invalid", "true");
-    status.dataset.tone = "error";
-    status.textContent = message;
+    setStatus(status, message, true);
   };
   const previewSelection = () => {
     resetPreview();
     const file = input.files?.[0];
     if (!file) return;
     clear.hidden = false;
-    if (!${JSON.stringify(BADGE_TEMPLATE_IMAGE_ALLOWED_MIME_TYPES)}.includes(file.type)) {
-      showError("Choose a PNG, JPEG or WebP image.");
+    if (file.size === 0 || file.size > guidance.maxBytes) {
+      showError(file.size === 0 ? guidance.emptyFile : guidance.tooLarge);
       return;
     }
-    if (file.size === 0 || file.size > ${BADGE_TEMPLATE_IMAGE_MAX_BYTES}) {
-      showError(file.size === 0 ? "This file is empty. Choose an image with content." : "Choose an image that is 2 MB or smaller.");
+    if (!guidance.allowedMimeTypes.includes(file.type)) {
+      showError(guidance.unsupportedFormat);
       return;
     }
 
@@ -56,7 +52,7 @@ export const renderBadgeTemplateUploadPreviewScript = (): string => `
     // Each selection owns its decoder so a late result cannot replace a newer preview.
     const decoder = new Image();
     input.setCustomValidity("Wait for the image preview to finish loading.");
-    status.textContent = "Loading image preview…";
+    setStatus(status, "Loading image preview…", false);
     decoder.addEventListener("load", () => {
       if (activeUrl !== url) return;
       input.setCustomValidity("");
@@ -64,17 +60,15 @@ export const renderBadgeTemplateUploadPreviewScript = (): string => `
       caption.textContent = decoder.naturalWidth + " × " + decoder.naturalHeight +
         " pixels. Full image shown; proportions preserved.";
       preview.hidden = false;
-      const small = Math.min(decoder.naturalWidth, decoder.naturalHeight) < 512;
-      status.dataset.tone = small ? "warning" : "info";
-      status.textContent = small
-        ? "This image may look soft at larger sizes. We recommend at least 512 × 512 pixels. You can still use it."
-        : "Preview ready. Choose Upload and use image to save this artwork.";
+      const small = Math.min(decoder.naturalWidth, decoder.naturalHeight) < guidance.recommendedMinPixels;
+      setStatus(status, small ? guidance.smallImage
+        : "Preview ready. Choose Upload and use image to save this artwork.", false, small ? "warning" : "info");
     }, { once: true });
     decoder.addEventListener("error", () => {
       if (activeUrl !== url) return;
       URL.revokeObjectURL(url);
       activeUrl = null;
-      showError("This image could not be opened. Export it as PNG, JPEG or WebP and choose it again.");
+      showError(guidance.decodeFailure);
     }, { once: true });
     decoder.src = url;
   };

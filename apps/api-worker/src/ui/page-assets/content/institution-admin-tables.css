@@ -243,6 +243,7 @@
   outline: 2px solid var(--ct-theme-border-focus);
   outline-offset: 2px;
 }
+/* Preserve the entire badge mark in template, generated-draft, and revision thumbnails. */
 .ct-admin__template-image {
   display: block;
   width: 3.2rem;

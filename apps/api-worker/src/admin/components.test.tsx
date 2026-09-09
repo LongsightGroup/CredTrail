@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { AdminActions, AdminButton, AdminButtonLink } from "./actions";
-import { AdminCheckboxRow, AdminField, AdminForm } from "./components";
+import { AdminCheckboxRow, AdminField, AdminForm, AdminStatus } from "./components";
 import { CtInput } from "../ui/forms";
 
 const renderToString = (node: { toString(): string }): string => {
   return node.toString();
 };
+
+describe("admin status announcements", () => {
+  it("announces dynamic status only when requested", () => {
+    const live = renderToString(<AdminStatus id="upload-status" live />);
+    const ordinary = renderToString(<AdminStatus>Artwork saved.</AdminStatus>);
+
+    expect(live).toContain('role="status"');
+    expect(live).toContain('aria-live="polite"');
+    expect(ordinary).not.toContain('role="status"');
+    expect(ordinary).not.toContain("aria-live");
+    expect(ordinary).toContain("Artwork saved.");
+  });
+});
 
 describe("admin action wrappers", () => {
   it("keeps admin wrappers compatible while delegating visual classes to primitives", () => {
