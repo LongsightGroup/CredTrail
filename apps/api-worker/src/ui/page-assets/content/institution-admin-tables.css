@@ -248,7 +248,7 @@
   width: 3.2rem;
   height: 3.2rem;
   border-radius: var(--ct-radius-sm);
-  object-fit: cover;
+  object-fit: contain;
   border: 1px solid var(--ct-theme-border-default);
   background: var(--ct-theme-surface-soft);
 }
@@ -266,7 +266,7 @@
   height: 7rem;
   border: 1px solid var(--ct-theme-border-soft);
   border-radius: var(--ct-radius-md);
-  object-fit: cover;
+  object-fit: contain;
   background: var(--ct-theme-surface-soft);
 }
 .ct-admin__image-generation-actions {
@@ -391,7 +391,7 @@ button.ct-admin__text-action {
   height: 2.6rem;
   border: 1px solid var(--ct-theme-border-soft);
   border-radius: var(--ct-radius-sm);
-  object-fit: cover;
+  object-fit: contain;
   background: var(--ct-theme-surface-soft);
 }
 .ct-admin__image-revision-thumbnail-link--empty {

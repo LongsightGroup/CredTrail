@@ -4,7 +4,7 @@ import type { HtmlEscapedString } from "hono/utils/html";
 import type { BadgeTemplateArtworkReadiness } from "../badges/badge-achievement-snapshot";
 import { adminStatusPillClass } from "./admin-status-pill-class";
 import { AdminButton, AdminField, AdminForm, AdminStatus } from "./components";
-import { CtInput, CtSelect } from "../ui/forms";
+import { CtFieldHint, CtInput, CtSelect } from "../ui/forms";
 
 type HonoElement = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -86,7 +86,7 @@ export const BadgeTemplateEditorCurrentArtwork = ({
   const artworkStatusLabel = (() => {
     switch (artworkReadiness) {
       case "ready":
-        return "Approved image";
+        return "Image set";
       case "missing_artwork":
         return "Image required";
       case "unmanaged_artwork":
@@ -100,9 +100,9 @@ export const BadgeTemplateEditorCurrentArtwork = ({
   const artworkDetail = (() => {
     switch (artworkReadiness) {
       case "ready":
-        return "Approved artwork is set. This template is ready for rules.";
+        return "Artwork is set. This template is ready for rules.";
       case "missing_artwork":
-        return "Upload approved artwork in CredTrail before using this template in rules.";
+        return "Upload an image or use a generated draft before using this template in rules.";
       case "unmanaged_artwork":
         return "Replace this image with artwork uploaded or generated in CredTrail before using the template in rules.";
       case "invalid_artwork":
@@ -163,7 +163,7 @@ const BadgeTemplateEditorArtworkActionsCopy = ({
       </strong>
       <small id="badge-template-editor-artwork-actions-detail">
         {!hasManagedArtwork
-          ? "Upload an approved image or generate a draft to review."
+          ? "Upload an image or generate a draft to review."
           : "Upload a new image to replace the current artwork."}
       </small>
     </>
@@ -204,7 +204,11 @@ export const BadgeTemplateEditorArtworkActions = ({
       <div class="ct-admin__template-editor-artwork-action-grid">
         <section class="ct-admin__template-editor-artwork-option">
           <div class="ct-admin__template-editor-subgroup">
-            <h4 class="ct-admin__template-editor-subgroup-title">Upload approved image</h4>
+            <h4 class="ct-admin__template-editor-subgroup-title">Upload artwork</h4>
+            <p class="ct-admin__template-editor-artwork-guidance" id="badge-template-upload-effect">
+              Complete any institutional image review before uploading. Uploading sets this
+              template’s artwork immediately.
+            </p>
             <AdminForm
               id="badge-template-image-upload-form"
               action={imageUploadPath}
@@ -220,17 +224,58 @@ export const BadgeTemplateEditorArtworkActions = ({
                     type="file"
                     required
                     accept="image/png,image/jpeg,image/webp"
+                    describedBy={[
+                      "badge-template-upload-guidance",
+                      "badge-template-upload-effect",
+                      "badge-template-image-upload-status",
+                    ]}
                   />
+                  <CtFieldHint id="badge-template-upload-guidance">
+                    PNG, JPEG or WebP, up to 2 MB. We recommend a square image at least 512 × 512
+                    pixels. Leave space around the artwork and avoid small text.
+                  </CtFieldHint>
                 </AdminField>
-                <AdminButton type="submit">Upload approved image</AdminButton>
+              </div>
+              <figure
+                class="ct-admin__artwork-upload-preview"
+                id="badge-template-upload-preview"
+                hidden
+              >
+                <img
+                  id="badge-template-upload-preview-image"
+                  alt="Selected artwork preview"
+                  width={128}
+                  height={128}
+                />
+                <figcaption id="badge-template-upload-preview-caption"></figcaption>
+              </figure>
+              <div class="ct-admin__template-editor-upload-actions">
+                <AdminButton type="submit">Upload and use image</AdminButton>
+                <button
+                  type="reset"
+                  id="badge-template-upload-clear"
+                  class="ct-admin__text-action"
+                  hidden
+                >
+                  Clear selection
+                </button>
               </div>
             </AdminForm>
-            <AdminStatus id="badge-template-image-upload-status"></AdminStatus>
+            <p
+              id="badge-template-image-upload-status"
+              class="ct-admin__status"
+              role="status"
+              aria-live="polite"
+            ></p>
           </div>
         </section>
         <section class="ct-admin__template-editor-artwork-option">
           <div class="ct-admin__template-editor-subgroup">
             <h4 class="ct-admin__template-editor-subgroup-title">Generate a draft</h4>
+            <p class="ct-admin__template-editor-artwork-guidance">
+              Generate a symbol without lettering. For an exact badge title or logo, upload a
+              finished image. Review the draft, then choose “Use this draft” to set it as artwork.
+            </p>
             <AdminForm
               id="badge-template-image-generation-form"
               className="ct-admin__form ct-admin__template-editor-subform"

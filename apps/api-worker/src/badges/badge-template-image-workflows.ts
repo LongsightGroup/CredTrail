@@ -54,13 +54,13 @@ export const uploadBadgeTemplateImage = async (input: {
   }
 
   if (input.file.size < 1) {
-    return { status: 422, message: "Badge template image file must not be empty" };
+    return { status: 422, message: "This file is empty. Choose an image with content." };
   }
 
   if (input.file.size > BADGE_TEMPLATE_IMAGE_MAX_BYTES) {
     return {
       status: 413,
-      message: `Badge template image exceeds ${String(BADGE_TEMPLATE_IMAGE_MAX_BYTES)} byte limit`,
+      message: "Choose an image that is 2 MB or smaller.",
     };
   }
 
@@ -69,7 +69,7 @@ export const uploadBadgeTemplateImage = async (input: {
   if (declaredMimeType === null) {
     return {
       status: 422,
-      message: "Unsupported image type. Allowed types: image/png, image/jpeg, image/webp",
+      message: "Choose a PNG, JPEG or WebP image.",
     };
   }
 
@@ -79,7 +79,8 @@ export const uploadBadgeTemplateImage = async (input: {
   if (detectedMimeType === null || detectedMimeType !== declaredMimeType) {
     return {
       status: 422,
-      message: "Uploaded file content does not match declared image type",
+      message:
+        "This file does not match its image format. Export it as PNG, JPEG or WebP and upload it again.",
     };
   }
 

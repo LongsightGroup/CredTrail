@@ -1,4 +1,5 @@
 import type { StylePageAssetSource } from "./assemble-style-asset";
+import { renderBadgeTemplateUploadPreviewScript } from "../../admin/badge-template-upload-preview";
 import {
   ADMIN_STATUS_PILL_CLASS_SCRIPT_SOURCE,
   type ScriptPageAssetSource,
@@ -134,6 +135,10 @@ export const PAGE_ASSET_BUILD_SOURCES = {
       "institution-admin-badge-template-history-core.js",
       "institution-admin-badge-template-image-helpers.js",
       "institution-admin-badge-template-image-workflow.js",
+      {
+        sourceName: "badge-template-upload-preview.js",
+        body: renderBadgeTemplateUploadPreviewScript(),
+      },
       "institution-admin-badge-template-trusted-repeatable.js",
     ],
   },

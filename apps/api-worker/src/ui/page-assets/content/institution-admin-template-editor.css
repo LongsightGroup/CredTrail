@@ -434,9 +434,45 @@
   align-items: end;
 }
 .ct-admin__template-editor-fields--upload {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+}
+.ct-admin__template-editor-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--ct-space-3);
+}
+.ct-admin__template-editor-artwork-guidance {
+  max-width: 65ch;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ct-theme-text-body);
+}
+.ct-admin__artwork-upload-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-3);
+  margin: var(--ct-space-2) 0;
+}
+.ct-admin__artwork-upload-preview[hidden] {
+  display: none;
+}
+.ct-admin__artwork-upload-preview img {
+  width: 8rem;
+  height: 8rem;
+  object-fit: contain;
+  background: var(--ct-theme-surface-soft);
+  border: 1px solid var(--ct-border-subtle);
+  border-radius: var(--ct-radius-sm);
+}
+.ct-admin__artwork-upload-preview figcaption {
+  flex: 1 1 12rem;
+  max-width: 40ch;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ct-theme-text-body);
 }
 .ct-admin__template-editor-generation-prompt,
 .ct-admin__template-editor-generation-action {

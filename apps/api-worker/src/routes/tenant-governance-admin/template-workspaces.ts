@@ -271,11 +271,11 @@ export const createTenantGovernanceTemplateAdminWorkspaces = (input: {
           : "";
 
     if (artwork === "uploaded") {
-      return { tone: "success", message: "Approved artwork uploaded." };
+      return { tone: "success", message: "Image uploaded and set as this template’s artwork." };
     }
 
     if (artwork === "applied") {
-      return { tone: "success", message: "Generated draft applied as approved artwork." };
+      return { tone: "success", message: "Generated image set as this template’s artwork." };
     }
 
     return null;

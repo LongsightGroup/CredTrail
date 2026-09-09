@@ -43,8 +43,12 @@ export const completeFirstDayWorkflow = async (
     mimeType: "image/png",
     buffer: TINY_PNG,
   });
-  await page.getByRole("button", { name: "Upload approved image" }).click();
-  await expect(page.getByText("Approved artwork uploaded.")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Selected artwork preview" })).toBeVisible();
+  await expect(
+    page.getByText("1 × 1 pixels. Full image shown; proportions preserved."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Upload and use image" }).click();
+  await expect(page.getByText("Image uploaded and set as this template’s artwork.")).toBeVisible();
 
   await page.goto(demoRoutes.manualIssue);
   await page.getByLabel(/recipient email/i).fill(identity.recipientEmail);

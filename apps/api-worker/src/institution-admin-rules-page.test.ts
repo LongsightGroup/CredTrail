@@ -1901,12 +1901,12 @@ describe("GET /tenants/:tenantId/admin/rules/templates", () => {
       "Replace this image with artwork uploaded or generated in CredTrail before using the template in rules.",
     );
     expect(body).toContain("Replace artwork");
-    expect(body).toContain("Upload an approved image or generate a draft to review.");
+    expect(body).toContain("Upload an image or generate a draft to review.");
     expect(body).not.toContain('aria-label="Artwork method"');
     expect(body).not.toContain('id="badge-template-artwork-mode-upload"');
     expect(body).not.toContain('id="badge-template-artwork-mode-generate"');
     expect(body).toContain('id="badge-template-image-upload-form"');
-    expect(body).toContain("Upload approved image");
+    expect(body).toContain("Upload and use image");
     expect(body).toContain('id="badge-template-image-generation-form"');
     expect(body).toContain("Generate a draft");
     expect(body).toContain("Use this draft");
